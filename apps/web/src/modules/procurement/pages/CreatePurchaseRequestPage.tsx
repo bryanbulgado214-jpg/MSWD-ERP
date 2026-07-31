@@ -4,15 +4,28 @@ import { useNavigate } from 'react-router-dom';
 import { formatPeso } from '../../budgeting/format-peso';
 import {
   createPurchaseRequest,
+  listAppItems,
   listAvailableBudgetReleases,
+  listLookupDepartments,
   listMyPpmpItems,
   listProcurementFiscalYears,
+  ProcurementApiError,
+  type AppItem,
   type BudgetReleaseOption,
+  type LookupDepartment,
   type PpmpItemWithRemaining,
   type ProcurementFiscalYear,
 } from '../api';
-import type { CreatePurchaseRequestItemInput } from '../types';
+import type { CreatePurchaseRequestItemInput, ItemClassification } from '../types';
 import './procurement.css';
+
+const CLASSIFICATION_OPTIONS: { value: ItemClassification; label: string }[] = [
+  { value: 'expense', label: 'Expense' },
+  { value: 'inventory', label: 'Inventory' },
+  { value: 'asset', label: 'Asset' },
+  { value: 'infrastructure', label: 'Infrastructure' },
+  { value: 'service', label: 'Service' },
+];
 
 function emptyItem(): CreatePurchaseRequestItemInput {
   return { description: '', quantity: 1, unitOfMeasure: 'pc', estimatedUnitCost: 0 };
@@ -27,21 +40,32 @@ export function CreatePurchaseRequestPage() {
   const [myPpmpItems, setMyPpmpItems] = useState<PpmpItemWithRemaining[]>([]);
   const [loadingPpmp, setLoadingPpmp] = useState(true);
   const [selectedPpmpItemId, setSelectedPpmpItemId] = useState('');
+  const [departments, setDepartments] = useState<LookupDepartment[]>([]);
+  const [appItems, setAppItems] = useState<AppItem[]>([]);
 
   const [budgetReleaseId, setBudgetReleaseId] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [purpose, setPurpose] = useState('');
+  const [departmentId, setDepartmentId] = useState('');
+  const [requestedDeliveryDate, setRequestedDeliveryDate] = useState('');
+  const [appItemId, setAppItemId] = useState('');
   const [items, setItems] = useState<CreatePurchaseRequestItemInput[]>([emptyItem()]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([listAvailableBudgetReleases(), listProcurementFiscalYears()])
-      .then(([relData, fyData]) => {
+    Promise.all([
+      listAvailableBudgetReleases(),
+      listProcurementFiscalYears(),
+      listLookupDepartments(),
+    ])
+      .then(([relData, fyData, deptData]) => {
         setReleases(relData);
         if (relData.length === 1) setBudgetReleaseId(relData[0]!.id);
         setFiscalYears(fyData);
         if (fyData.length > 0) setSelectedFiscalYear(fyData[0].id);
+        setDepartments(deptData);
       })
       .catch(() => setError('Failed to load form data.'))
       .finally(() => setLoadingReleases(false));
@@ -51,8 +75,16 @@ export function CreatePurchaseRequestPage() {
     if (!selectedFiscalYear) return;
     let cancelled = false;
     setLoadingPpmp(true);
-    listMyPpmpItems(selectedFiscalYear)
-      .then((data) => { if (!cancelled) setMyPpmpItems(data); })
+    Promise.all([
+      listMyPpmpItems(selectedFiscalYear),
+      listAppItems({ fiscalYearId: selectedFiscalYear, status: 'approved' }),
+    ])
+      .then(([ppmpData, appData]) => {
+        if (!cancelled) {
+          setMyPpmpItems(ppmpData);
+          setAppItems(appData);
+        }
+      })
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoadingPpmp(false); });
     return () => { cancelled = true; };
@@ -69,6 +101,8 @@ export function CreatePurchaseRequestPage() {
       unitOfMeasure: ppmp.unitOfMeasure,
       estimatedUnitCost: parseFloat(ppmp.estimatedUnitCost),
     }]);
+    const linkedApp = appItems.find((a) => a.ppmpItem.id === ppmpItemId);
+    setAppItemId(linkedApp ? linkedApp.id : '');
   }
 
   function updateItem(index: number, patch: Partial<CreatePurchaseRequestItemInput>) {
@@ -87,6 +121,9 @@ export function CreatePurchaseRequestPage() {
   const totalAmount = items.reduce((sum, item) => sum + item.quantity * item.estimatedUnitCost, 0);
   const selectedRelease = releases.find((r) => r.id === budgetReleaseId);
   const selectedPpmpItem = myPpmpItems.find((p) => p.id === selectedPpmpItemId);
+  const linkedAppItems = selectedPpmpItemId
+    ? appItems.filter((a) => a.ppmpItem.id === selectedPpmpItemId)
+    : appItems;
 
   const canSubmit =
     budgetReleaseId &&
@@ -104,18 +141,25 @@ export function CreatePurchaseRequestPage() {
         budgetReleaseId,
         title: title.trim(),
         ...(description.trim() ? { description: description.trim() } : {}),
+        ...(purpose.trim() ? { purpose: purpose.trim() } : {}),
+        ...(departmentId ? { departmentId } : {}),
+        ...(requestedDeliveryDate ? { requestedDeliveryDate } : {}),
         ...(selectedPpmpItemId ? { ppmpItemId: selectedPpmpItemId } : {}),
+        ...(appItemId ? { appItemId } : {}),
+        ...(selectedFiscalYear ? { fiscalYearId: selectedFiscalYear } : {}),
         items: items.map((item) => ({
           description: item.description.trim(),
           quantity: item.quantity,
           unitOfMeasure: item.unitOfMeasure.trim(),
           estimatedUnitCost: item.estimatedUnitCost,
           ...(item.accountCode?.trim() ? { accountCode: item.accountCode.trim() } : {}),
+          ...(item.technicalSpecification?.trim() ? { technicalSpecification: item.technicalSpecification.trim() } : {}),
+          ...(item.classification ? { classification: item.classification } : {}),
         })),
       });
       navigate(`/procurement/purchase-requests/${pr.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create purchase request.');
+      setError(err instanceof ProcurementApiError ? err.message : 'Failed to create purchase request.');
     } finally {
       setSubmitting(false);
     }
@@ -225,37 +269,75 @@ export function CreatePurchaseRequestPage() {
       )}
 
       <form className="pr-form" onSubmit={handleSubmit}>
-        <div className="pr-field">
-          <label>Budget Release</label>
-          {loadingReleases ? (
-            <p style={{ color: '#667085', fontSize: 13 }}>Loading available budgets...</p>
-          ) : releases.length === 0 ? (
-            <p style={{ color: '#b42318', fontSize: 13 }}>No released budgets available. A budget must be approved and released first.</p>
-          ) : (
-            <select value={budgetReleaseId} onChange={(e) => setBudgetReleaseId(e.target.value)} required>
-              <option value="">Select a budget release...</option>
-              {releases.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.releaseNumber} — {r.budgetHeader.responsibilityCenter.name} / {r.budgetHeader.fundSource.name} (Available: {formatPeso(r.availableAmount)})
-                </option>
+        <div className="pr-form-grid">
+          <div className="pr-field">
+            <label>Budget Release *</label>
+            {loadingReleases ? (
+              <p style={{ color: '#667085', fontSize: 13 }}>Loading available budgets...</p>
+            ) : releases.length === 0 ? (
+              <p style={{ color: '#b42318', fontSize: 13 }}>No released budgets available.</p>
+            ) : (
+              <select value={budgetReleaseId} onChange={(e) => setBudgetReleaseId(e.target.value)} required>
+                <option value="">Select a budget release...</option>
+                {releases.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.releaseNumber} — {r.budgetHeader.responsibilityCenter.name} / {r.budgetHeader.fundSource.name} (Avail: {formatPeso(r.availableAmount)})
+                  </option>
+                ))}
+              </select>
+            )}
+            {selectedRelease && (
+              <p style={{ fontSize: 12, color: '#667085', marginTop: 4 }}>
+                Released: {formatPeso(selectedRelease.releasedAmount)} | Available: {formatPeso(selectedRelease.availableAmount)}
+              </p>
+            )}
+          </div>
+
+          <div className="pr-field">
+            <label>Department</label>
+            <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+              <option value="">Select department...</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
               ))}
             </select>
-          )}
-          {selectedRelease && (
-            <p style={{ fontSize: 12, color: '#667085', marginTop: 4 }}>
-              Released: {formatPeso(selectedRelease.releasedAmount)} | Available: {formatPeso(selectedRelease.availableAmount)}
-            </p>
-          )}
+          </div>
         </div>
 
         <div className="pr-field">
-          <label>Title</label>
+          <label>Title *</label>
           <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Office Supplies Q3" required maxLength={255} />
         </div>
 
-        <div className="pr-field">
-          <label>Description (optional)</label>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Additional details..." />
+        <div className="pr-form-grid">
+          <div className="pr-field">
+            <label>Purpose / Justification</label>
+            <textarea value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="Why is this procurement needed?" rows={2} />
+          </div>
+
+          <div className="pr-field">
+            <label>Description (optional)</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Additional details..." rows={2} />
+          </div>
+        </div>
+
+        <div className="pr-form-grid">
+          <div className="pr-field">
+            <label>Requested Delivery Date</label>
+            <input type="date" value={requestedDeliveryDate} onChange={(e) => setRequestedDeliveryDate(e.target.value)} />
+          </div>
+
+          <div className="pr-field">
+            <label>APP Item (Annual Procurement Plan)</label>
+            <select value={appItemId} onChange={(e) => setAppItemId(e.target.value)}>
+              <option value="">No APP item linked</option>
+              {linkedAppItems.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.appNumber} — {a.procurementProjectTitle} (Budget: {formatPeso(a.approvedBudget)})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div>
@@ -285,6 +367,32 @@ export function CreatePurchaseRequestPage() {
                 <div>
                   <label>Unit Cost</label>
                   <input type="number" value={item.estimatedUnitCost} onChange={(e) => updateItem(idx, { estimatedUnitCost: parseFloat(e.target.value) || 0 })} min={0.01} step="0.01" required />
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 12, marginTop: 8 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475467', marginBottom: 2 }}>Technical Specification</label>
+                  <input
+                    type="text"
+                    value={item.technicalSpecification ?? ''}
+                    onChange={(e) => updateItem(idx, { technicalSpecification: e.target.value || undefined })}
+                    placeholder="e.g. A4, 80gsm, 500 sheets/ream"
+                    maxLength={500}
+                    style={{ width: '100%', padding: '6px 8px', border: '1.5px solid #d0d5dd', borderRadius: 4, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475467', marginBottom: 2 }}>Classification</label>
+                  <select
+                    value={item.classification ?? ''}
+                    onChange={(e) => updateItem(idx, { classification: (e.target.value || undefined) as ItemClassification | undefined })}
+                    style={{ width: '100%', padding: '6px 8px', border: '1.5px solid #d0d5dd', borderRadius: 4, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                  >
+                    <option value="">—</option>
+                    {CLASSIFICATION_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <p style={{ textAlign: 'right', fontSize: 12, color: '#475467', margin: '8px 0 0' }}>

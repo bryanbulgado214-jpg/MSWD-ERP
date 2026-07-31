@@ -5,12 +5,22 @@ import { formatPeso } from '../../budgeting/format-peso';
 import {
   getPurchaseRequest,
   listAvailableBudgetReleases,
+  listLookupDepartments,
   ProcurementApiError,
   updatePurchaseRequest,
   type BudgetReleaseOption,
+  type LookupDepartment,
 } from '../api';
-import type { CreatePurchaseRequestItemInput, PurchaseRequest } from '../types';
+import type { CreatePurchaseRequestItemInput, ItemClassification, PurchaseRequest } from '../types';
 import './procurement.css';
+
+const CLASSIFICATION_OPTIONS: { value: ItemClassification; label: string }[] = [
+  { value: 'expense', label: 'Expense' },
+  { value: 'inventory', label: 'Inventory' },
+  { value: 'asset', label: 'Asset' },
+  { value: 'infrastructure', label: 'Infrastructure' },
+  { value: 'service', label: 'Service' },
+];
 
 export function EditPurchaseRequestPage() {
   const { id } = useParams<{ id: string }>();
@@ -18,28 +28,36 @@ export function EditPurchaseRequestPage() {
 
   const [pr, setPr] = useState<PurchaseRequest | null>(null);
   const [releases, setReleases] = useState<BudgetReleaseOption[]>([]);
+  const [departments, setDepartments] = useState<LookupDepartment[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [budgetReleaseId, setBudgetReleaseId] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [purpose, setPurpose] = useState('');
+  const [departmentId, setDepartmentId] = useState('');
+  const [requestedDeliveryDate, setRequestedDeliveryDate] = useState('');
   const [items, setItems] = useState<CreatePurchaseRequestItemInput[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
-    Promise.all([getPurchaseRequest(id), listAvailableBudgetReleases()])
-      .then(([prData, relData]) => {
+    Promise.all([getPurchaseRequest(id), listAvailableBudgetReleases(), listLookupDepartments()])
+      .then(([prData, relData, deptData]) => {
         if (prData.status !== 'draft' && prData.status !== 'returned') {
           setError(`This PR cannot be edited (status: ${prData.status}).`);
           return;
         }
         setPr(prData);
         setReleases(relData);
+        setDepartments(deptData);
         setBudgetReleaseId(prData.budgetReleaseId ?? '');
         setTitle(prData.title);
         setDescription(prData.description ?? '');
+        setPurpose(prData.purpose ?? '');
+        setDepartmentId(prData.departmentId ?? '');
+        setRequestedDeliveryDate(prData.requestedDeliveryDate ? prData.requestedDeliveryDate.slice(0, 10) : '');
         setItems(
           prData.items.map((item) => ({
             description: item.description,
@@ -47,6 +65,8 @@ export function EditPurchaseRequestPage() {
             unitOfMeasure: item.unitOfMeasure,
             estimatedUnitCost: parseFloat(item.estimatedUnitCost),
             ...(item.accountCode ? { accountCode: item.accountCode } : {}),
+            ...(item.technicalSpecification ? { technicalSpecification: item.technicalSpecification } : {}),
+            ...(item.classification ? { classification: item.classification } : {}),
           })),
         );
       })
@@ -88,6 +108,9 @@ export function EditPurchaseRequestPage() {
         expectedVersion: pr.version,
         title: title.trim(),
         ...(description.trim() ? { description: description.trim() } : {}),
+        ...(purpose.trim() ? { purpose: purpose.trim() } : {}),
+        ...(departmentId ? { departmentId } : {}),
+        ...(requestedDeliveryDate ? { requestedDeliveryDate } : {}),
         ...(budgetReleaseId ? { budgetReleaseId } : {}),
         items: items.map((item) => ({
           description: item.description.trim(),
@@ -95,6 +118,8 @@ export function EditPurchaseRequestPage() {
           unitOfMeasure: item.unitOfMeasure.trim(),
           estimatedUnitCost: item.estimatedUnitCost,
           ...(item.accountCode?.trim() ? { accountCode: item.accountCode.trim() } : {}),
+          ...(item.technicalSpecification?.trim() ? { technicalSpecification: item.technicalSpecification.trim() } : {}),
+          ...(item.classification ? { classification: item.classification } : {}),
         })),
       });
       navigate(`/procurement/purchase-requests/${id}`);
@@ -129,35 +154,62 @@ export function EditPurchaseRequestPage() {
       {error && <div className="pr-error">{error}</div>}
 
       <form className="pr-form" onSubmit={handleSubmit}>
-        <div className="pr-field">
-          <label>Budget Release</label>
-          {releases.length === 0 ? (
-            <p style={{ color: '#b42318', fontSize: 13 }}>No released budgets available.</p>
-          ) : (
-            <select value={budgetReleaseId} onChange={(e) => setBudgetReleaseId(e.target.value)} required>
-              <option value="">Select a budget release...</option>
-              {releases.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.releaseNumber} — {r.budgetHeader.responsibilityCenter.name} / {r.budgetHeader.fundSource.name} (Available: {formatPeso(r.availableAmount)})
-                </option>
+        <div className="pr-form-grid">
+          <div className="pr-field">
+            <label>Budget Release *</label>
+            {releases.length === 0 ? (
+              <p style={{ color: '#b42318', fontSize: 13 }}>No released budgets available.</p>
+            ) : (
+              <select value={budgetReleaseId} onChange={(e) => setBudgetReleaseId(e.target.value)} required>
+                <option value="">Select a budget release...</option>
+                {releases.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.releaseNumber} — {r.budgetHeader.responsibilityCenter.name} / {r.budgetHeader.fundSource.name} (Avail: {formatPeso(r.availableAmount)})
+                  </option>
+                ))}
+              </select>
+            )}
+            {selectedRelease && (
+              <p style={{ fontSize: 12, color: '#667085', marginTop: 4 }}>
+                Released: {formatPeso(selectedRelease.releasedAmount)} | Available: {formatPeso(selectedRelease.availableAmount)}
+              </p>
+            )}
+          </div>
+
+          <div className="pr-field">
+            <label>Department</label>
+            <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+              <option value="">Select department...</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
               ))}
             </select>
-          )}
-          {selectedRelease && (
-            <p style={{ fontSize: 12, color: '#667085', marginTop: 4 }}>
-              Released: {formatPeso(selectedRelease.releasedAmount)} | Available: {formatPeso(selectedRelease.availableAmount)}
-            </p>
-          )}
+          </div>
         </div>
 
         <div className="pr-field">
-          <label>Title</label>
+          <label>Title *</label>
           <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={255} />
         </div>
 
-        <div className="pr-field">
-          <label>Description (optional)</label>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} />
+        <div className="pr-form-grid">
+          <div className="pr-field">
+            <label>Purpose / Justification</label>
+            <textarea value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="Why is this procurement needed?" rows={2} />
+          </div>
+
+          <div className="pr-field">
+            <label>Description (optional)</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
+          </div>
+        </div>
+
+        <div className="pr-form-grid">
+          <div className="pr-field">
+            <label>Requested Delivery Date</label>
+            <input type="date" value={requestedDeliveryDate} onChange={(e) => setRequestedDeliveryDate(e.target.value)} />
+          </div>
+          <div></div>
         </div>
 
         <div>
@@ -187,6 +239,32 @@ export function EditPurchaseRequestPage() {
                 <div>
                   <label>Unit Cost</label>
                   <input type="number" value={item.estimatedUnitCost} onChange={(e) => updateItem(idx, { estimatedUnitCost: parseFloat(e.target.value) || 0 })} min={0.01} step="0.01" required />
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 12, marginTop: 8 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475467', marginBottom: 2 }}>Technical Specification</label>
+                  <input
+                    type="text"
+                    value={item.technicalSpecification ?? ''}
+                    onChange={(e) => updateItem(idx, { technicalSpecification: e.target.value || undefined })}
+                    placeholder="e.g. A4, 80gsm, 500 sheets/ream"
+                    maxLength={500}
+                    style={{ width: '100%', padding: '6px 8px', border: '1.5px solid #d0d5dd', borderRadius: 4, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475467', marginBottom: 2 }}>Classification</label>
+                  <select
+                    value={item.classification ?? ''}
+                    onChange={(e) => updateItem(idx, { classification: (e.target.value || undefined) as ItemClassification | undefined })}
+                    style={{ width: '100%', padding: '6px 8px', border: '1.5px solid #d0d5dd', borderRadius: 4, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                  >
+                    <option value="">—</option>
+                    {CLASSIFICATION_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <p style={{ textAlign: 'right', fontSize: 12, color: '#475467', margin: '8px 0 0' }}>

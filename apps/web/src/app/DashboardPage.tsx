@@ -21,6 +21,12 @@ interface PendingActionItem {
   createdBy?: string;
 }
 
+interface StatCard {
+  label: string;
+  value: number;
+  color: string;
+}
+
 const MODULE_CARDS = [
   {
     key: 'budgeting' as const,
@@ -41,17 +47,27 @@ const MODULE_CARDS = [
 export function DashboardPage() {
   const { user, permissions } = useAuth();
   const [items, setItems] = useState<PendingActionItem[]>([]);
+  const [stats, setStats] = useState<StatCard[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem('mswd_access_token');
     if (!token) { setLoading(false); return; }
 
-    fetch(`${API_BASE_URL}/dashboard/pending-actions`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => (res.ok ? res.json() : { items: [] }))
-      .then((data: { items: PendingActionItem[] }) => setItems(data.items))
+    const headers = { Authorization: `Bearer ${token}` };
+
+    Promise.all([
+      fetch(`${API_BASE_URL}/dashboard/pending-actions`, { headers })
+        .then((res) => (res.ok ? res.json() : { items: [] }))
+        .then((data: { items: PendingActionItem[] }) => data.items),
+      fetch(`${API_BASE_URL}/dashboard/stats`, { headers })
+        .then((res) => (res.ok ? res.json() : { stats: [] }))
+        .then((data: { stats: StatCard[] }) => data.stats),
+    ])
+      .then(([actionItems, statCards]) => {
+        setItems(actionItems);
+        setStats(statCards);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -71,6 +87,18 @@ export function DashboardPage() {
         <h1 className="dashboard__greeting">Welcome, {user?.username ?? 'User'}</h1>
         <p className="dashboard__date">{today}</p>
       </div>
+
+      {/* ── Stats ── */}
+      {stats.length > 0 && (
+        <div className="dashboard__stats">
+          {stats.map((s) => (
+            <div key={s.label} className="dashboard__stat-card">
+              <div className="dashboard__stat-value" style={{ color: s.color }}>{s.value}</div>
+              <div className="dashboard__stat-label">{s.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Pending Actions ── */}
       <div className="dashboard__section">

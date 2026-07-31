@@ -17,6 +17,7 @@ export const MODULE_GATES = {
     'procurement.ors.budget_certify',
     'procurement.po.create',
     'procurement.po.approve',
+    'procurement.delegation.manage',
   ],
 } as const;
 

@@ -215,10 +215,34 @@ export function PurchaseRequestDetailPage() {
           <dt>Created</dt>
           <dd>{new Date(pr.createdAt).toLocaleString()}</dd>
         </div>
+        {pr.department && (
+          <div>
+            <dt>Department</dt>
+            <dd>{pr.department.name} ({pr.department.code})</dd>
+          </div>
+        )}
+        {pr.requestedDeliveryDate && (
+          <div>
+            <dt>Requested Delivery</dt>
+            <dd>{new Date(pr.requestedDeliveryDate).toLocaleDateString()}</dd>
+          </div>
+        )}
         {pr.ppmpItem && (
           <div>
             <dt>PPMP Item</dt>
             <dd>{pr.ppmpItem.code} — {pr.ppmpItem.itemDescription}</dd>
+          </div>
+        )}
+        {pr.appItem && (
+          <div>
+            <dt>APP Item</dt>
+            <dd>{pr.appItem.appNumber} — {pr.appItem.procurementProjectTitle}</dd>
+          </div>
+        )}
+        {pr.purpose && (
+          <div style={{ gridColumn: '1 / -1' }}>
+            <dt>Purpose / Justification</dt>
+            <dd style={{ fontWeight: 400 }}>{pr.purpose}</dd>
           </div>
         )}
         {pr.description && (
@@ -410,23 +434,30 @@ export function PurchaseRequestDetailPage() {
             <th>Unit</th>
             <th>Unit Cost</th>
             <th>Total</th>
+            <th>Class</th>
           </tr>
         </thead>
         <tbody>
           {pr.items.map((item) => (
             <tr key={item.id}>
               <td>{item.itemNumber}</td>
-              <td>{item.description}</td>
+              <td>
+                {item.description}
+                {item.technicalSpecification && (
+                  <div style={{ fontSize: 11, color: '#667085', marginTop: 2 }}>{item.technicalSpecification}</div>
+                )}
+              </td>
               <td style={{ fontFamily: "'JetBrains Mono', monospace" }}>{parseFloat(item.quantity).toLocaleString()}</td>
               <td>{item.unitOfMeasure}</td>
               <td style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatPeso(item.estimatedUnitCost)}</td>
               <td style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{formatPeso(item.estimatedTotalCost)}</td>
+              <td style={{ fontSize: 11, textTransform: 'capitalize' }}>{item.classification ?? '—'}</td>
             </tr>
           ))}
         </tbody>
         <tfoot>
           <tr>
-            <td colSpan={5} style={{ textAlign: 'right', fontWeight: 700, color: 'var(--mswd-navy)' }}>Total</td>
+            <td colSpan={6} style={{ textAlign: 'right', fontWeight: 700, color: 'var(--mswd-navy)' }}>Total</td>
             <td style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: 'var(--mswd-navy)' }}>
               {formatPeso(pr.totalAmount)}
             </td>

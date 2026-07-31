@@ -290,6 +290,32 @@
   box-sizing: border-box;
 }
 
+.pr-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.pr-form-grid select,
+.pr-form-grid input,
+.pr-form-grid textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1.5px solid #d0d5dd;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.pr-form-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mswd-navy);
+  margin-bottom: 4px;
+}
+
 .pr-form-actions {
   display: flex;
   gap: 12px;

@@ -25,6 +25,37 @@
   margin: 0;
 }
 
+/* ── Stats Cards ── */
+.dashboard__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.dashboard__stat-card {
+  background: #fff;
+  border: 1.5px solid #eaecf0;
+  border-radius: 10px;
+  padding: 18px 20px;
+  text-align: center;
+}
+
+.dashboard__stat-value {
+  font-size: 28px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.dashboard__stat-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mswd-text-mid);
+  letter-spacing: 0.01em;
+}
+
 /* ── Pending Actions Section ── */
 .dashboard__section {
   margin-bottom: 32px;

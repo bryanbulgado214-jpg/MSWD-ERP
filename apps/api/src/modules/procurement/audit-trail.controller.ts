@@ -16,6 +16,7 @@ const PROCUREMENT_TABLES = new Set([
   'ors_children',
   'ors_adjustments',
   'suppliers',
+  'delegation_authorities',
 ]);
 
 @Controller('procurement/audit-trail')

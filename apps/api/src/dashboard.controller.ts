@@ -239,6 +239,66 @@ export class DashboardController {
     return { items, total: items.length };
   }
 
+  @Get('stats')
+  async getStats(@CurrentUser() user: AuthenticatedUser) {
+    const orgId = user.organizationId;
+    const perms = await this.getPermissions(user.userId);
+
+    const stats: { label: string; value: number; color: string }[] = [];
+
+    if (perms.has('procurement.read')) {
+      const [myDrafts, totalActive] = await Promise.all([
+        this.prisma.purchaseRequest.count({
+          where: { organizationId: orgId, createdBy: user.userId, status: 'draft' },
+        }),
+        this.prisma.purchaseRequest.count({
+          where: {
+            organizationId: orgId,
+            status: { notIn: ['cancelled', 'rejected', 'voided', 'completed'] },
+          },
+        }),
+      ]);
+      stats.push({ label: 'My Drafts', value: myDrafts, color: '#667085' });
+      stats.push({ label: 'Active PRs', value: totalActive, color: '#175cd3' });
+    }
+
+    if (perms.has('procurement.pr.endorse')) {
+      const count = await this.prisma.purchaseRequest.count({
+        where: { organizationId: orgId, status: 'submitted' },
+      });
+      stats.push({ label: 'Awaiting Endorsement', value: count, color: '#f59e0b' });
+    }
+
+    if (perms.has('procurement.pr.budget_certify')) {
+      const count = await this.prisma.purchaseRequest.count({
+        where: { organizationId: orgId, status: 'endorsed' },
+      });
+      stats.push({ label: 'Awaiting Budget Cert.', value: count, color: '#f59e0b' });
+    }
+
+    if (perms.has('procurement.pr.final_approve')) {
+      const count = await this.prisma.purchaseRequest.count({
+        where: { organizationId: orgId, status: 'budget_certified' },
+      });
+      stats.push({ label: 'Awaiting Approval', value: count, color: '#f59e0b' });
+    }
+
+    if (perms.has('procurement.po.create') || perms.has('procurement.pr.accept_procurement')) {
+      const [completedPRs, activePOs] = await Promise.all([
+        this.prisma.purchaseRequest.count({
+          where: { organizationId: orgId, status: 'completed' },
+        }),
+        this.prisma.purchaseOrder.count({
+          where: { organizationId: orgId, status: { notIn: ['cancelled'] } },
+        }),
+      ]);
+      stats.push({ label: 'Completed PRs', value: completedPRs, color: '#067647' });
+      stats.push({ label: 'Active POs', value: activePOs, color: '#0369a1' });
+    }
+
+    return { stats };
+  }
+
   private async getPermissions(userId: string): Promise<Set<string>> {
     const userRoles = await this.prisma.userRole.findMany({
       where: { userId },

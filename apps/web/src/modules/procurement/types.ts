@@ -1,3 +1,5 @@
+export type ItemClassification = 'inventory' | 'asset' | 'expense' | 'infrastructure' | 'service';
+
 export interface PurchaseRequestItem {
   id: string;
   itemNumber: number;
@@ -7,6 +9,8 @@ export interface PurchaseRequestItem {
   estimatedUnitCost: string;
   estimatedTotalCost: string;
   accountCode: string | null;
+  technicalSpecification: string | null;
+  classification: ItemClassification | null;
 }
 
 export type PurchaseRequestStatus =
@@ -73,6 +77,9 @@ export interface PurchaseRequest {
   fundSource?: { id: string; code: string; name: string };
   purpose?: string;
   ppmpItem?: { id: string; code: string; itemDescription: string };
+  appItem?: { id: string; appNumber: string; procurementProjectTitle: string };
+  requestedDeliveryDate?: string | null;
+  departmentId?: string | null;
 }
 
 export interface CreatePurchaseRequestItemInput {
@@ -81,13 +88,20 @@ export interface CreatePurchaseRequestItemInput {
   unitOfMeasure: string;
   estimatedUnitCost: number;
   accountCode?: string;
+  technicalSpecification?: string;
+  classification?: ItemClassification;
 }
 
 export interface CreatePurchaseRequestInput {
   budgetReleaseId: string;
   title: string;
   description?: string;
+  purpose?: string;
+  departmentId?: string;
+  requestedDeliveryDate?: string;
   ppmpItemId?: string;
+  appItemId?: string;
+  fiscalYearId?: string;
   items: CreatePurchaseRequestItemInput[];
 }
 
@@ -95,7 +109,12 @@ export interface UpdatePurchaseRequestInput {
   expectedVersion: number;
   title?: string;
   description?: string;
+  purpose?: string;
+  departmentId?: string;
+  requestedDeliveryDate?: string;
   budgetReleaseId?: string;
+  ppmpItemId?: string;
+  appItemId?: string;
   items?: CreatePurchaseRequestItemInput[];
 }
 

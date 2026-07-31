@@ -23,6 +23,36 @@ export class ProcurementLookupController {
     });
   }
 
+  @Get('users')
+  @RequirePermissions('procurement.read')
+  async listUsers(@CurrentUser() user: AuthenticatedUser) {
+    return this.prisma.user.findMany({
+      where: { organizationId: user.organizationId, isActive: true },
+      select: { id: true, username: true, email: true },
+      orderBy: { username: 'asc' },
+    });
+  }
+
+  @Get('permissions')
+  @RequirePermissions('procurement.read')
+  async listPermissions() {
+    return this.prisma.permission.findMany({
+      where: { code: { startsWith: 'procurement.' } },
+      select: { id: true, code: true, name: true },
+      orderBy: { code: 'asc' },
+    });
+  }
+
+  @Get('departments')
+  @RequirePermissions('procurement.read')
+  async listDepartments(@CurrentUser() user: AuthenticatedUser) {
+    return this.prisma.department.findMany({
+      where: { organizationId: user.organizationId },
+      select: { id: true, name: true, code: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
   @Get('budget-releases')
   @RequirePermissions('procurement.read')
   async listBudgetReleases(

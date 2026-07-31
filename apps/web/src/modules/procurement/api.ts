@@ -470,4 +470,115 @@ export async function listAuditTrail(filters?: { tableName?: string; recordId?: 
   return res.json();
 }
 
+// ── APP Items ──
+
+export interface AppItem {
+  id: string;
+  appNumber: string;
+  procurementProjectTitle: string;
+  procurementCategory: string;
+  approvedBudget: string;
+  procurementMode: string | null;
+  scheduleMonth: number | null;
+  status: string;
+  ppmpItem: { id: string; code: string; itemDescription: string };
+  fiscalYear: { id: string; year: number; name: string };
+}
+
+export async function listAppItems(filters?: { fiscalYearId?: string; status?: string }): Promise<AppItem[]> {
+  const params = new URLSearchParams();
+  if (filters?.fiscalYearId) params.set('fiscalYearId', filters.fiscalYearId);
+  if (filters?.status) params.set('status', filters.status);
+  const qs = params.toString();
+  const res = await authFetch(`/procurement/app-items${qs ? `?${qs}` : ''}`);
+  return res.json();
+}
+
+// ── Delegation Authorities ──
+
+export interface Delegation {
+  id: string;
+  delegatorUserId: string;
+  delegateUserId: string;
+  permissionCode: string;
+  effectiveDate: string;
+  expirationDate: string;
+  amountLimit: string | null;
+  scopeDepartmentId: string | null;
+  status: 'active' | 'revoked' | 'expired';
+  remarks: string | null;
+  createdAt: string;
+  version: number;
+  delegator: { id: string; username: string };
+  delegate: { id: string; username: string };
+  scopeDepartment: { id: string; name: string } | null;
+  creator: { id: string; username: string } | null;
+}
+
+export async function listDelegations(filters?: { delegatorUserId?: string; delegateUserId?: string; status?: string }): Promise<Delegation[]> {
+  const params = new URLSearchParams();
+  if (filters?.delegatorUserId) params.set('delegatorUserId', filters.delegatorUserId);
+  if (filters?.delegateUserId) params.set('delegateUserId', filters.delegateUserId);
+  if (filters?.status) params.set('status', filters.status);
+  const qs = params.toString();
+  const res = await authFetch(`/procurement/delegations${qs ? `?${qs}` : ''}`);
+  return res.json();
+}
+
+export async function createDelegation(data: {
+  delegateUserId: string;
+  permissionCode: string;
+  effectiveDate: string;
+  expirationDate: string;
+  amountLimit?: number;
+  scopeDepartmentId?: string;
+  remarks?: string;
+}): Promise<Delegation> {
+  const res = await authFetchMutate('/procurement/delegations', 'POST', data);
+  return res.json();
+}
+
+export async function revokeDelegation(id: string, expectedVersion: number, remarks?: string): Promise<Delegation> {
+  const res = await authFetchMutate(`/procurement/delegations/${id}/revoke`, 'PATCH', {
+    expectedVersion,
+    ...(remarks ? { remarks } : {}),
+  });
+  return res.json();
+}
+
+// ── Lookups ──
+
+export interface LookupUser {
+  id: string;
+  username: string;
+  email: string;
+}
+
+export interface LookupPermission {
+  id: string;
+  code: string;
+  name: string;
+}
+
+export interface LookupDepartment {
+  id: string;
+  name: string;
+  code: string;
+}
+
+export async function listLookupUsers(): Promise<LookupUser[]> {
+  const res = await authFetch('/procurement/lookups/users');
+  return res.json();
+}
+
+export async function listLookupPermissions(): Promise<LookupPermission[]> {
+  const res = await authFetch('/procurement/lookups/permissions');
+  return res.json();
+}
+
+export async function listLookupDepartments(): Promise<LookupDepartment[]> {
+  const res = await authFetch('/procurement/lookups/departments');
+  return res.json();
+}
+
 export { ProcurementApiError };

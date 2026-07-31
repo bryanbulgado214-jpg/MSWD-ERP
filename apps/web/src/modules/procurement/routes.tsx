@@ -1,6 +1,7 @@
 import type { RouteObject } from 'react-router-dom';
 
 import { AuditTrailPage } from './pages/AuditTrailPage';
+import { DelegationPage } from './pages/DelegationPage';
 import { CafDetailPage } from './pages/CafDetailPage';
 import { CafListPage } from './pages/CafListPage';
 import { CreatePurchaseRequestPage } from './pages/CreatePurchaseRequestPage';
@@ -67,6 +68,10 @@ export const procurementRoutes: RouteObject[] = [
   {
     path: '/procurement/ors/:id',
     element: <OrsDetailPage />,
+  },
+  {
+    path: '/procurement/delegations',
+    element: <DelegationPage />,
   },
   {
     path: '/procurement/audit-trail',

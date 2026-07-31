@@ -2,6 +2,7 @@ import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-d
 
 import { useAuth } from './auth';
 import { hasModuleAccess } from './module-access';
+import { NotificationBell } from './NotificationBell';
 import './app-layout.css';
 
 const MODULE_NAV = [
@@ -53,6 +54,7 @@ export function AppLayout() {
           </div>
         </div>
         <div className="app-nav__user">
+          <NotificationBell />
           <span className="app-nav__username">{user.username}</span>
           <button type="button" className="app-nav__btn" onClick={handleSwitchUser}>Switch User</button>
           <button type="button" className="app-nav__btn app-nav__btn--logout" onClick={handleLogout}>Logout</button>
