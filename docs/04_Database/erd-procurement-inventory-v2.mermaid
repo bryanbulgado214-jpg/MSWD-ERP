@@ -1,0 +1,186 @@
+erDiagram
+    PURCHASE_REQUESTS ||--o{ PURCHASE_REQUEST_LINES : contains
+    PURCHASE_REQUEST_LINES }o--|| ITEMS : requests
+    PURCHASE_REQUESTS ||--o{ CANVASSES : triggers
+    CANVASSES ||--o{ CANVASS_QUOTATIONS : receives
+    SUPPLIERS ||--o{ CANVASS_QUOTATIONS : submits
+    SUPPLIERS ||--o{ SUPPLIER_CONTACTS : has
+
+    PURCHASE_REQUESTS ||--o{ PURCHASE_ORDERS : becomes
+    SUPPLIERS ||--o{ PURCHASE_ORDERS : receives
+    OBLIGATION_REQUESTS ||--o{ PURCHASE_ORDERS : "budget gate"
+    PURCHASE_ORDERS ||--o{ PURCHASE_ORDER_LINES : contains
+    PURCHASE_ORDER_LINES }o--|| ITEMS : orders
+    PURCHASE_REQUEST_LINES ||--o{ PURCHASE_ORDER_LINES : fulfilled_by
+
+    SUPPLIERS ||--o{ CONTRACTS : "awarded to"
+    OBLIGATION_REQUESTS ||--o{ CONTRACTS : "budget gate"
+
+    PURCHASE_ORDERS ||--o{ INSPECTION_ACCEPTANCE_REPORTS : "delivered via (PO path)"
+    CONTRACTS ||--o{ INSPECTION_ACCEPTANCE_REPORTS : "delivered via (contract path)"
+    INSPECTION_ACCEPTANCE_REPORTS ||--o{ INSPECTION_ACCEPTANCE_REPORT_LINES : contains
+
+    INSPECTION_ACCEPTANCE_REPORTS ||--o{ STOCK_LEDGER_ENTRIES : generates
+    ITEM_CATEGORIES ||--o{ ITEMS : classifies
+    ITEMS ||--o{ STOCK_LEDGER_ENTRIES : tracked_by
+    WAREHOUSES ||--o{ STOCK_LEDGER_ENTRIES : located_at
+
+    STOCK_ISSUANCES ||--o{ STOCK_ISSUANCE_LINES : contains
+    STOCK_ISSUANCE_LINES }o--|| ITEMS : issues
+    STOCK_ISSUANCES ||--o{ STOCK_LEDGER_ENTRIES : generates
+
+    ITEMS ||--o{ PROPERTY_CUSTODIANSHIPS : assigned_as
+    INSPECTION_ACCEPTANCE_REPORT_LINES ||--o{ PROPERTY_CUSTODIANSHIPS : "sourced from"
+    WAREHOUSES ||--o{ PHYSICAL_COUNTS : counted_at
+    PHYSICAL_COUNTS ||--o{ PHYSICAL_COUNT_LINES : contains
+
+    SUPPLIERS {
+        uuid id PK
+        text code
+        text name
+        text tin
+        bool is_active
+    }
+    SUPPLIER_CONTACTS {
+        uuid id PK
+        uuid supplier_id FK
+        text name
+        text phone
+    }
+    PURCHASE_REQUESTS {
+        uuid id PK
+        uuid department_id FK
+        uuid responsibility_center_id FK
+        uuid fiscal_year_id FK "direct — no obligation exists yet at PR stage"
+        text status
+        uuid created_by FK
+    }
+    PURCHASE_REQUEST_LINES {
+        uuid id PK
+        uuid purchase_request_id FK
+        uuid item_id FK "nullable — may be a service"
+        numeric quantity
+    }
+    CANVASSES {
+        uuid id PK
+        uuid purchase_request_id FK
+        text status
+    }
+    CANVASS_QUOTATIONS {
+        uuid id PK
+        uuid canvass_id FK
+        uuid supplier_id FK
+        numeric unit_price
+        bool is_winner
+    }
+    PURCHASE_ORDERS {
+        uuid id PK
+        uuid purchase_request_id FK
+        uuid supplier_id FK
+        uuid obligation_request_id FK
+        uuid currency_id FK
+        numeric total_amount
+        text approval_status
+        text lifecycle_status
+        int version
+        uuid created_by FK
+    }
+    PURCHASE_ORDER_LINES {
+        uuid id PK
+        uuid purchase_order_id FK
+        uuid purchase_request_line_id FK
+        uuid item_id FK
+        numeric quantity
+        numeric unit_price
+    }
+    CONTRACTS {
+        uuid id PK
+        uuid supplier_id FK
+        uuid obligation_request_id FK
+        uuid currency_id FK
+        text contract_number
+        numeric total_amount
+        date start_date
+        date end_date
+        text approval_status
+        text lifecycle_status
+        int version
+        uuid created_by FK
+    }
+    INSPECTION_ACCEPTANCE_REPORTS {
+        uuid id PK
+        uuid purchase_order_id FK "exactly one of PO/contract set"
+        uuid contract_id FK "exactly one of PO/contract set"
+        date received_date
+        text status
+        uuid created_by FK
+    }
+    INSPECTION_ACCEPTANCE_REPORT_LINES {
+        uuid id PK
+        uuid inspection_acceptance_report_id FK
+        uuid purchase_order_line_id FK
+        numeric quantity_accepted
+    }
+    ITEM_CATEGORIES {
+        uuid id PK
+        uuid parent_category_id FK
+        text name
+    }
+    ITEMS {
+        uuid id PK
+        uuid item_category_id FK
+        smallint unit_of_measure_id FK
+        text item_type
+        text code
+        text name
+    }
+    WAREHOUSES {
+        uuid id PK
+        text code
+        text name
+    }
+    STOCK_LEDGER_ENTRIES {
+        uuid id PK
+        uuid item_id FK
+        uuid warehouse_id FK
+        text movement_type
+        numeric quantity_signed
+        text source_table
+        uuid source_id
+        timestamptz created_at
+    }
+    STOCK_ISSUANCES {
+        uuid id PK
+        uuid department_id FK
+        uuid warehouse_id FK
+        text status
+        uuid created_by FK
+    }
+    STOCK_ISSUANCE_LINES {
+        uuid id PK
+        uuid stock_issuance_id FK
+        uuid item_id FK
+        numeric quantity
+    }
+    PROPERTY_CUSTODIANSHIPS {
+        uuid id PK
+        uuid item_id FK
+        uuid employee_id FK
+        uuid source_iar_line_id FK "new — traces to originating delivery"
+        date assigned_date
+        date returned_date
+        text status
+    }
+    PHYSICAL_COUNTS {
+        uuid id PK
+        uuid warehouse_id FK
+        uuid accounting_period_id FK
+        text status
+    }
+    PHYSICAL_COUNT_LINES {
+        uuid id PK
+        uuid physical_count_id FK
+        uuid item_id FK
+        numeric system_quantity
+        numeric counted_quantity
+    }

@@ -1,0 +1,166 @@
+erDiagram
+    APPROPRIATIONS ||--o{ ALLOTMENT_RELEASE_LINES : releases_against
+    ALLOTMENT_RELEASES ||--o{ ALLOTMENT_RELEASE_LINES : contains
+    ACCOUNTING_PERIODS ||--o{ ALLOTMENT_RELEASES : issued_in
+
+    ALLOTMENT_RELEASE_LINES ||--o{ OBLIGATION_REQUESTS : reserves_against
+    OBLIGATION_REQUESTS ||--o{ OBLIGATION_REQUEST_LINES : breaks_down
+    OBLIGATION_REQUEST_LINES }o--|| CHART_OF_ACCOUNTS : posts_to
+
+    OBLIGATION_REQUESTS ||--o{ BUDGET_OVERRIDES : "may require"
+    BUDGET_OVERRIDES }o--|| USERS : "requested by / approved by"
+
+    OBLIGATION_REQUESTS ||--o{ DISBURSEMENT_VOUCHERS : paid_by
+    DISBURSEMENT_VOUCHERS ||--o{ DISBURSEMENT_VOUCHER_LINES : breaks_down
+    DISBURSEMENT_VOUCHER_LINES }o--|| CHART_OF_ACCOUNTS : posts_to
+
+    DISBURSEMENT_VOUCHERS ||--o{ CHECKS : issues
+    BANK_ACCOUNTS ||--o{ CHECKS : drawn_from
+    BANK_ACCOUNTS ||--o{ DISBURSEMENT_VOUCHERS : paid_from
+    CHECKS ||--o{ CHECK_STATUS_HISTORY : tracks
+
+    JOURNAL_ENTRIES ||--o{ JOURNAL_ENTRY_LINES : contains
+    JOURNAL_ENTRY_LINES }o--|| CHART_OF_ACCOUNTS : posts_to
+    ACCOUNTING_PERIODS ||--o{ JOURNAL_ENTRIES : posted_in
+
+    BANK_ACCOUNTS ||--o{ COLLECTIONS : received_into
+    ACCOUNTING_PERIODS ||--o{ COLLECTIONS : recorded_in
+    BANK_ACCOUNTS ||--o{ BANK_RECONCILIATIONS : reconciles
+    BANK_RECONCILIATIONS ||--o{ BANK_RECONCILIATION_LINES : contains
+    ACCOUNTING_PERIODS ||--o{ BANK_RECONCILIATIONS : covers
+
+    APPROPRIATIONS {
+        uuid id PK
+        uuid fiscal_year_id FK
+        uuid responsibility_center_id FK
+        uuid fund_source_id FK
+        uuid account_id FK
+        uuid currency_id FK
+        numeric appropriated_amount
+        text status
+    }
+    ALLOTMENT_RELEASES {
+        uuid id PK
+        uuid accounting_period_id FK
+        text release_number
+        date release_date
+        text status
+    }
+    ALLOTMENT_RELEASE_LINES {
+        uuid id PK
+        uuid allotment_release_id FK
+        uuid appropriation_id FK
+        numeric allotted_amount
+        numeric obligated_amount
+        numeric available_amount "GENERATED: allotted - obligated"
+    }
+    OBLIGATION_REQUESTS {
+        uuid id PK
+        uuid allotment_release_line_id FK
+        uuid responsibility_center_id FK
+        numeric total_amount
+        text approval_status
+        text lifecycle_status
+        int version
+        timestamptz created_at
+        uuid created_by FK
+    }
+    OBLIGATION_REQUEST_LINES {
+        uuid id PK
+        uuid obligation_request_id FK
+        uuid account_id FK
+        numeric amount
+    }
+    BUDGET_OVERRIDES {
+        uuid id PK
+        text subject_table
+        uuid subject_id
+        uuid requested_by FK
+        text justification
+        numeric requested_amount_over
+        text status
+        uuid approved_by FK
+        timestamptz approved_at
+    }
+    DISBURSEMENT_VOUCHERS {
+        uuid id PK
+        uuid obligation_request_id FK
+        uuid bank_account_id FK
+        uuid currency_id FK
+        numeric total_amount
+        text payee_type
+        uuid payee_id
+        text approval_status
+        text lifecycle_status
+        int version
+        uuid created_by FK
+    }
+    DISBURSEMENT_VOUCHER_LINES {
+        uuid id PK
+        uuid disbursement_voucher_id FK
+        uuid account_id FK
+        numeric amount
+    }
+    CHECKS {
+        uuid id PK
+        uuid disbursement_voucher_id FK "NULL only if is_legacy_import"
+        uuid bank_account_id FK
+        uuid currency_id FK
+        text check_number
+        numeric amount
+        date check_date
+        text status
+        bool is_legacy_import
+        text legacy_source_reference
+        bool is_dv_link_validated
+        int version
+    }
+    CHECK_STATUS_HISTORY {
+        uuid id PK
+        uuid check_id FK
+        text from_status
+        text to_status
+        uuid changed_by FK
+        timestamptz changed_at
+    }
+    JOURNAL_ENTRIES {
+        uuid id PK
+        uuid accounting_period_id FK
+        text source_table
+        uuid source_id
+        text status
+        uuid created_by FK
+    }
+    JOURNAL_ENTRY_LINES {
+        uuid id PK
+        uuid journal_entry_id FK
+        uuid account_id FK
+        numeric debit_amount
+        numeric credit_amount
+        uuid currency_id FK
+    }
+    COLLECTIONS {
+        uuid id PK
+        uuid bank_account_id FK
+        uuid fund_source_id FK
+        uuid accounting_period_id FK
+        uuid currency_id FK
+        numeric amount
+        text payor_name
+        text status
+        uuid created_by FK
+    }
+    BANK_RECONCILIATIONS {
+        uuid id PK
+        uuid bank_account_id FK
+        uuid accounting_period_id FK
+        numeric book_balance
+        numeric bank_balance
+        text status
+    }
+    BANK_RECONCILIATION_LINES {
+        uuid id PK
+        uuid bank_reconciliation_id FK
+        text item_type
+        numeric amount
+    }

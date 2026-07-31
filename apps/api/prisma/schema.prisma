@@ -1,0 +1,1701 @@
+// MSWD ERP — Prisma schema.
+//
+// CORE PLATFORM ONLY. No Budgeting, Accounting, Procurement, Inventory,
+// or HR models exist yet — those are added in later, separate migrations
+// as each module is implemented, per docs/04_Database's approved
+// architecture and its documented implementation order.
+//
+// Naming: Prisma model/field names are idiomatic PascalCase/camelCase for
+// ergonomic TypeScript use; every model/field is explicitly mapped via
+// @@map/@map to a snake_case table/column name, so the actual database
+// schema is 100% snake_case as required — this is standard Prisma
+// practice, not a deviation from the naming standard.
+//
+// Reconciliation notes vs. docs/04_Database/MSWD_ERP_Database_Architecture_v2.md:
+// - Workflow tables use the names given in this implementation task
+//   (workflow_definitions / workflow_steps / workflow_instances /
+//   workflow_actions) rather than v2's (workflow_templates /
+//   workflow_template_steps / workflow_instances / workflow_approvals).
+//   This supersedes v2's naming for these four tables.
+// - organizational_units, locations, document_sequences, comments,
+//   notifications, and system_settings are new tables not present in v2,
+//   added per this task's explicit 24-table list.
+// - currencies, banks, bank_accounts, chart_of_accounts, and
+//   unit_of_measures from v2's "core" schema are DEFERRED — not part of
+//   this Core Platform pass, per the explicit instruction to implement
+//   only the 24 listed tables. organization_settings therefore stores a
+//   plain default_currency_code for now rather than a currency_id FK;
+//   that becomes a proper FK once the currencies table exists in a later
+//   migration (additive, non-breaking change).
+// See docs/04_Database/ for the full rationale.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// ENUMS
+// ════════════════════════════════════════════════════════════════════
+
+enum OrganizationalUnitType {
+  organization_wide
+  division
+  department
+  section
+  office
+  unit
+
+  @@map("organizational_unit_type")
+}
+
+enum FiscalYearStatus {
+  open
+  closed
+
+  @@map("fiscal_year_status")
+}
+
+enum AccountingPeriodStatus {
+  open
+  closed
+
+  @@map("accounting_period_status")
+}
+
+enum AuditAction {
+  insert
+  update
+  delete
+  status_change
+
+  @@map("audit_action")
+}
+
+enum WorkflowInstanceStatus {
+  in_progress
+  approved
+  rejected
+  cancelled
+
+  @@map("workflow_instance_status")
+}
+
+enum WorkflowActionDecision {
+  approved
+  rejected
+  returned
+  cancelled
+
+  @@map("workflow_action_decision")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// ORGANIZATION STRUCTURE
+// ════════════════════════════════════════════════════════════════════
+
+/// One row per organization. V1 seeds exactly one row — this table exists
+/// so a future multi-organization deployment is a data-population
+/// exercise, not a schema migration. No organization-specific values are
+/// hard-coded into the schema itself; they only ever live in seed data.
+model Organization {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code      String   @unique @db.VarChar(20)
+  name      String   @db.VarChar(255)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  settings             OrganizationSettings?
+  departments          Department[]
+  organizationalUnits  OrganizationalUnit[]
+  responsibilityCenters ResponsibilityCenter[]
+  locations            Location[]
+  users                User[]
+  roles                Role[]
+  fiscalYears          FiscalYear[]
+  fundSources          FundSource[]
+  documentSequences    DocumentSequence[]
+  attachments          Attachment[]
+  comments             Comment[]
+  auditLogs            AuditLog[]
+  workflowDefinitions  WorkflowDefinition[]
+  workflowInstances    WorkflowInstance[]
+  notifications        Notification[]
+  budgetCycles         BudgetCycle[]
+  budgetHeaders        BudgetHeader[]
+  budgetReleases       BudgetRelease[]
+  budgetReservations   BudgetReservation[]
+  budgetTransactionLogs BudgetTransactionLog[]
+  purchaseRequests     PurchaseRequest[]
+  procurementCategories ProcurementCategory[]
+  ppmpItems            PpmpItem[]
+  appItems             AppItem[]
+  delegationAuthorities DelegationAuthority[]
+  suppliers             Supplier[]
+  purchaseOrders        PurchaseOrder[]
+  cafs                  CertificationOfAvailability[]
+  obligationRequests    ObligationRequest[]
+
+  @@map("organizations")
+}
+
+/// Exactly one row per organization (enforced by the unique
+/// organization_id). Org-wide configuration.
+model OrganizationSettings {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId         String   @unique @map("organization_id") @db.Uuid
+  legalName              String   @map("legal_name") @db.VarChar(255)
+  /// ISO 4217 code. Plain text for now — see reconciliation note at top
+  /// of file re: deferred currencies table.
+  defaultCurrencyCode    String   @default("PHP") @map("default_currency_code") @db.VarChar(3)
+  fiscalYearStartMonth   Int      @default(1) @map("fiscal_year_start_month") @db.SmallInt
+  timezone               String   @default("Asia/Manila") @db.VarChar(50)
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedBy              String?  @map("updated_by") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  updater      User?         @relation("OrganizationSettingsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  @@map("organization_settings")
+}
+
+/// Generic hierarchical org-unit tree (any level: division, section,
+/// office, etc.). `departments` and `responsibility_centers` are
+/// specific specializations that each hang off a node in this tree,
+/// rather than each maintaining their own separate hierarchy.
+model OrganizationalUnit {
+  id             String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String                 @map("organization_id") @db.Uuid
+  parentUnitId   String?                @map("parent_unit_id") @db.Uuid
+  unitType       OrganizationalUnitType @map("unit_type")
+  code           String                 @db.VarChar(20)
+  name           String                 @db.VarChar(255)
+  isActive       Boolean                @default(true) @map("is_active")
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  parentUnit   OrganizationalUnit?  @relation("OrgUnitHierarchy", fields: [parentUnitId], references: [id], onDelete: Restrict)
+  childUnits   OrganizationalUnit[] @relation("OrgUnitHierarchy")
+
+  departments           Department[]
+  responsibilityCenters ResponsibilityCenter[]
+  userRoles             UserRole[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([parentUnitId])
+  @@map("organizational_units")
+}
+
+/// The formal, HR-recognized "Department" level of the org chart — a
+/// specific specialization of OrganizationalUnit, not a parallel
+/// hierarchy of its own.
+model Department {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String   @map("organization_id") @db.Uuid
+  organizationalUnitId String   @unique @map("organizational_unit_id") @db.Uuid
+  code                 String   @db.VarChar(20)
+  name                 String   @db.VarChar(255)
+  isActive             Boolean  @default(true) @map("is_active")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  organizationalUnit OrganizationalUnit @relation(fields: [organizationalUnitId], references: [id], onDelete: Restrict)
+
+  purchaseRequests      PurchaseRequest[]
+  ppmpItems             PpmpItem[]
+  delegationAuthorities DelegationAuthority[]
+  obligationRequests    ObligationRequest[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("departments")
+}
+
+/// Budgetary/accountability center — may map to any level of the
+/// organizational unit tree, not necessarily a full Department.
+model ResponsibilityCenter {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String   @map("organization_id") @db.Uuid
+  organizationalUnitId String   @map("organizational_unit_id") @db.Uuid
+  code                 String   @db.VarChar(20)
+  name                 String   @db.VarChar(255)
+  isActive             Boolean  @default(true) @map("is_active")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  organizationalUnit OrganizationalUnit @relation(fields: [organizationalUnitId], references: [id], onDelete: Restrict)
+
+  budgetHeaders    BudgetHeader[]
+  purchaseRequests   PurchaseRequest[]
+  cafs               CertificationOfAvailability[]
+  obligationRequests ObligationRequest[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([organizationalUnitId])
+  @@map("responsibility_centers")
+}
+
+/// Physical location master (offices, warehouses-to-be, sites) — generic
+/// enough to be reused by future Inventory/HR modules without
+/// duplicating an address table per module.
+model Location {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  code           String   @db.VarChar(20)
+  name           String   @db.VarChar(255)
+  addressLine1   String?  @map("address_line1") @db.VarChar(255)
+  addressLine2   String?  @map("address_line2") @db.VarChar(255)
+  city           String?  @db.VarChar(100)
+  region         String?  @db.VarChar(100)
+  postalCode     String?  @map("postal_code") @db.VarChar(20)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  purchaseRequests PurchaseRequest[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("locations")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// IDENTITY & ACCESS
+// ════════════════════════════════════════════════════════════════════
+
+/// Login accounts. Never stores a plain-text password — only a hash.
+model User {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  username       String    @db.VarChar(50)
+  email          String    @db.VarChar(255)
+  /// Bcrypt/argon2 hash — application layer is responsible for hashing;
+  /// this column never receives a plain-text value.
+  passwordHash   String    @map("password_hash") @db.VarChar(255)
+  isActive       Boolean   @default(true) @map("is_active")
+  lastLoginAt    DateTime? @map("last_login_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version        Int       @default(1)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  userRoles                  UserRole[]                @relation("UserRolesForUser")
+  grantedUserRoles            UserRole[]                @relation("UserRolesGrantedBy")
+  grantedRolePermissions       RolePermission[]         @relation("RolePermissionsGrantedBy")
+  auditLogs                   AuditLog[]                @relation("AuditLogsPerformedBy")
+  uploadedAttachments          Attachment[]              @relation("AttachmentsUploadedBy")
+  authoredComments             Comment[]                @relation("CommentsCreatedBy")
+  workflowActions               WorkflowAction[]          @relation("WorkflowActionsActor")
+  notifications                  Notification[]
+  organizationSettingsUpdates     OrganizationSettings[]   @relation("OrganizationSettingsUpdatedBy")
+  systemSettingsUpdates            SystemSetting[]         @relation("SystemSettingsUpdatedBy")
+  createdBudgetCycles                BudgetCycle[]         @relation("BudgetCyclesCreatedBy")
+  updatedBudgetCycles                BudgetCycle[]         @relation("BudgetCyclesUpdatedBy")
+  createdBudgetVersions               BudgetVersion[]      @relation("BudgetVersionsCreatedBy")
+  updatedBudgetVersions               BudgetVersion[]      @relation("BudgetVersionsUpdatedBy")
+  createdBudgetHeaders                 BudgetHeader[]      @relation("BudgetHeadersCreatedBy")
+  updatedBudgetHeaders                 BudgetHeader[]      @relation("BudgetHeadersUpdatedBy")
+  createdBudgetLines                    BudgetLine[]       @relation("BudgetLinesCreatedBy")
+  updatedBudgetLines                    BudgetLine[]       @relation("BudgetLinesUpdatedBy")
+  createdBudgetReleases                   BudgetRelease[]     @relation("BudgetReleasesCreatedBy")
+  updatedBudgetReleases                   BudgetRelease[]     @relation("BudgetReleasesUpdatedBy")
+  createdBudgetReservations                 BudgetReservation[] @relation("BudgetReservationsCreatedBy")
+  updatedBudgetReservations                 BudgetReservation[] @relation("BudgetReservationsUpdatedBy")
+  budgetTransactionLogs                       BudgetTransactionLog[] @relation("BudgetTransactionLogsCreatedBy")
+  createdPurchaseRequests                       PurchaseRequest[] @relation("PurchaseRequestsCreatedBy")
+  updatedPurchaseRequests                       PurchaseRequest[] @relation("PurchaseRequestsUpdatedBy")
+  departmentHeadPurchaseRequests                PurchaseRequest[] @relation("PurchaseRequestsDeptHead")
+  budgetCertifiedPurchaseRequests               PurchaseRequest[] @relation("PurchaseRequestsBudgetCertifiedBy")
+  approvedPurchaseRequests                      PurchaseRequest[] @relation("PurchaseRequestsApprovedBy")
+  endorsedPurchaseRequests                      PurchaseRequest[] @relation("PurchaseRequestsEndorsedBy")
+  createdPpmpItems                              PpmpItem[]        @relation("PpmpItemsCreatedBy")
+  updatedPpmpItems                              PpmpItem[]        @relation("PpmpItemsUpdatedBy")
+  approvedPpmpItems                             PpmpItem[]        @relation("PpmpItemsApprovedBy")
+  assignedPpmpItems                             PpmpItem[]        @relation("PpmpItemsAssignedTo")
+  createdAppItems                               AppItem[]         @relation("AppItemsCreatedBy")
+  updatedAppItems                               AppItem[]         @relation("AppItemsUpdatedBy")
+  createdPrRevisions                            PrRevision[]      @relation("PrRevisionsCreatedBy")
+  delegationsGiven                              DelegationAuthority[] @relation("DelegationsGiven")
+  delegationsReceived                           DelegationAuthority[] @relation("DelegationsReceived")
+  delegationsCreated                            DelegationAuthority[] @relation("DelegationsCreatedBy")
+  createdSuppliers                              Supplier[]            @relation("SuppliersCreatedBy")
+  updatedSuppliers                              Supplier[]            @relation("SuppliersUpdatedBy")
+  approvedPurchaseOrders                        PurchaseOrder[]       @relation("PurchaseOrdersApprovedBy")
+  createdPurchaseOrders                         PurchaseOrder[]       @relation("PurchaseOrdersCreatedBy")
+  updatedPurchaseOrders                         PurchaseOrder[]       @relation("PurchaseOrdersUpdatedBy")
+  certifiedCafs                                 CertificationOfAvailability[] @relation("CafsCertifiedBy")
+  createdCafs                                   CertificationOfAvailability[] @relation("CafsCreatedBy")
+  updatedCafs                                   CertificationOfAvailability[] @relation("CafsUpdatedBy")
+  orsRequestingOfficeCertifications             ObligationRequest[]   @relation("OrsRequestingOfficeCertifiedBy")
+  orsBudgetCertifications                       ObligationRequest[]   @relation("OrsBudgetCertifiedBy")
+  createdOrs                                    ObligationRequest[]   @relation("OrsCreatedBy")
+  updatedOrs                                    ObligationRequest[]   @relation("OrsUpdatedBy")
+  certifiedOrsChildren                          OrsChild[]            @relation("OrsChildrenCertifiedBy")
+  createdOrsChildren                            OrsChild[]            @relation("OrsChildrenCreatedBy")
+  updatedOrsChildren                            OrsChild[]            @relation("OrsChildrenUpdatedBy")
+  approvedOrsAdjustments                        OrsAdjustment[]       @relation("OrsAdjustmentsApprovedBy")
+  createdOrsAdjustments                         OrsAdjustment[]       @relation("OrsAdjustmentsCreatedBy")
+
+  @@unique([organizationId, username])
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@map("users")
+}
+
+/// Named role. Tenant-scoped (a future multi-org deployment can define
+/// different roles per organization) but the *seeded* system roles are
+/// identical in shape across organizations — only the data differs.
+model Role {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  code           String   @db.VarChar(50)
+  name           String   @db.VarChar(100)
+  description    String?
+  /// Seeded roles the application depends on (e.g. Cashier, Admin).
+  /// Blocks deletion at the application layer regardless of the RESTRICT
+  /// FK protection that already applies once a role is actually in use.
+  isSystemRole   Boolean  @default(false) @map("is_system_role")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+  workflowSteps   WorkflowStep[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("roles")
+}
+
+/// Fixed catalog of fine-grained permissions defined by the application
+/// itself (e.g. `accounting.check.void`) — not tenant data, so no
+/// organization_id: every organization shares the same permission
+/// catalog, they just grant different subsets to different roles.
+model Permission {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String   @unique @db.VarChar(100)
+  name        String   @db.VarChar(150)
+  description String?
+  module      String   @db.VarChar(50)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  rolePermissions RolePermission[]
+
+  @@index([module])
+  @@map("permissions")
+}
+
+/// Which roles a user holds. `organizational_unit_id` is NOT NULL by
+/// design — every organization is seeded with one organization_wide
+/// OrganizationalUnit row representing "the whole org," so an
+/// unscoped/global role assignment still has a concrete, non-null unit
+/// to point at. This avoids NULL-valued unique-constraint columns (which
+/// Postgres treats as always-distinct, silently allowing duplicate
+/// "global" assignments) without needing a partial index.
+model UserRole {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId               String   @map("user_id") @db.Uuid
+  roleId               String   @map("role_id") @db.Uuid
+  organizationalUnitId String   @map("organizational_unit_id") @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy            String?  @map("created_by") @db.Uuid
+
+  user               User               @relation("UserRolesForUser", fields: [userId], references: [id], onDelete: Cascade)
+  role               Role               @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  organizationalUnit OrganizationalUnit @relation(fields: [organizationalUnitId], references: [id], onDelete: Restrict)
+  grantedBy          User?              @relation("UserRolesGrantedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@unique([userId, roleId, organizationalUnitId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+/// Which permissions a role grants.
+model RolePermission {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roleId       String   @map("role_id") @db.Uuid
+  permissionId String   @map("permission_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy    String?  @map("created_by") @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Restrict)
+  grantedBy  User?      @relation("RolePermissionsGrantedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// FISCAL CALENDAR & FUND SOURCES
+// ════════════════════════════════════════════════════════════════════
+
+model FiscalYear {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  year           Int
+  name           String           @db.VarChar(50)
+  startDate      DateTime         @map("start_date") @db.Date
+  endDate        DateTime         @map("end_date") @db.Date
+  status         FiscalYearStatus @default(open)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version        Int              @default(1)
+
+  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  accountingPeriods AccountingPeriod[]
+  documentSequences DocumentSequence[]
+  budgetCycles      BudgetCycle[]
+  purchaseRequests  PurchaseRequest[]
+  ppmpItems         PpmpItem[]
+  appItems          AppItem[]
+  cafs              CertificationOfAvailability[]
+
+  @@unique([organizationId, year])
+  @@index([organizationId])
+  @@map("fiscal_years")
+}
+
+model AccountingPeriod {
+  id           String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fiscalYearId String                 @map("fiscal_year_id") @db.Uuid
+  periodNumber Int                    @map("period_number") @db.SmallInt
+  name         String                 @db.VarChar(50)
+  startDate    DateTime               @map("start_date") @db.Date
+  endDate      DateTime               @map("end_date") @db.Date
+  status       AccountingPeriodStatus @default(open)
+  createdAt    DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version      Int                    @default(1)
+
+  fiscalYear FiscalYear @relation(fields: [fiscalYearId], references: [id], onDelete: Restrict)
+
+  @@unique([fiscalYearId, periodNumber])
+  @@index([fiscalYearId])
+  @@map("accounting_periods")
+}
+
+model FundSource {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  code           String   @db.VarChar(20)
+  name           String   @db.VarChar(255)
+  description    String?
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  budgetHeaders      BudgetHeader[]
+  purchaseRequests   PurchaseRequest[]
+  cafs               CertificationOfAvailability[]
+  obligationRequests ObligationRequest[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("fund_sources")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// DOCUMENT NUMBERING
+// ════════════════════════════════════════════════════════════════════
+
+/// One counter per (organization, document type, fiscal year). The
+/// application increments `next_number` inside a transaction using
+/// `UPDATE ... SET next_number = next_number + 1 RETURNING next_number`,
+/// which takes an implicit row lock — two concurrent requests for the
+/// same sequence serialize on that row instead of racing to the same
+/// number, the same concurrency-safety pattern used for budget checks
+/// elsewhere in the architecture.
+model DocumentSequence {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  documentType     String    @map("document_type") @db.VarChar(50)
+  fiscalYearId     String?   @map("fiscal_year_id") @db.Uuid
+  prefix           String    @db.VarChar(20)
+  nextNumber       BigInt    @default(1) @map("next_number")
+  padding          Int       @default(6) @db.SmallInt
+  lastGeneratedAt  DateTime? @map("last_generated_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version          Int       @default(1)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  fiscalYear   FiscalYear?  @relation(fields: [fiscalYearId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, documentType, fiscalYearId])
+  @@index([organizationId])
+  @@map("document_sequences")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// CROSS-CUTTING: ATTACHMENTS, COMMENTS, AUDIT, WORKFLOW, NOTIFICATIONS
+// ════════════════════════════════════════════════════════════════════
+
+/// Polymorphic document metadata, attachable to a row in any module's
+/// table. Referential integrity to the attached row is enforced at the
+/// application layer, not a DB foreign key — Postgres cannot express "FK
+/// to whichever table attachable_table names." This is an accepted,
+/// explicit trade-off documented in the architecture, not an oversight.
+model Attachment {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  attachableTable String   @map("attachable_table") @db.VarChar(100)
+  attachableId    String   @map("attachable_id") @db.Uuid
+  fileName        String   @map("file_name") @db.VarChar(255)
+  filePath        String   @map("file_path") @db.VarChar(500)
+  mimeType        String   @map("mime_type") @db.VarChar(150)
+  fileSizeBytes   BigInt   @map("file_size_bytes")
+  uploadedBy      String?  @map("uploaded_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  uploader     User?        @relation("AttachmentsUploadedBy", fields: [uploadedBy], references: [id], onDelete: SetNull)
+
+  @@index([attachableTable, attachableId])
+  @@index([organizationId])
+  @@map("attachments")
+}
+
+/// Polymorphic comment thread, attachable to a row in any module's
+/// table. Soft-deleted (is_deleted) rather than hard-deleted — a
+/// deliberate use of soft deletion because a removed comment in a
+/// discussion thread should leave a visible "[comment removed]" trace
+/// rather than silently renumbering/collapsing the thread.
+model Comment {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  commentableTable String   @map("commentable_table") @db.VarChar(100)
+  commentableId    String   @map("commentable_id") @db.Uuid
+  body             String
+  isDeleted        Boolean  @default(false) @map("is_deleted")
+  createdBy        String?  @map("created_by") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  author       User?        @relation("CommentsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([commentableTable, commentableId])
+  @@index([organizationId])
+  @@map("comments")
+}
+
+/// Trigger-populated (not application-populated) change log — see the
+/// migration SQL for the trigger function. Append-only from the
+/// application's perspective: no UPDATE/DELETE code path exists or
+/// should ever exist against this table at the application layer. No
+/// `updated_at`/`updated_by` on purpose — a log entry is never edited.
+model AuditLog {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String?     @map("organization_id") @db.Uuid
+  tableName      String      @map("table_name") @db.VarChar(100)
+  recordId       String      @map("record_id") @db.Uuid
+  action         AuditAction
+  changedFields  Json?       @map("changed_fields")
+  performedBy    String?     @map("performed_by") @db.Uuid
+  performedAt    DateTime    @default(now()) @map("performed_at") @db.Timestamptz(6)
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  performer    User?         @relation("AuditLogsPerformedBy", fields: [performedBy], references: [id], onDelete: SetNull)
+
+  @@index([tableName, recordId])
+  @@index([performedAt])
+  @@index([organizationId])
+  @@map("audit_logs")
+}
+
+/// Reusable approval-flow shape (e.g. "Purchase Order Approval"),
+/// applicable to any document type across any module.
+model WorkflowDefinition {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(150)
+  appliesToTable String   @map("applies_to_table") @db.VarChar(100)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version        Int      @default(1)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  steps     WorkflowStep[]
+  instances WorkflowInstance[]
+
+  @@index([organizationId])
+  @@index([appliesToTable])
+  @@map("workflow_definitions")
+}
+
+/// Ordered steps within a workflow definition.
+model WorkflowStep {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowDefinitionId String   @map("workflow_definition_id") @db.Uuid
+  stepOrder            Int      @map("step_order") @db.SmallInt
+  name                 String   @db.VarChar(150)
+  approverRoleId       String   @map("approver_role_id") @db.Uuid
+  isFinalStep          Boolean  @default(false) @map("is_final_step")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  workflowDefinition WorkflowDefinition @relation(fields: [workflowDefinitionId], references: [id], onDelete: Cascade)
+  approverRole       Role               @relation(fields: [approverRoleId], references: [id], onDelete: Restrict)
+
+  workflowActions WorkflowAction[]
+
+  @@unique([workflowDefinitionId, stepOrder])
+  @@index([workflowDefinitionId])
+  @@map("workflow_steps")
+}
+
+/// One in-flight (or completed) approval process attached to one
+/// specific document, anywhere in the system — polymorphic subject,
+/// same pattern as Attachment/Comment above.
+model WorkflowInstance {
+  id                   String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String                  @map("organization_id") @db.Uuid
+  workflowDefinitionId String                  @map("workflow_definition_id") @db.Uuid
+  subjectTable         String                  @map("subject_table") @db.VarChar(100)
+  subjectId            String                  @map("subject_id") @db.Uuid
+  status               WorkflowInstanceStatus  @default(in_progress)
+  createdAt            DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version              Int                     @default(1)
+
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  workflowDefinition WorkflowDefinition @relation(fields: [workflowDefinitionId], references: [id], onDelete: Restrict)
+
+  actions WorkflowAction[]
+
+  @@index([subjectTable, subjectId])
+  @@index([organizationId])
+  @@map("workflow_instances")
+}
+
+/// One decision per step within an instance. Append-only, same as
+/// AuditLog — a recorded decision is never edited, only ever
+/// superseded by a new instance/step if a document is resubmitted.
+model WorkflowAction {
+  id                 String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowInstanceId String                 @map("workflow_instance_id") @db.Uuid
+  workflowStepId     String                 @map("workflow_step_id") @db.Uuid
+  actorUserId        String                 @map("actor_user_id") @db.Uuid
+  decision           WorkflowActionDecision
+  remarks            String?
+  actedAt            DateTime               @default(now()) @map("acted_at") @db.Timestamptz(6)
+
+  workflowInstance WorkflowInstance @relation(fields: [workflowInstanceId], references: [id], onDelete: Cascade)
+  workflowStep     WorkflowStep     @relation(fields: [workflowStepId], references: [id], onDelete: Restrict)
+  actor            User             @relation("WorkflowActionsActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([workflowInstanceId])
+  @@map("workflow_actions")
+}
+
+model Notification {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  title          String    @db.VarChar(255)
+  body           String?
+  isRead         Boolean   @default(false) @map("is_read")
+  readAt         DateTime? @map("read_at") @db.Timestamptz(6)
+  linkUrl        String?   @map("link_url") @db.VarChar(500)
+  relatedTable   String?   @map("related_table") @db.VarChar(100)
+  relatedId      String?   @map("related_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([organizationId])
+  @@map("notifications")
+}
+
+/// Global, application-wide configuration — NOT tenant data (no
+/// organization_id), distinct from OrganizationSettings which is
+/// per-organization.
+model SystemSetting {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key         String   @unique @db.VarChar(100)
+  value       String?
+  description String?
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedBy   String?  @map("updated_by") @db.Uuid
+
+  updater User? @relation("SystemSettingsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  @@map("system_settings")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// BUDGETING (Phase 1)
+//
+// Scope note: only budget_cycles / budget_versions / budget_headers /
+// budget_lines are implemented in this phase, per explicit instruction.
+// This is a different table set than budgeting.appropriations /
+// allotment_releases / allotment_release_lines / obligation_requests /
+// obligation_request_lines / budget_overrides described in
+// docs/04_Database/MSWD_ERP_Database_Architecture_v2.md §9 — that
+// design is not discarded, but this phase supersedes it with the
+// cycle → version → header → line structure below. Reconcile the
+// architecture doc in a follow-up before building further Budgeting
+// phases on top of this.
+//
+// chart_of_accounts and currencies are still not implemented (deferred,
+// same as Core Platform). budget_lines.account_code and
+// budget_headers.currency_code are therefore plain text for now, same
+// interim pattern as organization_settings.default_currency_code —
+// intended to become real foreign keys once those tables exist.
+// ════════════════════════════════════════════════════════════════════
+
+enum BudgetCycleStatus {
+  planning
+  active
+  closed
+
+  @@map("budget_cycle_status")
+}
+
+enum BudgetVersionStatus {
+  draft
+  submitted
+  approved
+  superseded
+  rejected
+
+  @@map("budget_version_status")
+}
+
+enum BudgetHeaderStatus {
+  draft
+  submitted
+  approved
+  rejected
+
+  @@map("budget_header_status")
+}
+
+/// One row per annual (or other) budgeting cycle — the overarching
+/// process a fiscal year's budget preparation happens under. Tenant-owned
+/// (organization_id), tied to the fiscal year it plans for.
+model BudgetCycle {
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String            @map("organization_id") @db.Uuid
+  fiscalYearId   String            @map("fiscal_year_id") @db.Uuid
+  code           String            @db.VarChar(20)
+  name           String            @db.VarChar(150)
+  status         BudgetCycleStatus @default(planning)
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy      String?           @map("created_by") @db.Uuid
+  updatedBy      String?           @map("updated_by") @db.Uuid
+  version        Int               @default(1)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  fiscalYear   FiscalYear   @relation(fields: [fiscalYearId], references: [id], onDelete: Restrict)
+  creator      User?        @relation("BudgetCyclesCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater      User?        @relation("BudgetCyclesUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  budgetVersions BudgetVersion[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([fiscalYearId])
+  @@map("budget_cycles")
+}
+
+/// A revision/iteration of a budget cycle's overall budget (e.g.
+/// "Original", "Revision 1"). Only one version per cycle is typically
+/// "current" at a time (is_current), tracked explicitly rather than
+/// inferred, since multiple approved versions may exist historically.
+model BudgetVersion {
+  id            String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  budgetCycleId String              @map("budget_cycle_id") @db.Uuid
+  versionNumber Int                 @map("version_number")
+  name          String              @db.VarChar(150)
+  status        BudgetVersionStatus @default(draft)
+  isCurrent     Boolean             @default(false) @map("is_current")
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?             @map("created_by") @db.Uuid
+  updatedBy     String?             @map("updated_by") @db.Uuid
+  version       Int                 @default(1)
+
+  budgetCycle BudgetCycle @relation(fields: [budgetCycleId], references: [id], onDelete: Restrict)
+  creator     User?       @relation("BudgetVersionsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater     User?       @relation("BudgetVersionsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  budgetHeaders BudgetHeader[]
+
+  @@unique([budgetCycleId, versionNumber])
+  @@index([budgetCycleId])
+  @@map("budget_versions")
+}
+
+/// One row per responsibility center + fund source within a budget
+/// version — the actual proposed/approved budget document for that
+/// unit. budget_lines below break this down by account.
+model BudgetHeader {
+  id                     String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId         String             @map("organization_id") @db.Uuid
+  budgetVersionId        String             @map("budget_version_id") @db.Uuid
+  responsibilityCenterId String             @map("responsibility_center_id") @db.Uuid
+  fundSourceId           String             @map("fund_source_id") @db.Uuid
+  /// Plain text pending a real currencies table — see file header note.
+  currencyCode           String             @default("PHP") @map("currency_code") @db.VarChar(3)
+  totalAmount            Decimal            @default(0) @map("total_amount") @db.Decimal(18, 2)
+  status                 BudgetHeaderStatus @default(draft)
+  createdAt              DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy              String?            @map("created_by") @db.Uuid
+  updatedBy              String?            @map("updated_by") @db.Uuid
+  version                Int                @default(1)
+
+  organization         Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  budgetVersion        BudgetVersion        @relation(fields: [budgetVersionId], references: [id], onDelete: Restrict)
+  responsibilityCenter ResponsibilityCenter @relation(fields: [responsibilityCenterId], references: [id], onDelete: Restrict)
+  fundSource           FundSource           @relation(fields: [fundSourceId], references: [id], onDelete: Restrict)
+  creator              User?                @relation("BudgetHeadersCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater              User?                @relation("BudgetHeadersUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  budgetLines    BudgetLine[]
+  budgetReleases BudgetRelease[]
+
+  @@unique([budgetVersionId, responsibilityCenterId, fundSourceId])
+  @@index([organizationId])
+  @@index([budgetVersionId])
+  @@index([responsibilityCenterId])
+  @@index([fundSourceId])
+  @@map("budget_headers")
+}
+
+/// Line-item breakdown of a budget header by account. Owned entirely by
+/// its header (no independent existence — deleting a header cascades to
+/// its lines, matching the header/lines deletion pattern used elsewhere
+/// in this schema; the header itself follows the RESTRICT-until-draft
+/// convention at the application layer).
+model BudgetLine {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  budgetHeaderId String   @map("budget_header_id") @db.Uuid
+  /// Plain text pending a real chart_of_accounts table — see file header note.
+  accountCode    String   @map("account_code") @db.VarChar(30)
+  description    String?
+  amount         Decimal  @db.Decimal(18, 2)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+
+  budgetHeader BudgetHeader @relation(fields: [budgetHeaderId], references: [id], onDelete: Cascade)
+  creator      User?        @relation("BudgetLinesCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater      User?        @relation("BudgetLinesUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  purchaseRequests   PurchaseRequest[]
+  cafs               CertificationOfAvailability[]
+  obligationRequests ObligationRequest[]
+
+  @@index([budgetHeaderId])
+  @@index([accountCode])
+  @@map("budget_lines")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// BUDGETING (Phase 2 — releases, reservations, transaction ledger)
+//
+// Scope note: budget_cycles/budget_versions/budget_headers/budget_lines
+// (Phase 1) are unchanged by this addition — only a virtual Prisma
+// relation field (budgetReleases) was added to BudgetHeader, which adds
+// no database column and required no migration on that table.
+//
+// This is where the architecture's budget concurrency control (§12 of
+// docs/04_Database/MSWD_ERP_Database_Architecture_v2.md) is actually
+// implemented, at the budget_releases grain: released_amount and
+// reserved_amount are plain columns updated by application logic under
+// a row lock (SELECT ... FOR UPDATE), and available_amount is a
+// Postgres GENERATED column, so it can never drift out of sync with the
+// other two. budget_transaction_logs is the append-only ledger of every
+// event that changes a release's balance — same ledger pattern as
+// inventory.stock_ledger_entries / hr.leave_credits in the architecture.
+// ════════════════════════════════════════════════════════════════════
+
+enum BudgetReleaseStatus {
+  draft
+  released
+  cancelled
+
+  @@map("budget_release_status")
+}
+
+enum BudgetReservationStatus {
+  draft
+  submitted
+  approved
+  rejected
+  active
+  released
+  cancelled
+
+  @@map("budget_reservation_status")
+}
+
+enum BudgetTransactionType {
+  release
+  reservation
+  reservation_release
+  reservation_cancellation
+  adjustment
+  obligation
+  obligation_release
+
+  @@map("budget_transaction_type")
+}
+
+/// Releases (makes available for spending) a portion of an approved
+/// budget header's total_amount. budget_reservations below draw against
+/// a specific release, never against the header directly — this is the
+/// row that gets locked (SELECT ... FOR UPDATE) during a concurrency-safe
+/// budget check.
+model BudgetRelease {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String              @map("organization_id") @db.Uuid
+  budgetHeaderId  String              @map("budget_header_id") @db.Uuid
+  releaseNumber   String              @map("release_number") @db.VarChar(30)
+  releaseDate     DateTime            @map("release_date") @db.Date
+  releasedAmount  Decimal             @map("released_amount") @db.Decimal(18, 2)
+  /// Updated by application logic under a row lock — never written to
+  /// directly except through that controlled path.
+  reservedAmount  Decimal             @default(0) @map("reserved_amount") @db.Decimal(18, 2)
+  /// GENERATED ALWAYS AS (released_amount - reserved_amount) STORED —
+  /// declared in the migration SQL (Prisma does not yet support
+  /// generated columns natively in schema.prisma), mapped here as a
+  /// plain read-only field so Prisma Client can read it.
+  availableAmount Decimal             @default(dbgenerated()) @map("available_amount") @db.Decimal(18, 2)
+  status          BudgetReleaseStatus @default(draft)
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy       String?             @map("created_by") @db.Uuid
+  updatedBy       String?             @map("updated_by") @db.Uuid
+  version         Int                 @default(1)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  budgetHeader BudgetHeader @relation(fields: [budgetHeaderId], references: [id], onDelete: Restrict)
+  creator      User?        @relation("BudgetReleasesCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater      User?        @relation("BudgetReleasesUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  budgetReservations    BudgetReservation[]
+  budgetTransactionLogs BudgetTransactionLog[]
+  purchaseRequests      PurchaseRequest[]
+  cafs                  CertificationOfAvailability[]
+  obligationRequests    ObligationRequest[]
+
+  @@unique([organizationId, releaseNumber])
+  @@index([organizationId])
+  @@index([budgetHeaderId])
+  @@map("budget_releases")
+}
+
+/// Reserves (obligates) an amount against a specific budget release.
+/// subject_table/subject_id are polymorphic and nullable — no module
+/// exists yet to reserve budget for (Procurement/Accounting aren't
+/// built), but the column is ready for a future Purchase Order,
+/// Contract, or Disbursement Voucher to reference without a schema
+/// change, same polymorphic pattern as attachments/workflow_instances.
+model BudgetReservation {
+  id              String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String                  @map("organization_id") @db.Uuid
+  budgetReleaseId String                  @map("budget_release_id") @db.Uuid
+  subjectTable    String?                 @map("subject_table") @db.VarChar(100)
+  subjectId       String?                 @map("subject_id") @db.Uuid
+  reservationAmount Decimal               @map("reservation_amount") @db.Decimal(18, 2)
+  status          BudgetReservationStatus @default(draft)
+  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy       String?                 @map("created_by") @db.Uuid
+  updatedBy       String?                 @map("updated_by") @db.Uuid
+  version         Int                     @default(1)
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  budgetRelease BudgetRelease @relation(fields: [budgetReleaseId], references: [id], onDelete: Restrict)
+  creator       User?         @relation("BudgetReservationsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater       User?         @relation("BudgetReservationsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  budgetTransactionLogs BudgetTransactionLog[]
+  cafs                  CertificationOfAvailability[]
+  obligationRequests    ObligationRequest[]
+
+  @@index([organizationId])
+  @@index([budgetReleaseId])
+  @@index([subjectTable, subjectId])
+  @@map("budget_reservations")
+}
+
+/// Append-only ledger of every event that changes a budget release's
+/// balance (a release, a reservation, a reservation being released back,
+/// a cancellation, or a manual adjustment). No updated_at/updated_by —
+/// same immutability convention as core.audit_logs and
+/// core.workflow_actions: a ledger entry is never edited, only ever
+/// followed by a new entry.
+model BudgetTransactionLog {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String                @map("organization_id") @db.Uuid
+  budgetReleaseId     String                @map("budget_release_id") @db.Uuid
+  budgetReservationId String?               @map("budget_reservation_id") @db.Uuid
+  transactionType     BudgetTransactionType @map("transaction_type")
+  signedAmount        Decimal               @map("signed_amount") @db.Decimal(18, 2)
+  remarks             String?
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy           String?               @map("created_by") @db.Uuid
+
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  budgetRelease     BudgetRelease      @relation(fields: [budgetReleaseId], references: [id], onDelete: Restrict)
+  budgetReservation BudgetReservation? @relation(fields: [budgetReservationId], references: [id], onDelete: Restrict)
+  creator           User?              @relation("BudgetTransactionLogsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([budgetReleaseId])
+  @@index([budgetReservationId])
+  @@map("budget_transaction_logs")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// PROCUREMENT (Phase 2+3 — Purchase Requests, PPMP, APP, Workflow)
+//
+// Purchase Requests reserve budget through the existing
+// budget_reservations system using the polymorphic
+// subject_table/subject_id pattern:
+//   subject_table = 'procurement.purchase_requests'
+//   subject_id    = purchase_request.id
+//
+// Budget is held at budget certification (after Dept Head endorsement
+// and Budget Officer validation), not at PR submission.
+// ════════════════════════════════════════════════════════════════════
+
+enum PurchaseRequestStatus {
+  draft
+  submitted
+  endorsed
+  budget_review
+  budget_certified
+  approved
+  procurement_review
+  accepted_for_procurement
+  procurement_in_progress
+  awarded
+  po_issued
+  delivered
+  inspected
+  completed
+  returned
+  rejected
+  cancelled
+  voided
+
+  @@map("purchase_request_status")
+}
+
+enum ProcurementCategoryEnum {
+  goods
+  services
+  infrastructure
+  consulting_services
+
+  @@map("procurement_category")
+}
+
+enum ItemClassification {
+  inventory
+  asset
+  expense
+  infrastructure
+  service
+
+  @@map("item_classification")
+}
+
+enum PpmpStatus {
+  draft
+  approved
+  cancelled
+
+  @@map("ppmp_status")
+}
+
+enum AppStatus {
+  draft
+  approved
+  cancelled
+
+  @@map("app_status")
+}
+
+enum DelegationStatus {
+  active
+  revoked
+  expired
+
+  @@map("delegation_status")
+}
+
+model PurchaseRequest {
+  id                     String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId         String                @map("organization_id") @db.Uuid
+  prNumber               String                @map("pr_number") @db.VarChar(30)
+  title                  String                @db.VarChar(255)
+  description            String?
+  budgetReleaseId        String?               @map("budget_release_id") @db.Uuid
+  totalAmount            Decimal               @default(0) @map("total_amount") @db.Decimal(18, 2)
+  status                 PurchaseRequestStatus @default(draft)
+  fiscalYearId           String?               @map("fiscal_year_id") @db.Uuid
+  departmentId           String?               @map("department_id") @db.Uuid
+  departmentHeadId       String?               @map("department_head_id") @db.Uuid
+  purpose                String?
+  procurementCategoryId  String?               @map("procurement_category_id") @db.Uuid
+  requestedDeliveryDate  DateTime?             @map("requested_delivery_date") @db.Date
+  deliveryLocationId     String?               @map("delivery_location_id") @db.Uuid
+  ppmpItemId             String?               @map("ppmp_item_id") @db.Uuid
+  appItemId              String?               @map("app_item_id") @db.Uuid
+  budgetLineId           String?               @map("budget_line_id") @db.Uuid
+  responsibilityCenterId String?               @map("responsibility_center_id") @db.Uuid
+  fundSourceId           String?               @map("fund_source_id") @db.Uuid
+  remarks                String?
+  revisionNumber         Int                   @default(0) @map("revision_number")
+  budgetCertifiedBy      String?               @map("budget_certified_by") @db.Uuid
+  budgetCertifiedAt      DateTime?             @map("budget_certified_at") @db.Timestamptz(6)
+  approvedBy             String?               @map("approved_by") @db.Uuid
+  approvedAt             DateTime?             @map("approved_at") @db.Timestamptz(6)
+  endorsedBy             String?               @map("endorsed_by") @db.Uuid
+  endorsedAt             DateTime?             @map("endorsed_at") @db.Timestamptz(6)
+  createdAt              DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy              String?               @map("created_by") @db.Uuid
+  updatedBy              String?               @map("updated_by") @db.Uuid
+  version                Int                   @default(1)
+
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  budgetRelease        BudgetRelease?        @relation(fields: [budgetReleaseId], references: [id], onDelete: Restrict)
+  fiscalYear           FiscalYear?           @relation(fields: [fiscalYearId], references: [id], onDelete: Restrict)
+  department           Department?           @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  departmentHead       User?                 @relation("PurchaseRequestsDeptHead", fields: [departmentHeadId], references: [id], onDelete: SetNull)
+  procurementCategory  ProcurementCategory?  @relation(fields: [procurementCategoryId], references: [id], onDelete: SetNull)
+  deliveryLocation     Location?             @relation(fields: [deliveryLocationId], references: [id], onDelete: SetNull)
+  ppmpItem             PpmpItem?             @relation(fields: [ppmpItemId], references: [id], onDelete: Restrict)
+  appItem              AppItem?              @relation(fields: [appItemId], references: [id], onDelete: Restrict)
+  budgetLine           BudgetLine?           @relation(fields: [budgetLineId], references: [id], onDelete: SetNull)
+  responsibilityCenter ResponsibilityCenter? @relation(fields: [responsibilityCenterId], references: [id], onDelete: Restrict)
+  fundSource           FundSource?           @relation(fields: [fundSourceId], references: [id], onDelete: Restrict)
+  budgetCertifier      User?                 @relation("PurchaseRequestsBudgetCertifiedBy", fields: [budgetCertifiedBy], references: [id], onDelete: SetNull)
+  approver             User?                 @relation("PurchaseRequestsApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
+  endorser             User?                 @relation("PurchaseRequestsEndorsedBy", fields: [endorsedBy], references: [id], onDelete: SetNull)
+  creator              User?                 @relation("PurchaseRequestsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater              User?                 @relation("PurchaseRequestsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  items              PurchaseRequestItem[]
+  revisions          PrRevision[]
+  purchaseOrders     PurchaseOrder[]
+  cafs               CertificationOfAvailability[]
+  obligationRequests ObligationRequest[]
+
+  @@unique([organizationId, prNumber])
+  @@index([organizationId])
+  @@index([budgetReleaseId])
+  @@index([status])
+  @@index([fiscalYearId])
+  @@index([departmentId])
+  @@index([ppmpItemId])
+  @@index([appItemId])
+  @@map("purchase_requests")
+}
+
+model PurchaseRequestItem {
+  id                     String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchaseRequestId      String              @map("purchase_request_id") @db.Uuid
+  itemNumber             Int                 @map("item_number") @db.SmallInt
+  description            String              @db.VarChar(500)
+  quantity               Decimal             @db.Decimal(12, 4)
+  unitOfMeasure          String              @map("unit_of_measure") @db.VarChar(20)
+  estimatedUnitCost      Decimal             @map("estimated_unit_cost") @db.Decimal(18, 2)
+  estimatedTotalCost     Decimal             @map("estimated_total_cost") @db.Decimal(18, 2)
+  accountCode            String?             @map("account_code") @db.VarChar(30)
+  technicalSpecification String?             @map("technical_specification")
+  classification         ItemClassification?
+  createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  purchaseRequest PurchaseRequest @relation(fields: [purchaseRequestId], references: [id], onDelete: Cascade)
+
+  @@unique([purchaseRequestId, itemNumber])
+  @@index([purchaseRequestId])
+  @@map("purchase_request_items")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// PROCUREMENT (Phase 3 — PPMP, APP, Categories, Revisions, Delegation)
+// ════════════════════════════════════════════════════════════════════
+
+model ProcurementCategory {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  code           String   @db.VarChar(30)
+  name           String   @db.VarChar(255)
+  description    String?
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  purchaseRequests PurchaseRequest[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("procurement_categories")
+}
+
+model PpmpItem {
+  id                  String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String                  @map("organization_id") @db.Uuid
+  fiscalYearId        String                  @map("fiscal_year_id") @db.Uuid
+  departmentId        String                  @map("department_id") @db.Uuid
+  code                String                  @db.VarChar(30)
+  itemDescription     String                  @map("item_description")
+  procurementCategory ProcurementCategoryEnum @default(goods) @map("procurement_category")
+  unitOfMeasure       String                  @map("unit_of_measure") @db.VarChar(30)
+  quantity            Decimal                 @db.Decimal(12, 4)
+  estimatedUnitCost   Decimal                 @map("estimated_unit_cost") @db.Decimal(18, 2)
+  estimatedTotalCost  Decimal                 @map("estimated_total_cost") @db.Decimal(18, 2)
+  status              PpmpStatus              @default(draft)
+  assignedUserId      String?                 @map("assigned_user_id") @db.Uuid
+  cboNotes            String?                 @map("cbo_notes") @db.VarChar(500)
+  modeOfProcurement   String?                 @map("mode_of_procurement") @db.VarChar(100)
+  scheduleQuarter     Int?                    @map("schedule_quarter") @db.SmallInt
+  approvedBy          String?                 @map("approved_by") @db.Uuid
+  approvedAt          DateTime?               @map("approved_at") @db.Timestamptz(6)
+  createdAt           DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy           String?                 @map("created_by") @db.Uuid
+  updatedBy           String?                 @map("updated_by") @db.Uuid
+  version             Int                     @default(1)
+
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  fiscalYear       FiscalYear        @relation(fields: [fiscalYearId], references: [id], onDelete: Restrict)
+  department       Department        @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  assignedUser     User?             @relation("PpmpItemsAssignedTo", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  approverUser     User?             @relation("PpmpItemsApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
+  creator          User?             @relation("PpmpItemsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater          User?             @relation("PpmpItemsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  appItems         AppItem[]
+  purchaseRequests PurchaseRequest[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([fiscalYearId])
+  @@index([departmentId])
+  @@index([assignedUserId])
+  @@index([assignedUserId, fiscalYearId])
+  @@index([status])
+  @@map("ppmp_items")
+}
+
+model AppItem {
+  id                      String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId          String                  @map("organization_id") @db.Uuid
+  fiscalYearId            String                  @map("fiscal_year_id") @db.Uuid
+  ppmpItemId              String                  @map("ppmp_item_id") @db.Uuid
+  appNumber               String                  @map("app_number") @db.VarChar(30)
+  procurementProjectTitle String                  @map("procurement_project_title") @db.VarChar(500)
+  procurementCategory     ProcurementCategoryEnum @default(goods) @map("procurement_category")
+  approvedBudget          Decimal                 @map("approved_budget") @db.Decimal(18, 2)
+  procurementMode         String?                 @map("procurement_mode") @db.VarChar(100)
+  scheduleMonth           Int?                    @map("schedule_month") @db.SmallInt
+  status                  AppStatus               @default(draft)
+  createdAt               DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy               String?                 @map("created_by") @db.Uuid
+  updatedBy               String?                 @map("updated_by") @db.Uuid
+  version                 Int                     @default(1)
+
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  fiscalYear       FiscalYear        @relation(fields: [fiscalYearId], references: [id], onDelete: Restrict)
+  ppmpItem         PpmpItem          @relation(fields: [ppmpItemId], references: [id], onDelete: Restrict)
+  creator          User?             @relation("AppItemsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater          User?             @relation("AppItemsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  purchaseRequests PurchaseRequest[]
+
+  @@unique([organizationId, appNumber])
+  @@index([organizationId])
+  @@index([fiscalYearId])
+  @@index([ppmpItemId])
+  @@index([status])
+  @@map("app_items")
+}
+
+model PrRevision {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchaseRequestId String   @map("purchase_request_id") @db.Uuid
+  revisionNumber    Int      @map("revision_number")
+  snapshotData      Json     @map("snapshot_data")
+  reason            String?
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy         String?  @map("created_by") @db.Uuid
+
+  purchaseRequest PurchaseRequest @relation(fields: [purchaseRequestId], references: [id], onDelete: Restrict)
+  creator         User?           @relation("PrRevisionsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@unique([purchaseRequestId, revisionNumber])
+  @@index([purchaseRequestId])
+  @@map("pr_revisions")
+}
+
+model DelegationAuthority {
+  id                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String           @map("organization_id") @db.Uuid
+  delegatorUserId   String           @map("delegator_user_id") @db.Uuid
+  delegateUserId    String           @map("delegate_user_id") @db.Uuid
+  permissionCode    String           @map("permission_code") @db.VarChar(100)
+  effectiveDate     DateTime         @map("effective_date") @db.Date
+  expirationDate    DateTime         @map("expiration_date") @db.Date
+  amountLimit       Decimal?         @map("amount_limit") @db.Decimal(18, 2)
+  scopeDepartmentId String?          @map("scope_department_id") @db.Uuid
+  status            DelegationStatus @default(active)
+  remarks           String?
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy         String?          @map("created_by") @db.Uuid
+  version           Int              @default(1)
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  delegator       User         @relation("DelegationsGiven", fields: [delegatorUserId], references: [id], onDelete: Restrict)
+  delegate        User         @relation("DelegationsReceived", fields: [delegateUserId], references: [id], onDelete: Restrict)
+  scopeDepartment Department?  @relation(fields: [scopeDepartmentId], references: [id], onDelete: SetNull)
+  creator         User?        @relation("DelegationsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([delegatorUserId])
+  @@index([delegateUserId])
+  @@index([permissionCode])
+  @@map("delegation_authorities")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// CAF / ORS FOUNDATION — Suppliers, Purchase Orders, CAF, ORS
+// ════════════════════════════════════════════════════════════════════
+
+enum PurchaseOrderStatus {
+  draft
+  pending_caf
+  for_approval
+  approved
+  cancelled
+
+  @@map("purchase_order_status")
+}
+
+enum CafStatus {
+  draft
+  for_certification
+  certified
+  rejected
+  cancelled
+  superseded
+
+  @@map("caf_status")
+}
+
+enum OrsStatus {
+  draft
+  for_requesting_certification
+  for_budget_certification
+  obligated
+  partially_payable
+  partially_paid
+  fully_paid
+  adjusted
+  cancelled
+  closed
+
+  @@map("ors_status")
+}
+
+enum OrsChildType {
+  billing
+  inspection
+  payable
+  disbursement_voucher
+  payment
+  retention
+  deduction
+  adjustment
+
+  @@map("ors_child_type")
+}
+
+model Supplier {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(255)
+  tin            String?  @db.VarChar(30)
+  address        String?
+  contactPerson  String?  @map("contact_person") @db.VarChar(255)
+  contactNumber  String?  @map("contact_number") @db.VarChar(50)
+  email          String?  @db.VarChar(255)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  version        Int      @default(1)
+
+  organization   Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  creator        User?                     @relation("SuppliersCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater        User?                     @relation("SuppliersUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  purchaseOrders PurchaseOrder[]
+  cafs           CertificationOfAvailability[]
+  ors            ObligationRequest[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@index([tin])
+  @@map("suppliers")
+}
+
+model PurchaseOrder {
+  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String              @map("organization_id") @db.Uuid
+  poNumber            String              @map("po_number") @db.VarChar(30)
+  poDate              DateTime            @map("po_date") @db.Date
+  purchaseRequestId   String              @map("purchase_request_id") @db.Uuid
+  supplierId          String              @map("supplier_id") @db.Uuid
+  contractAmount      Decimal             @map("contract_amount") @db.Decimal(18, 2)
+  awardDate           DateTime?           @map("award_date") @db.Date
+  awardNoticeNumber   String?             @map("award_notice_number") @db.VarChar(50)
+  modeOfProcurement   String?             @map("mode_of_procurement") @db.VarChar(100)
+  deliveryTerms       String?             @map("delivery_terms")
+  paymentTerms        String?             @map("payment_terms")
+  status              PurchaseOrderStatus @default(draft)
+  approvedBy          String?             @map("approved_by") @db.Uuid
+  approvedAt          DateTime?           @map("approved_at") @db.Timestamptz(6)
+  remarks             String?
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy           String?             @map("created_by") @db.Uuid
+  updatedBy           String?             @map("updated_by") @db.Uuid
+  version             Int                 @default(1)
+
+  organization    Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  purchaseRequest PurchaseRequest           @relation(fields: [purchaseRequestId], references: [id], onDelete: Restrict)
+  supplier        Supplier                  @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  approver        User?                     @relation("PurchaseOrdersApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
+  creator         User?                     @relation("PurchaseOrdersCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater         User?                     @relation("PurchaseOrdersUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  cafs            CertificationOfAvailability[]
+  ors             ObligationRequest[]
+
+  @@unique([organizationId, poNumber])
+  @@index([organizationId])
+  @@index([purchaseRequestId])
+  @@index([supplierId])
+  @@index([status])
+  @@map("purchase_orders")
+}
+
+model CertificationOfAvailability {
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId         String    @map("organization_id") @db.Uuid
+  cafNumber              String    @map("caf_number") @db.VarChar(30)
+  certificationDate      DateTime? @map("certification_date") @db.Date
+  purchaseRequestId      String    @map("purchase_request_id") @db.Uuid
+  purchaseOrderId        String?   @map("purchase_order_id") @db.Uuid
+  supplierId             String?   @map("supplier_id") @db.Uuid
+  budgetReservationId    String?   @map("budget_reservation_id") @db.Uuid
+  budgetReleaseId        String    @map("budget_release_id") @db.Uuid
+  budgetLineId           String?   @map("budget_line_id") @db.Uuid
+  fiscalYearId           String    @map("fiscal_year_id") @db.Uuid
+  fundSourceId           String    @map("fund_source_id") @db.Uuid
+  responsibilityCenterId String    @map("responsibility_center_id") @db.Uuid
+  accountCode            String?   @map("account_code") @db.VarChar(30)
+  certifiedAmount        Decimal   @map("certified_amount") @db.Decimal(18, 2)
+  availableBefore        Decimal   @map("available_before") @db.Decimal(18, 2)
+  availableAfter         Decimal   @map("available_after") @db.Decimal(18, 2)
+  certifiedBy            String?   @map("certified_by") @db.Uuid
+  certifiedAt            DateTime? @map("certified_at") @db.Timestamptz(6)
+  status                 CafStatus @default(draft)
+  remarks                String?
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy              String?   @map("created_by") @db.Uuid
+  updatedBy              String?   @map("updated_by") @db.Uuid
+  version                Int       @default(1)
+
+  organization         Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  purchaseRequest      PurchaseRequest      @relation(fields: [purchaseRequestId], references: [id], onDelete: Restrict)
+  purchaseOrder        PurchaseOrder?       @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  supplier             Supplier?            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  budgetReservation    BudgetReservation?   @relation(fields: [budgetReservationId], references: [id], onDelete: Restrict)
+  budgetRelease        BudgetRelease        @relation(fields: [budgetReleaseId], references: [id], onDelete: Restrict)
+  budgetLine           BudgetLine?          @relation(fields: [budgetLineId], references: [id], onDelete: SetNull)
+  fiscalYear           FiscalYear           @relation(fields: [fiscalYearId], references: [id], onDelete: Restrict)
+  fundSource           FundSource           @relation(fields: [fundSourceId], references: [id], onDelete: Restrict)
+  responsibilityCenter ResponsibilityCenter @relation(fields: [responsibilityCenterId], references: [id], onDelete: Restrict)
+  certifier            User?                @relation("CafsCertifiedBy", fields: [certifiedBy], references: [id], onDelete: SetNull)
+  creator              User?                @relation("CafsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater              User?                @relation("CafsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  obligationRequests ObligationRequest[]
+  orsAdjustments     OrsAdjustment[]
+
+  @@unique([organizationId, cafNumber])
+  @@index([organizationId])
+  @@index([purchaseRequestId])
+  @@index([purchaseOrderId])
+  @@index([supplierId])
+  @@index([budgetReleaseId])
+  @@index([fiscalYearId])
+  @@index([status])
+  @@map("certifications_of_availability")
+}
+
+model ObligationRequest {
+  id                            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                String    @map("organization_id") @db.Uuid
+  orsNumber                     String    @map("ors_number") @db.VarChar(30)
+  orsDate                       DateTime  @map("ors_date") @db.Date
+  cafId                         String    @map("caf_id") @db.Uuid
+  purchaseRequestId             String    @map("purchase_request_id") @db.Uuid
+  purchaseOrderId               String?   @map("purchase_order_id") @db.Uuid
+  supplierId                    String?   @map("supplier_id") @db.Uuid
+  budgetReleaseId               String    @map("budget_release_id") @db.Uuid
+  budgetLineId                  String?   @map("budget_line_id") @db.Uuid
+  budgetReservationId           String?   @map("budget_reservation_id") @db.Uuid
+  fundSourceId                  String    @map("fund_source_id") @db.Uuid
+  responsibilityCenterId        String    @map("responsibility_center_id") @db.Uuid
+  accountCode                   String?   @map("account_code") @db.VarChar(30)
+  originalAmount                Decimal   @map("original_amount") @db.Decimal(18, 2)
+  adjustmentAmount              Decimal   @default(0) @map("adjustment_amount") @db.Decimal(18, 2)
+  adjustedAmount                Decimal   @map("adjusted_amount") @db.Decimal(18, 2)
+  cumulativePayable             Decimal   @default(0) @map("cumulative_payable") @db.Decimal(18, 2)
+  cumulativePaid                Decimal   @default(0) @map("cumulative_paid") @db.Decimal(18, 2)
+  remainingUnpaid               Decimal   @map("remaining_unpaid") @db.Decimal(18, 2)
+  deobligatedAmount             Decimal   @default(0) @map("deobligated_amount") @db.Decimal(18, 2)
+  requestingOfficeId            String?   @map("requesting_office_id") @db.Uuid
+  requestingOfficeCertifiedBy   String?   @map("requesting_office_certified_by") @db.Uuid
+  requestingOfficeCertifiedAt   DateTime? @map("requesting_office_certified_at") @db.Timestamptz(6)
+  budgetCertifiedBy             String?   @map("budget_certified_by") @db.Uuid
+  budgetCertifiedAt             DateTime? @map("budget_certified_at") @db.Timestamptz(6)
+  obligationPostingDate         DateTime? @map("obligation_posting_date") @db.Date
+  status                        OrsStatus @default(draft)
+  remarks                       String?
+  createdAt                     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy                     String?   @map("created_by") @db.Uuid
+  updatedBy                     String?   @map("updated_by") @db.Uuid
+  version                       Int       @default(1)
+
+  organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  caf                      CertificationOfAvailability @relation(fields: [cafId], references: [id], onDelete: Restrict)
+  purchaseRequest          PurchaseRequest            @relation(fields: [purchaseRequestId], references: [id], onDelete: Restrict)
+  purchaseOrder            PurchaseOrder?             @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  supplier                 Supplier?                  @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  budgetRelease            BudgetRelease              @relation(fields: [budgetReleaseId], references: [id], onDelete: Restrict)
+  budgetLine               BudgetLine?                @relation(fields: [budgetLineId], references: [id], onDelete: SetNull)
+  budgetReservation        BudgetReservation?         @relation(fields: [budgetReservationId], references: [id], onDelete: Restrict)
+  fundSource               FundSource                 @relation(fields: [fundSourceId], references: [id], onDelete: Restrict)
+  responsibilityCenter     ResponsibilityCenter       @relation(fields: [responsibilityCenterId], references: [id], onDelete: Restrict)
+  requestingOffice         Department?                @relation(fields: [requestingOfficeId], references: [id], onDelete: SetNull)
+  requestingOfficeCertifier User?                     @relation("OrsRequestingOfficeCertifiedBy", fields: [requestingOfficeCertifiedBy], references: [id], onDelete: SetNull)
+  budgetCertifier          User?                      @relation("OrsBudgetCertifiedBy", fields: [budgetCertifiedBy], references: [id], onDelete: SetNull)
+  creator                  User?                      @relation("OrsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater                  User?                      @relation("OrsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  children    OrsChild[]
+  adjustments OrsAdjustment[]
+
+  @@unique([organizationId, orsNumber])
+  @@index([organizationId])
+  @@index([cafId])
+  @@index([purchaseRequestId])
+  @@index([purchaseOrderId])
+  @@index([supplierId])
+  @@index([budgetReleaseId])
+  @@index([budgetReservationId])
+  @@index([status])
+  @@map("obligation_requests")
+}
+
+model OrsChild {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orsId           String       @map("ors_id") @db.Uuid
+  childType       OrsChildType @map("child_type")
+  referenceNumber String?      @map("reference_number") @db.VarChar(50)
+  childDate       DateTime     @map("child_date") @db.Date
+  amount          Decimal      @db.Decimal(18, 2)
+  description     String?
+  certifiedBy     String?      @map("certified_by") @db.Uuid
+  certifiedAt     DateTime?    @map("certified_at") @db.Timestamptz(6)
+  status          String       @default("pending") @db.VarChar(30)
+  remarks         String?
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy       String?      @map("created_by") @db.Uuid
+  updatedBy       String?      @map("updated_by") @db.Uuid
+  version         Int          @default(1)
+
+  obligationRequest ObligationRequest @relation(fields: [orsId], references: [id], onDelete: Restrict)
+  certifier         User?             @relation("OrsChildrenCertifiedBy", fields: [certifiedBy], references: [id], onDelete: SetNull)
+  creator           User?             @relation("OrsChildrenCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater           User?             @relation("OrsChildrenUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  @@index([orsId])
+  @@index([childType])
+  @@index([status])
+  @@map("ors_children")
+}
+
+model OrsAdjustment {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orsId          String    @map("ors_id") @db.Uuid
+  adjustmentType String    @map("adjustment_type") @db.VarChar(50)
+  signedAmount   Decimal   @map("signed_amount") @db.Decimal(18, 2)
+  reason         String
+  cafId          String?   @map("caf_id") @db.Uuid
+  approvedBy     String?   @map("approved_by") @db.Uuid
+  approvedAt     DateTime? @map("approved_at") @db.Timestamptz(6)
+  status         String    @default("pending") @db.VarChar(30)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy      String?   @map("created_by") @db.Uuid
+
+  obligationRequest ObligationRequest            @relation(fields: [orsId], references: [id], onDelete: Restrict)
+  caf               CertificationOfAvailability? @relation(fields: [cafId], references: [id], onDelete: Restrict)
+  approver          User?                        @relation("OrsAdjustmentsApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
+  creator           User?                        @relation("OrsAdjustmentsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([orsId])
+  @@index([cafId])
+  @@map("ors_adjustments")
+}

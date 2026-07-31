@@ -1,0 +1,49 @@
+/* Shared MSWD brand tokens — matched against the actual Metro Siquijor
+   Water District logo via direct pixel sampling (not estimated): the
+   logo's blue samples at rgb(6,84,255) / #0654ff and its red at
+   rgb(251,2,0) / #fb0200 across every dominant pixel cluster measured.
+   Reused across every Budgeting page for visual consistency. Import
+   this once per page via `@import './mswd-tokens.css';` at the top of
+   that page's own stylesheet, then reference the variables under that
+   page's top-level class.
+
+   --mswd-blue is the logo's blue essentially as-sampled (very slightly
+   rounded for a clean value), used for links/accents/primary buttons.
+   --mswd-navy is a proportionally-darkened variant of that exact blue
+   (same hue, same darkening ratio the previous navy used relative to
+   its blue) — used for large surfaces like table headers where the
+   full-brightness logo blue would be too intense for extended reading.
+   --mswd-red is the logo's red, very slightly tempered from pure
+   #fb0200 for legibility as fine UI text/icons rather than a solid
+   fill, while staying unmistakably the same red.
+
+   --mswd-teal and --mswd-amber are deliberately NOT changed to match
+   the logo — the logo itself only uses blue/red/white/black, but this
+   app relies on teal/amber/red as a traffic-light convention for
+   status (approved=teal, pending=amber, rejected=red) across every
+   badge and stat card in the Budgeting module. Replacing teal with
+   another blue would make "approved" and "in progress" visually
+   indistinguishable from ordinary brand chrome, which would hurt
+   usability more than it would help brand consistency. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap');
+
+:root {
+  --mswd-navy: #053587;
+  --mswd-blue: #0b57ff;
+  --mswd-teal: #0e8a7c;
+  --mswd-amber: #e07b1a;
+  --mswd-red: #f01e12;
+  --mswd-border: #d1dce8;
+  --mswd-text: #1a2a3a;
+  --mswd-text-mid: #4a6278;
+  --mswd-text-light: #7a92a8;
+  --mswd-bg: #f0f4f8;
+
+  /* Status badge background tints — shared so the 3 places that render
+     a status badge (budget-list.css, budget-detail.css, reservation.css)
+     can't drift apart from each other. */
+  --mswd-badge-bg-neutral: #eef1f4;
+  --mswd-badge-bg-amber: #fdf3e6;
+  --mswd-badge-bg-teal: #e6f7ee;
+  --mswd-badge-bg-red: #fdecea;
+}

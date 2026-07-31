@@ -1,0 +1,208 @@
+@import '../modules/budgeting/mswd-tokens.css';
+
+.dashboard {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 24px;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* ── Welcome header ── */
+.dashboard__header {
+  margin-bottom: 32px;
+}
+
+.dashboard__greeting {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--mswd-navy);
+  margin: 0 0 4px;
+}
+
+.dashboard__date {
+  font-size: 13px;
+  color: var(--mswd-text-mid);
+  margin: 0;
+}
+
+/* ── Pending Actions Section ── */
+.dashboard__section {
+  margin-bottom: 32px;
+}
+
+.dashboard__section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--mswd-navy);
+  margin: 0 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dashboard__count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 7px;
+}
+
+.dashboard__count-badge--zero {
+  background: #d0d5dd;
+  color: #667085;
+}
+
+.dashboard__empty {
+  color: #667085;
+  font-size: 14px;
+  background: #f8f9fc;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+}
+
+/* ── Action cards ── */
+.dashboard__actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dashboard__action-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1.5px solid #eaecf0;
+  border-radius: 8px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.dashboard__action-card:hover {
+  border-color: var(--mswd-blue);
+  box-shadow: 0 2px 8px rgba(11, 87, 255, 0.08);
+}
+
+.dashboard__action-module {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.dashboard__action-module--procurement {
+  background: #eff8ff;
+  color: #175cd3;
+}
+
+.dashboard__action-module--budgeting {
+  background: #e6f7ee;
+  color: #067647;
+}
+
+.dashboard__action-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.dashboard__action-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mswd-navy);
+}
+
+.dashboard__action-desc {
+  font-size: 12px;
+  color: var(--mswd-text-mid);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard__action-amount {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mswd-navy);
+  white-space: nowrap;
+}
+
+.dashboard__action-link {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1.5px solid rgba(6, 118, 71, 0.3);
+  background: #fff;
+  color: #067647;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.dashboard__action-link:hover {
+  background: #ecfdf3;
+  border-color: #067647;
+}
+
+/* ── Module Cards ── */
+.dashboard__modules {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.dashboard__module-card {
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  background: #fff;
+  border: 1.5px solid #eaecf0;
+  border-radius: 10px;
+  text-decoration: none;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.dashboard__module-card:hover {
+  border-color: var(--mswd-blue);
+  box-shadow: 0 4px 16px rgba(11, 87, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+.dashboard__module-icon {
+  font-size: 28px;
+  margin-bottom: 12px;
+}
+
+.dashboard__module-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--mswd-navy);
+  margin-bottom: 4px;
+}
+
+.dashboard__module-desc {
+  font-size: 13px;
+  color: var(--mswd-text-mid);
+  line-height: 1.4;
+}
+
+/* ── Loading spinner ── */
+.dashboard__loading {
+  text-align: center;
+  padding: 32px 0;
+  color: var(--mswd-text-mid);
+  font-size: 14px;
+}

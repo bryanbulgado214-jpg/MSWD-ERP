@@ -1,0 +1,89 @@
+erDiagram
+    DEPARTMENTS ||--o{ EMPLOYEES : assigned_to
+    POSITIONS ||--o{ EMPLOYEES : holds
+    APPROPRIATIONS ||--o{ POSITIONS : "may fund"
+    USERS ||--o| EMPLOYEES : "linked login (optional, both directions)"
+    EMPLOYEES ||--o{ EMPLOYEES : "reports to"
+
+    EMPLOYEES ||--o{ EMPLOYEE_BANK_ACCOUNTS : owns
+    EMPLOYEES ||--o{ LEAVE_CREDITS : accrues
+    LEAVE_TYPES ||--o{ LEAVE_CREDITS : categorizes
+    EMPLOYEES ||--o{ LEAVE_APPLICATIONS : files
+    LEAVE_TYPES ||--o{ LEAVE_APPLICATIONS : categorizes
+
+    ACCOUNTING_PERIODS ||--o{ PAYROLL_PERIODS : aligns_with
+    PAYROLL_PERIODS ||--o{ PAYROLL_RUNS : processed_as
+    OBLIGATION_REQUESTS ||--o{ PAYROLL_RUNS : "draws against"
+    PAYROLL_RUNS ||--o{ DISBURSEMENT_VOUCHERS : "settled by"
+    PAYROLL_RUNS ||--o{ PAYROLL_RUN_LINES : contains
+    EMPLOYEES ||--o{ PAYROLL_RUN_LINES : paid_in
+
+    POSITIONS {
+        uuid id PK
+        uuid appropriation_id FK "nullable"
+        text title
+        text salary_grade
+        bool is_active
+    }
+    EMPLOYEES {
+        uuid id PK
+        uuid user_id FK "nullable — decision: optional both ways"
+        uuid department_id FK
+        uuid position_id FK
+        uuid reports_to_id FK
+        text employee_number
+        text first_name
+        text last_name
+        date hire_date
+        text status
+    }
+    EMPLOYEE_BANK_ACCOUNTS {
+        uuid id PK
+        uuid employee_id FK
+        text bank_name
+        text account_number
+    }
+    LEAVE_TYPES {
+        uuid id PK
+        text name
+        numeric annual_accrual_days
+    }
+    LEAVE_CREDITS {
+        uuid id PK
+        uuid employee_id FK
+        uuid leave_type_id FK
+        text entry_type
+        numeric days_signed
+        timestamptz created_at
+    }
+    LEAVE_APPLICATIONS {
+        uuid id PK
+        uuid employee_id FK
+        uuid leave_type_id FK
+        date start_date
+        date end_date
+        numeric days_requested
+        text status
+    }
+    PAYROLL_PERIODS {
+        uuid id PK
+        uuid accounting_period_id FK
+        date start_date
+        date end_date
+    }
+    PAYROLL_RUNS {
+        uuid id PK
+        uuid payroll_period_id FK
+        uuid obligation_request_id FK "new — links to budget"
+        uuid disbursement_voucher_id FK "new — links to accounting"
+        text status
+        uuid created_by FK
+    }
+    PAYROLL_RUN_LINES {
+        uuid id PK
+        uuid payroll_run_id FK
+        uuid employee_id FK
+        numeric gross_amount
+        numeric deductions_amount
+        numeric net_amount
+    }

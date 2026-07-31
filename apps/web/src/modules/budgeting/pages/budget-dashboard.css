@@ -1,0 +1,432 @@
+/* Budget Dashboard — reuses the MSWD brand system already established
+   in the Check Registry app for visual consistency across the ERP. */
+@import '../mswd-tokens.css';
+
+.budget-dashboard {
+  --navy: var(--mswd-navy);
+  --blue: var(--mswd-blue);
+  --teal: var(--mswd-teal);
+  --amber: var(--mswd-amber);
+  --red: var(--mswd-red);
+  --border: var(--mswd-border);
+  --text: var(--mswd-text);
+  --text-mid: var(--mswd-text-mid);
+  --text-light: var(--mswd-text-light);
+  --bg: var(--mswd-bg);
+
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 32px 24px 48px;
+  font-family:
+    'Inter',
+    system-ui,
+    -apple-system,
+    sans-serif;
+  color: var(--text);
+}
+
+.budget-dashboard__heading {
+  margin: 0 0 4px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.budget-dashboard__subheading {
+  margin: 0 0 28px;
+  font-size: 13px;
+  color: var(--text-light);
+}
+
+.budget-dashboard__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.budget-stat {
+  position: relative;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 18px 16px;
+  overflow: hidden;
+  /* Reset for the 3 stat cards that are real <button> elements
+     (Released/Reserved/Available) — Approved/Obligated stay plain
+     <div>s and are unaffected by these resets. */
+  font-family: inherit;
+  text-align: left;
+  width: 100%;
+  cursor: default;
+}
+
+.budget-stat--clickable {
+  cursor: pointer;
+  transition: box-shadow 0.12s ease, border-color 0.12s ease;
+}
+.budget-stat--clickable:hover {
+  border-color: var(--stat-accent, var(--blue));
+}
+.budget-stat--clickable:focus-visible {
+  outline: 2px solid var(--stat-accent, var(--blue));
+  outline-offset: 2px;
+}
+
+.budget-stat::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--stat-accent, var(--blue));
+}
+
+.budget-stat--total {
+  --stat-accent: var(--navy);
+}
+.budget-stat--released {
+  --stat-accent: var(--blue);
+}
+.budget-stat--reserved {
+  --stat-accent: var(--amber);
+}
+.budget-stat--obligated {
+  --stat-accent: var(--red);
+}
+.budget-stat--available {
+  --stat-accent: var(--teal);
+}
+
+.budget-stat__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+
+.budget-stat__value {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--stat-accent, var(--text));
+  line-height: 1.2;
+}
+
+/* One simple, honest visualization of the SAME four figures shown above
+   — not new data — so the relationship between them (released, split
+   into reserved vs. still-available) is legible at a glance. */
+.budget-proportion {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 20px;
+}
+
+.budget-proportion__caption {
+  font-size: 12px;
+  color: var(--text-mid);
+  margin-bottom: 10px;
+}
+
+.budget-proportion__bar {
+  height: 10px;
+  border-radius: 6px;
+  background: #eef3f8;
+  overflow: hidden;
+  display: flex;
+}
+
+.budget-proportion__segment--obligated {
+  background: var(--red);
+}
+.budget-proportion__segment--available {
+  background: var(--teal);
+}
+.budget-proportion__segment--empty {
+  width: 100%;
+  background: #eef3f8;
+}
+
+.budget-proportion__breakdown {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.budget-proportion__breakdown-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-mid);
+}
+
+.budget-proportion__breakdown-label {
+  min-width: 66px;
+}
+
+.budget-proportion__breakdown-amount {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 600;
+  color: var(--text);
+  margin-left: auto;
+}
+
+.budget-proportion__breakdown-pct {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  color: var(--text-light);
+  min-width: 48px;
+  text-align: right;
+}
+
+.budget-proportion__legend-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.budget-dashboard__status {
+  padding: 48px 0;
+  text-align: center;
+  color: var(--text-light);
+  font-size: 14px;
+}
+
+.budget-dashboard__status--error {
+  color: var(--red);
+}
+
+.budget-dashboard__integrity-warning {
+  margin-top: 16px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #fdecea;
+  border: 1px solid #f3c6c1;
+  color: var(--red);
+  font-size: 12.5px;
+}
+
+@media (max-width: 720px) {
+  .budget-dashboard__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 420px) {
+  .budget-dashboard__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Identity strip: responsibility center/fund source + cycle/version/status ── */
+.budget-dashboard__identity {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.budget-dashboard__identity-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.budget-dashboard__identity-sub {
+  font-size: 12.5px;
+  color: var(--text-light);
+  margin-top: 2px;
+}
+
+.budget-dashboard__identity-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── Generic status badge, reused for cycle/version/header/reservation status ── */
+.budget-dashboard__badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  text-transform: capitalize;
+}
+.budget-dashboard__badge--draft,
+.budget-dashboard__badge--planning {
+  background: var(--mswd-badge-bg-neutral);
+  color: var(--text-mid);
+}
+.budget-dashboard__badge--submitted,
+.budget-dashboard__badge--active {
+  background: var(--mswd-badge-bg-amber);
+  color: var(--amber);
+}
+.budget-dashboard__badge--approved,
+.budget-dashboard__badge--released,
+.budget-dashboard__badge--current {
+  background: var(--mswd-badge-bg-teal);
+  color: var(--teal);
+}
+.budget-dashboard__badge--rejected,
+.budget-dashboard__badge--cancelled,
+.budget-dashboard__badge--closed,
+.budget-dashboard__badge--superseded {
+  background: var(--mswd-badge-bg-red);
+  color: var(--red);
+}
+
+/* ── Generic section card, used for approvals/exhaustion/recent lists/audit note ── */
+.budget-dashboard__section {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-top: 16px;
+  overflow: hidden;
+}
+
+.budget-dashboard__section--warning {
+  border-color: #f3c6c1;
+}
+
+.budget-dashboard__section--muted {
+  background: var(--bg);
+}
+
+.budget-dashboard__section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--navy);
+}
+
+.budget-dashboard__count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--amber);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.budget-dashboard__empty {
+  padding: 16px 18px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-light);
+}
+
+.budget-dashboard__activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.budget-dashboard__activity-list li {
+  border-bottom: 1px solid #eef1f4;
+}
+.budget-dashboard__activity-list li:last-child {
+  border-bottom: none;
+}
+
+.budget-dashboard__activity-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 18px;
+  text-decoration: none;
+  color: inherit;
+}
+.budget-dashboard__activity-link:hover {
+  background: var(--bg);
+}
+
+.budget-dashboard__activity-list > li:not(:has(a)) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 18px;
+}
+
+.budget-dashboard__activity-amount {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.budget-dashboard__activity-amount--warning {
+  color: var(--red);
+}
+
+.budget-dashboard__activity-meta {
+  font-size: 12px;
+  color: var(--text-mid);
+  text-align: right;
+}
+
+/* ── Two-column layout for Recent Releases / Recent Reservations ── */
+.budget-dashboard__two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.budget-dashboard__two-col .budget-dashboard__section {
+  margin-top: 0;
+}
+
+@media (max-width: 640px) {
+  .budget-dashboard__two-col {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Quick links ── */
+.budget-dashboard__quick-links {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.budget-dashboard__quick-link {
+  padding: 8px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.budget-dashboard__quick-link:hover {
+  background: var(--bg);
+}
+

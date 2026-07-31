@@ -1,0 +1,9 @@
+{
+  "name": "@mswd-erp/config",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared TypeScript base config used by every app/package in the monorepo.",
+  "files": [
+    "tsconfig.base.json"
+  ]
+}

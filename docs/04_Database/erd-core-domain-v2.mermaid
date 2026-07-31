@@ -1,0 +1,186 @@
+erDiagram
+    ORGANIZATIONS ||--o{ DEPARTMENTS : scopes
+    ORGANIZATIONS ||--o{ FUND_SOURCES : scopes
+    ORGANIZATIONS ||--o{ BANKS : scopes
+    ORGANIZATIONS ||--o{ FISCAL_YEARS : scopes
+    ORGANIZATIONS ||--o{ CHART_OF_ACCOUNTS : scopes
+    ORGANIZATIONS ||--o{ USERS : scopes
+    ORGANIZATIONS ||--o{ ORGANIZATION_SETTINGS : configures
+
+    CURRENCIES ||--o{ ORGANIZATION_SETTINGS : "default currency"
+    CURRENCIES ||--o{ BANK_ACCOUNTS : denominates
+
+    USERS ||--o{ USER_ROLES : has
+    ROLES ||--o{ USER_ROLES : "assigned via"
+    ROLES ||--o{ ROLE_PERMISSIONS : has
+    PERMISSIONS ||--o{ ROLE_PERMISSIONS : "granted via"
+
+    DEPARTMENTS ||--o{ DEPARTMENTS : "parent of"
+    DEPARTMENTS ||--o{ RESPONSIBILITY_CENTERS : maps_to
+    BANKS ||--o{ BANK_ACCOUNTS : issues
+    FUND_SOURCES ||--o{ BANK_ACCOUNTS : funds
+
+    FISCAL_YEARS ||--o{ ACCOUNTING_PERIODS : contains
+    CHART_OF_ACCOUNTS ||--o{ CHART_OF_ACCOUNTS : "parent of"
+
+    WORKFLOW_TEMPLATES ||--o{ WORKFLOW_TEMPLATE_STEPS : defines
+    WORKFLOW_TEMPLATE_STEPS }o--|| ROLES : "approver role"
+    WORKFLOW_TEMPLATES ||--o{ WORKFLOW_INSTANCES : instantiates
+    WORKFLOW_INSTANCES ||--o{ WORKFLOW_APPROVALS : "decision per step"
+    WORKFLOW_TEMPLATE_STEPS ||--o{ WORKFLOW_APPROVALS : "step decided"
+    USERS ||--o{ WORKFLOW_APPROVALS : "decides (never own submission)"
+
+    USERS ||--o{ AUDIT_LOGS : performs
+    USERS ||--o{ ATTACHMENTS : uploads
+
+    ORGANIZATIONS {
+        uuid id PK
+        text code
+        text name
+    }
+    CURRENCIES {
+        uuid id PK
+        text code "ISO 4217, V1 = PHP only"
+        text name
+        text symbol
+    }
+    USERS {
+        uuid id PK
+        uuid organization_id FK
+        text username
+        text email
+        text password_hash
+        bool is_active
+    }
+    ROLES {
+        uuid id PK
+        text name
+        text description
+    }
+    PERMISSIONS {
+        uuid id PK
+        text code
+        text description
+    }
+    ROLE_PERMISSIONS {
+        uuid role_id FK
+        uuid permission_id FK
+    }
+    USER_ROLES {
+        uuid user_id FK
+        uuid role_id FK
+        uuid organization_unit_id FK
+    }
+    DEPARTMENTS {
+        uuid id PK
+        uuid organization_id FK
+        uuid parent_department_id FK
+        text code
+        text name
+    }
+    RESPONSIBILITY_CENTERS {
+        uuid id PK
+        uuid department_id FK
+        text code
+        text name
+    }
+    FUND_SOURCES {
+        uuid id PK
+        uuid organization_id FK
+        text code
+        text name
+    }
+    BANKS {
+        uuid id PK
+        uuid organization_id FK
+        text name
+    }
+    BANK_ACCOUNTS {
+        uuid id PK
+        uuid bank_id FK
+        uuid fund_source_id FK
+        uuid currency_id FK
+        text account_number
+        text account_name
+    }
+    FISCAL_YEARS {
+        uuid id PK
+        uuid organization_id FK
+        int year
+        date start_date
+        date end_date
+        bool is_closed
+    }
+    ACCOUNTING_PERIODS {
+        uuid id PK
+        uuid fiscal_year_id FK
+        date start_date
+        date end_date
+        bool is_closed
+    }
+    CHART_OF_ACCOUNTS {
+        uuid id PK
+        uuid organization_id FK
+        uuid parent_account_id FK
+        text account_code
+        text account_name
+        text account_type
+        text normal_balance
+    }
+    ORGANIZATION_SETTINGS {
+        uuid id PK
+        uuid organization_id FK
+        uuid default_currency_id FK
+        text legal_name
+        int fiscal_year_start_month
+    }
+    UNIT_OF_MEASURES {
+        smallint id PK
+        text code
+        text name
+    }
+    AUDIT_LOGS {
+        uuid id PK
+        text table_name
+        uuid record_id
+        text action
+        jsonb changed_fields
+        uuid performed_by FK
+        timestamptz performed_at
+    }
+    ATTACHMENTS {
+        uuid id PK
+        text attachable_table
+        uuid attachable_id
+        text file_name
+        text file_path
+        uuid uploaded_by FK
+    }
+    WORKFLOW_TEMPLATES {
+        uuid id PK
+        text name
+        text applies_to_table
+        bool is_active
+    }
+    WORKFLOW_TEMPLATE_STEPS {
+        uuid id PK
+        uuid workflow_template_id FK
+        int step_order
+        uuid approver_role_id FK
+    }
+    WORKFLOW_INSTANCES {
+        uuid id PK
+        uuid workflow_template_id FK
+        text subject_table
+        uuid subject_id
+        text status
+    }
+    WORKFLOW_APPROVALS {
+        uuid id PK
+        uuid workflow_instance_id FK
+        uuid workflow_template_step_id FK
+        uuid approver_user_id FK
+        text decision
+        text remarks
+        timestamptz decided_at
+    }

@@ -1,0 +1,94 @@
+@import '../modules/budgeting/mswd-tokens.css';
+
+.app-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 52px;
+  background: var(--mswd-navy);
+  color: #fff;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.app-nav__left {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.app-nav__brand {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.app-nav__links {
+  display: flex;
+  gap: 4px;
+}
+
+.app-nav__link {
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.app-nav__link:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.app-nav__link--active {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.app-nav__user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-nav__username {
+  font-size: 13px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+.app-nav__btn {
+  padding: 5px 14px;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.app-nav__btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.app-nav__btn--logout {
+  border-color: rgba(240, 30, 18, 0.4);
+  color: #ffb4b0;
+}
+
+.app-nav__btn--logout:hover {
+  background: rgba(240, 30, 18, 0.15);
+  border-color: rgba(240, 30, 18, 0.6);
+}
+
+.app-main {
+  min-height: calc(100vh - 52px);
+}

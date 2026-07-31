@@ -1,0 +1,255 @@
+.print-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  gap: 16px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14px;
+  color: #b42318;
+}
+
+.print-error button {
+  padding: 8px 20px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+/* ── Screen layout ── */
+.pr-print-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  background: #e5e7eb;
+  min-height: 100vh;
+}
+
+.pr-print-controls {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+  margin-bottom: 40px;
+}
+
+.pr-print-controls button {
+  padding: 10px 28px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.pr-print-controls button:last-child {
+  background: #6b7280;
+}
+
+/* ── The paper sheet ── */
+.pr-print-sheet {
+  width: 8.5in;
+  min-height: 11in;
+  padding: 0.5in 0.6in 0.4in;
+  background: #fff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 11pt;
+  color: #000;
+  line-height: 1.3;
+  box-sizing: border-box;
+}
+
+/* ── Appendix label ── */
+.pr-print-appendix {
+  text-align: right;
+  font-size: 14pt;
+  margin-bottom: 8px;
+}
+
+/* ── Title ── */
+.pr-print-title {
+  text-align: center;
+  font-size: 14pt;
+  font-weight: 700;
+  margin: 12px 0 16px;
+  letter-spacing: 0.5px;
+}
+
+/* ── Header fields ── */
+.pr-print-header {
+  margin-bottom: 4px;
+}
+
+.pr-print-header__row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.pr-print-header__left {
+  flex: 1;
+}
+
+.pr-print-header__right {
+  flex: 1;
+  text-align: left;
+  padding-left: 20px;
+}
+
+.pr-print-header__right-split {
+  flex: 1;
+  display: flex;
+  gap: 24px;
+  padding-left: 20px;
+}
+
+.pr-print-label {
+  font-weight: 700;
+  font-size: 11pt;
+}
+
+.pr-print-value {
+  font-size: 11pt;
+}
+
+.pr-print-value--bold {
+  font-weight: 700;
+}
+
+.pr-print-value--underline {
+  border-bottom: 1px solid #000;
+  padding-bottom: 1px;
+}
+
+/* ── Items table ── */
+.pr-print-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 11pt;
+}
+
+.pr-print-th {
+  border: 1px solid #000;
+  padding: 6px 4px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 11pt;
+  background: transparent;
+  vertical-align: middle;
+}
+
+.pr-print-td {
+  border: 1px solid #000;
+  padding: 3px 6px;
+  font-size: 10pt;
+  vertical-align: top;
+  min-height: 18px;
+}
+
+.pr-print-td--center {
+  text-align: center;
+}
+
+.pr-print-td--right {
+  text-align: right;
+}
+
+.pr-print-td--bold {
+  font-weight: 700;
+}
+
+/* ── Purpose ── */
+.pr-print-purpose {
+  margin: 12px 0 16px;
+  font-size: 12pt;
+}
+
+/* ── Signatures ── */
+.pr-print-signatures {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+
+.pr-print-sig-col {
+  width: 46%;
+}
+
+.pr-print-sig-block {
+  margin-bottom: 8px;
+}
+
+.pr-print-sig-block--gm {
+  margin-top: 20px;
+}
+
+.pr-print-sig-header {
+  font-size: 12pt;
+  margin-bottom: 10px;
+}
+
+.pr-print-sig-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 2px;
+  font-size: 12pt;
+  align-items: baseline;
+}
+
+.pr-print-sig-label {
+  white-space: nowrap;
+}
+
+.pr-print-sig-line {
+  letter-spacing: 1px;
+}
+
+.pr-print-sig-name {
+  font-weight: 700;
+  font-size: 12pt;
+}
+
+.pr-print-sig-desg {
+  font-size: 12pt;
+}
+
+/* ── Print media ── */
+@media print {
+  @page {
+    size: letter portrait;
+    margin: 0.4in;
+  }
+
+  body {
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Hide app shell */
+  .app-nav,
+  .app-layout__sidebar,
+  .pr-print-controls {
+    display: none !important;
+  }
+
+  .pr-print-page {
+    padding: 0;
+    background: #fff;
+    min-height: auto;
+  }
+
+  .pr-print-sheet {
+    width: 100%;
+    min-height: auto;
+    padding: 0;
+    box-shadow: none;
+  }
+}
