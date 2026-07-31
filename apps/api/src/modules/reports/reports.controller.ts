@@ -96,7 +96,7 @@ export class ReportsController {
       total_amount: string;
     }> = await this.prisma.$queryRaw`
       SELECT
-        pri.classification,
+        COALESCE(pri.classification::text, 'unclassified') AS classification,
         COUNT(pri.id) AS item_count,
         COALESCE(SUM(pri.estimated_total_cost), 0)::text AS total_amount
       FROM purchase_request_items pri
