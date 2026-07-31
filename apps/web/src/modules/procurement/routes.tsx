@@ -5,6 +5,7 @@ import { DelegationPage } from './pages/DelegationPage';
 import { DvDetailPage } from './pages/DvDetailPage';
 import { DvListPage } from './pages/DvListPage';
 import { NewDvPage } from './pages/NewDvPage';
+import { PrintDvPage } from './pages/PrintDvPage';
 import { InspectionDetailPage } from './pages/InspectionDetailPage';
 import { InspectionListPage } from './pages/InspectionListPage';
 import { NewInspectionPage } from './pages/NewInspectionPage';
@@ -113,6 +114,10 @@ export const procurementRoutes: RouteObject[] = [
   {
     path: '/procurement/dvs/:id',
     element: <DvDetailPage />,
+  },
+  {
+    path: '/procurement/dvs/:id/print',
+    element: <PrintDvPage />,
   },
   {
     path: '/procurement/delegations',

@@ -208,6 +208,27 @@
   margin-bottom: 16px;
 }
 
+/* ── Checkbox for DV form ── */
+.gov-checkbox {
+  font-size: 13pt;
+  margin-right: 4px;
+}
+
+/* ── Compact table variant (smaller padding) ── */
+.gov-table--compact td,
+.gov-table--compact th {
+  padding: 3px 6px;
+}
+
+/* ── Print footer ── */
+.gov-print-footer {
+  margin-top: 8px;
+  text-align: right;
+}
+
+/* ── Bold helper for table cells ── */
+.gov-bold { font-weight: 700; }
+
 /* ── Print media ── */
 @media print {
   @page {

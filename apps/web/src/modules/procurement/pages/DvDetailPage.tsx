@@ -126,6 +126,9 @@ export function DvDetailPage() {
       {error && <div className="pr-error">{error}</div>}
 
       <div className="pr-detail-actions">
+        <Link to={`/procurement/dvs/${dv.id}/print`} className="pr-btn" style={{ textDecoration: 'none' }}>
+          Print DV
+        </Link>
         {dv.status === 'draft' && canCreate && (
           <button className="pr-btn pr-btn--primary" disabled={acting}
             onClick={() => doAction(submitDvForCertification, 'Submit for certification?')}>
