@@ -8,6 +8,8 @@ import './app-layout.css';
 const MODULE_NAV = [
   { to: '/budgeting', label: 'Budgeting', module: 'budgeting' as const },
   { to: '/procurement', label: 'Procurement', module: 'procurement' as const },
+  { to: '/reports', label: 'Reports', module: 'reports' as const },
+  { to: '/admin', label: 'Admin', module: 'admin' as const },
 ];
 
 export function AppLayout() {

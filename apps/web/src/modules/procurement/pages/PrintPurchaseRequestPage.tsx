@@ -14,13 +14,7 @@ export function PrintPurchaseRequestPage() {
   useEffect(() => {
     if (!id) return;
     getPurchaseRequest(id)
-      .then((data) => {
-        if (data.status !== 'procurement_in_progress') {
-          setError('This PR cannot be printed yet. It must complete all approval stages first.');
-          return;
-        }
-        setPr(data);
-      })
+      .then((data) => setPr(data))
       .catch((err) =>
         setError(err instanceof ProcurementApiError ? err.message : 'Failed to load PR.'),
       );

@@ -140,6 +140,8 @@ model Organization {
   purchaseOrders        PurchaseOrder[]
   cafs                  CertificationOfAvailability[]
   obligationRequests    ObligationRequest[]
+  inspectionReports     InspectionReport[]
+  disbursementVouchers  DisbursementVoucher[]
 
   @@map("organizations")
 }
@@ -238,7 +240,8 @@ model ResponsibilityCenter {
   budgetHeaders    BudgetHeader[]
   purchaseRequests   PurchaseRequest[]
   cafs               CertificationOfAvailability[]
-  obligationRequests ObligationRequest[]
+  obligationRequests   ObligationRequest[]
+  disbursementVouchers DisbursementVoucher[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -349,6 +352,15 @@ model User {
   updatedOrsChildren                            OrsChild[]            @relation("OrsChildrenUpdatedBy")
   approvedOrsAdjustments                        OrsAdjustment[]       @relation("OrsAdjustmentsApprovedBy")
   createdOrsAdjustments                         OrsAdjustment[]       @relation("OrsAdjustmentsCreatedBy")
+  inspectedInspectionReports                    InspectionReport[]    @relation("InspectionReportsInspectedBy")
+  acceptedInspectionReports                     InspectionReport[]    @relation("InspectionReportsAcceptedBy")
+  createdInspectionReports                      InspectionReport[]    @relation("InspectionReportsCreatedBy")
+  updatedInspectionReports                      InspectionReport[]    @relation("InspectionReportsUpdatedBy")
+  certifiedDvs                                  DisbursementVoucher[] @relation("DvsCertifiedBy")
+  approvedDvs                                   DisbursementVoucher[] @relation("DvsApprovedBy")
+  releasedDvs                                   DisbursementVoucher[] @relation("DvsReleasedBy")
+  createdDvs                                    DisbursementVoucher[] @relation("DvsCreatedBy")
+  updatedDvs                                    DisbursementVoucher[] @relation("DvsUpdatedBy")
 
   @@unique([organizationId, username])
   @@unique([organizationId, email])
@@ -511,7 +523,8 @@ model FundSource {
   budgetHeaders      BudgetHeader[]
   purchaseRequests   PurchaseRequest[]
   cafs               CertificationOfAvailability[]
-  obligationRequests ObligationRequest[]
+  obligationRequests   ObligationRequest[]
+  disbursementVouchers DisbursementVoucher[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -1217,7 +1230,9 @@ model PurchaseRequest {
   revisions          PrRevision[]
   purchaseOrders     PurchaseOrder[]
   cafs               CertificationOfAvailability[]
-  obligationRequests ObligationRequest[]
+  obligationRequests   ObligationRequest[]
+  inspectionReports    InspectionReport[]
+  disbursementVouchers DisbursementVoucher[]
 
   @@unique([organizationId, prNumber])
   @@index([organizationId])
@@ -1245,7 +1260,8 @@ model PurchaseRequestItem {
   createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  purchaseRequest PurchaseRequest @relation(fields: [purchaseRequestId], references: [id], onDelete: Cascade)
+  purchaseRequest      PurchaseRequest       @relation(fields: [purchaseRequestId], references: [id], onDelete: Cascade)
+  inspectionReportItems InspectionReportItem[]
 
   @@unique([purchaseRequestId, itemNumber])
   @@index([purchaseRequestId])
@@ -1474,9 +1490,11 @@ model Supplier {
   creator        User?                     @relation("SuppliersCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
   updater        User?                     @relation("SuppliersUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
 
-  purchaseOrders PurchaseOrder[]
-  cafs           CertificationOfAvailability[]
-  ors            ObligationRequest[]
+  purchaseOrders    PurchaseOrder[]
+  cafs              CertificationOfAvailability[]
+  ors                  ObligationRequest[]
+  inspectionReports    InspectionReport[]
+  disbursementVouchers DisbursementVoucher[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -1514,8 +1532,10 @@ model PurchaseOrder {
   creator         User?                     @relation("PurchaseOrdersCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
   updater         User?                     @relation("PurchaseOrdersUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
 
-  cafs            CertificationOfAvailability[]
-  ors             ObligationRequest[]
+  cafs              CertificationOfAvailability[]
+  ors               ObligationRequest[]
+  inspectionReports    InspectionReport[]
+  disbursementVouchers DisbursementVoucher[]
 
   @@unique([organizationId, poNumber])
   @@index([organizationId])
@@ -1634,7 +1654,8 @@ model ObligationRequest {
   updater                  User?                      @relation("OrsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
 
   children    OrsChild[]
-  adjustments OrsAdjustment[]
+  adjustments          OrsAdjustment[]
+  disbursementVouchers DisbursementVoucher[]
 
   @@unique([organizationId, orsNumber])
   @@index([organizationId])
@@ -1698,4 +1719,165 @@ model OrsAdjustment {
   @@index([orsId])
   @@index([cafId])
   @@map("ors_adjustments")
+}
+
+enum InspectionStatus {
+  draft
+  submitted
+  accepted
+  rejected
+  cancelled
+
+  @@map("inspection_status")
+}
+
+model InspectionReport {
+  id                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String           @map("organization_id") @db.Uuid
+  reportNumber      String           @map("report_number") @db.VarChar(30)
+  reportDate        DateTime         @map("report_date") @db.Date
+  purchaseOrderId   String           @map("purchase_order_id") @db.Uuid
+  purchaseRequestId String           @map("purchase_request_id") @db.Uuid
+  supplierId        String           @map("supplier_id") @db.Uuid
+  deliveryDate      DateTime         @map("delivery_date") @db.Date
+  deliveryNote      String?          @map("delivery_note") @db.VarChar(100)
+  invoiceNumber     String?          @map("invoice_number") @db.VarChar(50)
+  invoiceDate       DateTime?        @map("invoice_date") @db.Date
+  overallResult     String           @default("pending") @map("overall_result") @db.VarChar(20)
+  findings          String?
+  recommendations   String?
+  status            InspectionStatus @default(draft)
+  inspectedBy       String?          @map("inspected_by") @db.Uuid
+  inspectedAt       DateTime?        @map("inspected_at") @db.Timestamptz(6)
+  acceptedBy        String?          @map("accepted_by") @db.Uuid
+  acceptedAt        DateTime?        @map("accepted_at") @db.Timestamptz(6)
+  remarks           String?
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy         String?          @map("created_by") @db.Uuid
+  updatedBy         String?          @map("updated_by") @db.Uuid
+  version           Int              @default(1)
+
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  purchaseOrder   PurchaseOrder   @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  purchaseRequest PurchaseRequest @relation(fields: [purchaseRequestId], references: [id], onDelete: Restrict)
+  supplier        Supplier        @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  inspector       User?           @relation("InspectionReportsInspectedBy", fields: [inspectedBy], references: [id], onDelete: SetNull)
+  accepter        User?           @relation("InspectionReportsAcceptedBy", fields: [acceptedBy], references: [id], onDelete: SetNull)
+  creator         User?           @relation("InspectionReportsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater         User?           @relation("InspectionReportsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  items                InspectionReportItem[]
+  disbursementVouchers DisbursementVoucher[]
+
+  @@unique([organizationId, reportNumber])
+  @@index([organizationId])
+  @@index([purchaseOrderId])
+  @@index([purchaseRequestId])
+  @@index([status])
+  @@map("inspection_reports")
+}
+
+model InspectionReportItem {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  inspectionReportId String   @map("inspection_report_id") @db.Uuid
+  prItemId           String?  @map("pr_item_id") @db.Uuid
+  description        String
+  unitOfMeasure      String?  @map("unit_of_measure") @db.VarChar(30)
+  quantityOrdered    Decimal  @default(0) @map("quantity_ordered") @db.Decimal(18, 4)
+  quantityDelivered  Decimal  @default(0) @map("quantity_delivered") @db.Decimal(18, 4)
+  quantityAccepted   Decimal  @default(0) @map("quantity_accepted") @db.Decimal(18, 4)
+  quantityRejected   Decimal  @default(0) @map("quantity_rejected") @db.Decimal(18, 4)
+  result             String   @default("pending") @db.VarChar(20)
+  remarks            String?
+  itemNumber         Int      @default(1) @map("item_number")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  inspectionReport InspectionReport    @relation(fields: [inspectionReportId], references: [id], onDelete: Cascade)
+  prItem           PurchaseRequestItem? @relation(fields: [prItemId], references: [id], onDelete: SetNull)
+
+  @@index([inspectionReportId])
+  @@map("inspection_report_items")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// DISBURSEMENT VOUCHERS
+// ════════════════════════════════════════════════════════════════════
+
+enum DvStatus {
+  draft
+  for_certification
+  certified
+  for_approval
+  approved
+  released
+  cancelled
+
+  @@map("dv_status")
+}
+
+enum PaymentMode {
+  check
+  ada
+  others
+
+  @@map("payment_mode")
+}
+
+model DisbursementVoucher {
+  id                     String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId         String      @map("organization_id") @db.Uuid
+  dvNumber               String      @map("dv_number") @db.VarChar(30)
+  dvDate                 DateTime    @default(now()) @map("dv_date") @db.Timestamptz(6)
+  orsId                  String      @map("ors_id") @db.Uuid
+  purchaseRequestId      String      @map("purchase_request_id") @db.Uuid
+  purchaseOrderId        String      @map("purchase_order_id") @db.Uuid
+  supplierId             String      @map("supplier_id") @db.Uuid
+  inspectionReportId     String?     @map("inspection_report_id") @db.Uuid
+  fundSourceId           String?     @map("fund_source_id") @db.Uuid
+  responsibilityCenterId String?     @map("responsibility_center_id") @db.Uuid
+  accountCode            String?     @map("account_code") @db.VarChar(30)
+  particulars            String
+  paymentMode            PaymentMode @default(check) @map("payment_mode")
+  grossAmount            Decimal     @default(0) @map("gross_amount") @db.Decimal(18, 2)
+  taxAmount              Decimal     @default(0) @map("tax_amount") @db.Decimal(18, 2)
+  otherDeductions        Decimal     @default(0) @map("other_deductions") @db.Decimal(18, 2)
+  netAmount              Decimal     @default(0) @map("net_amount") @db.Decimal(18, 2)
+  checkNumber            String?     @map("check_number") @db.VarChar(50)
+  checkDate              DateTime?   @map("check_date") @db.Date
+  bankName               String?     @map("bank_name") @db.VarChar(100)
+  certifiedBy            String?     @map("certified_by") @db.Uuid
+  certifiedAt            DateTime?   @map("certified_at") @db.Timestamptz(6)
+  approvedBy             String?     @map("approved_by") @db.Uuid
+  approvedAt             DateTime?   @map("approved_at") @db.Timestamptz(6)
+  releasedBy             String?     @map("released_by") @db.Uuid
+  releasedAt             DateTime?   @map("released_at") @db.Timestamptz(6)
+  status                 DvStatus    @default(draft)
+  remarks                String?
+  createdBy              String      @map("created_by") @db.Uuid
+  updatedBy              String      @map("updated_by") @db.Uuid
+  createdAt              DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version                Int         @default(1)
+
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  ors                  ObligationRequest     @relation(fields: [orsId], references: [id], onDelete: Restrict)
+  purchaseRequest      PurchaseRequest       @relation(fields: [purchaseRequestId], references: [id], onDelete: Restrict)
+  purchaseOrder        PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  supplier             Supplier              @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  inspectionReport     InspectionReport?     @relation(fields: [inspectionReportId], references: [id], onDelete: SetNull)
+  fundSource           FundSource?           @relation(fields: [fundSourceId], references: [id], onDelete: Restrict)
+  responsibilityCenter ResponsibilityCenter? @relation(fields: [responsibilityCenterId], references: [id], onDelete: Restrict)
+  certifier            User?                 @relation("DvsCertifiedBy", fields: [certifiedBy], references: [id], onDelete: SetNull)
+  approver             User?                 @relation("DvsApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
+  releaser             User?                 @relation("DvsReleasedBy", fields: [releasedBy], references: [id], onDelete: SetNull)
+  creator              User                  @relation("DvsCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  updater              User                  @relation("DvsUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, dvNumber])
+  @@index([organizationId, status])
+  @@index([orsId])
+  @@index([purchaseOrderId])
+  @@index([supplierId])
+  @@map("disbursement_vouchers")
 }

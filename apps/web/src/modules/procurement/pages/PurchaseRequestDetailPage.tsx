@@ -328,8 +328,8 @@ export function PurchaseRequestDetailPage() {
           </button>
         )}
 
-        {pr.status === 'procurement_in_progress' && hasPermission('procurement.pr.accept_procurement') && (
-          <Link to={`/procurement/purchase-requests/${pr.id}/print`} className="pr-btn pr-btn--primary" style={{ textDecoration: 'none' }}>
+        {pr.status !== 'draft' && (
+          <Link to={`/procurement/purchase-requests/${pr.id}/print`} className="pr-btn" style={{ textDecoration: 'none' }}>
             Print PR
           </Link>
         )}

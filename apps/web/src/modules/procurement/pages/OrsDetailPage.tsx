@@ -167,6 +167,9 @@ export function OrsDetailPage() {
       {error && <div className="pr-error">{error}</div>}
 
       <div className="pr-detail-actions">
+        <Link to={`/procurement/ors/${ors.id}/print`} className="pr-btn" style={{ textDecoration: 'none' }}>
+          Print ORS
+        </Link>
         {ors.status === 'draft' && canCreate && (
           <button className="pr-btn pr-btn--primary" disabled={acting}
             onClick={() => doAction(submitOrs, 'submit')}>

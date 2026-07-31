@@ -301,3 +301,98 @@ export interface Ors {
   children: OrsChild[];
   adjustments: OrsAdjustment[];
 }
+
+// ── Inspection ──
+
+export type InspectionStatus = 'draft' | 'submitted' | 'accepted' | 'rejected' | 'cancelled';
+
+export interface InspectionReportItem {
+  id: string;
+  prItemId: string | null;
+  description: string;
+  unitOfMeasure: string | null;
+  quantityOrdered: string;
+  quantityDelivered: string;
+  quantityAccepted: string;
+  quantityRejected: string;
+  result: string;
+  remarks: string | null;
+  itemNumber: number;
+}
+
+export interface InspectionReport {
+  id: string;
+  reportNumber: string;
+  reportDate: string;
+  deliveryDate: string;
+  deliveryNote: string | null;
+  invoiceNumber: string | null;
+  invoiceDate: string | null;
+  overallResult: string;
+  findings: string | null;
+  recommendations: string | null;
+  status: InspectionStatus;
+  remarks: string | null;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+  inspectedAt: string | null;
+  acceptedAt: string | null;
+  purchaseOrder: {
+    id: string;
+    poNumber: string;
+    contractAmount: string;
+    status: string;
+    supplier: { id: string; name: string };
+  };
+  purchaseRequest: { id: string; prNumber: string; title: string; status: string };
+  supplier: { id: string; name: string; tin: string | null };
+  inspector: UserRef | null;
+  accepter: UserRef | null;
+  creator: UserRef | null;
+  items: InspectionReportItem[];
+}
+
+export type DvStatus = 'draft' | 'for_certification' | 'certified' | 'for_approval' | 'approved' | 'released' | 'cancelled';
+export type PaymentMode = 'check' | 'ada' | 'others';
+
+export interface DisbursementVoucher {
+  id: string;
+  dvNumber: string;
+  dvDate: string;
+  particulars: string;
+  paymentMode: PaymentMode;
+  grossAmount: string;
+  taxAmount: string;
+  otherDeductions: string;
+  netAmount: string;
+  checkNumber: string | null;
+  checkDate: string | null;
+  bankName: string | null;
+  accountCode: string | null;
+  status: DvStatus;
+  remarks: string | null;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+  certifiedAt: string | null;
+  approvedAt: string | null;
+  releasedAt: string | null;
+  ors: { id: string; orsNumber: string; originalAmount: string; status: string };
+  purchaseRequest: { id: string; prNumber: string; title: string; status: string };
+  purchaseOrder: {
+    id: string;
+    poNumber: string;
+    contractAmount: string;
+    supplier: { id: string; name: string };
+  };
+  supplier: { id: string; name: string; tin: string | null };
+  inspectionReport: { id: string; reportNumber: string; overallResult: string } | null;
+  fundSource: { id: string; code: string; name: string } | null;
+  responsibilityCenter: { id: string; code: string; name: string } | null;
+  certifier: UserRef | null;
+  approver: UserRef | null;
+  releaser: UserRef | null;
+  creator: UserRef | null;
+  updater: UserRef | null;
+}

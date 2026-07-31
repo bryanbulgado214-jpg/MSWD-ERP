@@ -6,10 +6,12 @@ import { AppService } from './app.service';
 import { DashboardController } from './dashboard.controller';
 import { validateEnv } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BudgetingModule } from './modules/budgeting/budgeting.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { ProcurementModule } from './modules/procurement/procurement.module';
+import { ReportsModule } from './modules/reports/reports.module';
 import { WorkflowModule } from './modules/workflow/workflow.module';
 
 @Module({
@@ -19,11 +21,13 @@ import { WorkflowModule } from './modules/workflow/workflow.module';
       validate: validateEnv,
     }),
     DatabaseModule,
+    AdminModule,
     AuthModule,
     BudgetingModule,
     WorkflowModule,
     NotificationModule,
     ProcurementModule,
+    ReportsModule,
   ],
   controllers: [AppController, DashboardController],
   providers: [AppService],

@@ -1,4 +1,8 @@
 export const MODULE_GATES = {
+  admin: [
+    'core.user.manage',
+    'core.role.manage',
+  ],
   budgeting: [
     'budgeting.cycle.manage',
     'budgeting.header.manage',
@@ -18,6 +22,16 @@ export const MODULE_GATES = {
     'procurement.po.create',
     'procurement.po.approve',
     'procurement.delegation.manage',
+    'procurement.inspection.create',
+    'procurement.inspection.accept',
+    'procurement.dv.create',
+    'procurement.dv.certify',
+    'procurement.dv.approve',
+    'procurement.dv.release',
+  ],
+  reports: [
+    'procurement.read',
+    'budgeting.read',
   ],
 } as const;
 

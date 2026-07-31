@@ -6,6 +6,8 @@ const LINKS = [
   { to: '/procurement/suppliers', label: 'Suppliers' },
   { to: '/procurement/cafs', label: 'CAFs' },
   { to: '/procurement/ors', label: 'ORS' },
+  { to: '/procurement/inspections', label: 'Inspections' },
+  { to: '/procurement/dvs', label: 'DVs' },
   { to: '/procurement/ppmp-items', label: 'PPMP Items' },
   { to: '/procurement/delegations', label: 'Delegations' },
   { to: '/procurement/audit-trail', label: 'Audit Trail' },

@@ -117,6 +117,9 @@ export function PurchaseOrderDetailPage() {
       {error && <div className="pr-error">{error}</div>}
 
       <div className="pr-detail-actions">
+        <Link to={`/procurement/purchase-orders/${po.id}/print`} className="pr-btn" style={{ textDecoration: 'none' }}>
+          Print PO
+        </Link>
         {po.status === 'draft' && canCreate && (
           <button className="pr-btn pr-btn--primary" disabled={acting} onClick={doSubmitForCaf}>
             Submit for CAF

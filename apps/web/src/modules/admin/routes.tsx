@@ -1,0 +1,20 @@
+import type { RouteObject } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
+
+import { AdminLayout } from './pages/AdminLayout';
+import { RoleDetailPage } from './pages/RoleDetailPage';
+import { RoleListPage } from './pages/RoleListPage';
+import { UserListPage } from './pages/UserListPage';
+
+export const adminRoutes: RouteObject[] = [
+  {
+    path: '/admin',
+    element: <AdminLayout />,
+    children: [
+      { index: true, element: <Navigate to="/admin/users" replace /> },
+      { path: 'users', element: <UserListPage /> },
+      { path: 'roles', element: <RoleListPage /> },
+      { path: 'roles/:id', element: <RoleDetailPage /> },
+    ],
+  },
+];

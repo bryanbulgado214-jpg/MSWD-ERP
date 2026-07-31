@@ -82,6 +82,9 @@ export function CafDetailPage() {
       {error && <div className="pr-error">{error}</div>}
 
       <div className="pr-detail-actions">
+        <Link to={`/procurement/cafs/${caf.id}/print`} className="pr-btn" style={{ textDecoration: 'none' }}>
+          Print CAF
+        </Link>
         {caf.status === 'draft' && canCreate && (
           <button className="pr-btn pr-btn--primary" disabled={acting}
             onClick={() => doAction(submitCafForCertification, 'submit')}>

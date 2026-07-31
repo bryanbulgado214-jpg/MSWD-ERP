@@ -7,6 +7,10 @@ import { AuditTrailController } from './audit-trail.controller';
 import { AppItemController } from './app-item.controller';
 import { DelegationController } from './delegation.controller';
 import { DelegationService } from './delegation.service';
+import { DvController } from './dv.controller';
+import { DvService } from './dv.service';
+import { InspectionController } from './inspection.controller';
+import { InspectionService } from './inspection.service';
 import { AppItemService } from './app-item.service';
 import { CafController } from './caf.controller';
 import { CafService } from './caf.service';
@@ -35,16 +39,18 @@ import { SupplierService } from './supplier.service';
     OrsController,
     AuditTrailController,
     DelegationController,
+    InspectionController,
+    DvController,
   ],
   providers: [
     PurchaseRequestService, PpmpService, AppItemService,
     SupplierService, PurchaseOrderService, CafService, OrsService,
-    DelegationService,
+    DelegationService, InspectionService, DvService,
   ],
   exports: [
     PurchaseRequestService, PpmpService, AppItemService,
     SupplierService, PurchaseOrderService, CafService, OrsService,
-    DelegationService,
+    DelegationService, InspectionService, DvService,
   ],
 })
 export class ProcurementModule {}

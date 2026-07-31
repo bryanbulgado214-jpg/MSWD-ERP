@@ -1,7 +1,9 @@
 import { createBrowserRouter } from 'react-router-dom';
 
+import { adminRoutes } from '../modules/admin/routes';
 import { budgetingRoutes } from '../modules/budgeting/routes';
 import { procurementRoutes } from '../modules/procurement/routes';
+import { reportsRoutes } from '../modules/reports/routes';
 import { AppLayout } from './AppLayout';
 import { DashboardPage } from './DashboardPage';
 import { LoginPage } from './LoginPage';
@@ -27,6 +29,14 @@ export const router = createBrowserRouter([
           {
             path: '/no-access',
             element: <NoAccessPage />,
+          },
+          {
+            element: <RequireModule module="reports" />,
+            children: reportsRoutes,
+          },
+          {
+            element: <RequireModule module="admin" />,
+            children: adminRoutes,
           },
           {
             element: <RequireModule module="budgeting" />,

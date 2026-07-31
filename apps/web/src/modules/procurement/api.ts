@@ -1,4 +1,4 @@
-import type { Caf, CreatePurchaseRequestInput, Ors, PurchaseOrder, PurchaseRequest, Supplier, UpdatePurchaseRequestInput } from './types';
+import type { Caf, CreatePurchaseRequestInput, DisbursementVoucher, InspectionReport, Ors, PurchaseOrder, PurchaseRequest, Supplier, UpdatePurchaseRequestInput } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
 
@@ -578,6 +578,125 @@ export async function listLookupPermissions(): Promise<LookupPermission[]> {
 
 export async function listLookupDepartments(): Promise<LookupDepartment[]> {
   const res = await authFetch('/procurement/lookups/departments');
+  return res.json();
+}
+
+// ── Inspection Reports ──
+
+export async function listInspections(filters?: { purchaseOrderId?: string; status?: string }): Promise<InspectionReport[]> {
+  const params = new URLSearchParams();
+  if (filters?.purchaseOrderId) params.set('purchaseOrderId', filters.purchaseOrderId);
+  if (filters?.status) params.set('status', filters.status);
+  const qs = params.toString();
+  const res = await authFetch(`/procurement/inspections${qs ? `?${qs}` : ''}`);
+  return res.json();
+}
+
+export async function getInspection(id: string): Promise<InspectionReport> {
+  const res = await authFetch(`/procurement/inspections/${id}`);
+  return res.json();
+}
+
+export async function createInspection(data: {
+  purchaseOrderId: string;
+  deliveryDate: string;
+  deliveryNote?: string;
+  invoiceNumber?: string;
+  invoiceDate?: string;
+  findings?: string;
+  recommendations?: string;
+  items: Array<{
+    prItemId?: string;
+    description: string;
+    unitOfMeasure?: string;
+    quantityOrdered: number;
+    quantityDelivered: number;
+    quantityAccepted: number;
+    quantityRejected: number;
+    result: string;
+    remarks?: string;
+  }>;
+}): Promise<InspectionReport> {
+  const res = await authFetchMutate('/procurement/inspections', 'POST', data);
+  return res.json();
+}
+
+export async function submitInspection(id: string, expectedVersion: number): Promise<InspectionReport> {
+  const res = await authFetchMutate(`/procurement/inspections/${id}/submit`, 'POST', { expectedVersion });
+  return res.json();
+}
+
+export async function acceptInspection(id: string, expectedVersion: number, remarks?: string): Promise<InspectionReport> {
+  const res = await authFetchMutate(`/procurement/inspections/${id}/accept`, 'POST', { expectedVersion, ...(remarks ? { remarks } : {}) });
+  return res.json();
+}
+
+export async function rejectInspection(id: string, expectedVersion: number, remarks?: string): Promise<InspectionReport> {
+  const res = await authFetchMutate(`/procurement/inspections/${id}/reject`, 'POST', { expectedVersion, ...(remarks ? { remarks } : {}) });
+  return res.json();
+}
+
+// ── Disbursement Vouchers ────────────────────────────────────────
+
+export async function listDvs(): Promise<DisbursementVoucher[]> {
+  const res = await authFetch('/procurement/dvs');
+  return res.json();
+}
+
+export async function getDv(id: string): Promise<DisbursementVoucher> {
+  const res = await authFetch(`/procurement/dvs/${id}`);
+  return res.json();
+}
+
+export async function createDv(data: {
+  orsId: string;
+  particulars: string;
+  grossAmount: number;
+  paymentMode?: string;
+  taxAmount?: number;
+  otherDeductions?: number;
+  inspectionReportId?: string;
+  accountCode?: string;
+  checkNumber?: string;
+  checkDate?: string;
+  bankName?: string;
+}): Promise<DisbursementVoucher> {
+  const res = await authFetchMutate('/procurement/dvs', 'POST', data);
+  return res.json();
+}
+
+export async function submitDvForCertification(id: string, expectedVersion: number): Promise<DisbursementVoucher> {
+  const res = await authFetchMutate(`/procurement/dvs/${id}/submit-for-certification`, 'POST', { expectedVersion });
+  return res.json();
+}
+
+export async function certifyDv(id: string, expectedVersion: number, remarks?: string): Promise<DisbursementVoucher> {
+  const res = await authFetchMutate(`/procurement/dvs/${id}/certify`, 'POST', { expectedVersion, ...(remarks ? { remarks } : {}) });
+  return res.json();
+}
+
+export async function submitDvForApproval(id: string, expectedVersion: number): Promise<DisbursementVoucher> {
+  const res = await authFetchMutate(`/procurement/dvs/${id}/submit-for-approval`, 'POST', { expectedVersion });
+  return res.json();
+}
+
+export async function approveDv(id: string, expectedVersion: number, remarks?: string): Promise<DisbursementVoucher> {
+  const res = await authFetchMutate(`/procurement/dvs/${id}/approve`, 'POST', { expectedVersion, ...(remarks ? { remarks } : {}) });
+  return res.json();
+}
+
+export async function releaseDv(id: string, expectedVersion: number, payment?: {
+  checkNumber?: string;
+  checkDate?: string;
+  bankName?: string;
+  remarks?: string;
+}): Promise<DisbursementVoucher> {
+  const res = await authFetchMutate(`/procurement/dvs/${id}/release`, 'POST', { expectedVersion, ...(payment ?? {}) });
+  return res.json();
+}
+
+export async function cancelDv(id: string, expectedVersion: number, remarks?: string): Promise<DisbursementVoucher> {
+  const res = await authFetchMutate(`/procurement/dvs/${id}/cancel`, 'POST', { expectedVersion, ...(remarks ? { remarks } : {}) });
   return res.json();
 }
 
