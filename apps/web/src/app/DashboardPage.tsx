@@ -25,6 +25,7 @@ interface StatCard {
   label: string;
   value: number;
   color: string;
+  link?: string;
 }
 
 const MODULE_CARDS = [
@@ -91,12 +92,24 @@ export function DashboardPage() {
       {/* ── Stats ── */}
       {stats.length > 0 && (
         <div className="dashboard__stats">
-          {stats.map((s) => (
-            <div key={s.label} className="dashboard__stat-card">
-              <div className="dashboard__stat-value" style={{ color: s.color }}>{s.value}</div>
-              <div className="dashboard__stat-label">{s.label}</div>
-            </div>
-          ))}
+          {stats.map((s) => {
+            const clickable = s.value > 0 && s.link;
+            const content = (
+              <>
+                <div className="dashboard__stat-value" style={{ color: s.color }}>{s.value}</div>
+                <div className="dashboard__stat-label">{s.label}</div>
+              </>
+            );
+            return clickable ? (
+              <Link key={s.label} to={s.link!} className="dashboard__stat-card dashboard__stat-card--clickable">
+                {content}
+              </Link>
+            ) : (
+              <div key={s.label} className="dashboard__stat-card">
+                {content}
+              </div>
+            );
+          })}
         </div>
       )}
 

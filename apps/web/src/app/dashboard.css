@@ -49,6 +49,18 @@
   margin-bottom: 6px;
 }
 
+.dashboard__stat-card--clickable {
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.dashboard__stat-card--clickable:hover {
+  border-color: var(--mswd-blue);
+  box-shadow: 0 4px 16px rgba(11, 87, 255, 0.1);
+  transform: translateY(-2px);
+}
+
 .dashboard__stat-label {
   font-size: 12px;
   font-weight: 600;

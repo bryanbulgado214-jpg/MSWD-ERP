@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 import { formatPeso } from '../../budgeting/format-peso';
 import { listPurchaseOrders, ProcurementApiError } from '../api';
@@ -14,6 +14,7 @@ type LoadState =
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: '', label: 'All statuses' },
+  { value: 'active', label: 'Active (non-cancelled)' },
   { value: 'draft', label: 'Draft' },
   { value: 'pending_caf', label: 'Pending CAF' },
   { value: 'for_approval', label: 'For Approval' },
@@ -30,14 +31,31 @@ const STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
 };
 
 export function PurchaseOrderListPage() {
-  const [statusFilter, setStatusFilter] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialStatus = searchParams.get('status') ?? '';
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [state, setState] = useState<LoadState>({ status: 'loading' });
+
+  useEffect(() => {
+    if (statusFilter) {
+      setSearchParams({ status: statusFilter }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  }, [statusFilter]);
 
   useEffect(() => {
     let cancelled = false;
     setState({ status: 'loading' });
-    listPurchaseOrders(statusFilter ? { status: statusFilter } : undefined)
-      .then((data) => { if (!cancelled) setState({ status: 'loaded', data }); })
+    const apiStatus = statusFilter === 'active' ? undefined : statusFilter || undefined;
+    listPurchaseOrders(apiStatus ? { status: apiStatus } : undefined)
+      .then((data) => {
+        if (cancelled) return;
+        const filtered = statusFilter === 'active'
+          ? data.filter((po) => po.status !== 'cancelled')
+          : data;
+        setState({ status: 'loaded', data: filtered });
+      })
       .catch((e) => {
         if (!cancelled) setState({ status: 'error', message: e instanceof ProcurementApiError ? e.message : 'Failed to load Purchase Orders.' });
       });

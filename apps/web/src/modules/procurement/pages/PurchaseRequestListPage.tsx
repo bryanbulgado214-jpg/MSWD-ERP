@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
 import { formatPeso } from '../../budgeting/format-peso';
@@ -20,14 +20,18 @@ type LoadState =
   | { status: 'error'; message: string }
   | { status: 'loaded'; data: PurchaseRequest[] };
 
+const TERMINAL_STATUSES = ['cancelled', 'rejected', 'voided', 'completed'];
+
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
+  { value: 'active', label: 'Active (non-terminal)' },
   { value: 'draft', label: 'Draft' },
   { value: 'submitted', label: 'Submitted' },
   { value: 'endorsed', label: 'Endorsed' },
   { value: 'budget_certified', label: 'Budget Certified' },
   { value: 'approved', label: 'Approved' },
   { value: 'procurement_in_progress', label: 'Procurement In Progress' },
+  { value: 'completed', label: 'Completed' },
   { value: 'returned', label: 'Returned' },
   { value: 'rejected', label: 'Rejected' },
   { value: 'cancelled', label: 'Cancelled' },
@@ -58,7 +62,9 @@ const QUEUES: PendingQueue[] = [
 
 export function PurchaseRequestListPage() {
   const { hasPermission } = useAuth();
-  const [statusFilter, setStatusFilter] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialStatus = searchParams.get('status') ?? '';
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [pendingItems, setPendingItems] = useState<PurchaseRequest[]>([]);
   const [pendingLabel, setPendingLabel] = useState('');
@@ -79,10 +85,25 @@ export function PurchaseRequestListPage() {
   }, [activeQueue?.permission]);
 
   useEffect(() => {
+    if (statusFilter) {
+      setSearchParams({ status: statusFilter }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  }, [statusFilter]);
+
+  useEffect(() => {
     let cancelled = false;
     setState({ status: 'loading' });
-    listPurchaseRequests(statusFilter || undefined)
-      .then((data) => { if (!cancelled) setState({ status: 'loaded', data }); })
+    const apiStatus = statusFilter === 'active' ? undefined : statusFilter || undefined;
+    listPurchaseRequests(apiStatus)
+      .then((data) => {
+        if (cancelled) return;
+        const filtered = statusFilter === 'active'
+          ? data.filter((pr) => !TERMINAL_STATUSES.includes(pr.status))
+          : data;
+        setState({ status: 'loaded', data: filtered });
+      })
       .catch((err) => { if (!cancelled) setState({ status: 'error', message: err instanceof ProcurementApiError ? err.message : 'Failed to load purchase requests.' }); });
     return () => { cancelled = true; };
   }, [statusFilter]);
