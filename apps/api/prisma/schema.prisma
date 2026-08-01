@@ -142,6 +142,14 @@ model Organization {
   obligationRequests    ObligationRequest[]
   inspectionReports     InspectionReport[]
   disbursementVouchers  DisbursementVoucher[]
+  inventoryItems        InventoryItem[]
+  stockReceipts         StockReceipt[]
+  stockCards            StockCard[]
+  requisitionIssueSlips RequisitionIssueSlip[]
+  propertyRecords       PropertyRecord[]
+  accountabilityRecords AccountabilityRecord[]
+  physicalCounts        PhysicalCount[]
+  disposalRequests      DisposalRequest[]
 
   @@map("organizations")
 }
@@ -216,6 +224,7 @@ model Department {
   ppmpItems             PpmpItem[]
   delegationAuthorities DelegationAuthority[]
   obligationRequests    ObligationRequest[]
+  requisitionIssueSlips RequisitionIssueSlip[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -269,6 +278,7 @@ model Location {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   purchaseRequests PurchaseRequest[]
+  propertyRecords  PropertyRecord[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -361,6 +371,34 @@ model User {
   releasedDvs                                   DisbursementVoucher[] @relation("DvsReleasedBy")
   createdDvs                                    DisbursementVoucher[] @relation("DvsCreatedBy")
   updatedDvs                                    DisbursementVoucher[] @relation("DvsUpdatedBy")
+  createdInventoryItems                         InventoryItem[]       @relation("InventoryItemsCreatedBy")
+  updatedInventoryItems                         InventoryItem[]       @relation("InventoryItemsUpdatedBy")
+  receivedStockReceipts                         StockReceipt[]        @relation("StockReceiptsReceivedBy")
+  createdStockReceipts                          StockReceipt[]        @relation("StockReceiptsCreatedBy")
+  updatedStockReceipts                          StockReceipt[]        @relation("StockReceiptsUpdatedBy")
+  createdStockCardEntries                       StockCardEntry[]      @relation("StockCardEntriesCreatedBy")
+  requestedRis                                  RequisitionIssueSlip[] @relation("RisRequestedBy")
+  approvedRis                                   RequisitionIssueSlip[] @relation("RisApprovedBy")
+  issuedRis                                     RequisitionIssueSlip[] @relation("RisIssuedBy")
+  createdRis                                    RequisitionIssueSlip[] @relation("RisCreatedBy")
+  updatedRis                                    RequisitionIssueSlip[] @relation("RisUpdatedBy")
+  accountablePropertyRecords                    PropertyRecord[]       @relation("PropertyRecordsAccountable")
+  createdPropertyRecords                        PropertyRecord[]       @relation("PropertyRecordsCreatedBy")
+  updatedPropertyRecords                        PropertyRecord[]       @relation("PropertyRecordsUpdatedBy")
+  issuedToAccountabilities                      AccountabilityRecord[] @relation("AccountabilitiesIssuedTo")
+  issuedByAccountabilities                      AccountabilityRecord[] @relation("AccountabilitiesIssuedBy")
+  createdAccountabilities                       AccountabilityRecord[] @relation("AccountabilitiesCreatedBy")
+  updatedAccountabilities                       AccountabilityRecord[] @relation("AccountabilitiesUpdatedBy")
+  countedByPhysicalCounts                       PhysicalCount[]        @relation("PhysicalCountsCountedBy")
+  verifiedPhysicalCounts                        PhysicalCount[]        @relation("PhysicalCountsVerifiedBy")
+  approvedPhysicalCounts                        PhysicalCount[]        @relation("PhysicalCountsApprovedBy")
+  createdPhysicalCounts                         PhysicalCount[]        @relation("PhysicalCountsCreatedBy")
+  updatedPhysicalCounts                         PhysicalCount[]        @relation("PhysicalCountsUpdatedBy")
+  requestedDisposals                            DisposalRequest[]      @relation("DisposalsRequestedBy")
+  appraisedDisposals                            DisposalRequest[]      @relation("DisposalsAppraisedBy")
+  approvedDisposals                             DisposalRequest[]      @relation("DisposalsApprovedBy")
+  createdDisposals                              DisposalRequest[]      @relation("DisposalsCreatedBy")
+  updatedDisposals                              DisposalRequest[]      @relation("DisposalsUpdatedBy")
 
   @@unique([organizationId, username])
   @@unique([organizationId, email])
@@ -483,6 +521,7 @@ model FiscalYear {
   ppmpItems         PpmpItem[]
   appItems          AppItem[]
   cafs              CertificationOfAvailability[]
+  physicalCounts    PhysicalCount[]
 
   @@unique([organizationId, year])
   @@index([organizationId])
@@ -1495,6 +1534,7 @@ model Supplier {
   ors                  ObligationRequest[]
   inspectionReports    InspectionReport[]
   disbursementVouchers DisbursementVoucher[]
+  stockReceipts        StockReceipt[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -1536,6 +1576,7 @@ model PurchaseOrder {
   ors               ObligationRequest[]
   inspectionReports    InspectionReport[]
   disbursementVouchers DisbursementVoucher[]
+  stockReceipts        StockReceipt[]
 
   @@unique([organizationId, poNumber])
   @@index([organizationId])
@@ -1769,6 +1810,7 @@ model InspectionReport {
 
   items                InspectionReportItem[]
   disbursementVouchers DisbursementVoucher[]
+  stockReceipts        StockReceipt[]
 
   @@unique([organizationId, reportNumber])
   @@index([organizationId])
@@ -1880,4 +1922,577 @@ model DisbursementVoucher {
   @@index([purchaseOrderId])
   @@index([supplierId])
   @@map("disbursement_vouchers")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// INVENTORY & PROPERTY MANAGEMENT
+//
+// Implements the Supply & Property Management module per:
+//   - COA Circular 2024-006 / 2022-004 (₱50,000 PPE threshold,
+//     3-tier item classification)
+//   - GAM Appendices 57-74 (Stock Card, RIS, PAR, ICS, RPCI, etc.)
+//   - PD 1445 (Government Auditing Code)
+//   - R.A. 9184 (Government Procurement Reform Act)
+//
+// Classification tiers (COA Circular 2024-006):
+//   expendable      — Supplies consumed in use
+//   semi_expendable — ₱5,000 to <₱50,000, useful life >1 year (ICS)
+//   ppe             — ≥₱50,000, useful life >1 year (PAR)
+//
+// Valuation: Weighted average cost method per COA rules.
+// Physical count: Semi-annual for supplies, annual for PPE.
+// ════════════════════════════════════════════════════════════════════
+
+enum InventoryClassification {
+  expendable
+  semi_expendable
+  ppe
+
+  @@map("inventory_classification")
+}
+
+enum StockReceiptStatus {
+  draft
+  received
+  cancelled
+
+  @@map("stock_receipt_status")
+}
+
+enum StockCardEntryType {
+  receipt
+  issue
+  return_entry
+  adjustment
+  beginning_balance
+
+  @@map("stock_card_entry_type")
+}
+
+enum RisStatus {
+  draft
+  submitted
+  approved
+  issued
+  partially_issued
+  cancelled
+
+  @@map("ris_status")
+}
+
+enum AccountabilityType {
+  par
+  ics
+
+  @@map("accountability_type")
+}
+
+enum AccountabilityStatus {
+  active
+  returned
+  transferred
+  disposed
+  lost
+
+  @@map("accountability_status")
+}
+
+enum PropertyCondition {
+  brand_new
+  serviceable
+  unserviceable
+  poor
+  beyond_repair
+
+  @@map("property_condition")
+}
+
+enum PhysicalCountStatus {
+  draft
+  in_progress
+  completed
+  approved
+
+  @@map("physical_count_status")
+}
+
+enum CountType {
+  semi_annual_supplies
+  annual_ppe
+  annual_semi_expendable
+  spot_check
+
+  @@map("count_type")
+}
+
+enum DisposalStatus {
+  draft
+  for_appraisal
+  appraised
+  for_approval
+  approved
+  disposed
+  cancelled
+
+  @@map("disposal_status")
+}
+
+enum DisposalMethod {
+  public_auction
+  negotiated_sale
+  barter
+  donation
+  destruction
+  transfer_to_agency
+
+  @@map("disposal_method")
+}
+
+/// Master catalog of inventory items. Each item is classified as
+/// expendable, semi-expendable, or PPE per COA Circular 2024-006.
+/// on_hand_quantity and unit_cost are maintained by the system via
+/// stock card entries (weighted average cost method).
+model InventoryItem {
+  id                  String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String                  @map("organization_id") @db.Uuid
+  itemCode            String                  @map("item_code") @db.VarChar(50)
+  description         String                  @db.VarChar(500)
+  unitOfMeasure       String                  @map("unit_of_measure") @db.VarChar(30)
+  classification      InventoryClassification
+  category            String?                 @db.VarChar(100)
+  accountCode         String?                 @map("account_code") @db.VarChar(30)
+  reorderPoint        Decimal                 @default(0) @map("reorder_point") @db.Decimal(12, 4)
+  unitCost            Decimal                 @default(0) @map("unit_cost") @db.Decimal(18, 2)
+  onHandQuantity      Decimal                 @default(0) @map("on_hand_quantity") @db.Decimal(12, 4)
+  isActive            Boolean                 @default(true) @map("is_active")
+  createdAt           DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy           String?                 @map("created_by") @db.Uuid
+  updatedBy           String?                 @map("updated_by") @db.Uuid
+  version             Int                     @default(1)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  creator      User?        @relation("InventoryItemsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater      User?        @relation("InventoryItemsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  stockCard          StockCard?
+  stockReceiptItems  StockReceiptItem[]
+  risItems           RisItem[]
+  propertyRecords    PropertyRecord[]
+  physicalCountItems PhysicalCountItem[]
+
+  @@unique([organizationId, itemCode])
+  @@index([organizationId])
+  @@index([classification])
+  @@index([isActive])
+  @@map("inventory_items")
+}
+
+/// Goods received into inventory, typically from a PO after inspection
+/// (IAR). Links to PurchaseOrder and InspectionReport for traceability.
+model StockReceipt {
+  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId     String             @map("organization_id") @db.Uuid
+  receiptNumber      String             @map("receipt_number") @db.VarChar(30)
+  receiptDate        DateTime           @map("receipt_date") @db.Date
+  purchaseOrderId    String?            @map("purchase_order_id") @db.Uuid
+  inspectionReportId String?            @map("inspection_report_id") @db.Uuid
+  supplierId         String?            @map("supplier_id") @db.Uuid
+  status             StockReceiptStatus @default(draft)
+  receivedBy         String?            @map("received_by") @db.Uuid
+  remarks            String?
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy          String?            @map("created_by") @db.Uuid
+  updatedBy          String?            @map("updated_by") @db.Uuid
+  version            Int                @default(1)
+
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  purchaseOrder    PurchaseOrder?    @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  inspectionReport InspectionReport? @relation(fields: [inspectionReportId], references: [id], onDelete: Restrict)
+  supplier         Supplier?         @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  receiver         User?             @relation("StockReceiptsReceivedBy", fields: [receivedBy], references: [id], onDelete: SetNull)
+  creator          User?             @relation("StockReceiptsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater          User?             @relation("StockReceiptsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  items StockReceiptItem[]
+
+  @@unique([organizationId, receiptNumber])
+  @@index([organizationId])
+  @@index([purchaseOrderId])
+  @@index([inspectionReportId])
+  @@index([status])
+  @@map("stock_receipts")
+}
+
+/// Line item of a stock receipt — quantity and cost of each item received.
+model StockReceiptItem {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stockReceiptId  String   @map("stock_receipt_id") @db.Uuid
+  inventoryItemId String   @map("inventory_item_id") @db.Uuid
+  quantityReceived Decimal @map("quantity_received") @db.Decimal(12, 4)
+  unitCost        Decimal  @map("unit_cost") @db.Decimal(18, 2)
+  totalCost       Decimal  @map("total_cost") @db.Decimal(18, 2)
+  lotNumber       String?  @map("lot_number") @db.VarChar(50)
+  expiryDate      DateTime? @map("expiry_date") @db.Date
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  stockReceipt  StockReceipt  @relation(fields: [stockReceiptId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+
+  propertyRecords PropertyRecord[]
+
+  @@index([stockReceiptId])
+  @@index([inventoryItemId])
+  @@map("stock_receipt_items")
+}
+
+/// Stock Card per inventory item (GAM Appendix 58). Maintains the
+/// running balance for weighted average cost valuation. One card per
+/// item; entries below record every receipt, issue, return, and
+/// adjustment.
+model StockCard {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  inventoryItemId String   @unique @map("inventory_item_id") @db.Uuid
+  stockNumber     String   @map("stock_number") @db.VarChar(50)
+  description     String   @db.VarChar(500)
+  reorderPoint    Decimal  @default(0) @map("reorder_point") @db.Decimal(12, 4)
+  unitOfMeasure   String   @map("unit_of_measure") @db.VarChar(30)
+  balanceQuantity Decimal  @default(0) @map("balance_quantity") @db.Decimal(12, 4)
+  balanceUnitCost Decimal  @default(0) @map("balance_unit_cost") @db.Decimal(18, 2)
+  balanceTotalCost Decimal @default(0) @map("balance_total_cost") @db.Decimal(18, 2)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+
+  entries StockCardEntry[]
+
+  @@index([organizationId])
+  @@map("stock_cards")
+}
+
+/// Individual entry on a Stock Card — each receipt, issue, return, or
+/// adjustment is one row. balance_* columns record the running balance
+/// AFTER this entry (same layout as the physical Appendix 58 form).
+model StockCardEntry {
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stockCardId      String             @map("stock_card_id") @db.Uuid
+  entryDate        DateTime           @map("entry_date") @db.Date
+  entryType        StockCardEntryType @map("entry_type")
+  referenceType    String?            @map("reference_type") @db.VarChar(50)
+  referenceId      String?            @map("reference_id") @db.Uuid
+  referenceNumber  String?            @map("reference_number") @db.VarChar(50)
+  receiptQuantity  Decimal?           @map("receipt_quantity") @db.Decimal(12, 4)
+  receiptUnitCost  Decimal?           @map("receipt_unit_cost") @db.Decimal(18, 2)
+  receiptTotalCost Decimal?           @map("receipt_total_cost") @db.Decimal(18, 2)
+  issueQuantity    Decimal?           @map("issue_quantity") @db.Decimal(12, 4)
+  issueUnitCost    Decimal?           @map("issue_unit_cost") @db.Decimal(18, 2)
+  issueTotalCost   Decimal?           @map("issue_total_cost") @db.Decimal(18, 2)
+  balanceQuantity  Decimal            @map("balance_quantity") @db.Decimal(12, 4)
+  balanceUnitCost  Decimal            @map("balance_unit_cost") @db.Decimal(18, 2)
+  balanceTotalCost Decimal            @map("balance_total_cost") @db.Decimal(18, 2)
+  createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy        String?            @map("created_by") @db.Uuid
+
+  stockCard StockCard @relation(fields: [stockCardId], references: [id], onDelete: Restrict)
+  creator   User?     @relation("StockCardEntriesCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([stockCardId])
+  @@index([entryDate])
+  @@index([referenceType, referenceId])
+  @@map("stock_card_entries")
+}
+
+/// Requisition and Issue Slip (GAM Appendix 63). A department requests
+/// supplies; the Supply Officer approves and issues them.
+model RequisitionIssueSlip {
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId         String    @map("organization_id") @db.Uuid
+  risNumber              String    @map("ris_number") @db.VarChar(30)
+  risDate                DateTime  @map("ris_date") @db.Date
+  requestingDepartmentId String    @map("requesting_department_id") @db.Uuid
+  purpose                String?
+  status                 RisStatus @default(draft)
+  requestedBy            String?   @map("requested_by") @db.Uuid
+  approvedBy             String?   @map("approved_by") @db.Uuid
+  approvedAt             DateTime? @map("approved_at") @db.Timestamptz(6)
+  issuedBy               String?   @map("issued_by") @db.Uuid
+  issuedAt               DateTime? @map("issued_at") @db.Timestamptz(6)
+  remarks                String?
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy              String?   @map("created_by") @db.Uuid
+  updatedBy              String?   @map("updated_by") @db.Uuid
+  version                Int       @default(1)
+
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  requestingDepartment Department   @relation(fields: [requestingDepartmentId], references: [id], onDelete: Restrict)
+  requester            User?        @relation("RisRequestedBy", fields: [requestedBy], references: [id], onDelete: SetNull)
+  approver             User?        @relation("RisApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
+  issuer               User?        @relation("RisIssuedBy", fields: [issuedBy], references: [id], onDelete: SetNull)
+  creator              User?        @relation("RisCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater              User?        @relation("RisUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  items RisItem[]
+
+  @@unique([organizationId, risNumber])
+  @@index([organizationId])
+  @@index([requestingDepartmentId])
+  @@index([status])
+  @@map("requisition_issue_slips")
+}
+
+/// Line item on an RIS — what was requested and what was actually issued.
+model RisItem {
+  id               String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  risId            String  @map("ris_id") @db.Uuid
+  inventoryItemId  String  @map("inventory_item_id") @db.Uuid
+  stockNumber      String  @map("stock_number") @db.VarChar(50)
+  description      String  @db.VarChar(500)
+  unitOfMeasure    String  @map("unit_of_measure") @db.VarChar(30)
+  quantityRequested Decimal @map("quantity_requested") @db.Decimal(12, 4)
+  quantityIssued   Decimal @default(0) @map("quantity_issued") @db.Decimal(12, 4)
+  unitCost         Decimal @default(0) @map("unit_cost") @db.Decimal(18, 2)
+  remarks          String?
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  ris           RequisitionIssueSlip @relation(fields: [risId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem        @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+
+  @@index([risId])
+  @@index([inventoryItemId])
+  @@map("ris_items")
+}
+
+/// Individual PPE or semi-expendable item tracked with a unique property
+/// number. Created when a stock receipt for a PPE/semi-expendable item
+/// is posted. Tracks condition, location, accountable person, and
+/// depreciation data for PPE items.
+model PropertyRecord {
+  id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String            @map("organization_id") @db.Uuid
+  inventoryItemId     String            @map("inventory_item_id") @db.Uuid
+  stockReceiptItemId  String?           @map("stock_receipt_item_id") @db.Uuid
+  propertyNumber      String            @map("property_number") @db.VarChar(50)
+  serialNumber        String?           @map("serial_number") @db.VarChar(100)
+  description         String            @db.VarChar(500)
+  dateAcquired        DateTime          @map("date_acquired") @db.Date
+  acquisitionCost     Decimal           @map("acquisition_cost") @db.Decimal(18, 2)
+  estimatedUsefulLife Int?              @map("estimated_useful_life")
+  salvageValue        Decimal?          @map("salvage_value") @db.Decimal(18, 2)
+  monthlyDepreciation Decimal?          @map("monthly_depreciation") @db.Decimal(18, 2)
+  accumulatedDepreciation Decimal       @default(0) @map("accumulated_depreciation") @db.Decimal(18, 2)
+  bookValue           Decimal?          @map("book_value") @db.Decimal(18, 2)
+  condition           PropertyCondition @default(brand_new)
+  locationId          String?           @map("location_id") @db.Uuid
+  accountableUserId   String?           @map("accountable_user_id") @db.Uuid
+  isDisposed          Boolean           @default(false) @map("is_disposed")
+  createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy           String?           @map("created_by") @db.Uuid
+  updatedBy           String?           @map("updated_by") @db.Uuid
+  version             Int               @default(1)
+
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  inventoryItem    InventoryItem     @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  stockReceiptItem StockReceiptItem? @relation(fields: [stockReceiptItemId], references: [id], onDelete: SetNull)
+  location         Location?         @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  accountableUser  User?             @relation("PropertyRecordsAccountable", fields: [accountableUserId], references: [id], onDelete: SetNull)
+  creator          User?             @relation("PropertyRecordsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater          User?             @relation("PropertyRecordsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  accountabilityItems AccountabilityRecordItem[]
+  physicalCountItems  PhysicalCountItem[]
+  disposalItems       DisposalRequestItem[]
+
+  @@unique([organizationId, propertyNumber])
+  @@index([organizationId])
+  @@index([inventoryItemId])
+  @@index([accountableUserId])
+  @@index([locationId])
+  @@index([condition])
+  @@index([isDisposed])
+  @@map("property_records")
+}
+
+/// PAR or ICS document header. A PAR (Property Acknowledgment Receipt)
+/// is issued for PPE items (≥₱50,000). An ICS (Inventory Custodian
+/// Slip) is issued for semi-expendable items (₱5,000 to <₱50,000).
+model AccountabilityRecord {
+  id                   String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String               @map("organization_id") @db.Uuid
+  accountabilityType   AccountabilityType   @map("accountability_type")
+  accountabilityNumber String               @map("accountability_number") @db.VarChar(30)
+  issuedToUserId       String               @map("issued_to_user_id") @db.Uuid
+  issuedDate           DateTime             @map("issued_date") @db.Date
+  returnDate           DateTime?            @map("return_date") @db.Date
+  status               AccountabilityStatus @default(active)
+  parRenewalDate       DateTime?            @map("par_renewal_date") @db.Date
+  issuedBy             String?              @map("issued_by") @db.Uuid
+  remarks              String?
+  createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy            String?              @map("created_by") @db.Uuid
+  updatedBy            String?              @map("updated_by") @db.Uuid
+  version              Int                  @default(1)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  issuedTo     User         @relation("AccountabilitiesIssuedTo", fields: [issuedToUserId], references: [id], onDelete: Restrict)
+  issuer       User?        @relation("AccountabilitiesIssuedBy", fields: [issuedBy], references: [id], onDelete: SetNull)
+  creator      User?        @relation("AccountabilitiesCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater      User?        @relation("AccountabilitiesUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  items AccountabilityRecordItem[]
+
+  @@unique([organizationId, accountabilityNumber])
+  @@index([organizationId])
+  @@index([issuedToUserId])
+  @@index([accountabilityType])
+  @@index([status])
+  @@map("accountability_records")
+}
+
+/// Line item on a PAR or ICS — links a property record to the
+/// accountability document.
+model AccountabilityRecordItem {
+  id                     String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountabilityRecordId String  @map("accountability_record_id") @db.Uuid
+  propertyRecordId       String  @map("property_record_id") @db.Uuid
+  quantity               Decimal @default(1) @db.Decimal(12, 4)
+  unitCost               Decimal @map("unit_cost") @db.Decimal(18, 2)
+  totalCost              Decimal @map("total_cost") @db.Decimal(18, 2)
+  remarks                String?
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  accountabilityRecord AccountabilityRecord @relation(fields: [accountabilityRecordId], references: [id], onDelete: Cascade)
+  propertyRecord       PropertyRecord       @relation(fields: [propertyRecordId], references: [id], onDelete: Restrict)
+
+  @@index([accountabilityRecordId])
+  @@index([propertyRecordId])
+  @@map("accountability_record_items")
+}
+
+/// Physical count event. Semi-annual for supplies, annual for PPE/
+/// semi-expendable, per COA rules.
+model PhysicalCount {
+  id             String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String             @map("organization_id") @db.Uuid
+  countNumber    String             @map("count_number") @db.VarChar(30)
+  countDate      DateTime           @map("count_date") @db.Date
+  countType      CountType          @map("count_type")
+  fiscalYearId   String?            @map("fiscal_year_id") @db.Uuid
+  status         PhysicalCountStatus @default(draft)
+  countedBy      String?            @map("counted_by") @db.Uuid
+  verifiedBy     String?            @map("verified_by") @db.Uuid
+  approvedBy     String?            @map("approved_by") @db.Uuid
+  approvedAt     DateTime?          @map("approved_at") @db.Timestamptz(6)
+  remarks        String?
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy      String?            @map("created_by") @db.Uuid
+  updatedBy      String?            @map("updated_by") @db.Uuid
+  version        Int                @default(1)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  fiscalYear   FiscalYear?  @relation(fields: [fiscalYearId], references: [id], onDelete: Restrict)
+  counter      User?        @relation("PhysicalCountsCountedBy", fields: [countedBy], references: [id], onDelete: SetNull)
+  verifier     User?        @relation("PhysicalCountsVerifiedBy", fields: [verifiedBy], references: [id], onDelete: SetNull)
+  approver     User?        @relation("PhysicalCountsApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
+  creator      User?        @relation("PhysicalCountsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater      User?        @relation("PhysicalCountsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  items PhysicalCountItem[]
+
+  @@unique([organizationId, countNumber])
+  @@index([organizationId])
+  @@index([countType])
+  @@index([status])
+  @@map("physical_counts")
+}
+
+/// Individual item counted during a physical count. Records the
+/// variance between on-hand (counted) and per-card (system) quantities.
+model PhysicalCountItem {
+  id                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  physicalCountId   String           @map("physical_count_id") @db.Uuid
+  inventoryItemId   String           @map("inventory_item_id") @db.Uuid
+  propertyRecordId  String?          @map("property_record_id") @db.Uuid
+  onHandPerCount    Decimal          @map("on_hand_per_count") @db.Decimal(12, 4)
+  onHandPerCard     Decimal          @map("on_hand_per_card") @db.Decimal(12, 4)
+  quantityVariance  Decimal          @map("quantity_variance") @db.Decimal(12, 4)
+  unitCost          Decimal          @map("unit_cost") @db.Decimal(18, 2)
+  totalVarianceCost Decimal          @map("total_variance_cost") @db.Decimal(18, 2)
+  condition         PropertyCondition?
+  remarks           String?
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  physicalCount  PhysicalCount  @relation(fields: [physicalCountId], references: [id], onDelete: Cascade)
+  inventoryItem  InventoryItem  @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  propertyRecord PropertyRecord? @relation(fields: [propertyRecordId], references: [id], onDelete: SetNull)
+
+  @@index([physicalCountId])
+  @@index([inventoryItemId])
+  @@map("physical_count_items")
+}
+
+/// Waste Materials Report / Disposal request. Workflow:
+/// draft → for_appraisal → appraised → for_approval → approved → disposed
+model DisposalRequest {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String         @map("organization_id") @db.Uuid
+  requestNumber   String         @map("request_number") @db.VarChar(30)
+  requestDate     DateTime       @map("request_date") @db.Date
+  status          DisposalStatus @default(draft)
+  disposalMethod  DisposalMethod? @map("disposal_method")
+  totalAppraised  Decimal?       @map("total_appraised") @db.Decimal(18, 2)
+  requestedBy     String?        @map("requested_by") @db.Uuid
+  appraisedBy     String?        @map("appraised_by") @db.Uuid
+  appraisedAt     DateTime?      @map("appraised_at") @db.Timestamptz(6)
+  approvedBy      String?        @map("approved_by") @db.Uuid
+  approvedAt      DateTime?      @map("approved_at") @db.Timestamptz(6)
+  disposedAt      DateTime?      @map("disposed_at") @db.Timestamptz(6)
+  remarks         String?
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy       String?        @map("created_by") @db.Uuid
+  updatedBy       String?        @map("updated_by") @db.Uuid
+  version         Int            @default(1)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  requester    User?        @relation("DisposalsRequestedBy", fields: [requestedBy], references: [id], onDelete: SetNull)
+  appraiser    User?        @relation("DisposalsAppraisedBy", fields: [appraisedBy], references: [id], onDelete: SetNull)
+  approver     User?        @relation("DisposalsApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
+  creator      User?        @relation("DisposalsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater      User?        @relation("DisposalsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  items DisposalRequestItem[]
+
+  @@unique([organizationId, requestNumber])
+  @@index([organizationId])
+  @@index([status])
+  @@map("disposal_requests")
+}
+
+/// Line item in a disposal request — links a property record to the WMR.
+model DisposalRequestItem {
+  id                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  disposalRequestId String           @map("disposal_request_id") @db.Uuid
+  propertyRecordId  String           @map("property_record_id") @db.Uuid
+  description       String           @db.VarChar(500)
+  quantity          Decimal          @default(1) @db.Decimal(12, 4)
+  unitOfMeasure     String           @map("unit_of_measure") @db.VarChar(30)
+  condition         PropertyCondition
+  appraisedValue    Decimal?         @map("appraised_value") @db.Decimal(18, 2)
+  remarks           String?
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  disposalRequest DisposalRequest @relation(fields: [disposalRequestId], references: [id], onDelete: Cascade)
+  propertyRecord  PropertyRecord  @relation(fields: [propertyRecordId], references: [id], onDelete: Restrict)
+
+  @@index([disposalRequestId])
+  @@index([propertyRecordId])
+  @@map("disposal_request_items")
 }

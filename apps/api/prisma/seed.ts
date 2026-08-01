@@ -88,6 +88,9 @@ async function main() {
     { code: 'GENERAL_MANAGER', name: 'General Manager / HoPE', description: 'Final PR approval authority.' },
     { code: 'BAC_MEMBER', name: 'BAC Member', description: 'Bids and Awards Committee member. Read-only access to procurement projects.' },
     { code: 'INSPECTION_OFFICER', name: 'Inspection & Acceptance', description: 'Records inspection and acceptance of delivered goods/services.' },
+    { code: 'SUPPLY_OFFICER', name: 'Supply Officer', description: 'Manages inventory items, stock receipts, RIS approval, stock cards, PAR/ICS, and property records.' },
+    { code: 'PROPERTY_CUSTODIAN', name: 'Property Custodian', description: 'Manages property records, PAR/ICS issuance, transfers, and physical counts.' },
+    { code: 'INVENTORY_COMMITTEE', name: 'Inventory Committee', description: 'Conducts and approves physical counts, appraises items for disposal.' },
   ];
 
   const roles: Record<string, { id: string }> = {};
@@ -164,6 +167,26 @@ async function main() {
     { code: 'procurement.ors.budget_certify', name: 'Certify ORS Budget & Post Obligation', module: 'procurement' },
     { code: 'procurement.ors.adjust', name: 'Adjust or De-obligate ORS', module: 'procurement' },
     { code: 'procurement.ors.cancel', name: 'Cancel ORS', module: 'procurement' },
+    // Inventory & Property Management
+    { code: 'inventory.read', name: 'View Inventory Data', module: 'inventory' },
+    { code: 'inventory.item.manage', name: 'Manage Inventory Items', module: 'inventory' },
+    { code: 'inventory.receive', name: 'Receive Stock', module: 'inventory' },
+    { code: 'inventory.issue', name: 'Issue Stock via RIS', module: 'inventory' },
+    { code: 'inventory.ris.approve', name: 'Approve RIS', module: 'inventory' },
+    { code: 'inventory.stock_card', name: 'View/Manage Stock Cards', module: 'inventory' },
+    { code: 'inventory.par', name: 'Issue/Manage PAR', module: 'inventory' },
+    { code: 'inventory.ics', name: 'Issue/Manage ICS', module: 'inventory' },
+    { code: 'inventory.property_card', name: 'View/Manage Property Records', module: 'inventory' },
+    { code: 'inventory.transfer', name: 'Transfer Property', module: 'inventory' },
+    { code: 'inventory.request', name: 'Request Supplies (RIS)', module: 'inventory' },
+    { code: 'inventory.acknowledge', name: 'Acknowledge Property Receipt', module: 'inventory' },
+    { code: 'inventory.physical_count', name: 'Conduct Physical Count', module: 'inventory' },
+    { code: 'inventory.physical_count.approve', name: 'Approve Physical Count', module: 'inventory' },
+    { code: 'inventory.dispose.request', name: 'Request Disposal', module: 'inventory' },
+    { code: 'inventory.dispose.appraise', name: 'Appraise Items for Disposal', module: 'inventory' },
+    { code: 'inventory.dispose.approve', name: 'Approve Disposal', module: 'inventory' },
+    { code: 'inventory.ledger', name: 'View Inventory Ledger/Reports', module: 'inventory' },
+    { code: 'inventory.reconcile', name: 'Reconcile Inventory', module: 'inventory' },
   ];
 
   const permissions: Record<string, { id: string }> = {};
@@ -201,6 +224,10 @@ async function main() {
     'procurement.caf.certify',
     'procurement.ors.requesting_certify',
     'procurement.ors.budget_certify',
+    'inventory.ris.approve',
+    'inventory.physical_count.approve',
+    'inventory.dispose.approve',
+    'inventory.dispose.appraise',
   ]);
   for (const code of Object.keys(permissions)) {
     if (!adminExcludedPermissions.has(code)) {
@@ -336,6 +363,79 @@ async function main() {
     'procurement.read',
   ]) {
     await grant('INSPECTION_OFFICER', code);
+  }
+
+  // Supply Officer: full operational inventory permissions.
+  for (const code of [
+    'inventory.read',
+    'inventory.item.manage',
+    'inventory.receive',
+    'inventory.issue',
+    'inventory.ris.approve',
+    'inventory.stock_card',
+    'inventory.par',
+    'inventory.ics',
+    'inventory.property_card',
+    'inventory.transfer',
+    'inventory.physical_count',
+    'inventory.ledger',
+    'inventory.dispose.request',
+  ]) {
+    await grant('SUPPLY_OFFICER', code);
+  }
+
+  // Property Custodian: property-focused permissions.
+  for (const code of [
+    'inventory.read',
+    'inventory.property_card',
+    'inventory.par',
+    'inventory.ics',
+    'inventory.transfer',
+    'inventory.physical_count',
+    'inventory.ledger',
+  ]) {
+    await grant('PROPERTY_CUSTODIAN', code);
+  }
+
+  // Inventory Committee: count and disposal permissions.
+  for (const code of [
+    'inventory.read',
+    'inventory.physical_count',
+    'inventory.physical_count.approve',
+    'inventory.dispose.appraise',
+    'inventory.ledger',
+  ]) {
+    await grant('INVENTORY_COMMITTEE', code);
+  }
+
+  // General Manager: inventory approval permissions.
+  for (const code of [
+    'inventory.read',
+    'inventory.physical_count.approve',
+    'inventory.dispose.approve',
+    'inventory.reconcile',
+    'inventory.ledger',
+  ]) {
+    await grant('GENERAL_MANAGER', code);
+  }
+
+  // Department Head: request and acknowledge.
+  for (const code of [
+    'inventory.read',
+    'inventory.request',
+    'inventory.acknowledge',
+    'inventory.ledger',
+  ]) {
+    await grant('DEPARTMENT_HEAD', code);
+  }
+
+  // Employee (End-User): request supplies and acknowledge property.
+  for (const code of [
+    'inventory.read',
+    'inventory.request',
+    'inventory.acknowledge',
+  ]) {
+    await grant('EMPLOYEE', code);
   }
 
   // ── 6. Fiscal year setup ──

@@ -12,6 +12,7 @@ import { BudgetingModule } from './modules/budgeting/budgeting.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { ProcurementModule } from './modules/procurement/procurement.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
 import { WorkflowModule } from './modules/workflow/workflow.module';
 
 @Module({
@@ -28,6 +29,7 @@ import { WorkflowModule } from './modules/workflow/workflow.module';
     NotificationModule,
     ProcurementModule,
     ReportsModule,
+    InventoryModule,
   ],
   controllers: [AppController, DashboardController],
   providers: [AppService],
