@@ -181,6 +181,7 @@ model Organization {
   payrollRuns           PayrollRun[]
   payrollItems          PayrollItem[]
   workOrders            WorkOrder[]
+  complaints            Complaint[]
 
   @@map("organizations")
 }
@@ -493,6 +494,12 @@ model User {
   createdWorkOrders                             WorkOrder[]            @relation("WorkOrdersCreatedBy")
   updatedWorkOrders                             WorkOrder[]            @relation("WorkOrdersUpdatedBy")
   workOrderNotes                                WorkOrderNote[]        @relation("WorkOrderNotesCreatedBy")
+  complaintsResolved                            Complaint[]            @relation("ComplaintsResolvedBy")
+  complaintsClosed                              Complaint[]            @relation("ComplaintsClosedBy")
+  complaintsCreated                             Complaint[]            @relation("ComplaintsCreatedBy")
+  complaintsUpdated                             Complaint[]            @relation("ComplaintsUpdatedBy")
+  complaintNotes                                ComplaintNote[]        @relation("ComplaintNotesCreatedBy")
+  complaintAttachments                          ComplaintAttachment[]  @relation("ComplaintAttachmentsUploadedBy")
 
   @@unique([organizationId, username])
   @@unique([organizationId, email])
@@ -3183,6 +3190,7 @@ model Consumer {
   payments             Payment[]
   disconnectionOrders  DisconnectionOrder[]
   workOrders           WorkOrder[]
+  complaints           Complaint[]
 
   @@unique([organizationId, accountNumber])
   @@index([organizationId])
@@ -3640,7 +3648,8 @@ model Employee {
   employeeAllowances EmployeeAllowance[]
   employeeDeductions EmployeeDeduction[]
   payrollItems       PayrollItem[]
-  workOrdersAssigned WorkOrder[]         @relation("WorkOrderAssignee")
+  workOrdersAssigned   WorkOrder[]         @relation("WorkOrderAssignee")
+  complaintsAssigned   Complaint[]         @relation("ComplaintAssignee")
 
   @@unique([organizationId, employeeNumber])
   @@index([organizationId])
@@ -4076,8 +4085,9 @@ model WorkOrder {
   creator      User?        @relation("WorkOrdersCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
   updater      User?        @relation("WorkOrdersUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
 
-  materials WorkOrderMaterial[]
-  notes     WorkOrderNote[]
+  materials  WorkOrderMaterial[]
+  notes      WorkOrderNote[]
+  complaints Complaint[]
 
   @@unique([organizationId, woNumber])
   @@index([organizationId])
@@ -4118,4 +4128,137 @@ model WorkOrderNote {
 
   @@index([workOrderId])
   @@map("work_order_notes")
+}
+
+// ─── Customer Service & Complaints ───
+
+enum ComplaintType {
+  water_quality
+  billing_dispute
+  service_interruption
+  leak_report
+  meter_issue
+  low_pressure
+  no_water
+  illegal_connection
+  staff_conduct
+  other
+
+  @@map("complaint_type")
+}
+
+enum ComplaintPriority {
+  low
+  normal
+  high
+  urgent
+
+  @@map("complaint_priority")
+}
+
+enum ComplaintStatus {
+  open
+  assigned
+  in_progress
+  resolved
+  closed
+  reopened
+
+  @@map("complaint_status")
+}
+
+enum ComplaintResolutionType {
+  fixed
+  explained
+  referred
+  no_action_needed
+  duplicate
+  invalid
+
+  @@map("complaint_resolution_type")
+}
+
+model Complaint {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String              @map("organization_id") @db.Uuid
+  complaintNumber String              @map("complaint_number") @db.VarChar(20)
+  type            ComplaintType
+  priority        ComplaintPriority    @default(normal)
+  status          ComplaintStatus      @default(open)
+  subject         String              @db.VarChar(200)
+  description     String
+  location        String?             @db.VarChar(300)
+  contactName     String?             @map("contact_name") @db.VarChar(150)
+  contactPhone    String?             @map("contact_phone") @db.VarChar(30)
+  contactEmail    String?             @map("contact_email") @db.VarChar(150)
+  consumerId      String?             @map("consumer_id") @db.Uuid
+  assignedTo      String?             @map("assigned_to") @db.Uuid
+  assignedAt      DateTime?           @map("assigned_at") @db.Timestamptz(6)
+  resolutionType  ComplaintResolutionType? @map("resolution_type")
+  resolutionNotes String?             @map("resolution_notes")
+  resolvedAt      DateTime?           @map("resolved_at") @db.Timestamptz(6)
+  resolvedBy      String?             @map("resolved_by") @db.Uuid
+  closedAt        DateTime?           @map("closed_at") @db.Timestamptz(6)
+  closedBy        String?             @map("closed_by") @db.Uuid
+  slaDueAt        DateTime?           @map("sla_due_at") @db.Timestamptz(6)
+  workOrderId     String?             @map("work_order_id") @db.Uuid
+  version         Int                 @default(1)
+  createdBy       String?             @map("created_by") @db.Uuid
+  updatedBy       String?             @map("updated_by") @db.Uuid
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  consumer     Consumer?    @relation(fields: [consumerId], references: [id], onDelete: SetNull)
+  assignee     Employee?    @relation("ComplaintAssignee", fields: [assignedTo], references: [id], onDelete: SetNull)
+  resolver     User?        @relation("ComplaintsResolvedBy", fields: [resolvedBy], references: [id], onDelete: SetNull)
+  closer       User?        @relation("ComplaintsClosedBy", fields: [closedBy], references: [id], onDelete: SetNull)
+  workOrder    WorkOrder?   @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  creator      User?        @relation("ComplaintsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater      User?        @relation("ComplaintsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  notes        ComplaintNote[]
+  attachments  ComplaintAttachment[]
+
+  @@unique([organizationId, complaintNumber])
+  @@index([organizationId, status])
+  @@index([organizationId, type])
+  @@index([organizationId, priority])
+  @@index([consumerId])
+  @@index([assignedTo])
+  @@index([workOrderId])
+  @@index([createdAt])
+  @@index([slaDueAt])
+  @@map("complaints")
+}
+
+model ComplaintNote {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  complaintId String   @map("complaint_id") @db.Uuid
+  note        String
+  isInternal  Boolean  @default(false) @map("is_internal")
+  createdBy   String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  author    User?     @relation("ComplaintNotesCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([complaintId])
+  @@map("complaint_notes")
+}
+
+model ComplaintAttachment {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  complaintId String   @map("complaint_id") @db.Uuid
+  fileName    String   @map("file_name") @db.VarChar(255)
+  fileType    String?  @map("file_type") @db.VarChar(100)
+  fileSize    Int?     @map("file_size")
+  filePath    String   @map("file_path") @db.VarChar(500)
+  uploadedBy  String?  @map("uploaded_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  uploader  User?     @relation("ComplaintAttachmentsUploadedBy", fields: [uploadedBy], references: [id], onDelete: SetNull)
+
+  @@index([complaintId])
+  @@map("complaint_attachments")
 }

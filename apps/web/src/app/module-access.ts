@@ -75,6 +75,14 @@ export const MODULE_GATES = {
     'workorder.verify',
     'workorder.reports',
   ],
+  complaint: [
+    'complaint.read',
+    'complaint.create',
+    'complaint.assign',
+    'complaint.resolve',
+    'complaint.close',
+    'complaint.reports',
+  ],
   accounting: [
     'accounting.read',
     'accounting.coa.manage',

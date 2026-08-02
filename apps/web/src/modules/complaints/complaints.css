@@ -1,0 +1,136 @@
+/* ── Complaints Module ── */
+
+.cs-page { padding: 1.5rem; max-width: 1200px; margin: 0 auto; }
+.cs-page__header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; }
+.cs-page__header h1 { margin: 0; font-size: 1.5rem; }
+
+.cs-filters { display: flex; gap: 0.75rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+
+.cs-input, .cs-select, .cs-textarea {
+  padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 6px;
+  font-size: 0.875rem; background: #fff; color: #1e293b;
+}
+.cs-input:focus, .cs-select:focus, .cs-textarea:focus {
+  outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+}
+.cs-textarea { resize: vertical; width: 100%; }
+
+.cs-btn {
+  padding: 0.5rem 1rem; border: 1px solid #cbd5e1; border-radius: 6px;
+  background: #fff; color: #334155; font-size: 0.875rem; cursor: pointer;
+  text-decoration: none; display: inline-block; text-align: center;
+}
+.cs-btn:hover { background: #f1f5f9; }
+.cs-btn--primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+.cs-btn--primary:hover { background: #1d4ed8; }
+.cs-btn--success { background: #16a34a; color: #fff; border-color: #16a34a; }
+.cs-btn--success:hover { background: #15803d; }
+.cs-btn--danger { background: #dc2626; color: #fff; border-color: #dc2626; }
+.cs-btn--danger:hover { background: #b91c1c; }
+.cs-btn--sm { padding: 0.35rem 0.75rem; font-size: 0.8125rem; }
+.cs-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.cs-table-wrap { overflow-x: auto; }
+.cs-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.cs-table th, .cs-table td { padding: 0.625rem 0.75rem; text-align: left; border-bottom: 1px solid #e2e8f0; }
+.cs-table th { background: #f8fafc; font-weight: 600; color: #475569; white-space: nowrap; }
+.cs-table tbody tr:hover { background: #f8fafc; }
+
+.cs-badge {
+  display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px;
+  font-size: 0.75rem; font-weight: 600; white-space: nowrap;
+}
+
+/* Status */
+.cs-badge--status-open       { background: #fef3c7; color: #92400e; }
+.cs-badge--status-assigned   { background: #dbeafe; color: #1e40af; }
+.cs-badge--status-in_progress { background: #e0e7ff; color: #3730a3; }
+.cs-badge--status-resolved   { background: #d1fae5; color: #065f46; }
+.cs-badge--status-closed     { background: #f1f5f9; color: #64748b; }
+.cs-badge--status-reopened   { background: #ffedd5; color: #c2410c; }
+
+/* Priority */
+.cs-badge--priority-low    { background: #f1f5f9; color: #64748b; }
+.cs-badge--priority-normal { background: #e0f2fe; color: #0369a1; }
+.cs-badge--priority-high   { background: #ffedd5; color: #c2410c; }
+.cs-badge--priority-urgent { background: #fee2e2; color: #dc2626; }
+
+/* Type */
+.cs-badge--type-water_quality        { background: #dbeafe; color: #1e40af; }
+.cs-badge--type-billing_dispute      { background: #fef3c7; color: #92400e; }
+.cs-badge--type-service_interruption { background: #fee2e2; color: #991b1b; }
+.cs-badge--type-leak_report          { background: #e0f2fe; color: #0369a1; }
+.cs-badge--type-meter_issue          { background: #f3e8ff; color: #7c3aed; }
+.cs-badge--type-low_pressure         { background: #ffedd5; color: #c2410c; }
+.cs-badge--type-no_water             { background: #fee2e2; color: #dc2626; }
+.cs-badge--type-illegal_connection   { background: #fce7f3; color: #be185d; }
+.cs-badge--type-staff_conduct        { background: #f1f5f9; color: #64748b; }
+.cs-badge--type-other                { background: #f1f5f9; color: #64748b; }
+
+.cs-link { color: #2563eb; font-weight: 600; text-decoration: none; }
+.cs-link:hover { text-decoration: underline; }
+
+.cs-error { padding: 0.75rem 1rem; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 6px; margin-bottom: 1rem; }
+.cs-loading, .cs-empty { color: #64748b; padding: 2rem 0; text-align: center; }
+
+.cs-form { max-width: 800px; }
+.cs-form__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.cs-form__field { display: flex; flex-direction: column; gap: 0.25rem; }
+.cs-form__field--full { grid-column: 1 / -1; }
+.cs-form__label { font-size: 0.8125rem; font-weight: 600; color: #475569; }
+.cs-form__actions { display: flex; gap: 0.75rem; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e2e8f0; }
+
+.cs-detail { display: grid; grid-template-columns: 1fr 320px; gap: 1.5rem; align-items: start; }
+.cs-detail__main { display: flex; flex-direction: column; gap: 1.25rem; }
+.cs-detail__sidebar { display: flex; flex-direction: column; gap: 1.25rem; }
+
+.cs-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem; }
+.cs-card__title { font-size: 1rem; font-weight: 600; color: #1e293b; margin: 0 0 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #f1f5f9; }
+
+.cs-detail__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.cs-detail__field { display: flex; flex-direction: column; gap: 0.15rem; }
+.cs-detail__label { font-size: 0.75rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.025em; }
+
+.cs-actions { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.cs-assign-form, .cs-resolve-form, .cs-reopen-form {
+  display: flex; flex-direction: column; gap: 0.5rem;
+  padding: 0.75rem; background: #f8fafc; border-radius: 6px;
+}
+
+.cs-notes { display: flex; flex-direction: column; gap: 0.75rem; }
+.cs-note { padding: 0.75rem; background: #f8fafc; border-radius: 6px; }
+.cs-note--internal { background: #fffbeb; border-left: 3px solid #f59e0b; }
+.cs-note__header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; }
+.cs-note__date { font-size: 0.75rem; color: #94a3b8; }
+.cs-note__text { margin: 0; white-space: pre-wrap; font-size: 0.875rem; }
+.cs-note__add { margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end; }
+.cs-note__add .cs-textarea { width: 100%; }
+
+.cs-meta { display: flex; flex-direction: column; gap: 0.75rem; font-size: 0.875rem; }
+.cs-meta > div { display: flex; flex-direction: column; gap: 0.1rem; }
+.cs-meta__by { font-size: 0.75rem; color: #94a3b8; }
+
+/* Dashboard */
+.cs-dash-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.75rem; margin-bottom: 1.25rem; }
+.cs-dash-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; text-align: center; }
+.cs-dash-card--active { border-color: #3b82f6; background: #eff6ff; }
+.cs-dash-card--sla { border-color: #ef4444; background: #fef2f2; }
+.cs-dash-card__value { font-size: 1.5rem; font-weight: 700; color: #1e293b; }
+.cs-dash-card__label { font-size: 0.75rem; color: #64748b; margin-top: 0.15rem; }
+.cs-dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+.cs-dash-bars { display: flex; flex-direction: column; gap: 0.5rem; }
+.cs-dash-bar { display: flex; align-items: center; gap: 0.5rem; }
+.cs-dash-bar .cs-badge { min-width: 110px; text-align: center; }
+.cs-dash-bar__track { flex: 1; height: 20px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+.cs-dash-bar__fill { height: 100%; background: #3b82f6; border-radius: 4px; min-width: 4px; transition: width 0.3s; }
+.cs-dash-bar__count { font-size: 0.8125rem; font-weight: 600; color: #475569; min-width: 24px; text-align: right; }
+
+@media (max-width: 960px) {
+  .cs-detail { grid-template-columns: 1fr; }
+  .cs-dash-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .cs-form__grid, .cs-detail__grid { grid-template-columns: 1fr; }
+  .cs-filters { flex-direction: column; }
+}

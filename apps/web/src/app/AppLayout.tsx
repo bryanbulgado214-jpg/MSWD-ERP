@@ -12,6 +12,7 @@ const MODULE_NAV = [
   { to: '/billing', label: 'Billing', module: 'billing' as const },
   { to: '/hr', label: 'HR & Payroll', module: 'hr' as const },
   { to: '/work-orders', label: 'Work Orders', module: 'workorder' as const },
+  { to: '/complaints', label: 'Complaints', module: 'complaint' as const },
   { to: '/accounting', label: 'Accounting', module: 'accounting' as const },
   { to: '/reports', label: 'Reports', module: 'reports' as const },
   { to: '/admin', label: 'Admin', module: 'admin' as const },

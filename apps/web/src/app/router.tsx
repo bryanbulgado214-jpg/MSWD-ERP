@@ -1,6 +1,7 @@
 import { createBrowserRouter } from 'react-router-dom';
 
 import { accountingRoutes } from '../modules/accounting/routes';
+import complaintRoutes from '../modules/complaints/routes';
 import { billingRoutes } from '../modules/billing/routes';
 import hrRoutes from '../modules/hr/routes';
 import workOrderRoutes from '../modules/workorders/routes';
@@ -68,6 +69,11 @@ export const router = createBrowserRouter([
             path: '/work-orders',
             element: <RequireModule module="workorder" />,
             children: workOrderRoutes,
+          },
+          {
+            path: '/complaints',
+            element: <RequireModule module="complaint" />,
+            children: complaintRoutes,
           },
           {
             element: <RequireModule module="accounting" />,

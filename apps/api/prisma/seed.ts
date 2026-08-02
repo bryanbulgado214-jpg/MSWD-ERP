@@ -97,6 +97,7 @@ async function main() {
     { code: 'BILLING_CASHIER', name: 'Billing Cashier', description: 'Collects payments and issues official receipts.' },
     { code: 'FIELD_SUPERVISOR', name: 'Field Supervisor', description: 'Manages field crews, assigns and verifies work orders.' },
     { code: 'FIELD_TECHNICIAN', name: 'Field Technician', description: 'Executes field work orders — installations, repairs, disconnections.' },
+    { code: 'CUSTOMER_SERVICE_REP', name: 'Customer Service Representative', description: 'Handles consumer complaints, inquiries, and service requests.' },
   ];
 
   const roles: Record<string, { id: string }> = {};
@@ -233,6 +234,14 @@ async function main() {
     { code: 'workorder.execute', name: 'Execute Work Orders', module: 'workorder' },
     { code: 'workorder.verify', name: 'Verify Completed Work', module: 'workorder' },
     { code: 'workorder.reports', name: 'View Work Order Reports', module: 'workorder' },
+
+    // Customer Service & Complaints
+    { code: 'complaint.read',    name: 'View Complaints',        module: 'complaint' },
+    { code: 'complaint.create',  name: 'Create Complaints',      module: 'complaint' },
+    { code: 'complaint.assign',  name: 'Assign Complaints',      module: 'complaint' },
+    { code: 'complaint.resolve', name: 'Resolve Complaints',     module: 'complaint' },
+    { code: 'complaint.close',   name: 'Close Complaints',       module: 'complaint' },
+    { code: 'complaint.reports', name: 'View Complaint Reports', module: 'complaint' },
   ];
 
   const permissions: Record<string, { id: string }> = {};
@@ -647,6 +656,47 @@ async function main() {
     'workorder.execute',
   ]) {
     await grant('FIELD_TECHNICIAN', code);
+  }
+
+  // ── Customer Service permissions ──
+
+  // General Manager: full complaint access.
+  for (const code of [
+    'complaint.read',
+    'complaint.create',
+    'complaint.assign',
+    'complaint.resolve',
+    'complaint.close',
+    'complaint.reports',
+  ]) {
+    await grant('GENERAL_MANAGER', code);
+  }
+
+  // Customer Service Rep: create, assign, resolve complaints.
+  for (const code of [
+    'complaint.read',
+    'complaint.create',
+    'complaint.assign',
+    'complaint.resolve',
+    'complaint.reports',
+  ]) {
+    await grant('CUSTOMER_SERVICE_REP', code);
+  }
+
+  // Billing Manager: read complaints, close (billing disputes).
+  for (const code of [
+    'complaint.read',
+    'complaint.close',
+    'complaint.reports',
+  ]) {
+    await grant('BILLING_MANAGER', code);
+  }
+
+  // Field Supervisor: read complaints (linked work orders).
+  for (const code of [
+    'complaint.read',
+  ]) {
+    await grant('FIELD_SUPERVISOR', code);
   }
 
   // ── 6. Fiscal year setup ──
@@ -1308,6 +1358,38 @@ async function main() {
     create: {
       userId: fieldTechnicianUser.id,
       roleId: fieldTechnicianRole.id,
+      organizationalUnitId: rootUnit.id,
+    },
+  });
+
+  // ── Seed customer service rep test user ──
+  const csRepUser = await prisma.user.upsert({
+    where: { organizationId_username: { organizationId: organization.id, username: 'cs_rep' } },
+    update: {},
+    create: {
+      organizationId: organization.id,
+      username: 'cs_rep',
+      email: 'cs.rep@example.invalid',
+      passwordHash,
+      isActive: true,
+    },
+  });
+
+  const csRepRole = roles.CUSTOMER_SERVICE_REP;
+  if (!csRepRole) throw new Error('Seed error: CUSTOMER_SERVICE_REP role was not created above.');
+
+  await prisma.userRole.upsert({
+    where: {
+      userId_roleId_organizationalUnitId: {
+        userId: csRepUser.id,
+        roleId: csRepRole.id,
+        organizationalUnitId: rootUnit.id,
+      },
+    },
+    update: {},
+    create: {
+      userId: csRepUser.id,
+      roleId: csRepRole.id,
       organizationalUnitId: rootUnit.id,
     },
   });
