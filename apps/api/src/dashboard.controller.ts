@@ -2,6 +2,7 @@ import { Controller, Get, UseGuards } from '@nestjs/common';
 
 import { CurrentUser } from './common/decorators/current-user.decorator';
 import { PrismaService } from './database/prisma.service';
+import { ExecutiveDashboardService } from './executive-dashboard.service';
 import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
 import type { AuthenticatedUser } from './modules/auth/jwt.strategy';
 
@@ -40,7 +41,10 @@ function prItem(
 @Controller('dashboard')
 @UseGuards(JwtAuthGuard)
 export class DashboardController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly executiveDashboard: ExecutiveDashboardService,
+  ) {}
 
   @Get('pending-actions')
   async getPendingActions(@CurrentUser() user: AuthenticatedUser) {
@@ -297,6 +301,11 @@ export class DashboardController {
     }
 
     return { stats };
+  }
+
+  @Get('executive')
+  async getExecutiveSummary(@CurrentUser() user: AuthenticatedUser) {
+    return this.executiveDashboard.getSummary(user.organizationId);
   }
 
   private async getPermissions(userId: string): Promise<Set<string>> {

@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DashboardController } from './dashboard.controller';
+import { ExecutiveDashboardService } from './executive-dashboard.service';
 import { validateEnv } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
 import { AdminModule } from './modules/admin/admin.module';
@@ -38,6 +39,6 @@ import { WorkflowModule } from './modules/workflow/workflow.module';
     HrModule,
   ],
   controllers: [AppController, DashboardController],
-  providers: [AppService],
+  providers: [AppService, ExecutiveDashboardService],
 })
 export class AppModule {}
