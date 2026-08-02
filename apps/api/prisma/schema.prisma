@@ -2674,6 +2674,7 @@ enum JevSourceType {
   adjustment
   closing
   payroll
+  work_order
 
   @@map("jev_source_type")
 }

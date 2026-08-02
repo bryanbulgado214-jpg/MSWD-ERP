@@ -3,12 +3,15 @@ import { useNavigate, useParams } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
 import {
+  addWorkOrderMaterial,
   addWorkOrderNote,
   assignWorkOrder,
   cancelWorkOrder,
   completeWorkOrder,
   getEmployeesLookup,
+  getInventoryItemsLookup,
   getWorkOrder,
+  removeWorkOrderMaterial,
   startWorkOrder,
   verifyWorkOrder,
 } from '../api';
@@ -18,6 +21,7 @@ import type { WorkOrderPriority, WorkOrderStatus, WorkOrderType } from '../types
 import '../workorders.css';
 
 interface EmployeeOption { id: string; firstName: string; lastName: string; position?: { title: string } | null }
+interface InventoryItemOption { id: string; itemCode: string; description: string; unitOfMeasure: string; unitCost: string; onHandQuantity: string }
 
 export default function WorkOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -37,8 +41,20 @@ export default function WorkOrderDetailPage() {
   const [completionNotes, setCompletionNotes] = useState('');
   const [actualHrs, setActualHrs] = useState('');
 
+  const [showCancel, setShowCancel] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
+
+  // Materials state
+  const [inventoryItems, setInventoryItems] = useState<InventoryItemOption[]>([]);
+  const [itemSearch, setItemSearch] = useState('');
+  const [selectedItemId, setSelectedItemId] = useState('');
+  const [materialQty, setMaterialQty] = useState('');
+  const [materialNotes, setMaterialNotes] = useState('');
+  const [addingMaterial, setAddingMaterial] = useState(false);
+  const [removingMaterialId, setRemovingMaterialId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -53,6 +69,17 @@ export default function WorkOrderDetailPage() {
     getEmployeesLookup().then(setEmployees).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (itemSearch.length >= 2) {
+        getInventoryItemsLookup(itemSearch).then(setInventoryItems).catch(() => {});
+      } else if (itemSearch.length === 0) {
+        getInventoryItemsLookup().then(setInventoryItems).catch(() => {});
+      }
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [itemSearch]);
+
   if (loading) return <p className="wo-loading">Loading...</p>;
   if (error) return <div className="wo-error">{error}</div>;
   if (!wo) return <div className="wo-error">Work order not found</div>;
@@ -61,6 +88,8 @@ export default function WorkOrderDetailPage() {
   const canExecute = permissions.has('workorder.execute');
   const canVerify = permissions.has('workorder.verify');
   const canCreate = permissions.has('workorder.create');
+  const canEditWo = canCreate && ['draft', 'pending'].includes(wo.status);
+  const canManageMaterials = canExecute && ['assigned', 'in_progress'].includes(wo.status);
 
   async function doAction(action: () => Promise<WorkOrder>) {
     setActing(true);
@@ -70,6 +99,7 @@ export default function WorkOrderDetailPage() {
       setWo(updated);
       setShowAssign(false);
       setShowComplete(false);
+      setShowCancel(false);
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : 'Action failed');
     } finally {
@@ -92,6 +122,45 @@ export default function WorkOrderDetailPage() {
     }
   }
 
+  async function handleAddMaterial() {
+    if (!wo || !selectedItemId || !materialQty) return;
+    setAddingMaterial(true);
+    setActionError('');
+    try {
+      await addWorkOrderMaterial(wo.id, {
+        inventoryItemId: selectedItemId,
+        quantityUsed: Number(materialQty),
+        ...(materialNotes.trim() ? { notes: materialNotes.trim() } : {}),
+      });
+      setSelectedItemId('');
+      setMaterialQty('');
+      setMaterialNotes('');
+      const refreshed = await getWorkOrder(wo.id);
+      setWo(refreshed);
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Failed to add material');
+    } finally {
+      setAddingMaterial(false);
+    }
+  }
+
+  async function handleRemoveMaterial(materialId: string) {
+    if (!wo) return;
+    setRemovingMaterialId(materialId);
+    setActionError('');
+    try {
+      await removeWorkOrderMaterial(wo.id, materialId);
+      const refreshed = await getWorkOrder(wo.id);
+      setWo(refreshed);
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Failed to remove material');
+    } finally {
+      setRemovingMaterialId(null);
+    }
+  }
+
+  const selectedItem = inventoryItems.find(i => i.id === selectedItemId);
+
   return (
     <div className="wo-page">
       <div className="wo-page__header">
@@ -100,6 +169,16 @@ export default function WorkOrderDetailPage() {
             &larr; Back
           </button>
           <h1 style={{ marginTop: '0.5rem' }}>{wo.woNumber}: {wo.title}</h1>
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          {canEditWo && (
+            <button type="button" className="wo-btn wo-btn--sm" onClick={() => navigate(`/work-orders/${wo.id}/edit`)}>
+              Edit
+            </button>
+          )}
+          <button type="button" className="wo-btn wo-btn--sm" onClick={() => navigate(`/work-orders/${wo.id}/print`)}>
+            Print
+          </button>
         </div>
       </div>
 
@@ -225,33 +304,112 @@ export default function WorkOrderDetailPage() {
             </div>
           </section>
 
-          {wo.materials && wo.materials.length > 0 && (
-            <section className="wo-card">
-              <h2 className="wo-card__title">Materials Used</h2>
-              <table className="wo-table wo-table--compact">
-                <thead>
-                  <tr>
-                    <th>Item</th>
-                    <th>Qty</th>
-                    <th>Unit Cost</th>
-                    <th>Total</th>
-                    <th>Notes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {wo.materials.map((m) => (
-                    <tr key={m.id}>
-                      <td>{m.inventoryItem ? `${m.inventoryItem.itemCode} — ${m.inventoryItem.description}` : m.inventoryItemId}</td>
-                      <td>{Number(m.quantityUsed)}</td>
-                      <td>{Number(m.unitCost).toFixed(2)}</td>
-                      <td>{Number(m.totalCost).toFixed(2)}</td>
-                      <td>{m.notes ?? '—'}</td>
+          <section className="wo-card">
+            <h2 className="wo-card__title">Materials Used</h2>
+            {wo.materials && wo.materials.length > 0 ? (
+              <div className="wo-table-wrap">
+                <table className="wo-table wo-table--compact">
+                  <thead>
+                    <tr>
+                      <th>Item</th>
+                      <th>Qty</th>
+                      <th>Unit Cost</th>
+                      <th>Total</th>
+                      <th>Notes</th>
+                      {canManageMaterials && <th style={{ width: '70px' }}></th>}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </section>
-          )}
+                  </thead>
+                  <tbody>
+                    {wo.materials.map((m) => (
+                      <tr key={m.id}>
+                        <td>{m.inventoryItem ? `${m.inventoryItem.itemCode} — ${m.inventoryItem.description}` : m.inventoryItemId}</td>
+                        <td>{Number(m.quantityUsed)} {m.inventoryItem?.unitOfMeasure ?? ''}</td>
+                        <td>{Number(m.unitCost).toFixed(2)}</td>
+                        <td>{Number(m.totalCost).toFixed(2)}</td>
+                        <td>{m.notes ?? '—'}</td>
+                        {canManageMaterials && (
+                          <td>
+                            <button
+                              type="button"
+                              className="wo-btn wo-btn--danger wo-btn--sm"
+                              disabled={removingMaterialId === m.id}
+                              onClick={() => handleRemoveMaterial(m.id)}
+                            >
+                              {removingMaterialId === m.id ? '...' : 'Remove'}
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="wo-empty" style={{ padding: '0.5rem 0' }}>No materials recorded yet.</p>
+            )}
+
+            {canManageMaterials && (
+              <div className="wo-material-add">
+                <h3 className="wo-material-add__title">Add Material</h3>
+                <div className="wo-material-add__grid">
+                  <div className="wo-form__field">
+                    <span className="wo-form__label">Search Items</span>
+                    <input
+                      className="wo-input"
+                      value={itemSearch}
+                      onChange={(e) => setItemSearch(e.target.value)}
+                      placeholder="Search by code or name..."
+                    />
+                  </div>
+                  <div className="wo-form__field">
+                    <span className="wo-form__label">Select Item</span>
+                    <select className="wo-select" value={selectedItemId} onChange={(e) => setSelectedItemId(e.target.value)}>
+                      <option value="">— Select —</option>
+                      {inventoryItems.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.itemCode} — {item.description} (On hand: {Number(item.onHandQuantity)} {item.unitOfMeasure})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="wo-form__field">
+                    <span className="wo-form__label">Quantity</span>
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      className="wo-input"
+                      value={materialQty}
+                      onChange={(e) => setMaterialQty(e.target.value)}
+                      placeholder={selectedItem ? selectedItem.unitOfMeasure : 'Qty'}
+                    />
+                  </div>
+                  <div className="wo-form__field">
+                    <span className="wo-form__label">Notes</span>
+                    <input
+                      className="wo-input"
+                      value={materialNotes}
+                      onChange={(e) => setMaterialNotes(e.target.value)}
+                      placeholder="Optional"
+                    />
+                  </div>
+                </div>
+                {selectedItem && (
+                  <p className="wo-material-add__cost">
+                    Unit cost: {Number(selectedItem.unitCost).toFixed(2)} &times; {materialQty || '0'} = <strong>{(Number(selectedItem.unitCost) * (Number(materialQty) || 0)).toFixed(2)}</strong>
+                  </p>
+                )}
+                <button
+                  type="button"
+                  className="wo-btn wo-btn--primary wo-btn--sm"
+                  disabled={addingMaterial || !selectedItemId || !materialQty}
+                  onClick={handleAddMaterial}
+                >
+                  {addingMaterial ? 'Adding...' : 'Add Material'}
+                </button>
+              </div>
+            )}
+          </section>
 
           <section className="wo-card">
             <h2 className="wo-card__title">Notes</h2>
@@ -401,18 +559,41 @@ export default function WorkOrderDetailPage() {
               )}
 
               {canCreate && !['verified', 'cancelled'].includes(wo.status) && (
-                <button
-                  type="button"
-                  className="wo-btn wo-btn--danger"
-                  disabled={acting}
-                  onClick={() => {
-                    if (confirm('Cancel this work order?')) {
-                      doAction(() => cancelWorkOrder(wo.id, { expectedVersion: wo.version }));
-                    }
-                  }}
-                >
-                  Cancel Work Order
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="wo-btn wo-btn--danger"
+                    onClick={() => setShowCancel(!showCancel)}
+                  >
+                    Cancel Work Order
+                  </button>
+                  {showCancel && (
+                    <div className="wo-cancel-form">
+                      <textarea
+                        className="wo-textarea"
+                        rows={2}
+                        value={cancelReason}
+                        onChange={(e) => setCancelReason(e.target.value)}
+                        placeholder="Reason for cancellation..."
+                      />
+                      <button
+                        type="button"
+                        className="wo-btn wo-btn--danger wo-btn--sm"
+                        disabled={acting || !cancelReason.trim()}
+                        onClick={() =>
+                          doAction(() =>
+                            cancelWorkOrder(wo.id, {
+                              expectedVersion: wo.version,
+                              ...(cancelReason.trim() ? { reason: cancelReason.trim() } : {}),
+                            }),
+                          )
+                        }
+                      >
+                        {acting ? 'Cancelling...' : 'Confirm Cancel'}
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
 
               {['verified', 'cancelled'].includes(wo.status) && (

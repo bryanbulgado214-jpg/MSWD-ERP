@@ -2,15 +2,22 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { AutoJevService } from '../accounting/auto-jev.service';
 
 @Injectable()
 export class WorkOrderService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(WorkOrderService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly autoJevService: AutoJevService,
+  ) {}
 
   async findAll(
     organizationId: string,
@@ -256,15 +263,33 @@ export class WorkOrderService {
       throw new BadRequestException('Can only verify completed work orders');
     }
 
-    return this.prisma.workOrder.update({
-      where: { id },
-      data: {
-        status: 'verified',
-        verifiedBy: userId,
-        verifiedAt: new Date(),
-        updatedBy: userId,
-        version: { increment: 1 },
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.workOrder.update({
+        where: { id },
+        data: {
+          status: 'verified',
+          verifiedBy: userId,
+          verifiedAt: new Date(),
+          updatedBy: userId,
+          version: { increment: 1 },
+        },
+      });
+
+      const materialsCost = Number(wo.materialsCost);
+      if (materialsCost > 0) {
+        try {
+          await this.autoJevService.onWorkOrderVerified(tx, organizationId, userId, {
+            id: wo.id,
+            woNumber: wo.woNumber,
+            verifiedAt: new Date(),
+            materialsCost,
+          });
+        } catch (err) {
+          this.logger.warn(`Auto-JEV failed for WO ${wo.woNumber}: ${err}`);
+        }
+      }
+
+      return updated;
     });
   }
 
@@ -332,21 +357,44 @@ export class WorkOrderService {
     });
     if (!item) throw new NotFoundException('Inventory item not found');
 
+    const currentQty = Number(item.onHandQuantity);
+    if (dto.quantityUsed > currentQty) {
+      throw new BadRequestException(
+        `Insufficient stock: ${currentQty} on hand, ${dto.quantityUsed} requested`,
+      );
+    }
+
     const unitCost = dto.unitCost ?? Number(item.unitCost);
     const totalCost = unitCost * dto.quantityUsed;
 
-    return this.prisma.workOrderMaterial.create({
-      data: {
-        workOrderId,
-        inventoryItemId: dto.inventoryItemId,
-        quantityUsed: dto.quantityUsed,
-        unitCost,
-        totalCost,
-        ...(dto.notes ? { notes: dto.notes } : {}),
-      },
-      include: {
-        inventoryItem: { select: { id: true, itemCode: true, description: true, unitOfMeasure: true } },
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const material = await tx.workOrderMaterial.create({
+        data: {
+          workOrderId,
+          inventoryItemId: dto.inventoryItemId,
+          quantityUsed: dto.quantityUsed,
+          unitCost,
+          totalCost,
+          ...(dto.notes ? { notes: dto.notes } : {}),
+        },
+        include: {
+          inventoryItem: { select: { id: true, itemCode: true, description: true, unitOfMeasure: true } },
+        },
+      });
+
+      await tx.inventoryItem.update({
+        where: { id: dto.inventoryItemId },
+        data: {
+          onHandQuantity: currentQty - dto.quantityUsed,
+          version: { increment: 1 },
+        },
+      });
+
+      this.logger.log(
+        `Deducted ${dto.quantityUsed} of ${item.itemCode} for WO ${wo.woNumber}`,
+      );
+
+      return material;
     });
   }
 
@@ -361,7 +409,25 @@ export class WorkOrderService {
     });
     if (!material) throw new NotFoundException('Material record not found');
 
-    return this.prisma.workOrderMaterial.delete({ where: { id: materialId } });
+    return this.prisma.$transaction(async (tx) => {
+      await tx.workOrderMaterial.delete({ where: { id: materialId } });
+
+      const item = await tx.inventoryItem.findFirst({
+        where: { id: material.inventoryItemId },
+      });
+      if (item) {
+        await tx.inventoryItem.update({
+          where: { id: material.inventoryItemId },
+          data: {
+            onHandQuantity: Number(item.onHandQuantity) + Number(material.quantityUsed),
+            version: { increment: 1 },
+          },
+        });
+        this.logger.log(
+          `Restored ${material.quantityUsed} of ${item.itemCode} from WO ${wo.woNumber}`,
+        );
+      }
+    });
   }
 
   async getDashboardStats(organizationId: string) {
@@ -398,6 +464,63 @@ export class WorkOrderService {
     ]);
 
     return { byStatus, byType, byPriority, recentCompleted };
+  }
+
+  async getReport(
+    organizationId: string,
+    filters: {
+      dateFrom?: string;
+      dateTo?: string;
+      status?: string;
+      type?: string;
+    },
+  ) {
+    const where: Prisma.WorkOrderWhereInput = { organizationId };
+    if (filters.status) where.status = filters.status as never;
+    if (filters.type) where.type = filters.type as never;
+    if (filters.dateFrom || filters.dateTo) {
+      where.createdAt = {};
+      if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
+      if (filters.dateTo) where.createdAt.lte = new Date(filters.dateTo + 'T23:59:59Z');
+    }
+
+    const [orders, summary] = await Promise.all([
+      this.prisma.workOrder.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          woNumber: true,
+          title: true,
+          type: true,
+          priority: true,
+          status: true,
+          location: true,
+          scheduledDate: true,
+          completedAt: true,
+          verifiedAt: true,
+          estimatedDurationHrs: true,
+          actualDurationHrs: true,
+          materialsCost: true,
+          createdAt: true,
+          consumer: { select: { firstName: true, lastName: true, accountNumber: true } },
+          assignee: { select: { firstName: true, lastName: true } },
+        },
+      }),
+      this.prisma.workOrder.aggregate({
+        where,
+        _count: true,
+        _sum: { materialsCost: true },
+      }),
+    ]);
+
+    return {
+      orders,
+      summary: {
+        totalCount: summary._count,
+        totalMaterialsCost: summary._sum.materialsCost ?? 0,
+      },
+    };
   }
 
   private async findOneOrThrow(organizationId: string, id: string) {

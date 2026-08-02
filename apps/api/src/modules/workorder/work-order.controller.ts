@@ -48,6 +48,23 @@ export class WorkOrderController {
     return this.workOrderService.getDashboardStats(user.organizationId);
   }
 
+  @Get('reports')
+  @RequirePermissions('workorder.reports')
+  getReport(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('status') status?: string,
+    @Query('type') type?: string,
+  ) {
+    return this.workOrderService.getReport(user.organizationId, {
+      ...(dateFrom ? { dateFrom } : {}),
+      ...(dateTo ? { dateTo } : {}),
+      ...(status ? { status } : {}),
+      ...(type ? { type } : {}),
+    });
+  }
+
   @Get(':id')
   @RequirePermissions('workorder.read')
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {

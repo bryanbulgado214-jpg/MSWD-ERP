@@ -314,13 +314,44 @@
 }
 
 .wo-assign-form,
-.wo-complete-form {
+.wo-complete-form,
+.wo-cancel-form {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   padding: 0.75rem;
   background: #f8fafc;
   border-radius: 6px;
+}
+
+/* ── Materials add form ── */
+
+.wo-material-add {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 6px;
+  border: 1px dashed #cbd5e1;
+}
+
+.wo-material-add__title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #475569;
+  margin: 0 0 0.75rem;
+}
+
+.wo-material-add__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.wo-material-add__cost {
+  font-size: 0.8125rem;
+  color: #475569;
+  margin: 0.5rem 0;
 }
 
 /* ── Notes ── */
@@ -387,16 +418,113 @@
   color: #94a3b8;
 }
 
+/* ── Dashboard ── */
+
+.wo-dash-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.wo-dash-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+}
+
+.wo-dash-card--active {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.wo-dash-card--pending    { border-left: 3px solid #f59e0b; }
+.wo-dash-card--assigned   { border-left: 3px solid #3b82f6; }
+.wo-dash-card--in_progress { border-left: 3px solid #6366f1; }
+.wo-dash-card--completed  { border-left: 3px solid #10b981; }
+.wo-dash-card--verified   { border-left: 3px solid #22c55e; }
+.wo-dash-card--cancelled  { border-left: 3px solid #ef4444; }
+
+.wo-dash-card__value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.wo-dash-card__label {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 0.15rem;
+}
+
+.wo-dash-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.wo-dash-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.wo-dash-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wo-dash-bar .wo-badge {
+  min-width: 90px;
+  text-align: center;
+}
+
+.wo-dash-bar__track {
+  flex: 1;
+  height: 20px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.wo-dash-bar__fill {
+  height: 100%;
+  background: #3b82f6;
+  border-radius: 4px;
+  min-width: 4px;
+  transition: width 0.3s;
+}
+
+.wo-dash-bar__fill--priority {
+  background: #f59e0b;
+}
+
+.wo-dash-bar__count {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #475569;
+  min-width: 24px;
+  text-align: right;
+}
+
 /* ── Responsive ── */
 
 @media (max-width: 960px) {
   .wo-detail {
     grid-template-columns: 1fr;
   }
+
+  .wo-dash-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 600px) {
-  .wo-form__grid {
+  .wo-form__grid,
+  .wo-material-add__grid {
     grid-template-columns: 1fr;
   }
 

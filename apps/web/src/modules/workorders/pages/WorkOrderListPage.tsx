@@ -38,11 +38,17 @@ export default function WorkOrderListPage() {
     <div className="wo-page">
       <div className="wo-page__header">
         <h1>Work Orders</h1>
-        {canCreate && (
-          <Link to="/work-orders/new" className="wo-btn wo-btn--primary">
-            + New Work Order
-          </Link>
-        )}
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <Link to="/work-orders/dashboard" className="wo-btn wo-btn--sm">Dashboard</Link>
+          {permissions.has('workorder.reports') && (
+            <Link to="/work-orders/reports" className="wo-btn wo-btn--sm">Reports</Link>
+          )}
+          {canCreate && (
+            <Link to="/work-orders/new" className="wo-btn wo-btn--primary">
+              + New Work Order
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="wo-filters">

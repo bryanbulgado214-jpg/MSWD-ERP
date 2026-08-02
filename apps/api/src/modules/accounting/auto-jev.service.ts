@@ -233,6 +233,54 @@ export class AutoJevService {
     });
   }
 
+  async onWorkOrderVerified(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    userId: string,
+    wo: {
+      id: string;
+      woNumber: string;
+      verifiedAt: Date;
+      materialsCost: number;
+    },
+  ) {
+    const expenseAccount = await this.resolve(organizationId, 'expense.repairs_maintenance');
+    const inventoryAccount = await this.resolve(organizationId, 'inventory.office_supplies');
+
+    if (!expenseAccount || !inventoryAccount) {
+      this.logger.warn(
+        `Skipping auto-JEV for WO ${wo.woNumber}: missing account mappings (expense.repairs_maintenance or inventory.office_supplies).`,
+      );
+      return null;
+    }
+
+    if (wo.materialsCost <= 0) return null;
+
+    return this.createAutoJev(tx, {
+      organizationId,
+      userId,
+      jevDate: wo.verifiedAt,
+      sourceType: 'work_order',
+      sourceTable: 'work_orders',
+      sourceId: wo.id,
+      particulars: `WO ${wo.woNumber} — Materials used for field operations`,
+      lines: [
+        {
+          chartOfAccountId: expenseAccount.id,
+          debitAmount: wo.materialsCost,
+          creditAmount: 0,
+          description: `Repairs & Maintenance Expense — ${wo.woNumber}`,
+        },
+        {
+          chartOfAccountId: inventoryAccount.id,
+          debitAmount: 0,
+          creditAmount: wo.materialsCost,
+          description: `Inventory consumed — ${wo.woNumber}`,
+        },
+      ],
+    });
+  }
+
   private async resolve(organizationId: string, mappingKey: string) {
     const mapping = await this.prisma.accountMapping.findFirst({
       where: { organizationId, mappingKey, isActive: true },

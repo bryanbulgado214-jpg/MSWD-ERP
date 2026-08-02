@@ -141,6 +141,22 @@ export async function removeWorkOrderMaterial(id: string, materialId: string): P
   await authFetchMutate(`/workorders/${id}/materials/${materialId}`, 'DELETE');
 }
 
+export async function getReport(params?: string): Promise<{
+  orders: Array<{
+    id: string; woNumber: string; title: string; type: string; priority: string; status: string;
+    location: string | null; scheduledDate: string | null; completedAt: string | null; verifiedAt: string | null;
+    estimatedDurationHrs: string | null; actualDurationHrs: string | null; materialsCost: string;
+    createdAt: string;
+    consumer: { firstName: string; lastName: string; accountNumber: string } | null;
+    assignee: { firstName: string; lastName: string } | null;
+  }>;
+  summary: { totalCount: number; totalMaterialsCost: string };
+}> {
+  const qs = params ? `?${params}` : '';
+  const res = await authFetch(`/workorders/reports${qs}`);
+  return res.json();
+}
+
 export async function getConsumersLookup(): Promise<Array<{ id: string; accountNumber: string; firstName: string; lastName: string }>> {
   const res = await authFetch('/billing/consumers?status=active');
   return res.json();
@@ -148,5 +164,13 @@ export async function getConsumersLookup(): Promise<Array<{ id: string; accountN
 
 export async function getEmployeesLookup(): Promise<Array<{ id: string; firstName: string; lastName: string; position?: { title: string } | null }>> {
   const res = await authFetch('/hr/employees?isActive=true');
+  return res.json();
+}
+
+export async function getInventoryItemsLookup(search?: string): Promise<Array<{
+  id: string; itemCode: string; description: string; unitOfMeasure: string; unitCost: string; onHandQuantity: string;
+}>> {
+  const qs = search ? `?search=${encodeURIComponent(search)}` : '';
+  const res = await authFetch(`/inventory/items${qs}`);
   return res.json();
 }
