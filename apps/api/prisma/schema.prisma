@@ -165,6 +165,21 @@ model Organization {
   bills                 Bill[]
   payments              Payment[]
   disconnectionOrders   DisconnectionOrder[]
+  positions             Position[]
+  salaryGrades          SalaryGrade[]
+  employees             Employee[]
+  leaveTypes            LeaveType[]
+  leaveBalances         LeaveBalance[]
+  leaveApplications     LeaveApplication[]
+  dtrUploads            DtrUpload[]
+  dtrRecords            DtrRecord[]
+  allowanceTypes        AllowanceType[]
+  employeeAllowances    EmployeeAllowance[]
+  deductionTypes        DeductionType[]
+  employeeDeductions    EmployeeDeduction[]
+  payrollPeriods        PayrollPeriod[]
+  payrollRuns           PayrollRun[]
+  payrollItems          PayrollItem[]
 
   @@map("organizations")
 }
@@ -240,6 +255,7 @@ model Department {
   delegationAuthorities DelegationAuthority[]
   obligationRequests    ObligationRequest[]
   requisitionIssueSlips RequisitionIssueSlip[]
+  employees             Employee[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -460,6 +476,18 @@ model User {
   cancelledDisconnectionOrders                  DisconnectionOrder[]   @relation("DisconnectionOrdersCancelledBy")
   createdDisconnectionOrders                    DisconnectionOrder[]   @relation("DisconnectionOrdersCreatedBy")
   updatedDisconnectionOrders                    DisconnectionOrder[]   @relation("DisconnectionOrdersUpdatedBy")
+  employeeProfile                               Employee[]             @relation("EmployeeUser")
+  createdEmployees                              Employee[]             @relation("EmployeesCreatedBy")
+  updatedEmployees                              Employee[]             @relation("EmployeesUpdatedBy")
+  approvedLeaveApplications                     LeaveApplication[]     @relation("LeaveApplicationsApprovedBy")
+  createdLeaveApplications                      LeaveApplication[]     @relation("LeaveApplicationsCreatedBy")
+  updatedLeaveApplications                      LeaveApplication[]     @relation("LeaveApplicationsUpdatedBy")
+  uploadedDtrs                                  DtrUpload[]            @relation("DtrUploadsUploadedBy")
+  createdPayrollPeriods                         PayrollPeriod[]        @relation("PayrollPeriodsCreatedBy")
+  approvedPayrollRuns                           PayrollRun[]           @relation("PayrollRunsApprovedBy")
+  voidedPayrollRuns                             PayrollRun[]           @relation("PayrollRunsVoidedBy")
+  createdPayrollRuns                            PayrollRun[]           @relation("PayrollRunsCreatedBy")
+  updatedPayrollRuns                            PayrollRun[]           @relation("PayrollRunsUpdatedBy")
 
   @@unique([organizationId, username])
   @@unique([organizationId, email])
@@ -2639,6 +2667,7 @@ enum JevSourceType {
   stock_issue
   adjustment
   closing
+  payroll
 
   @@map("jev_source_type")
 }
@@ -3487,4 +3516,478 @@ model DisconnectionOrder {
   @@index([consumerId])
   @@index([status])
   @@map("disconnection_orders")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// HR & PAYROLL MODULE
+// ════════════════════════════════════════════════════════════════════
+
+model Position {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  code           String   @db.VarChar(20)
+  title          String   @db.VarChar(255)
+  salaryGrade    Int?     @map("salary_grade")
+  salaryStep     Int?     @default(1) @map("salary_step")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  employees    Employee[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("positions")
+}
+
+model SalaryGrade {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  grade          Int
+  step           Int      @default(1)
+  monthlySalary  Decimal  @map("monthly_salary") @db.Decimal(14, 2)
+  effectiveDate  DateTime @map("effective_date") @db.Date
+  endDate        DateTime? @map("end_date") @db.Date
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, grade, step, effectiveDate])
+  @@index([organizationId])
+  @@map("salary_grades")
+}
+
+enum EmploymentStatus {
+  active
+  resigned
+  retired
+  terminated
+  on_leave
+  suspended
+
+  @@map("employment_status")
+}
+
+enum EmploymentType {
+  permanent
+  casual
+  contractual
+  job_order
+  co_terminous
+  elected
+
+  @@map("employment_type")
+}
+
+model Employee {
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String           @map("organization_id") @db.Uuid
+  userId           String?          @map("user_id") @db.Uuid
+  employeeNumber   String           @map("employee_number") @db.VarChar(20)
+  firstName        String           @map("first_name") @db.VarChar(100)
+  middleName       String?          @map("middle_name") @db.VarChar(100)
+  lastName         String           @map("last_name") @db.VarChar(100)
+  suffix           String?          @db.VarChar(20)
+  dateOfBirth      DateTime?        @map("date_of_birth") @db.Date
+  gender           String?          @db.VarChar(10)
+  civilStatus      String?          @map("civil_status") @db.VarChar(20)
+  address          String?
+  contactNumber    String?          @map("contact_number") @db.VarChar(30)
+  email            String?          @db.VarChar(255)
+  tin              String?          @db.VarChar(20)
+  sssGsisNumber    String?          @map("sss_gsis_number") @db.VarChar(20)
+  philhealthNumber String?          @map("philhealth_number") @db.VarChar(20)
+  pagibigNumber    String?          @map("pagibig_number") @db.VarChar(20)
+  departmentId     String?          @map("department_id") @db.Uuid
+  positionId       String?          @map("position_id") @db.Uuid
+  employmentType   EmploymentType   @default(permanent) @map("employment_type")
+  employmentStatus EmploymentStatus @default(active) @map("employment_status")
+  dateHired        DateTime?        @map("date_hired") @db.Date
+  dateRegularized  DateTime?        @map("date_regularized") @db.Date
+  dateSeparated    DateTime?        @map("date_separated") @db.Date
+  separationReason String?          @map("separation_reason")
+  basicSalary      Decimal?         @map("basic_salary") @db.Decimal(14, 2)
+  salaryGrade      Int?             @map("salary_grade")
+  salaryStep       Int?             @default(1) @map("salary_step")
+  isActive         Boolean          @default(true) @map("is_active")
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy        String?          @map("created_by") @db.Uuid
+  updatedBy        String?          @map("updated_by") @db.Uuid
+  version          Int              @default(1)
+
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user               User?               @relation("EmployeeUser", fields: [userId], references: [id], onDelete: SetNull)
+  department         Department?         @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  position           Position?           @relation(fields: [positionId], references: [id], onDelete: SetNull)
+  creator            User?               @relation("EmployeesCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater            User?               @relation("EmployeesUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  leaveBalances      LeaveBalance[]
+  leaveApplications  LeaveApplication[]
+  dtrRecords         DtrRecord[]
+  employeeAllowances EmployeeAllowance[]
+  employeeDeductions EmployeeDeduction[]
+  payrollItems       PayrollItem[]
+
+  @@unique([organizationId, employeeNumber])
+  @@index([organizationId])
+  @@index([userId])
+  @@index([departmentId])
+  @@index([employmentStatus])
+  @@map("employees")
+}
+
+model LeaveType {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  code            String   @db.VarChar(20)
+  name            String   @db.VarChar(100)
+  defaultDays     Decimal  @default(0) @map("default_days") @db.Decimal(5, 1)
+  isConvertible   Boolean  @default(false) @map("is_convertible")
+  isCumulative    Boolean  @default(true) @map("is_cumulative")
+  maxAccumulation Decimal? @map("max_accumulation") @db.Decimal(6, 1)
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  leaveBalances    LeaveBalance[]
+  leaveApplications LeaveApplication[]
+
+  @@unique([organizationId, code])
+  @@map("leave_types")
+}
+
+model LeaveBalance {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  employeeId     String   @map("employee_id") @db.Uuid
+  leaveTypeId    String   @map("leave_type_id") @db.Uuid
+  year           Int
+  earned         Decimal  @default(0) @map("earned") @db.Decimal(6, 1)
+  used           Decimal  @default(0) @map("used") @db.Decimal(6, 1)
+  balance        Decimal  @default(0) @map("balance") @db.Decimal(6, 1)
+  carryOver      Decimal  @default(0) @map("carry_over") @db.Decimal(6, 1)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType    LeaveType    @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, leaveTypeId, year])
+  @@index([employeeId])
+  @@map("leave_balances")
+}
+
+enum LeaveRequestStatus {
+  pending
+  approved
+  rejected
+  cancelled
+
+  @@map("leave_request_status")
+}
+
+model LeaveApplication {
+  id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String             @map("organization_id") @db.Uuid
+  employeeId      String             @map("employee_id") @db.Uuid
+  leaveTypeId     String             @map("leave_type_id") @db.Uuid
+  startDate       DateTime           @map("start_date") @db.Date
+  endDate         DateTime           @map("end_date") @db.Date
+  daysApplied     Decimal            @map("days_applied") @db.Decimal(5, 1)
+  reason          String?
+  status          LeaveRequestStatus @default(pending)
+  approvedBy      String?            @map("approved_by") @db.Uuid
+  approvedAt      DateTime?          @map("approved_at") @db.Timestamptz(6)
+  rejectionReason String?            @map("rejection_reason")
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy       String?            @map("created_by") @db.Uuid
+  updatedBy       String?            @map("updated_by") @db.Uuid
+  version         Int                @default(1)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType    LeaveType    @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  approver     User?        @relation("LeaveApplicationsApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
+  creator      User?        @relation("LeaveApplicationsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater      User?        @relation("LeaveApplicationsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  @@index([employeeId])
+  @@index([status])
+  @@map("leave_applications")
+}
+
+enum DtrUploadStatus {
+  pending
+  processed
+  error
+
+  @@map("dtr_upload_status")
+}
+
+model DtrUpload {
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String          @map("organization_id") @db.Uuid
+  fileName         String          @map("file_name") @db.VarChar(255)
+  periodStart      DateTime        @map("period_start") @db.Date
+  periodEnd        DateTime        @map("period_end") @db.Date
+  totalRecords     Int             @default(0) @map("total_records")
+  processedRecords Int             @default(0) @map("processed_records")
+  errorRecords     Int             @default(0) @map("error_records")
+  status           DtrUploadStatus @default(pending)
+  errorLog         String?         @map("error_log")
+  uploadedBy       String?         @map("uploaded_by") @db.Uuid
+  processedAt      DateTime?       @map("processed_at") @db.Timestamptz(6)
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  uploader     User?        @relation("DtrUploadsUploadedBy", fields: [uploadedBy], references: [id], onDelete: SetNull)
+  records      DtrRecord[]
+
+  @@index([organizationId])
+  @@map("dtr_uploads")
+}
+
+model DtrRecord {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  employeeId     String   @map("employee_id") @db.Uuid
+  uploadId       String?  @map("upload_id") @db.Uuid
+  recordDate     DateTime @map("record_date") @db.Date
+  timeInAm       DateTime? @map("time_in_am") @db.Time()
+  timeOutAm      DateTime? @map("time_out_am") @db.Time()
+  timeInPm       DateTime? @map("time_in_pm") @db.Time()
+  timeOutPm      DateTime? @map("time_out_pm") @db.Time()
+  hoursWorked    Decimal  @default(0) @map("hours_worked") @db.Decimal(5, 2)
+  hoursLate      Decimal  @default(0) @map("hours_late") @db.Decimal(5, 2)
+  hoursUndertime Decimal  @default(0) @map("hours_undertime") @db.Decimal(5, 2)
+  hoursOvertime  Decimal  @default(0) @map("hours_overtime") @db.Decimal(5, 2)
+  isAbsent       Boolean  @default(false) @map("is_absent")
+  isHoliday      Boolean  @default(false) @map("is_holiday")
+  isRestDay      Boolean  @default(false) @map("is_rest_day")
+  remarks        String?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  upload       DtrUpload?   @relation(fields: [uploadId], references: [id], onDelete: SetNull)
+
+  @@unique([employeeId, recordDate])
+  @@index([employeeId])
+  @@index([recordDate])
+  @@index([uploadId])
+  @@map("dtr_records")
+}
+
+model AllowanceType {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  code           String   @db.VarChar(20)
+  name           String   @db.VarChar(100)
+  isTaxable      Boolean  @default(false) @map("is_taxable")
+  isFixed        Boolean  @default(true) @map("is_fixed")
+  defaultAmount  Decimal  @default(0) @map("default_amount") @db.Decimal(14, 2)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  employeeAllowances EmployeeAllowance[]
+
+  @@unique([organizationId, code])
+  @@map("allowance_types")
+}
+
+model EmployeeAllowance {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  employeeId      String   @map("employee_id") @db.Uuid
+  allowanceTypeId String   @map("allowance_type_id") @db.Uuid
+  amount          Decimal  @db.Decimal(14, 2)
+  effectiveDate   DateTime @map("effective_date") @db.Date
+  endDate         DateTime? @map("end_date") @db.Date
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  employee      Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  allowanceType AllowanceType @relation(fields: [allowanceTypeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@map("employee_allowances")
+}
+
+model DeductionType {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  code           String   @db.VarChar(20)
+  name           String   @db.VarChar(100)
+  category       String   @default("mandatory") @db.VarChar(30)
+  isPercentage   Boolean  @default(false) @map("is_percentage")
+  employerShare  Decimal  @default(0) @map("employer_share") @db.Decimal(8, 4)
+  employeeShare  Decimal  @default(0) @map("employee_share") @db.Decimal(8, 4)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  employeeDeductions EmployeeDeduction[]
+
+  @@unique([organizationId, code])
+  @@map("deduction_types")
+}
+
+model EmployeeDeduction {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  employeeId       String   @map("employee_id") @db.Uuid
+  deductionTypeId  String   @map("deduction_type_id") @db.Uuid
+  amount           Decimal  @default(0) @db.Decimal(14, 2)
+  startDate        DateTime? @map("start_date") @db.Date
+  endDate          DateTime? @map("end_date") @db.Date
+  remainingBalance Decimal? @map("remaining_balance") @db.Decimal(14, 2)
+  isActive         Boolean  @default(true) @map("is_active")
+  remarks          String?
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  employee      Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  deductionType DeductionType @relation(fields: [deductionTypeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@map("employee_deductions")
+}
+
+enum PayrollStatus {
+  draft
+  computing
+  computed
+  reviewing
+  approved
+  paid
+  voided
+
+  @@map("payroll_status")
+}
+
+model PayrollPeriod {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(100)
+  periodType     String   @default("semi_monthly") @map("period_type") @db.VarChar(20)
+  startDate      DateTime @map("start_date") @db.Date
+  endDate        DateTime @map("end_date") @db.Date
+  payDate        DateTime @map("pay_date") @db.Date
+  isLocked       Boolean  @default(false) @map("is_locked")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy      String?  @map("created_by") @db.Uuid
+  version        Int      @default(1)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  creator      User?        @relation("PayrollPeriodsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  payrollRuns  PayrollRun[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("payroll_periods")
+}
+
+model PayrollRun {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String        @map("organization_id") @db.Uuid
+  payrollPeriodId String        @map("payroll_period_id") @db.Uuid
+  runNumber       String        @map("run_number") @db.VarChar(20)
+  status          PayrollStatus @default(draft)
+  totalGross      Decimal       @default(0) @map("total_gross") @db.Decimal(14, 2)
+  totalDeductions Decimal       @default(0) @map("total_deductions") @db.Decimal(14, 2)
+  totalNet        Decimal       @default(0) @map("total_net") @db.Decimal(14, 2)
+  employeeCount   Int           @default(0) @map("employee_count")
+  computedAt      DateTime?     @map("computed_at") @db.Timestamptz(6)
+  approvedBy      String?       @map("approved_by") @db.Uuid
+  approvedAt      DateTime?     @map("approved_at") @db.Timestamptz(6)
+  paidAt          DateTime?     @map("paid_at") @db.Timestamptz(6)
+  voidedBy        String?       @map("voided_by") @db.Uuid
+  voidedAt        DateTime?     @map("voided_at") @db.Timestamptz(6)
+  voidReason      String?       @map("void_reason")
+  remarks         String?
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy       String?       @map("created_by") @db.Uuid
+  updatedBy       String?       @map("updated_by") @db.Uuid
+  version         Int           @default(1)
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  payrollPeriod PayrollPeriod @relation(fields: [payrollPeriodId], references: [id], onDelete: Restrict)
+  approver      User?         @relation("PayrollRunsApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
+  voider        User?         @relation("PayrollRunsVoidedBy", fields: [voidedBy], references: [id], onDelete: SetNull)
+  creator       User?         @relation("PayrollRunsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater       User?         @relation("PayrollRunsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  items         PayrollItem[]
+
+  @@unique([organizationId, runNumber])
+  @@index([organizationId])
+  @@index([payrollPeriodId])
+  @@index([status])
+  @@map("payroll_runs")
+}
+
+model PayrollItem {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String   @map("organization_id") @db.Uuid
+  payrollRunId        String   @map("payroll_run_id") @db.Uuid
+  employeeId          String   @map("employee_id") @db.Uuid
+  basicPay            Decimal  @default(0) @map("basic_pay") @db.Decimal(14, 2)
+  totalAllowances     Decimal  @default(0) @map("total_allowances") @db.Decimal(14, 2)
+  grossPay            Decimal  @default(0) @map("gross_pay") @db.Decimal(14, 2)
+  totalDeductions     Decimal  @default(0) @map("total_deductions") @db.Decimal(14, 2)
+  netPay              Decimal  @default(0) @map("net_pay") @db.Decimal(14, 2)
+  daysWorked          Decimal  @default(0) @map("days_worked") @db.Decimal(5, 1)
+  daysAbsent          Decimal  @default(0) @map("days_absent") @db.Decimal(5, 1)
+  hoursLate           Decimal  @default(0) @map("hours_late") @db.Decimal(6, 2)
+  hoursUndertime      Decimal  @default(0) @map("hours_undertime") @db.Decimal(6, 2)
+  hoursOvertime       Decimal  @default(0) @map("hours_overtime") @db.Decimal(6, 2)
+  lateDeduction       Decimal  @default(0) @map("late_deduction") @db.Decimal(14, 2)
+  undertimeDeduction  Decimal  @default(0) @map("undertime_deduction") @db.Decimal(14, 2)
+  overtimePay         Decimal  @default(0) @map("overtime_pay") @db.Decimal(14, 2)
+  absentDeduction     Decimal  @default(0) @map("absent_deduction") @db.Decimal(14, 2)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  payrollRun   PayrollRun   @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  details      PayrollItemDetail[]
+
+  @@unique([payrollRunId, employeeId])
+  @@index([payrollRunId])
+  @@index([employeeId])
+  @@map("payroll_items")
+}
+
+model PayrollItemDetail {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  payrollItemId String   @map("payroll_item_id") @db.Uuid
+  detailType    String   @map("detail_type") @db.VarChar(20)
+  referenceCode String   @map("reference_code") @db.VarChar(20)
+  referenceName String   @map("reference_name") @db.VarChar(100)
+  amount        Decimal  @default(0) @db.Decimal(14, 2)
+  employerShare Decimal  @default(0) @map("employer_share") @db.Decimal(14, 2)
+  remarks       String?
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  payrollItem PayrollItem @relation(fields: [payrollItemId], references: [id], onDelete: Cascade)
+
+  @@index([payrollItemId])
+  @@map("payroll_item_details")
 }

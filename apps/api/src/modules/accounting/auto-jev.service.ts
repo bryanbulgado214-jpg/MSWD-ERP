@@ -183,6 +183,56 @@ export class AutoJevService {
     });
   }
 
+  async onPayrollPaid(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    userId: string,
+    payroll: {
+      id: string;
+      runNumber: string;
+      payDate: Date;
+      totalGross: number;
+      totalDeductions: number;
+      totalNet: number;
+    },
+  ) {
+    const salaryExpense = await this.resolve(organizationId, 'payroll.salaries_expense');
+    const payrollPayable = await this.resolve(organizationId, 'payroll.payable');
+
+    if (!salaryExpense || !payrollPayable) {
+      this.logger.warn(
+        `Skipping auto-JEV for payroll ${payroll.runNumber}: missing account mappings (payroll.salaries_expense or payroll.payable).`,
+      );
+      return null;
+    }
+
+    if (payroll.totalGross <= 0) return null;
+
+    return this.createAutoJev(tx, {
+      organizationId,
+      userId,
+      jevDate: payroll.payDate,
+      sourceType: 'payroll',
+      sourceTable: 'payroll_runs',
+      sourceId: payroll.id,
+      particulars: `Payroll ${payroll.runNumber} — Salaries and Wages`,
+      lines: [
+        {
+          chartOfAccountId: salaryExpense.id,
+          debitAmount: payroll.totalGross,
+          creditAmount: 0,
+          description: `Salaries Expense — ${payroll.runNumber}`,
+        },
+        {
+          chartOfAccountId: payrollPayable.id,
+          debitAmount: 0,
+          creditAmount: payroll.totalGross,
+          description: `Salaries Payable — ${payroll.runNumber}`,
+        },
+      ],
+    });
+  }
+
   private async resolve(organizationId: string, mappingKey: string) {
     const mapping = await this.prisma.accountMapping.findFirst({
       where: { organizationId, mappingKey, isActive: true },

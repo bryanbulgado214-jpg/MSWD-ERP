@@ -56,6 +56,17 @@ export const MODULE_GATES = {
     'billing.disconnect.manage',
     'billing.reports',
   ],
+  hr: [
+    'hr.read',
+    'hr.employee.manage',
+    'hr.leave.manage',
+    'hr.leave.approve',
+    'hr.attendance.manage',
+    'hr.payroll.manage',
+    'hr.payroll.approve',
+    'hr.salary.manage',
+    'hr.reports',
+  ],
   accounting: [
     'accounting.read',
     'accounting.coa.manage',

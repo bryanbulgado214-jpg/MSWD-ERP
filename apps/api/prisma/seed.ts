@@ -82,7 +82,8 @@ async function main() {
     { code: 'ACCOUNTANT', name: 'Accountant', description: 'Journal entries, disbursement vouchers, collections.' },
     { code: 'BUDGET_APPROVER', name: 'Budget Approver', description: 'Reviews and approves/rejects budget headers and reservations.' },
     { code: 'PROCUREMENT_OFFICER', name: 'Procurement Officer', description: 'Procurement processing, completeness review, procurement lifecycle.' },
-    { code: 'HR_OFFICER', name: 'HR Officer', description: 'Employee, position, and leave administration.' },
+    { code: 'HR_OFFICER', name: 'HR Officer', description: 'Employee management, leave administration, attendance, and DTR processing.' },
+    { code: 'PAYROLL_OFFICER', name: 'Payroll Officer', description: 'Payroll processing, salary structure, allowances, deductions, and government remittances.' },
     { code: 'EMPLOYEE', name: 'Employee', description: 'End-user / PR preparer. Creates and submits purchase requisitions.' },
     { code: 'DEPARTMENT_HEAD', name: 'Department Head', description: 'Reviews and endorses PRs from their department.' },
     { code: 'GENERAL_MANAGER', name: 'General Manager / HoPE', description: 'Final PR approval authority.' },
@@ -213,6 +214,16 @@ async function main() {
     { code: 'billing.payment.void', name: 'Void Payments', module: 'billing' },
     { code: 'billing.disconnect.manage', name: 'Manage Disconnection Orders', module: 'billing' },
     { code: 'billing.reports', name: 'View Billing Reports', module: 'billing' },
+    // HR & Payroll
+    { code: 'hr.read', name: 'View HR Data', module: 'hr' },
+    { code: 'hr.employee.manage', name: 'Manage Employees', module: 'hr' },
+    { code: 'hr.leave.manage', name: 'Manage Leave Applications', module: 'hr' },
+    { code: 'hr.leave.approve', name: 'Approve Leave Applications', module: 'hr' },
+    { code: 'hr.attendance.manage', name: 'Manage DTR & Attendance', module: 'hr' },
+    { code: 'hr.payroll.manage', name: 'Manage Payroll', module: 'hr' },
+    { code: 'hr.payroll.approve', name: 'Approve Payroll Runs', module: 'hr' },
+    { code: 'hr.salary.manage', name: 'Manage Salary Grades & Allowances', module: 'hr' },
+    { code: 'hr.reports', name: 'View HR & Payroll Reports', module: 'hr' },
   ];
 
   const permissions: Record<string, { id: string }> = {};
@@ -261,6 +272,7 @@ async function main() {
     'billing.payment.void',
     'billing.bill.adjust',
     'billing.disconnect.manage',
+    'hr.payroll.approve',
   ]);
   for (const code of Object.keys(permissions)) {
     if (!adminExcludedPermissions.has(code)) {
@@ -535,6 +547,48 @@ async function main() {
     'inventory.acknowledge',
   ]) {
     await grant('EMPLOYEE', code);
+  }
+
+  // HR Officer: employee, leave, attendance management.
+  for (const code of [
+    'hr.read',
+    'hr.employee.manage',
+    'hr.leave.manage',
+    'hr.leave.approve',
+    'hr.attendance.manage',
+    'hr.salary.manage',
+    'hr.reports',
+  ]) {
+    await grant('HR_OFFICER', code);
+  }
+
+  // Payroll Officer: payroll processing, salary, deductions.
+  for (const code of [
+    'hr.read',
+    'hr.payroll.manage',
+    'hr.salary.manage',
+    'hr.attendance.manage',
+    'hr.reports',
+  ]) {
+    await grant('PAYROLL_OFFICER', code);
+  }
+
+  // General Manager: HR approval permissions.
+  for (const code of [
+    'hr.read',
+    'hr.leave.approve',
+    'hr.payroll.approve',
+    'hr.reports',
+  ]) {
+    await grant('GENERAL_MANAGER', code);
+  }
+
+  // Department Head: view HR data, approve leaves.
+  for (const code of [
+    'hr.read',
+    'hr.leave.approve',
+  ]) {
+    await grant('DEPARTMENT_HEAD', code);
   }
 
   // ── 6. Fiscal year setup ──
@@ -1072,6 +1126,149 @@ async function main() {
     },
   });
 
+  // ── Seed HR officer test user ──
+  const hrOfficerUser = await prisma.user.upsert({
+    where: { organizationId_username: { organizationId: organization.id, username: 'hr_officer' } },
+    update: {},
+    create: {
+      organizationId: organization.id,
+      username: 'hr_officer',
+      email: 'hr.officer@example.invalid',
+      passwordHash,
+      isActive: true,
+    },
+  });
+
+  const hrOfficerRole = roles.HR_OFFICER;
+  if (!hrOfficerRole) throw new Error('Seed error: HR_OFFICER role was not created above.');
+
+  await prisma.userRole.upsert({
+    where: {
+      userId_roleId_organizationalUnitId: {
+        userId: hrOfficerUser.id,
+        roleId: hrOfficerRole.id,
+        organizationalUnitId: rootUnit.id,
+      },
+    },
+    update: {},
+    create: {
+      userId: hrOfficerUser.id,
+      roleId: hrOfficerRole.id,
+      organizationalUnitId: rootUnit.id,
+    },
+  });
+
+  // ── Seed payroll officer test user ──
+  const payrollOfficerUser = await prisma.user.upsert({
+    where: { organizationId_username: { organizationId: organization.id, username: 'payroll_officer' } },
+    update: {},
+    create: {
+      organizationId: organization.id,
+      username: 'payroll_officer',
+      email: 'payroll.officer@example.invalid',
+      passwordHash,
+      isActive: true,
+    },
+  });
+
+  const payrollOfficerRole = roles.PAYROLL_OFFICER;
+  if (!payrollOfficerRole) throw new Error('Seed error: PAYROLL_OFFICER role was not created above.');
+
+  await prisma.userRole.upsert({
+    where: {
+      userId_roleId_organizationalUnitId: {
+        userId: payrollOfficerUser.id,
+        roleId: payrollOfficerRole.id,
+        organizationalUnitId: rootUnit.id,
+      },
+    },
+    update: {},
+    create: {
+      userId: payrollOfficerUser.id,
+      roleId: payrollOfficerRole.id,
+      organizationalUnitId: rootUnit.id,
+    },
+  });
+
+  // ── Seed default leave types ──
+  const leaveTypeDefs = [
+    { code: 'VL', name: 'Vacation Leave', defaultDays: 15, isCumulative: true, isConvertible: true, maxAccumulation: 300 },
+    { code: 'SL', name: 'Sick Leave', defaultDays: 15, isCumulative: true, isConvertible: true, maxAccumulation: 300 },
+    { code: 'FL', name: 'Force Leave', defaultDays: 5, isCumulative: false, isConvertible: false },
+    { code: 'SPL', name: 'Special Privilege Leave', defaultDays: 3, isCumulative: false, isConvertible: false },
+    { code: 'ML', name: 'Maternity Leave', defaultDays: 105, isCumulative: false, isConvertible: false },
+    { code: 'PL', name: 'Paternity Leave', defaultDays: 7, isCumulative: false, isConvertible: false },
+    { code: 'SLBW', name: 'Solo Parent Leave', defaultDays: 7, isCumulative: false, isConvertible: false },
+    { code: 'VAWC', name: 'VAWC Leave', defaultDays: 10, isCumulative: false, isConvertible: false },
+  ];
+
+  for (const lt of leaveTypeDefs) {
+    await prisma.leaveType.upsert({
+      where: { organizationId_code: { organizationId: organization.id, code: lt.code } },
+      update: { name: lt.name },
+      create: {
+        organizationId: organization.id,
+        code: lt.code,
+        name: lt.name,
+        defaultDays: lt.defaultDays,
+        isCumulative: lt.isCumulative,
+        isConvertible: lt.isConvertible,
+        ...(lt.maxAccumulation ? { maxAccumulation: lt.maxAccumulation } : {}),
+      },
+    });
+  }
+
+  // ── Seed default allowance types ──
+  const allowanceTypeDefs = [
+    { code: 'PERA', name: 'Personnel Economic Relief Allowance', isTaxable: false, isFixed: true, defaultAmount: 2000 },
+    { code: 'RATA', name: 'Representation and Transportation Allowance', isTaxable: true, isFixed: true, defaultAmount: 0 },
+    { code: 'COLA', name: 'Cost of Living Allowance', isTaxable: false, isFixed: true, defaultAmount: 0 },
+    { code: 'HAZARD', name: 'Hazard Pay', isTaxable: false, isFixed: false, defaultAmount: 0 },
+    { code: 'LONGEVITY', name: 'Longevity Pay', isTaxable: true, isFixed: false, defaultAmount: 0 },
+  ];
+
+  for (const at of allowanceTypeDefs) {
+    await prisma.allowanceType.upsert({
+      where: { organizationId_code: { organizationId: organization.id, code: at.code } },
+      update: { name: at.name },
+      create: {
+        organizationId: organization.id,
+        code: at.code,
+        name: at.name,
+        isTaxable: at.isTaxable,
+        isFixed: at.isFixed,
+        defaultAmount: at.defaultAmount,
+      },
+    });
+  }
+
+  // ── Seed default deduction types ──
+  const deductionTypeDefs = [
+    { code: 'GSIS', name: 'GSIS Contribution', category: 'mandatory', isPercentage: true, employerShare: 12, employeeShare: 9 },
+    { code: 'PHILHEALTH', name: 'PhilHealth Contribution', category: 'mandatory', isPercentage: true, employerShare: 2.25, employeeShare: 2.25 },
+    { code: 'PAGIBIG', name: 'Pag-IBIG Contribution', category: 'mandatory', isPercentage: false, employerShare: 100, employeeShare: 200 },
+    { code: 'BIR', name: 'Withholding Tax', category: 'mandatory', isPercentage: true, employerShare: 0, employeeShare: 0 },
+    { code: 'GSIS_LOAN', name: 'GSIS Loan', category: 'loan', isPercentage: false, employerShare: 0, employeeShare: 0 },
+    { code: 'PAGIBIG_LOAN', name: 'Pag-IBIG Loan', category: 'loan', isPercentage: false, employerShare: 0, employeeShare: 0 },
+    { code: 'COOP', name: 'Cooperative Loan/Contribution', category: 'voluntary', isPercentage: false, employerShare: 0, employeeShare: 0 },
+  ];
+
+  for (const dt of deductionTypeDefs) {
+    await prisma.deductionType.upsert({
+      where: { organizationId_code: { organizationId: organization.id, code: dt.code } },
+      update: { name: dt.name },
+      create: {
+        organizationId: organization.id,
+        code: dt.code,
+        name: dt.name,
+        category: dt.category,
+        isPercentage: dt.isPercentage,
+        employerShare: dt.employerShare,
+        employeeShare: dt.employeeShare,
+      },
+    });
+  }
+
   // ── UACS Chart of Accounts seed data ──
   // Hierarchical: level 1 = group (header), level 2 = major (header),
   // level 3 = sub/detail (postable). Based on the COA for NGAs/GOCCs.
@@ -1261,6 +1458,8 @@ async function main() {
   console.log(`  Billing Manager login: username "billing_manager", password "${SEED_ADMIN_PASSWORD}"`);
   console.log(`  Meter Reader login: username "meter_reader", password "${SEED_ADMIN_PASSWORD}"`);
   console.log(`  Billing Cashier login: username "billing_cashier", password "${SEED_ADMIN_PASSWORD}"`);
+  console.log(`  HR Officer login: username "hr_officer", password "${SEED_ADMIN_PASSWORD}"`);
+  console.log(`  Payroll Officer login: username "payroll_officer", password "${SEED_ADMIN_PASSWORD}"`);
 }
 
 main()
