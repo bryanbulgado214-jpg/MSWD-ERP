@@ -95,6 +95,8 @@ async function main() {
     { code: 'BILLING_MANAGER', name: 'Billing Manager', description: 'Full billing & collections management — rates, bills, payments, disconnections.' },
     { code: 'METER_READER', name: 'Meter Reader', description: 'Records meter readings for billing.' },
     { code: 'BILLING_CASHIER', name: 'Billing Cashier', description: 'Collects payments and issues official receipts.' },
+    { code: 'FIELD_SUPERVISOR', name: 'Field Supervisor', description: 'Manages field crews, assigns and verifies work orders.' },
+    { code: 'FIELD_TECHNICIAN', name: 'Field Technician', description: 'Executes field work orders — installations, repairs, disconnections.' },
   ];
 
   const roles: Record<string, { id: string }> = {};
@@ -224,6 +226,13 @@ async function main() {
     { code: 'hr.payroll.approve', name: 'Approve Payroll Runs', module: 'hr' },
     { code: 'hr.salary.manage', name: 'Manage Salary Grades & Allowances', module: 'hr' },
     { code: 'hr.reports', name: 'View HR & Payroll Reports', module: 'hr' },
+    // Work Orders / Field Operations
+    { code: 'workorder.read', name: 'View Work Orders', module: 'workorder' },
+    { code: 'workorder.create', name: 'Create Work Orders', module: 'workorder' },
+    { code: 'workorder.assign', name: 'Assign Work Orders', module: 'workorder' },
+    { code: 'workorder.execute', name: 'Execute Work Orders', module: 'workorder' },
+    { code: 'workorder.verify', name: 'Verify Completed Work', module: 'workorder' },
+    { code: 'workorder.reports', name: 'View Work Order Reports', module: 'workorder' },
   ];
 
   const permissions: Record<string, { id: string }> = {};
@@ -589,6 +598,55 @@ async function main() {
     'hr.leave.approve',
   ]) {
     await grant('DEPARTMENT_HEAD', code);
+  }
+
+  // ── Work Order permissions ──
+
+  // General Manager: full work order access.
+  for (const code of [
+    'workorder.read',
+    'workorder.create',
+    'workorder.assign',
+    'workorder.verify',
+    'workorder.reports',
+  ]) {
+    await grant('GENERAL_MANAGER', code);
+  }
+
+  // Billing Manager: create/read work orders (disconnections, reconnections).
+  for (const code of [
+    'workorder.read',
+    'workorder.create',
+    'workorder.assign',
+  ]) {
+    await grant('BILLING_MANAGER', code);
+  }
+
+  // Supply Officer: read work orders + materials tracking.
+  for (const code of [
+    'workorder.read',
+  ]) {
+    await grant('SUPPLY_OFFICER', code);
+  }
+
+  // Field Supervisor: full work order management.
+  for (const code of [
+    'workorder.read',
+    'workorder.create',
+    'workorder.assign',
+    'workorder.execute',
+    'workorder.verify',
+    'workorder.reports',
+  ]) {
+    await grant('FIELD_SUPERVISOR', code);
+  }
+
+  // Field Technician: read + execute work orders.
+  for (const code of [
+    'workorder.read',
+    'workorder.execute',
+  ]) {
+    await grant('FIELD_TECHNICIAN', code);
   }
 
   // ── 6. Fiscal year setup ──
@@ -1190,6 +1248,70 @@ async function main() {
     },
   });
 
+  // ── Seed field supervisor test user ──
+  const fieldSupervisorUser = await prisma.user.upsert({
+    where: { organizationId_username: { organizationId: organization.id, username: 'field_supervisor' } },
+    update: {},
+    create: {
+      organizationId: organization.id,
+      username: 'field_supervisor',
+      email: 'field.supervisor@example.invalid',
+      passwordHash,
+      isActive: true,
+    },
+  });
+
+  const fieldSupervisorRole = roles.FIELD_SUPERVISOR;
+  if (!fieldSupervisorRole) throw new Error('Seed error: FIELD_SUPERVISOR role was not created above.');
+
+  await prisma.userRole.upsert({
+    where: {
+      userId_roleId_organizationalUnitId: {
+        userId: fieldSupervisorUser.id,
+        roleId: fieldSupervisorRole.id,
+        organizationalUnitId: rootUnit.id,
+      },
+    },
+    update: {},
+    create: {
+      userId: fieldSupervisorUser.id,
+      roleId: fieldSupervisorRole.id,
+      organizationalUnitId: rootUnit.id,
+    },
+  });
+
+  // ── Seed field technician test user ──
+  const fieldTechnicianUser = await prisma.user.upsert({
+    where: { organizationId_username: { organizationId: organization.id, username: 'field_technician' } },
+    update: {},
+    create: {
+      organizationId: organization.id,
+      username: 'field_technician',
+      email: 'field.technician@example.invalid',
+      passwordHash,
+      isActive: true,
+    },
+  });
+
+  const fieldTechnicianRole = roles.FIELD_TECHNICIAN;
+  if (!fieldTechnicianRole) throw new Error('Seed error: FIELD_TECHNICIAN role was not created above.');
+
+  await prisma.userRole.upsert({
+    where: {
+      userId_roleId_organizationalUnitId: {
+        userId: fieldTechnicianUser.id,
+        roleId: fieldTechnicianRole.id,
+        organizationalUnitId: rootUnit.id,
+      },
+    },
+    update: {},
+    create: {
+      userId: fieldTechnicianUser.id,
+      roleId: fieldTechnicianRole.id,
+      organizationalUnitId: rootUnit.id,
+    },
+  });
+
   // ── Seed default leave types ──
   const leaveTypeDefs = [
     { code: 'VL', name: 'Vacation Leave', defaultDays: 15, isCumulative: true, isConvertible: true, maxAccumulation: 300 },
@@ -1460,6 +1582,8 @@ async function main() {
   console.log(`  Billing Cashier login: username "billing_cashier", password "${SEED_ADMIN_PASSWORD}"`);
   console.log(`  HR Officer login: username "hr_officer", password "${SEED_ADMIN_PASSWORD}"`);
   console.log(`  Payroll Officer login: username "payroll_officer", password "${SEED_ADMIN_PASSWORD}"`);
+  console.log(`  Field Supervisor login: username "field_supervisor", password "${SEED_ADMIN_PASSWORD}"`);
+  console.log(`  Field Technician login: username "field_technician", password "${SEED_ADMIN_PASSWORD}"`);
 }
 
 main()

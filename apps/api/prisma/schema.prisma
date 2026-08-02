@@ -180,6 +180,7 @@ model Organization {
   payrollPeriods        PayrollPeriod[]
   payrollRuns           PayrollRun[]
   payrollItems          PayrollItem[]
+  workOrders            WorkOrder[]
 
   @@map("organizations")
 }
@@ -488,6 +489,10 @@ model User {
   voidedPayrollRuns                             PayrollRun[]           @relation("PayrollRunsVoidedBy")
   createdPayrollRuns                            PayrollRun[]           @relation("PayrollRunsCreatedBy")
   updatedPayrollRuns                            PayrollRun[]           @relation("PayrollRunsUpdatedBy")
+  verifiedWorkOrders                            WorkOrder[]            @relation("WorkOrdersVerifiedBy")
+  createdWorkOrders                             WorkOrder[]            @relation("WorkOrdersCreatedBy")
+  updatedWorkOrders                             WorkOrder[]            @relation("WorkOrdersUpdatedBy")
+  workOrderNotes                                WorkOrderNote[]        @relation("WorkOrderNotesCreatedBy")
 
   @@unique([organizationId, username])
   @@unique([organizationId, email])
@@ -2177,11 +2182,12 @@ model InventoryItem {
   creator      User?        @relation("InventoryItemsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
   updater      User?        @relation("InventoryItemsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
 
-  stockCard          StockCard?
-  stockReceiptItems  StockReceiptItem[]
-  risItems           RisItem[]
-  propertyRecords    PropertyRecord[]
-  physicalCountItems PhysicalCountItem[]
+  stockCard            StockCard?
+  stockReceiptItems    StockReceiptItem[]
+  risItems             RisItem[]
+  propertyRecords      PropertyRecord[]
+  physicalCountItems   PhysicalCountItem[]
+  workOrderMaterials   WorkOrderMaterial[]
 
   @@unique([organizationId, itemCode])
   @@index([organizationId])
@@ -3175,6 +3181,7 @@ model Consumer {
   bills                Bill[]
   payments             Payment[]
   disconnectionOrders  DisconnectionOrder[]
+  workOrders           WorkOrder[]
 
   @@unique([organizationId, accountNumber])
   @@index([organizationId])
@@ -3206,6 +3213,7 @@ model Meter {
 
   consumerMeters ConsumerMeter[]
   meterReadings  MeterReading[]
+  workOrders     WorkOrder[]
 
   @@unique([organizationId, serialNumber])
   @@index([organizationId])
@@ -3631,6 +3639,7 @@ model Employee {
   employeeAllowances EmployeeAllowance[]
   employeeDeductions EmployeeDeduction[]
   payrollItems       PayrollItem[]
+  workOrdersAssigned WorkOrder[]         @relation("WorkOrderAssignee")
 
   @@unique([organizationId, employeeNumber])
   @@index([organizationId])
@@ -3990,4 +3999,122 @@ model PayrollItemDetail {
 
   @@index([payrollItemId])
   @@map("payroll_item_details")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Work Order / Field Operations Module
+// ═══════════════════════════════════════════════════════════════
+
+enum WorkOrderType {
+  installation
+  repair
+  replacement
+  disconnection
+  reconnection
+  inspection
+  maintenance
+
+  @@map("work_order_type")
+}
+
+enum WorkOrderPriority {
+  low
+  normal
+  high
+  urgent
+
+  @@map("work_order_priority")
+}
+
+enum WorkOrderStatus {
+  draft
+  pending
+  assigned
+  in_progress
+  completed
+  verified
+  cancelled
+
+  @@map("work_order_status")
+}
+
+model WorkOrder {
+  id                    String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId        String            @map("organization_id") @db.Uuid
+  woNumber              String            @map("wo_number") @db.VarChar(20)
+  type                  WorkOrderType
+  priority              WorkOrderPriority @default(normal)
+  status                WorkOrderStatus   @default(draft)
+  title                 String            @db.VarChar(255)
+  description           String?
+  consumerId            String?           @map("consumer_id") @db.Uuid
+  meterId               String?           @map("meter_id") @db.Uuid
+  location              String?           @db.VarChar(500)
+  scheduledDate         DateTime?         @map("scheduled_date") @db.Date
+  assignedTo            String?           @map("assigned_to") @db.Uuid
+  assignedAt            DateTime?         @map("assigned_at") @db.Timestamptz(6)
+  startedAt             DateTime?         @map("started_at") @db.Timestamptz(6)
+  completedAt           DateTime?         @map("completed_at") @db.Timestamptz(6)
+  verifiedBy            String?           @map("verified_by") @db.Uuid
+  verifiedAt            DateTime?         @map("verified_at") @db.Timestamptz(6)
+  completionNotes       String?           @map("completion_notes")
+  estimatedDurationHrs  Decimal?          @map("estimated_duration_hrs") @db.Decimal(6, 2)
+  actualDurationHrs     Decimal?          @map("actual_duration_hrs") @db.Decimal(6, 2)
+  materialsCost         Decimal           @default(0) @map("materials_cost") @db.Decimal(14, 2)
+  createdBy             String?           @map("created_by") @db.Uuid
+  updatedBy             String?           @map("updated_by") @db.Uuid
+  createdAt             DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version               Int               @default(1)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  consumer     Consumer?    @relation(fields: [consumerId], references: [id], onDelete: SetNull)
+  meter        Meter?       @relation(fields: [meterId], references: [id], onDelete: SetNull)
+  assignee     Employee?    @relation("WorkOrderAssignee", fields: [assignedTo], references: [id], onDelete: SetNull)
+  verifier     User?        @relation("WorkOrdersVerifiedBy", fields: [verifiedBy], references: [id], onDelete: SetNull)
+  creator      User?        @relation("WorkOrdersCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater      User?        @relation("WorkOrdersUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  materials WorkOrderMaterial[]
+  notes     WorkOrderNote[]
+
+  @@unique([organizationId, woNumber])
+  @@index([organizationId])
+  @@index([status])
+  @@index([type])
+  @@index([assignedTo])
+  @@index([consumerId])
+  @@index([scheduledDate])
+  @@map("work_orders")
+}
+
+model WorkOrderMaterial {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workOrderId     String   @map("work_order_id") @db.Uuid
+  inventoryItemId String   @map("inventory_item_id") @db.Uuid
+  quantityUsed    Decimal  @map("quantity_used") @db.Decimal(12, 4)
+  unitCost        Decimal  @default(0) @map("unit_cost") @db.Decimal(18, 2)
+  totalCost       Decimal  @default(0) @map("total_cost") @db.Decimal(18, 2)
+  notes           String?  @db.VarChar(500)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  workOrder     WorkOrder     @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+
+  @@index([workOrderId])
+  @@map("work_order_materials")
+}
+
+model WorkOrderNote {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workOrderId String   @map("work_order_id") @db.Uuid
+  note        String
+  createdBy   String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  author    User?     @relation("WorkOrderNotesCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([workOrderId])
+  @@map("work_order_notes")
 }

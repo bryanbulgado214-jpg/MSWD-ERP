@@ -67,6 +67,14 @@ export const MODULE_GATES = {
     'hr.salary.manage',
     'hr.reports',
   ],
+  workorder: [
+    'workorder.read',
+    'workorder.create',
+    'workorder.assign',
+    'workorder.execute',
+    'workorder.verify',
+    'workorder.reports',
+  ],
   accounting: [
     'accounting.read',
     'accounting.coa.manage',

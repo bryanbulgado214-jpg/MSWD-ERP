@@ -18,6 +18,7 @@ import { BillingModule } from './modules/billing/billing.module';
 import { HrModule } from './modules/hr/hr.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { WorkflowModule } from './modules/workflow/workflow.module';
+import { WorkorderModule } from './modules/workorder/workorder.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { WorkflowModule } from './modules/workflow/workflow.module';
     AccountingModule,
     BillingModule,
     HrModule,
+    WorkorderModule,
   ],
   controllers: [AppController, DashboardController],
   providers: [AppService, ExecutiveDashboardService],
