@@ -1,0 +1,367 @@
+import type {
+  AccountMapping, AccountingPeriod, Bank, BankAccount, BankReconciliationDetail,
+  BankReconciliationListItem, CheckDetail, CheckListItem, ChartOfAccount,
+  FinancialStatementResult, FiscalYearDetail, FiscalYearOption, GeneralLedgerRow,
+  JevDetail, JevListItem, PeriodDetail, PeriodOption, SubsidiaryLedgerResult,
+  TrialBalanceRow,
+} from './types';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
+
+function getAccessToken(): string | null {
+  return localStorage.getItem('mswd_access_token');
+}
+
+export class AccountingApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status?: number,
+  ) {
+    super(message);
+    this.name = 'AccountingApiError';
+  }
+}
+
+async function extractErrorMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const body = await response.json();
+    if (Array.isArray(body.message)) return body.message.join(' ');
+    if (typeof body.message === 'string') return body.message;
+  } catch { /* not JSON */ }
+  return fallback;
+}
+
+async function authFetch(path: string): Promise<Response> {
+  const token = getAccessToken();
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (response.status === 401) throw new AccountingApiError('Not signed in, or your session has expired.', 401);
+  if (response.status === 403) throw new AccountingApiError('You do not have permission to view this.', 403);
+  if (response.status === 404) throw new AccountingApiError('Not found.', 404);
+  if (!response.ok) throw new AccountingApiError(`Request failed (${response.status}).`, response.status);
+  return response;
+}
+
+async function authFetchMutate(path: string, method: 'POST' | 'PATCH', body?: unknown): Promise<Response> {
+  const token = getAccessToken();
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method,
+    headers: {
+      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+  if (response.status === 401) throw new AccountingApiError('Not signed in.', 401);
+  if (response.status === 403) throw new AccountingApiError(await extractErrorMessage(response, 'Forbidden.'), 403);
+  if (response.status === 404) throw new AccountingApiError('Not found.', 404);
+  if (response.status === 409) throw new AccountingApiError(await extractErrorMessage(response, 'Modified concurrently — reload.'), 409);
+  if (response.status === 400) throw new AccountingApiError(await extractErrorMessage(response, 'Invalid request.'), 400);
+  if (!response.ok) throw new AccountingApiError(await extractErrorMessage(response, `Failed (${response.status}).`), response.status);
+  return response;
+}
+
+// ── Chart of Accounts ──
+
+export async function getChartOfAccounts(params?: string): Promise<ChartOfAccount[]> {
+  const qs = params ? `?${params}` : '';
+  const res = await authFetch(`/accounting/coa${qs}`);
+  return res.json();
+}
+
+export async function getChartOfAccountTree(): Promise<ChartOfAccount[]> {
+  const res = await authFetch('/accounting/coa/tree');
+  return res.json();
+}
+
+export async function getChartOfAccount(id: string): Promise<ChartOfAccount> {
+  const res = await authFetch(`/accounting/coa/${id}`);
+  return res.json();
+}
+
+export async function createChartOfAccount(data: {
+  accountCode: string; name: string; accountType: string; normalBalance: string;
+  level: number; isHeader: boolean; parentAccountId?: string; uacsCode?: string;
+}): Promise<ChartOfAccount> {
+  const res = await authFetchMutate('/accounting/coa', 'POST', data);
+  return res.json();
+}
+
+export async function updateChartOfAccount(id: string, data: {
+  expectedVersion: number; name?: string; isActive?: boolean; uacsCode?: string;
+}): Promise<ChartOfAccount> {
+  const res = await authFetchMutate(`/accounting/coa/${id}`, 'PATCH', data);
+  return res.json();
+}
+
+// ── Banks ──
+
+export async function getBanks(): Promise<Bank[]> {
+  const res = await authFetch('/accounting/banks');
+  return res.json();
+}
+
+export async function createBank(data: {
+  code: string; name: string; branch?: string; swiftCode?: string;
+}): Promise<Bank> {
+  const res = await authFetchMutate('/accounting/banks', 'POST', data);
+  return res.json();
+}
+
+export async function updateBank(id: string, data: {
+  name?: string; branch?: string; swiftCode?: string; isActive?: boolean;
+}): Promise<Bank> {
+  const res = await authFetchMutate(`/accounting/banks/${id}`, 'PATCH', data);
+  return res.json();
+}
+
+// ── Bank Accounts ──
+
+export async function getBankAccounts(params?: string): Promise<BankAccount[]> {
+  const qs = params ? `?${params}` : '';
+  const res = await authFetch(`/accounting/banks/accounts${qs}`);
+  return res.json();
+}
+
+export async function getBankAccount(id: string): Promise<BankAccount> {
+  const res = await authFetch(`/accounting/banks/accounts/${id}`);
+  return res.json();
+}
+
+export async function createBankAccount(data: {
+  bankId: string; fundSourceId?: string; accountNumber: string;
+  accountName: string; accountType: string; isDefault?: boolean;
+}): Promise<BankAccount> {
+  const res = await authFetchMutate('/accounting/banks/accounts', 'POST', data);
+  return res.json();
+}
+
+export async function updateBankAccount(id: string, data: {
+  expectedVersion: number; accountName?: string; fundSourceId?: string;
+  isDefault?: boolean; status?: string;
+}): Promise<BankAccount> {
+  const res = await authFetchMutate(`/accounting/banks/accounts/${id}`, 'PATCH', data);
+  return res.json();
+}
+
+// ── Account Mappings ──
+
+export async function getAccountMappings(): Promise<AccountMapping[]> {
+  const res = await authFetch('/accounting/mappings');
+  return res.json();
+}
+
+export async function upsertAccountMapping(data: {
+  mappingKey: string; chartOfAccountId: string;
+}): Promise<AccountMapping> {
+  const res = await authFetchMutate('/accounting/mappings', 'POST', data);
+  return res.json();
+}
+
+// ── JEV ──
+
+export async function getJevList(params?: string): Promise<JevListItem[]> {
+  const qs = params ? `?${params}` : '';
+  const res = await authFetch(`/accounting/jev${qs}`);
+  return res.json();
+}
+
+export async function getJev(id: string): Promise<JevDetail> {
+  const res = await authFetch(`/accounting/jev/${id}`);
+  return res.json();
+}
+
+export async function getOpenPeriods(): Promise<AccountingPeriod[]> {
+  const res = await authFetch('/accounting/jev/periods');
+  return res.json();
+}
+
+export async function createJev(data: {
+  jevDate: string; particulars: string;
+  responsibilityCenterId?: string; fundSourceId?: string;
+  lines: Array<{ chartOfAccountId: string; debitAmount: number; creditAmount: number; description?: string }>;
+}): Promise<JevDetail> {
+  const res = await authFetchMutate('/accounting/jev', 'POST', data);
+  return res.json();
+}
+
+export async function updateJev(id: string, data: {
+  expectedVersion: number; jevDate?: string; particulars?: string;
+  responsibilityCenterId?: string; fundSourceId?: string;
+  lines?: Array<{ chartOfAccountId: string; debitAmount: number; creditAmount: number; description?: string }>;
+}): Promise<JevDetail> {
+  const res = await authFetchMutate(`/accounting/jev/${id}`, 'PATCH', data);
+  return res.json();
+}
+
+export async function submitJev(id: string, expectedVersion: number): Promise<JevDetail> {
+  const res = await authFetchMutate(`/accounting/jev/${id}/submit`, 'POST', { expectedVersion });
+  return res.json();
+}
+
+export async function postJev(id: string, expectedVersion: number): Promise<JevDetail> {
+  const res = await authFetchMutate(`/accounting/jev/${id}/post`, 'POST', { expectedVersion });
+  return res.json();
+}
+
+export async function voidJev(id: string, data: { expectedVersion: number; voidReason: string }): Promise<JevDetail> {
+  const res = await authFetchMutate(`/accounting/jev/${id}/void`, 'POST', data);
+  return res.json();
+}
+
+export async function getJevsBySource(sourceTable: string, sourceId: string): Promise<Array<{
+  id: string; jevNumber: string; status: string; totalDebit: string; totalCredit: string; sourceType: string; createdAt: string;
+}>> {
+  const res = await authFetch(`/accounting/jev/by-source/${sourceTable}/${sourceId}`);
+  return res.json();
+}
+
+// ── GL / Trial Balance / Subsidiary Ledger ──
+
+export async function getTrialBalance(params?: string): Promise<TrialBalanceRow[]> {
+  const qs = params ? `?${params}` : '';
+  const res = await authFetch(`/accounting/gl/trial-balance${qs}`);
+  return res.json();
+}
+
+export async function getGeneralLedger(params?: string): Promise<GeneralLedgerRow[]> {
+  const qs = params ? `?${params}` : '';
+  const res = await authFetch(`/accounting/gl/general-ledger${qs}`);
+  return res.json();
+}
+
+export async function getSubsidiaryLedger(accountId: string, params?: string): Promise<SubsidiaryLedgerResult> {
+  const qs = params ? `?${params}` : '';
+  const res = await authFetch(`/accounting/gl/subsidiary/${accountId}${qs}`);
+  return res.json();
+}
+
+export async function getGlFiscalYears(): Promise<FiscalYearOption[]> {
+  const res = await authFetch('/accounting/gl/fiscal-years');
+  return res.json();
+}
+
+export async function getGlPeriods(fiscalYearId: string): Promise<PeriodOption[]> {
+  const res = await authFetch(`/accounting/gl/periods/${fiscalYearId}`);
+  return res.json();
+}
+
+// ── Check Register ──
+
+export async function getChecks(params?: string): Promise<CheckListItem[]> {
+  const qs = params ? `?${params}` : '';
+  const res = await authFetch(`/accounting/checks${qs}`);
+  return res.json();
+}
+
+export async function getCheck(id: string): Promise<CheckDetail> {
+  const res = await authFetch(`/accounting/checks/${id}`);
+  return res.json();
+}
+
+export async function createCheck(data: {
+  bankAccountId: string; checkNumber: string; amount: number;
+  checkDate: string; payeeName: string; disbursementVoucherId?: string;
+}): Promise<CheckDetail> {
+  const res = await authFetchMutate('/accounting/checks', 'POST', data);
+  return res.json();
+}
+
+export async function transitionCheck(id: string, data: {
+  expectedVersion: number; toStatus: string; remarks?: string; clearedDate?: string;
+}): Promise<CheckDetail> {
+  const res = await authFetchMutate(`/accounting/checks/${id}/transition`, 'POST', data);
+  return res.json();
+}
+
+// ── Bank Reconciliation ──
+
+export async function getReconciliations(params?: string): Promise<BankReconciliationListItem[]> {
+  const qs = params ? `?${params}` : '';
+  const res = await authFetch(`/accounting/reconciliations${qs}`);
+  return res.json();
+}
+
+export async function getReconciliation(id: string): Promise<BankReconciliationDetail> {
+  const res = await authFetch(`/accounting/reconciliations/${id}`);
+  return res.json();
+}
+
+export async function createReconciliation(data: {
+  bankAccountId: string; accountingPeriodId: string; reconciliationDate: string;
+  bookBalance: number; bankBalance: number;
+}): Promise<BankReconciliationDetail> {
+  const res = await authFetchMutate('/accounting/reconciliations', 'POST', data);
+  return res.json();
+}
+
+export async function addReconItem(reconId: string, data: {
+  expectedVersion: number; itemType: string; referenceNumber?: string;
+  referenceDate: string; amount: number; description: string; checkId?: string;
+}): Promise<BankReconciliationDetail> {
+  const res = await authFetchMutate(`/accounting/reconciliations/${reconId}/items`, 'POST', data);
+  return res.json();
+}
+
+export async function completeReconciliation(id: string, expectedVersion: number): Promise<BankReconciliationDetail> {
+  const res = await authFetchMutate(`/accounting/reconciliations/${id}/complete`, 'POST', { expectedVersion });
+  return res.json();
+}
+
+export async function approveReconciliation(id: string, expectedVersion: number): Promise<BankReconciliationDetail> {
+  const res = await authFetchMutate(`/accounting/reconciliations/${id}/approve`, 'POST', { expectedVersion });
+  return res.json();
+}
+
+// ── Period Management ──
+
+export async function getPeriodFiscalYears(): Promise<FiscalYearDetail[]> {
+  const res = await authFetch('/accounting/periods/fiscal-years');
+  return res.json();
+}
+
+export async function createFiscalYear(data: {
+  year: number; name: string; startDate: string; endDate: string;
+}): Promise<FiscalYearDetail> {
+  const res = await authFetchMutate('/accounting/periods/fiscal-years', 'POST', data);
+  return res.json();
+}
+
+export async function closeFiscalYear(id: string, expectedVersion: number): Promise<FiscalYearDetail> {
+  const res = await authFetchMutate(`/accounting/periods/fiscal-years/${id}/close`, 'POST', { expectedVersion });
+  return res.json();
+}
+
+export async function getPeriodList(fiscalYearId: string): Promise<PeriodDetail[]> {
+  const res = await authFetch(`/accounting/periods/${fiscalYearId}`);
+  return res.json();
+}
+
+export async function lockPeriod(id: string, expectedVersion: number): Promise<PeriodDetail> {
+  const res = await authFetchMutate(`/accounting/periods/${id}/lock`, 'POST', { expectedVersion });
+  return res.json();
+}
+
+export async function unlockPeriod(id: string, expectedVersion: number): Promise<PeriodDetail> {
+  const res = await authFetchMutate(`/accounting/periods/${id}/unlock`, 'POST', { expectedVersion });
+  return res.json();
+}
+
+export async function closePeriod(id: string, expectedVersion: number): Promise<PeriodDetail> {
+  const res = await authFetchMutate(`/accounting/periods/${id}/close`, 'POST', { expectedVersion });
+  return res.json();
+}
+
+export async function reopenPeriod(id: string, expectedVersion: number): Promise<PeriodDetail> {
+  const res = await authFetchMutate(`/accounting/periods/${id}/reopen`, 'POST', { expectedVersion });
+  return res.json();
+}
+
+// ── Financial Statements ──
+
+export async function getFinancialStatements(params?: string): Promise<FinancialStatementResult> {
+  const qs = params ? `?${params}` : '';
+  const res = await authFetch(`/accounting/financial-statements${qs}`);
+  return res.json();
+}

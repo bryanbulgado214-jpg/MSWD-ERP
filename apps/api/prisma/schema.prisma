@@ -150,6 +150,13 @@ model Organization {
   accountabilityRecords AccountabilityRecord[]
   physicalCounts        PhysicalCount[]
   disposalRequests      DisposalRequest[]
+  chartOfAccounts       ChartOfAccount[]
+  banks                 Bank[]
+  bankAccounts          BankAccount[]
+  accountMappings       AccountMapping[]
+  journalEntryVouchers  JournalEntryVoucher[]
+  checks                Check[]
+  bankReconciliations   BankReconciliation[]
 
   @@map("organizations")
 }
@@ -251,6 +258,7 @@ model ResponsibilityCenter {
   cafs               CertificationOfAvailability[]
   obligationRequests   ObligationRequest[]
   disbursementVouchers DisbursementVoucher[]
+  journalEntryVouchers JournalEntryVoucher[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -399,6 +407,28 @@ model User {
   approvedDisposals                             DisposalRequest[]      @relation("DisposalsApprovedBy")
   createdDisposals                              DisposalRequest[]      @relation("DisposalsCreatedBy")
   updatedDisposals                              DisposalRequest[]      @relation("DisposalsUpdatedBy")
+  createdChartOfAccounts                        ChartOfAccount[]       @relation("ChartOfAccountsCreatedBy")
+  updatedChartOfAccounts                        ChartOfAccount[]       @relation("ChartOfAccountsUpdatedBy")
+  createdBankAccounts                           BankAccount[]          @relation("BankAccountsCreatedBy")
+  updatedBankAccounts                           BankAccount[]          @relation("BankAccountsUpdatedBy")
+  createdAccountMappings                        AccountMapping[]       @relation("AccountMappingsCreatedBy")
+  updatedAccountMappings                        AccountMapping[]       @relation("AccountMappingsUpdatedBy")
+  reviewedJevs                                  JournalEntryVoucher[]  @relation("JevsReviewedBy")
+  postedJevs                                    JournalEntryVoucher[]  @relation("JevsPostedBy")
+  voidedJevs                                    JournalEntryVoucher[]  @relation("JevsVoidedBy")
+  createdJevs                                   JournalEntryVoucher[]  @relation("JevsCreatedBy")
+  updatedJevs                                   JournalEntryVoucher[]  @relation("JevsUpdatedBy")
+  releasedChecks                                Check[]                @relation("ChecksReleasedBy")
+  voidedChecks                                  Check[]                @relation("ChecksVoidedBy")
+  createdChecks                                 Check[]                @relation("ChecksCreatedBy")
+  updatedChecks                                 Check[]                @relation("ChecksUpdatedBy")
+  checkStatusChanges                            CheckStatusHistory[]   @relation("CheckStatusChangedBy")
+  preparedBankReconciliations                   BankReconciliation[]   @relation("BankReconciliationsPreparedBy")
+  approvedBankReconciliations                   BankReconciliation[]   @relation("BankReconciliationsApprovedBy")
+  createdBankReconciliations                    BankReconciliation[]   @relation("BankReconciliationsCreatedBy")
+  updatedBankReconciliations                    BankReconciliation[]   @relation("BankReconciliationsUpdatedBy")
+  lockedAccountingPeriods                       AccountingPeriod[]     @relation("AccountingPeriodsLockedBy")
+  closedFiscalYears                             FiscalYear[]           @relation("FiscalYearsClosedBy")
 
   @@unique([organizationId, username])
   @@unique([organizationId, email])
@@ -509,11 +539,14 @@ model FiscalYear {
   startDate      DateTime         @map("start_date") @db.Date
   endDate        DateTime         @map("end_date") @db.Date
   status         FiscalYearStatus @default(open)
+  closedAt       DateTime?        @map("closed_at") @db.Timestamptz(6)
+  closedBy       String?          @map("closed_by") @db.Uuid
   createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   version        Int              @default(1)
 
   organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  closer            User?               @relation("FiscalYearsClosedBy", fields: [closedBy], references: [id], onDelete: SetNull)
   accountingPeriods AccountingPeriod[]
   documentSequences DocumentSequence[]
   budgetCycles      BudgetCycle[]
@@ -536,11 +569,17 @@ model AccountingPeriod {
   startDate    DateTime               @map("start_date") @db.Date
   endDate      DateTime               @map("end_date") @db.Date
   status       AccountingPeriodStatus @default(open)
+  lockedAt     DateTime?              @map("locked_at") @db.Timestamptz(6)
+  lockedBy     String?                @map("locked_by") @db.Uuid
   createdAt    DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   version      Int                    @default(1)
 
   fiscalYear FiscalYear @relation(fields: [fiscalYearId], references: [id], onDelete: Restrict)
+  locker     User?      @relation("AccountingPeriodsLockedBy", fields: [lockedBy], references: [id], onDelete: SetNull)
+
+  journalEntryVouchers JournalEntryVoucher[]
+  bankReconciliations  BankReconciliation[]
 
   @@unique([fiscalYearId, periodNumber])
   @@index([fiscalYearId])
@@ -564,6 +603,8 @@ model FundSource {
   cafs               CertificationOfAvailability[]
   obligationRequests   ObligationRequest[]
   disbursementVouchers DisbursementVoucher[]
+  bankAccounts         BankAccount[]
+  journalEntryVouchers JournalEntryVoucher[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -1916,6 +1957,8 @@ model DisbursementVoucher {
   creator              User                  @relation("DvsCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
   updater              User                  @relation("DvsUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict)
 
+  checks               Check[]
+
   @@unique([organizationId, dvNumber])
   @@index([organizationId, status])
   @@index([orsId])
@@ -2495,4 +2538,430 @@ model DisposalRequestItem {
   @@index([disposalRequestId])
   @@index([propertyRecordId])
   @@map("disposal_request_items")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// ACCOUNTING / GENERAL LEDGER MODULE
+//
+// Implements the Accounting module per:
+//   - COA (Commission on Audit) standards
+//   - GAM (Government Accounting Manual) for NGAs
+//   - UACS (Unified Accounts Code Structure)
+//   - GAM Appendix 41 (Journal Entry Voucher)
+//
+// JEV is the single entry point for all GL postings. GL and Trial
+// Balance are database views (not tables) — always real-time
+// aggregates of posted JEVs.
+//
+// Integration: ORS obligation, DV release, stock receipt posting,
+// and RIS issuance each auto-generate JEVs via AccountMapping
+// configuration.
+// ════════════════════════════════════════════════════════════════════
+
+enum AccountType {
+  asset
+  liability
+  equity
+  revenue
+  expense
+
+  @@map("account_type")
+}
+
+enum NormalBalance {
+  debit
+  credit
+
+  @@map("normal_balance")
+}
+
+enum BankAccountType {
+  checking
+  savings
+  trust
+
+  @@map("bank_account_type")
+}
+
+enum BankAccountStatus {
+  active
+  inactive
+  closed
+
+  @@map("bank_account_status")
+}
+
+enum JevStatus {
+  draft
+  for_review
+  posted
+  voided
+
+  @@map("jev_status")
+}
+
+enum JevSourceType {
+  manual
+  obligation
+  disbursement
+  stock_receipt
+  stock_issue
+  adjustment
+  closing
+
+  @@map("jev_source_type")
+}
+
+enum CheckStatus {
+  assigned
+  printed
+  released
+  cleared
+  stale_dated
+  spoiled
+  voided
+
+  @@map("check_status")
+}
+
+enum BankReconciliationStatus {
+  draft
+  in_progress
+  completed
+  approved
+
+  @@map("bank_reconciliation_status")
+}
+
+enum ReconciliationItemType {
+  deposit_in_transit
+  outstanding_check
+  bank_charge
+  bank_credit
+  book_error
+  bank_error
+
+  @@map("reconciliation_item_type")
+}
+
+/// UACS-compliant Chart of Accounts. Self-referencing hierarchy:
+/// level 1 = account group (e.g. "Assets"), level 2 = major account
+/// (e.g. "Cash and Cash Equivalents"), level 3 = sub-account / detail
+/// (e.g. "Cash in Bank - LCCA"). Header accounts (isHeader=true)
+/// cannot receive JEV postings.
+model ChartOfAccount {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String        @map("organization_id") @db.Uuid
+  parentAccountId String?       @map("parent_account_id") @db.Uuid
+  accountCode     String        @map("account_code") @db.VarChar(30)
+  name            String        @db.VarChar(255)
+  accountType     AccountType   @map("account_type")
+  normalBalance   NormalBalance @map("normal_balance")
+  level           Int           @db.SmallInt
+  isHeader        Boolean       @default(false) @map("is_header")
+  isActive        Boolean       @default(true) @map("is_active")
+  uacsCode        String?       @map("uacs_code") @db.VarChar(30)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy       String?       @map("created_by") @db.Uuid
+  updatedBy       String?       @map("updated_by") @db.Uuid
+  version         Int           @default(1)
+
+  organization  Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  parentAccount ChartOfAccount?  @relation("CoaHierarchy", fields: [parentAccountId], references: [id], onDelete: Restrict)
+  childAccounts ChartOfAccount[] @relation("CoaHierarchy")
+  creator       User?            @relation("ChartOfAccountsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater       User?            @relation("ChartOfAccountsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  jevLines        JevLine[]
+  accountMappings AccountMapping[]
+
+  @@unique([organizationId, accountCode])
+  @@index([organizationId])
+  @@index([parentAccountId])
+  @@index([accountType])
+  @@index([isActive])
+  @@map("chart_of_accounts")
+}
+
+/// Bank institution master.
+model Bank {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  code           String   @db.VarChar(20)
+  name           String   @db.VarChar(255)
+  branch         String?  @db.VarChar(255)
+  swiftCode      String?  @map("swift_code") @db.VarChar(20)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  bankAccounts BankAccount[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("banks")
+}
+
+/// Organization's bank accounts. Links to a Bank and optionally to a
+/// FundSource for fund segregation.
+model BankAccount {
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String            @map("organization_id") @db.Uuid
+  bankId         String            @map("bank_id") @db.Uuid
+  fundSourceId   String?           @map("fund_source_id") @db.Uuid
+  accountNumber  String            @map("account_number") @db.VarChar(50)
+  accountName    String            @map("account_name") @db.VarChar(255)
+  accountType    BankAccountType   @map("account_type")
+  currentBalance Decimal           @default(0) @map("current_balance") @db.Decimal(18, 2)
+  status         BankAccountStatus @default(active)
+  isDefault      Boolean           @default(false) @map("is_default")
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy      String?           @map("created_by") @db.Uuid
+  updatedBy      String?           @map("updated_by") @db.Uuid
+  version        Int               @default(1)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  bank         Bank         @relation(fields: [bankId], references: [id], onDelete: Restrict)
+  fundSource   FundSource?  @relation(fields: [fundSourceId], references: [id], onDelete: SetNull)
+  creator      User?        @relation("BankAccountsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater      User?        @relation("BankAccountsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  checks              Check[]
+  bankReconciliations BankReconciliation[]
+
+  @@unique([organizationId, accountNumber])
+  @@index([organizationId])
+  @@index([bankId])
+  @@index([fundSourceId])
+  @@index([status])
+  @@map("bank_accounts")
+}
+
+/// Configurable mapping from transaction type to COA account. Used by
+/// the accounting integration service to determine which accounts to
+/// debit/credit when auto-generating JEVs from procurement/inventory
+/// events. The accountant configures these — avoids hardcoding UACS
+/// codes in application logic.
+model AccountMapping {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  mappingKey        String   @map("mapping_key") @db.VarChar(100)
+  chartOfAccountId String   @map("chart_of_account_id") @db.Uuid
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy        String?  @map("created_by") @db.Uuid
+  updatedBy        String?  @map("updated_by") @db.Uuid
+
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  chartOfAccount ChartOfAccount @relation(fields: [chartOfAccountId], references: [id], onDelete: Restrict)
+  creator        User?          @relation("AccountMappingsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater        User?          @relation("AccountMappingsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, mappingKey])
+  @@index([organizationId])
+  @@index([chartOfAccountId])
+  @@map("account_mappings")
+}
+
+/// Journal Entry Voucher (GAM Appendix 41). The primary accounting
+/// document and single entry point for all GL postings. Auto-generated
+/// from procurement/inventory events or created manually.
+model JournalEntryVoucher {
+  id                     String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId         String        @map("organization_id") @db.Uuid
+  jevNumber              String        @map("jev_number") @db.VarChar(30)
+  jevDate                DateTime      @map("jev_date") @db.Date
+  accountingPeriodId     String        @map("accounting_period_id") @db.Uuid
+  sourceType             JevSourceType @map("source_type")
+  sourceTable            String?       @map("source_table") @db.VarChar(100)
+  sourceId               String?       @map("source_id") @db.Uuid
+  particulars            String
+  responsibilityCenterId String?       @map("responsibility_center_id") @db.Uuid
+  fundSourceId           String?       @map("fund_source_id") @db.Uuid
+  totalDebit             Decimal       @default(0) @map("total_debit") @db.Decimal(18, 2)
+  totalCredit            Decimal       @default(0) @map("total_credit") @db.Decimal(18, 2)
+  status                 JevStatus     @default(draft)
+  reviewedBy             String?       @map("reviewed_by") @db.Uuid
+  reviewedAt             DateTime?     @map("reviewed_at") @db.Timestamptz(6)
+  postedBy               String?       @map("posted_by") @db.Uuid
+  postedAt               DateTime?     @map("posted_at") @db.Timestamptz(6)
+  voidedBy               String?       @map("voided_by") @db.Uuid
+  voidedAt               DateTime?     @map("voided_at") @db.Timestamptz(6)
+  voidReason             String?       @map("void_reason")
+  createdAt              DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy              String?       @map("created_by") @db.Uuid
+  updatedBy              String?       @map("updated_by") @db.Uuid
+  version                Int           @default(1)
+
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  accountingPeriod     AccountingPeriod      @relation(fields: [accountingPeriodId], references: [id], onDelete: Restrict)
+  responsibilityCenter ResponsibilityCenter? @relation(fields: [responsibilityCenterId], references: [id], onDelete: SetNull)
+  fundSource           FundSource?           @relation(fields: [fundSourceId], references: [id], onDelete: SetNull)
+  reviewer             User?                 @relation("JevsReviewedBy", fields: [reviewedBy], references: [id], onDelete: SetNull)
+  poster               User?                 @relation("JevsPostedBy", fields: [postedBy], references: [id], onDelete: SetNull)
+  voider               User?                 @relation("JevsVoidedBy", fields: [voidedBy], references: [id], onDelete: SetNull)
+  creator              User?                 @relation("JevsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater              User?                 @relation("JevsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  lines JevLine[]
+
+  @@unique([organizationId, jevNumber])
+  @@index([organizationId])
+  @@index([accountingPeriodId])
+  @@index([sourceType])
+  @@index([sourceTable, sourceId])
+  @@index([status])
+  @@map("journal_entry_vouchers")
+}
+
+/// Individual debit or credit line on a JEV. A line is either a debit
+/// or a credit (never both, enforced by CHECK constraint in migration).
+model JevLine {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jevId            String   @map("jev_id") @db.Uuid
+  chartOfAccountId String   @map("chart_of_account_id") @db.Uuid
+  debitAmount      Decimal  @default(0) @map("debit_amount") @db.Decimal(18, 2)
+  creditAmount     Decimal  @default(0) @map("credit_amount") @db.Decimal(18, 2)
+  description      String?
+  subsidiaryRef    String?  @map("subsidiary_ref") @db.VarChar(255)
+  subsidiaryRefId  String?  @map("subsidiary_ref_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  jev            JournalEntryVoucher @relation(fields: [jevId], references: [id], onDelete: Cascade)
+  chartOfAccount ChartOfAccount      @relation(fields: [chartOfAccountId], references: [id], onDelete: Restrict)
+
+  @@index([jevId])
+  @@index([chartOfAccountId])
+  @@map("jev_lines")
+}
+
+/// Check lifecycle. Linked to a DisbursementVoucher and BankAccount.
+/// Workflow: assigned → printed → released → cleared (or voided/spoiled
+/// at any point, stale_dated after 6 months).
+model Check {
+  id                    String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId        String      @map("organization_id") @db.Uuid
+  disbursementVoucherId String?     @map("disbursement_voucher_id") @db.Uuid
+  bankAccountId         String      @map("bank_account_id") @db.Uuid
+  checkNumber           String      @map("check_number") @db.VarChar(30)
+  amount                Decimal     @db.Decimal(18, 2)
+  checkDate             DateTime    @map("check_date") @db.Date
+  payeeName             String      @map("payee_name") @db.VarChar(255)
+  status                CheckStatus @default(assigned)
+  releasedBy            String?     @map("released_by") @db.Uuid
+  releasedAt            DateTime?   @map("released_at") @db.Timestamptz(6)
+  clearedDate           DateTime?   @map("cleared_date") @db.Date
+  voidedBy              String?     @map("voided_by") @db.Uuid
+  voidedAt              DateTime?   @map("voided_at") @db.Timestamptz(6)
+  voidReason            String?     @map("void_reason")
+  createdAt             DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy             String?     @map("created_by") @db.Uuid
+  updatedBy             String?     @map("updated_by") @db.Uuid
+  version               Int         @default(1)
+
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  disbursementVoucher DisbursementVoucher? @relation(fields: [disbursementVoucherId], references: [id], onDelete: Restrict)
+  bankAccount         BankAccount          @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+  releaser            User?                @relation("ChecksReleasedBy", fields: [releasedBy], references: [id], onDelete: SetNull)
+  voider              User?                @relation("ChecksVoidedBy", fields: [voidedBy], references: [id], onDelete: SetNull)
+  creator             User?                @relation("ChecksCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater             User?                @relation("ChecksUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  statusHistory           CheckStatusHistory[]
+  bankReconciliationItems BankReconciliationItem[]
+
+  @@unique([organizationId, checkNumber, bankAccountId])
+  @@index([organizationId])
+  @@index([disbursementVoucherId])
+  @@index([bankAccountId])
+  @@index([status])
+  @@map("checks")
+}
+
+/// Append-only lifecycle log for checks. A recorded status change is
+/// never edited — same immutability convention as audit_logs and
+/// workflow_actions.
+model CheckStatusHistory {
+  id         String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  checkId    String       @map("check_id") @db.Uuid
+  fromStatus CheckStatus? @map("from_status")
+  toStatus   CheckStatus  @map("to_status")
+  changedBy  String       @map("changed_by") @db.Uuid
+  changedAt  DateTime     @default(now()) @map("changed_at") @db.Timestamptz(6)
+  remarks    String?
+
+  check   Check @relation(fields: [checkId], references: [id], onDelete: Restrict)
+  changer User  @relation("CheckStatusChangedBy", fields: [changedBy], references: [id], onDelete: Restrict)
+
+  @@index([checkId])
+  @@map("check_status_history")
+}
+
+/// Bank Reconciliation Statement header. One per bank account per
+/// accounting period. Reconciles book balance (from JEV postings)
+/// against bank statement balance.
+model BankReconciliation {
+  id                   String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String                   @map("organization_id") @db.Uuid
+  bankAccountId        String                   @map("bank_account_id") @db.Uuid
+  accountingPeriodId   String                   @map("accounting_period_id") @db.Uuid
+  reconciliationDate   DateTime                 @map("reconciliation_date") @db.Date
+  bookBalance          Decimal                  @map("book_balance") @db.Decimal(18, 2)
+  bankBalance          Decimal                  @map("bank_balance") @db.Decimal(18, 2)
+  adjustedBookBalance  Decimal                  @default(0) @map("adjusted_book_balance") @db.Decimal(18, 2)
+  adjustedBankBalance  Decimal                  @default(0) @map("adjusted_bank_balance") @db.Decimal(18, 2)
+  difference           Decimal                  @default(0) @db.Decimal(18, 2)
+  status               BankReconciliationStatus @default(draft)
+  preparedBy           String?                  @map("prepared_by") @db.Uuid
+  approvedBy           String?                  @map("approved_by") @db.Uuid
+  approvedAt           DateTime?                @map("approved_at") @db.Timestamptz(6)
+  createdAt            DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy            String?                  @map("created_by") @db.Uuid
+  updatedBy            String?                  @map("updated_by") @db.Uuid
+  version              Int                      @default(1)
+
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  bankAccount      BankAccount      @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+  accountingPeriod AccountingPeriod @relation(fields: [accountingPeriodId], references: [id], onDelete: Restrict)
+  preparer         User?            @relation("BankReconciliationsPreparedBy", fields: [preparedBy], references: [id], onDelete: SetNull)
+  approver         User?            @relation("BankReconciliationsApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
+  creator          User?            @relation("BankReconciliationsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater          User?            @relation("BankReconciliationsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  items BankReconciliationItem[]
+
+  @@unique([organizationId, bankAccountId, accountingPeriodId])
+  @@index([organizationId])
+  @@index([bankAccountId])
+  @@index([accountingPeriodId])
+  @@index([status])
+  @@map("bank_reconciliations")
+}
+
+/// Reconciling item on a Bank Reconciliation Statement — deposits in
+/// transit, outstanding checks, bank charges/credits, errors.
+model BankReconciliationItem {
+  id                   String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bankReconciliationId String                 @map("bank_reconciliation_id") @db.Uuid
+  itemType             ReconciliationItemType @map("item_type")
+  referenceNumber      String?                @map("reference_number") @db.VarChar(50)
+  referenceDate        DateTime               @map("reference_date") @db.Date
+  amount               Decimal                @db.Decimal(18, 2)
+  description          String
+  checkId              String?                @map("check_id") @db.Uuid
+  createdAt            DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  bankReconciliation BankReconciliation @relation(fields: [bankReconciliationId], references: [id], onDelete: Cascade)
+  check              Check?             @relation(fields: [checkId], references: [id], onDelete: SetNull)
+
+  @@index([bankReconciliationId])
+  @@index([checkId])
+  @@map("bank_reconciliation_items")
 }

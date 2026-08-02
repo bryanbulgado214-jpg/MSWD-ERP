@@ -12,6 +12,7 @@ import { BudgetingModule } from './modules/budgeting/budgeting.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { ProcurementModule } from './modules/procurement/procurement.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { AccountingModule } from './modules/accounting/accounting.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { WorkflowModule } from './modules/workflow/workflow.module';
 
@@ -30,6 +31,7 @@ import { WorkflowModule } from './modules/workflow/workflow.module';
     ProcurementModule,
     ReportsModule,
     InventoryModule,
+    AccountingModule,
   ],
   controllers: [AppController, DashboardController],
   providers: [AppService],

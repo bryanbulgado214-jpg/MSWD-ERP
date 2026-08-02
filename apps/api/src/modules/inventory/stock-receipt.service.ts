@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { AutoJevService } from '../accounting/auto-jev.service';
 import { runAudited } from '../budgeting/audit-actor.util';
 
 const RECEIPT_SELECT = {
@@ -34,7 +35,10 @@ const RECEIPT_SELECT = {
 
 @Injectable()
 export class StockReceiptService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly autoJev: AutoJevService,
+  ) {}
 
   async findAll(organizationId: string, filters?: { status?: string }) {
     return this.prisma.stockReceipt.findMany({
@@ -186,6 +190,16 @@ export class StockReceiptService {
           },
         });
       }
+
+      await this.autoJev.onStockReceiptPosted(tx, organizationId, userId, {
+        id: receipt.id,
+        receiptNumber: receipt.receiptNumber,
+        receiptDate: receipt.receiptDate,
+        items: receipt.items.map((i) => ({
+          totalCost: Number(i.totalCost),
+          inventoryItem: { itemCode: i.inventoryItem.itemCode, name: i.inventoryItem.description },
+        })),
+      });
 
       return tx.stockReceipt.update({
         where: { id },

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { AutoJevService } from '../accounting/auto-jev.service';
 import { runAudited } from '../budgeting/audit-actor.util';
 
 const DV_SELECT = {
@@ -74,7 +75,10 @@ interface CreateDvData {
 
 @Injectable()
 export class DvService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly autoJev: AutoJevService,
+  ) {}
 
   async list(orgId: string, filters?: { status?: string; supplierId?: string }) {
     const where: Prisma.DisbursementVoucherWhereInput = { organizationId: orgId };
@@ -241,6 +245,19 @@ export class DvService {
           createdBy: userId,
           updatedBy: userId,
         },
+      });
+
+      await this.autoJev.onDvReleased(tx, orgId, userId, {
+        id: dv.id,
+        dvNumber: dv.dvNumber,
+        dvDate: dv.dvDate,
+        particulars: dv.particulars,
+        grossAmount: Number(dv.grossAmount),
+        taxAmount: Number(dv.taxAmount),
+        otherDeductions: Number(dv.otherDeductions),
+        netAmount: Number(dv.netAmount),
+        fundSourceId: dv.fundSourceId,
+        responsibilityCenterId: dv.responsibilityCenterId,
       });
 
       return updated;

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { AccountingModule } from '../accounting/accounting.module';
 import { BudgetingModule } from '../budgeting/budgeting.module';
 import { NotificationModule } from '../notification/notification.module';
 import { WorkflowModule } from '../workflow/workflow.module';
@@ -27,7 +28,7 @@ import { SupplierController } from './supplier.controller';
 import { SupplierService } from './supplier.service';
 
 @Module({
-  imports: [BudgetingModule, WorkflowModule, NotificationModule],
+  imports: [BudgetingModule, WorkflowModule, NotificationModule, AccountingModule],
   controllers: [
     PurchaseRequestsController,
     PpmpController,

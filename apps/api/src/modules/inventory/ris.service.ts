@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 
 import { PrismaService } from '../../database/prisma.service';
+import { AutoJevService } from '../accounting/auto-jev.service';
 import { runAudited } from '../budgeting/audit-actor.util';
 
 const RIS_SELECT = {
@@ -36,7 +37,10 @@ const RIS_SELECT = {
 
 @Injectable()
 export class RisService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly autoJev: AutoJevService,
+  ) {}
 
   async findAll(organizationId: string, filters?: { status?: string; departmentId?: string }) {
     return this.prisma.requisitionIssueSlip.findMany({
@@ -270,6 +274,19 @@ export class RisService {
           data: { quantityIssued: alreadyIssued + toIssue },
         });
       }
+
+      await this.autoJev.onRisIssued(tx, organizationId, userId, {
+        id: ris.id,
+        risNumber: ris.risNumber,
+        issuedItems: items.map((issueItem) => {
+          const risItem = ris.items.find((i) => i.id === issueItem.risItemId)!;
+          return {
+            description: risItem.description,
+            quantityIssued: issueItem.quantityIssued,
+            unitCost: Number(risItem.unitCost),
+          };
+        }),
+      });
 
       const updatedItems = await tx.risItem.findMany({ where: { risId: id } });
       const allFullyIssued = updatedItems.every(

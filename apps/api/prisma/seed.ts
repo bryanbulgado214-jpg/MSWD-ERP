@@ -167,6 +167,16 @@ async function main() {
     { code: 'procurement.ors.budget_certify', name: 'Certify ORS Budget & Post Obligation', module: 'procurement' },
     { code: 'procurement.ors.adjust', name: 'Adjust or De-obligate ORS', module: 'procurement' },
     { code: 'procurement.ors.cancel', name: 'Cancel ORS', module: 'procurement' },
+    // Accounting / General Ledger
+    { code: 'accounting.read', name: 'View Accounting Data', module: 'accounting' },
+    { code: 'accounting.coa.manage', name: 'Manage Chart of Accounts', module: 'accounting' },
+    { code: 'accounting.bank.manage', name: 'Manage Bank Accounts', module: 'accounting' },
+    { code: 'accounting.jev.create', name: 'Create Journal Entry Vouchers', module: 'accounting' },
+    { code: 'accounting.jev.post', name: 'Post Journal Entry Vouchers', module: 'accounting' },
+    { code: 'accounting.jev.void', name: 'Void Journal Entry Vouchers', module: 'accounting' },
+    { code: 'accounting.period.manage', name: 'Manage Accounting Periods', module: 'accounting' },
+    { code: 'accounting.reports', name: 'View Financial Statements & Reports', module: 'accounting' },
+    { code: 'accounting.reconcile', name: 'Perform Bank Reconciliation', module: 'accounting' },
     // Inventory & Property Management
     { code: 'inventory.read', name: 'View Inventory Data', module: 'inventory' },
     { code: 'inventory.item.manage', name: 'Manage Inventory Items', module: 'inventory' },
@@ -228,19 +238,25 @@ async function main() {
     'inventory.physical_count.approve',
     'inventory.dispose.approve',
     'inventory.dispose.appraise',
+    'accounting.jev.post',
+    'accounting.jev.void',
+    'accounting.period.manage',
+    'accounting.reconcile',
   ]);
   for (const code of Object.keys(permissions)) {
     if (!adminExcludedPermissions.has(code)) {
       await grant('ADMIN', code);
     }
   }
-  // Cashier gets exactly the check-lifecycle permissions.
+  // Cashier: check-lifecycle permissions + accounting read.
   for (const code of [
     'accounting.check.assign_number',
     'accounting.check.print',
     'accounting.check.record_release',
     'accounting.check.void',
     'accounting.check.update_clearing',
+    'accounting.read',
+    'accounting.reports',
   ]) {
     await grant('CASHIER', code);
   }
@@ -324,7 +340,7 @@ async function main() {
     await grant('DEPARTMENT_HEAD', code);
   }
 
-  // General Manager / HoPE: final PR approval, PO approval, reject.
+  // General Manager / HoPE: final PR approval, PO approval, reject + accounting read.
   for (const code of [
     'procurement.pr.final_approve',
     'procurement.pr.reject',
@@ -332,6 +348,9 @@ async function main() {
     'procurement.po.approve',
     'procurement.read',
     'budgeting.read',
+    'accounting.read',
+    'accounting.reports',
+    'accounting.period.manage',
   ]) {
     await grant('GENERAL_MANAGER', code);
   }
@@ -344,7 +363,7 @@ async function main() {
     await grant('BAC_MEMBER', code);
   }
 
-  // Accountant: CAF certification, ORS creation, ORS requesting certification.
+  // Accountant: CAF certification, ORS creation, ORS requesting certification + full accounting.
   for (const code of [
     'procurement.caf.certify',
     'procurement.caf.cancel',
@@ -353,6 +372,15 @@ async function main() {
     'procurement.ors.adjust',
     'procurement.read',
     'budgeting.read',
+    'accounting.read',
+    'accounting.coa.manage',
+    'accounting.bank.manage',
+    'accounting.jev.create',
+    'accounting.jev.post',
+    'accounting.jev.void',
+    'accounting.period.manage',
+    'accounting.reports',
+    'accounting.reconcile',
   ]) {
     await grant('ACCOUNTANT', code);
   }
@@ -876,6 +904,176 @@ async function main() {
       organizationalUnitId: rootUnit.id,
     },
   });
+
+  // ── UACS Chart of Accounts seed data ──
+  // Hierarchical: level 1 = group (header), level 2 = major (header),
+  // level 3 = sub/detail (postable). Based on the COA for NGAs/GOCCs.
+  const coaGroups: Array<{
+    code: string; name: string; type: 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
+    balance: 'debit' | 'credit'; level: number; parentCode?: string; isHeader: boolean; uacs?: string;
+  }> = [
+    // Level 1: Account Groups
+    { code: '1', name: 'Assets', type: 'asset', balance: 'debit', level: 1, isHeader: true },
+    { code: '2', name: 'Liabilities', type: 'liability', balance: 'credit', level: 1, isHeader: true },
+    { code: '3', name: 'Equity', type: 'equity', balance: 'credit', level: 1, isHeader: true },
+    { code: '4', name: 'Revenue', type: 'revenue', balance: 'credit', level: 1, isHeader: true },
+    { code: '5', name: 'Expenses', type: 'expense', balance: 'debit', level: 1, isHeader: true },
+
+    // Level 2: Major Accounts — Assets
+    { code: '101', name: 'Cash and Cash Equivalents', type: 'asset', balance: 'debit', level: 2, parentCode: '1', isHeader: true },
+    { code: '103', name: 'Receivables', type: 'asset', balance: 'debit', level: 2, parentCode: '1', isHeader: true },
+    { code: '104', name: 'Inventories', type: 'asset', balance: 'debit', level: 2, parentCode: '1', isHeader: true },
+    { code: '106', name: 'Property, Plant and Equipment', type: 'asset', balance: 'debit', level: 2, parentCode: '1', isHeader: true },
+    { code: '107', name: 'Accumulated Depreciation', type: 'asset', balance: 'credit', level: 2, parentCode: '1', isHeader: true },
+
+    // Level 2: Major Accounts — Liabilities
+    { code: '201', name: 'Financial Liabilities', type: 'liability', balance: 'credit', level: 2, parentCode: '2', isHeader: true },
+    { code: '202', name: 'Inter-Agency Payables', type: 'liability', balance: 'credit', level: 2, parentCode: '2', isHeader: true },
+    { code: '204', name: 'Trust Liabilities', type: 'liability', balance: 'credit', level: 2, parentCode: '2', isHeader: true },
+
+    // Level 2: Major Accounts — Equity
+    { code: '301', name: 'Government Equity', type: 'equity', balance: 'credit', level: 2, parentCode: '3', isHeader: true },
+
+    // Level 2: Major Accounts — Revenue
+    { code: '402', name: 'Service and Business Income', type: 'revenue', balance: 'credit', level: 2, parentCode: '4', isHeader: true },
+    { code: '407', name: 'Other Non-Operating Income', type: 'revenue', balance: 'credit', level: 2, parentCode: '4', isHeader: true },
+
+    // Level 2: Major Accounts — Expenses
+    { code: '501', name: 'Personnel Services', type: 'expense', balance: 'debit', level: 2, parentCode: '5', isHeader: true },
+    { code: '502', name: 'Maintenance and Other Operating Expenses', type: 'expense', balance: 'debit', level: 2, parentCode: '5', isHeader: true },
+    { code: '503', name: 'Financial Expenses', type: 'expense', balance: 'debit', level: 2, parentCode: '5', isHeader: true },
+
+    // Level 3: Sub-Accounts — Cash
+    { code: '10101010', name: 'Cash - Collecting Officers', type: 'asset', balance: 'debit', level: 3, parentCode: '101', isHeader: false, uacs: '10101010' },
+    { code: '10101020', name: 'Cash in Bank - Local Currency, Current Account', type: 'asset', balance: 'debit', level: 3, parentCode: '101', isHeader: false, uacs: '10101020' },
+    { code: '10101030', name: 'Cash in Bank - Local Currency, Savings Account', type: 'asset', balance: 'debit', level: 3, parentCode: '101', isHeader: false, uacs: '10101030' },
+    { code: '10104010', name: 'Petty Cash Fund', type: 'asset', balance: 'debit', level: 3, parentCode: '101', isHeader: false, uacs: '10104010' },
+
+    // Level 3: Receivables
+    { code: '10301010', name: 'Accounts Receivable', type: 'asset', balance: 'debit', level: 3, parentCode: '103', isHeader: false, uacs: '10301010' },
+    { code: '10301990', name: 'Other Receivables', type: 'asset', balance: 'debit', level: 3, parentCode: '103', isHeader: false, uacs: '10301990' },
+
+    // Level 3: Inventories
+    { code: '10404010', name: 'Office Supplies Inventory', type: 'asset', balance: 'debit', level: 3, parentCode: '104', isHeader: false, uacs: '10404010' },
+    { code: '10404020', name: 'Accountable Forms, Plates and Stickers', type: 'asset', balance: 'debit', level: 3, parentCode: '104', isHeader: false, uacs: '10404020' },
+    { code: '10404060', name: 'Drugs and Medicines Inventory', type: 'asset', balance: 'debit', level: 3, parentCode: '104', isHeader: false, uacs: '10404060' },
+    { code: '10404070', name: 'Chemical and Filtering Supplies Inventory', type: 'asset', balance: 'debit', level: 3, parentCode: '104', isHeader: false, uacs: '10404070' },
+    { code: '10404990', name: 'Other Supplies and Materials Inventory', type: 'asset', balance: 'debit', level: 3, parentCode: '104', isHeader: false, uacs: '10404990' },
+
+    // Level 3: PPE
+    { code: '10601010', name: 'Land', type: 'asset', balance: 'debit', level: 3, parentCode: '106', isHeader: false, uacs: '10601010' },
+    { code: '10604010', name: 'Buildings', type: 'asset', balance: 'debit', level: 3, parentCode: '106', isHeader: false, uacs: '10604010' },
+    { code: '10605010', name: 'Machinery and Equipment', type: 'asset', balance: 'debit', level: 3, parentCode: '106', isHeader: false, uacs: '10605010' },
+    { code: '10605020', name: 'Office Equipment', type: 'asset', balance: 'debit', level: 3, parentCode: '106', isHeader: false, uacs: '10605020' },
+    { code: '10605030', name: 'ICT Equipment', type: 'asset', balance: 'debit', level: 3, parentCode: '106', isHeader: false, uacs: '10605030' },
+    { code: '10605060', name: 'Motor Vehicles', type: 'asset', balance: 'debit', level: 3, parentCode: '106', isHeader: false, uacs: '10605060' },
+    { code: '10605070', name: 'Furniture and Fixtures', type: 'asset', balance: 'debit', level: 3, parentCode: '106', isHeader: false, uacs: '10605070' },
+    { code: '10605990', name: 'Other Machinery and Equipment', type: 'asset', balance: 'debit', level: 3, parentCode: '106', isHeader: false, uacs: '10605990' },
+    { code: '10606010', name: 'Water Supply Systems', type: 'asset', balance: 'debit', level: 3, parentCode: '106', isHeader: false, uacs: '10606010' },
+
+    // Level 3: Accumulated Depreciation
+    { code: '10704010', name: 'Accumulated Depreciation - Buildings', type: 'asset', balance: 'credit', level: 3, parentCode: '107', isHeader: false, uacs: '10704010' },
+    { code: '10705010', name: 'Accumulated Depreciation - Machinery and Equipment', type: 'asset', balance: 'credit', level: 3, parentCode: '107', isHeader: false, uacs: '10705010' },
+    { code: '10705020', name: 'Accumulated Depreciation - Office Equipment', type: 'asset', balance: 'credit', level: 3, parentCode: '107', isHeader: false, uacs: '10705020' },
+    { code: '10705030', name: 'Accumulated Depreciation - ICT Equipment', type: 'asset', balance: 'credit', level: 3, parentCode: '107', isHeader: false, uacs: '10705030' },
+    { code: '10705060', name: 'Accumulated Depreciation - Motor Vehicles', type: 'asset', balance: 'credit', level: 3, parentCode: '107', isHeader: false, uacs: '10705060' },
+    { code: '10705070', name: 'Accumulated Depreciation - Furniture and Fixtures', type: 'asset', balance: 'credit', level: 3, parentCode: '107', isHeader: false, uacs: '10705070' },
+    { code: '10706010', name: 'Accumulated Depreciation - Water Supply Systems', type: 'asset', balance: 'credit', level: 3, parentCode: '107', isHeader: false, uacs: '10706010' },
+
+    // Level 3: Liabilities
+    { code: '20101010', name: 'Accounts Payable', type: 'liability', balance: 'credit', level: 3, parentCode: '201', isHeader: false, uacs: '20101010' },
+    { code: '20101020', name: 'Due to Officers and Employees', type: 'liability', balance: 'credit', level: 3, parentCode: '201', isHeader: false, uacs: '20101020' },
+    { code: '20201010', name: 'Due to BIR', type: 'liability', balance: 'credit', level: 3, parentCode: '202', isHeader: false, uacs: '20201010' },
+    { code: '20201020', name: 'Due to GSIS', type: 'liability', balance: 'credit', level: 3, parentCode: '202', isHeader: false, uacs: '20201020' },
+    { code: '20201030', name: 'Due to Pag-IBIG', type: 'liability', balance: 'credit', level: 3, parentCode: '202', isHeader: false, uacs: '20201030' },
+    { code: '20201040', name: 'Due to PhilHealth', type: 'liability', balance: 'credit', level: 3, parentCode: '202', isHeader: false, uacs: '20201040' },
+    { code: '20401010', name: 'Trust Liabilities', type: 'liability', balance: 'credit', level: 3, parentCode: '204', isHeader: false, uacs: '20401010' },
+    { code: '20401040', name: 'Customers\' Deposits', type: 'liability', balance: 'credit', level: 3, parentCode: '204', isHeader: false, uacs: '20401040' },
+
+    // Level 3: Equity
+    { code: '30101010', name: 'Government Equity', type: 'equity', balance: 'credit', level: 3, parentCode: '301', isHeader: false, uacs: '30101010' },
+    { code: '30104010', name: 'Retained Earnings / Accumulated Surplus (Deficit)', type: 'equity', balance: 'credit', level: 3, parentCode: '301', isHeader: false, uacs: '30104010' },
+
+    // Level 3: Revenue
+    { code: '40201010', name: 'Water Sales Revenue', type: 'revenue', balance: 'credit', level: 3, parentCode: '402', isHeader: false, uacs: '40201010' },
+    { code: '40201020', name: 'Connection Fees', type: 'revenue', balance: 'credit', level: 3, parentCode: '402', isHeader: false, uacs: '40201020' },
+    { code: '40201030', name: 'Reconnection Fees', type: 'revenue', balance: 'credit', level: 3, parentCode: '402', isHeader: false, uacs: '40201030' },
+    { code: '40201990', name: 'Other Service Income', type: 'revenue', balance: 'credit', level: 3, parentCode: '402', isHeader: false, uacs: '40201990' },
+    { code: '40701010', name: 'Miscellaneous Income', type: 'revenue', balance: 'credit', level: 3, parentCode: '407', isHeader: false, uacs: '40701010' },
+
+    // Level 3: Personnel Services
+    { code: '50101010', name: 'Salaries and Wages - Regular', type: 'expense', balance: 'debit', level: 3, parentCode: '501', isHeader: false, uacs: '50101010' },
+    { code: '50101020', name: 'Salaries and Wages - Casual/Contractual', type: 'expense', balance: 'debit', level: 3, parentCode: '501', isHeader: false, uacs: '50101020' },
+    { code: '50102010', name: 'Personnel Benefit Contributions - GSIS', type: 'expense', balance: 'debit', level: 3, parentCode: '501', isHeader: false, uacs: '50102010' },
+    { code: '50102020', name: 'Personnel Benefit Contributions - Pag-IBIG', type: 'expense', balance: 'debit', level: 3, parentCode: '501', isHeader: false, uacs: '50102020' },
+    { code: '50102030', name: 'Personnel Benefit Contributions - PhilHealth', type: 'expense', balance: 'debit', level: 3, parentCode: '501', isHeader: false, uacs: '50102030' },
+    { code: '50103010', name: 'Retirement and Life Insurance Premiums', type: 'expense', balance: 'debit', level: 3, parentCode: '501', isHeader: false, uacs: '50103010' },
+    { code: '50104010', name: 'Year-End Bonus', type: 'expense', balance: 'debit', level: 3, parentCode: '501', isHeader: false, uacs: '50104010' },
+    { code: '50104030', name: 'Cash Gift', type: 'expense', balance: 'debit', level: 3, parentCode: '501', isHeader: false, uacs: '50104030' },
+
+    // Level 3: MOOE
+    { code: '50201010', name: 'Traveling Expenses - Local', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50201010' },
+    { code: '50202010', name: 'Training Expenses', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50202010' },
+    { code: '50203010', name: 'Office Supplies Expenses', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50203010' },
+    { code: '50203020', name: 'Accountable Forms Expenses', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50203020' },
+    { code: '50203070', name: 'Drugs and Medicines Expenses', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50203070' },
+    { code: '50203080', name: 'Chemical and Filtering Supplies Expenses', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50203080' },
+    { code: '50203990', name: 'Other Supplies and Materials Expenses', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50203990' },
+    { code: '50204010', name: 'Water Expenses', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50204010' },
+    { code: '50204020', name: 'Electricity Expenses', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50204020' },
+    { code: '50205010', name: 'Telephone Expenses - Landline', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50205010' },
+    { code: '50205020', name: 'Telephone Expenses - Mobile', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50205020' },
+    { code: '50205030', name: 'Internet Subscription Expenses', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50205030' },
+    { code: '50211010', name: 'Legal Services', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50211010' },
+    { code: '50211020', name: 'Auditing Services', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50211020' },
+    { code: '50211990', name: 'Other Professional Services', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50211990' },
+    { code: '50212020', name: 'Janitorial Services', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50212020' },
+    { code: '50212030', name: 'Security Services', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50212030' },
+    { code: '50213040', name: 'R&M - Buildings and Other Structures', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50213040' },
+    { code: '50213050', name: 'R&M - Machinery and Equipment', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50213050' },
+    { code: '50213060', name: 'R&M - Motor Vehicles', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50213060' },
+    { code: '50213070', name: 'R&M - Water Supply Systems', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50213070' },
+    { code: '50214010', name: 'Depreciation - Buildings', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50214010' },
+    { code: '50214050', name: 'Depreciation - Machinery and Equipment', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50214050' },
+    { code: '50214060', name: 'Depreciation - Office Equipment', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50214060' },
+    { code: '50214070', name: 'Depreciation - ICT Equipment', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50214070' },
+    { code: '50214100', name: 'Depreciation - Motor Vehicles', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50214100' },
+    { code: '50214110', name: 'Depreciation - Furniture and Fixtures', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50214110' },
+    { code: '50214120', name: 'Depreciation - Water Supply Systems', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50214120' },
+    { code: '50215010', name: 'Taxes, Duties and Licenses', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50215010' },
+    { code: '50216010', name: 'Fidelity Bond Premiums', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50216010' },
+    { code: '50216020', name: 'Insurance Expenses', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50216020' },
+    { code: '50299990', name: 'Other Maintenance and Operating Expenses', type: 'expense', balance: 'debit', level: 3, parentCode: '502', isHeader: false, uacs: '50299990' },
+
+    // Level 3: Financial Expenses
+    { code: '50301010', name: 'Interest Expenses', type: 'expense', balance: 'debit', level: 3, parentCode: '503', isHeader: false, uacs: '50301010' },
+    { code: '50301020', name: 'Bank Charges', type: 'expense', balance: 'debit', level: 3, parentCode: '503', isHeader: false, uacs: '50301020' },
+  ];
+
+  // Build COA in order: level 1, then 2, then 3 (parent must exist before child)
+  const coaMap: Record<string, string> = {};
+  for (const lvl of [1, 2, 3]) {
+    for (const acct of coaGroups.filter((a) => a.level === lvl)) {
+      const parentId = acct.parentCode ? coaMap[acct.parentCode] : undefined;
+      const row = await prisma.chartOfAccount.upsert({
+        where: { organizationId_accountCode: { organizationId: organization.id, accountCode: acct.code } },
+        update: { name: acct.name },
+        create: {
+          organizationId: organization.id,
+          accountCode: acct.code,
+          name: acct.name,
+          accountType: acct.type,
+          normalBalance: acct.balance,
+          level: acct.level,
+          isHeader: acct.isHeader,
+          ...(acct.uacs ? { uacsCode: acct.uacs } : {}),
+          ...(parentId ? { parentAccountId: parentId } : {}),
+        },
+      });
+      coaMap[acct.code] = row.id;
+    }
+  }
+  console.log(`  Chart of Accounts seeded: ${coaGroups.length} accounts`);
 
   console.log('Seed complete:');
   console.log(`  Organization: ${organization.name} (${organization.code})`);

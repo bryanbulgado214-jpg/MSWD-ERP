@@ -42,6 +42,17 @@ export const MODULE_GATES = {
     'inventory.dispose.manage',
     'inventory.reports',
   ],
+  accounting: [
+    'accounting.read',
+    'accounting.coa.manage',
+    'accounting.bank.manage',
+    'accounting.jev.create',
+    'accounting.jev.post',
+    'accounting.jev.void',
+    'accounting.period.manage',
+    'accounting.reports',
+    'accounting.reconcile',
+  ],
   reports: [
     'procurement.read',
     'budgeting.read',

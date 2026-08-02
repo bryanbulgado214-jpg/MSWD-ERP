@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { AccountingModule } from '../accounting/accounting.module';
 import { AccountabilityRecordController } from './accountability-record.controller';
 import { AccountabilityRecordService } from './accountability-record.service';
 import { DisposalRequestController } from './disposal-request.controller';
@@ -18,6 +19,7 @@ import { StockReceiptController } from './stock-receipt.controller';
 import { StockReceiptService } from './stock-receipt.service';
 
 @Module({
+  imports: [AccountingModule],
   controllers: [
     InventoryItemController,
     StockReceiptController,
