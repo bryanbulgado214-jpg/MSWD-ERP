@@ -1,6 +1,7 @@
 import { createBrowserRouter } from 'react-router-dom';
 
 import { accountingRoutes } from '../modules/accounting/routes';
+import { billingRoutes } from '../modules/billing/routes';
 import { adminRoutes } from '../modules/admin/routes';
 import { budgetingRoutes } from '../modules/budgeting/routes';
 import { inventoryRoutes } from '../modules/inventory/routes';
@@ -51,6 +52,10 @@ export const router = createBrowserRouter([
           {
             element: <RequireModule module="inventory" />,
             children: inventoryRoutes,
+          },
+          {
+            element: <RequireModule module="billing" />,
+            children: billingRoutes,
           },
           {
             element: <RequireModule module="accounting" />,

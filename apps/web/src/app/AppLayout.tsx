@@ -9,6 +9,7 @@ const MODULE_NAV = [
   { to: '/budgeting', label: 'Budgeting', module: 'budgeting' as const },
   { to: '/procurement', label: 'Procurement', module: 'procurement' as const },
   { to: '/inventory', label: 'Inventory', module: 'inventory' as const },
+  { to: '/billing', label: 'Billing', module: 'billing' as const },
   { to: '/accounting', label: 'Accounting', module: 'accounting' as const },
   { to: '/reports', label: 'Reports', module: 'reports' as const },
   { to: '/admin', label: 'Admin', module: 'admin' as const },

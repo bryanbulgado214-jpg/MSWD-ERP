@@ -91,6 +91,9 @@ async function main() {
     { code: 'SUPPLY_OFFICER', name: 'Supply Officer', description: 'Manages inventory items, stock receipts, RIS approval, stock cards, PAR/ICS, and property records.' },
     { code: 'PROPERTY_CUSTODIAN', name: 'Property Custodian', description: 'Manages property records, PAR/ICS issuance, transfers, and physical counts.' },
     { code: 'INVENTORY_COMMITTEE', name: 'Inventory Committee', description: 'Conducts and approves physical counts, appraises items for disposal.' },
+    { code: 'BILLING_MANAGER', name: 'Billing Manager', description: 'Full billing & collections management — rates, bills, payments, disconnections.' },
+    { code: 'METER_READER', name: 'Meter Reader', description: 'Records meter readings for billing.' },
+    { code: 'BILLING_CASHIER', name: 'Billing Cashier', description: 'Collects payments and issues official receipts.' },
   ];
 
   const roles: Record<string, { id: string }> = {};
@@ -197,6 +200,19 @@ async function main() {
     { code: 'inventory.dispose.approve', name: 'Approve Disposal', module: 'inventory' },
     { code: 'inventory.ledger', name: 'View Inventory Ledger/Reports', module: 'inventory' },
     { code: 'inventory.reconcile', name: 'Reconcile Inventory', module: 'inventory' },
+    // Billing & Collections
+    { code: 'billing.read', name: 'View Billing Data', module: 'billing' },
+    { code: 'billing.consumer.manage', name: 'Manage Consumer Accounts', module: 'billing' },
+    { code: 'billing.meter.manage', name: 'Manage Water Meters', module: 'billing' },
+    { code: 'billing.rate.manage', name: 'Manage Rate Schedules', module: 'billing' },
+    { code: 'billing.reading.manage', name: 'Record Meter Readings', module: 'billing' },
+    { code: 'billing.period.manage', name: 'Manage Billing Periods', module: 'billing' },
+    { code: 'billing.bill.generate', name: 'Generate Bills', module: 'billing' },
+    { code: 'billing.bill.adjust', name: 'Adjust or Cancel Bills', module: 'billing' },
+    { code: 'billing.payment.collect', name: 'Collect Payments & Issue OR', module: 'billing' },
+    { code: 'billing.payment.void', name: 'Void Payments', module: 'billing' },
+    { code: 'billing.disconnect.manage', name: 'Manage Disconnection Orders', module: 'billing' },
+    { code: 'billing.reports', name: 'View Billing Reports', module: 'billing' },
   ];
 
   const permissions: Record<string, { id: string }> = {};
@@ -242,6 +258,9 @@ async function main() {
     'accounting.jev.void',
     'accounting.period.manage',
     'accounting.reconcile',
+    'billing.payment.void',
+    'billing.bill.adjust',
+    'billing.disconnect.manage',
   ]);
   for (const code of Object.keys(permissions)) {
     if (!adminExcludedPermissions.has(code)) {
@@ -434,6 +453,58 @@ async function main() {
     'inventory.ledger',
   ]) {
     await grant('INVENTORY_COMMITTEE', code);
+  }
+
+  // Billing Manager: full billing & collections.
+  for (const code of [
+    'billing.read',
+    'billing.consumer.manage',
+    'billing.meter.manage',
+    'billing.rate.manage',
+    'billing.reading.manage',
+    'billing.period.manage',
+    'billing.bill.generate',
+    'billing.bill.adjust',
+    'billing.payment.collect',
+    'billing.payment.void',
+    'billing.disconnect.manage',
+    'billing.reports',
+  ]) {
+    await grant('BILLING_MANAGER', code);
+  }
+
+  // Meter Reader: read + record readings.
+  for (const code of [
+    'billing.read',
+    'billing.reading.manage',
+  ]) {
+    await grant('METER_READER', code);
+  }
+
+  // Billing Cashier: read + collect payments.
+  for (const code of [
+    'billing.read',
+    'billing.payment.collect',
+    'billing.reports',
+  ]) {
+    await grant('BILLING_CASHIER', code);
+  }
+
+  // Accountant: billing read + reports (for JEV integration).
+  for (const code of [
+    'billing.read',
+    'billing.reports',
+  ]) {
+    await grant('ACCOUNTANT', code);
+  }
+
+  // General Manager: billing oversight.
+  for (const code of [
+    'billing.read',
+    'billing.reports',
+    'billing.disconnect.manage',
+  ]) {
+    await grant('GENERAL_MANAGER', code);
   }
 
   // General Manager: inventory approval permissions.
@@ -905,6 +976,102 @@ async function main() {
     },
   });
 
+  // ── Seed billing manager test user ──
+  const billingManagerUser = await prisma.user.upsert({
+    where: { organizationId_username: { organizationId: organization.id, username: 'billing_manager' } },
+    update: {},
+    create: {
+      organizationId: organization.id,
+      username: 'billing_manager',
+      email: 'billing.manager@example.invalid',
+      passwordHash,
+      isActive: true,
+    },
+  });
+
+  const billingManagerRole = roles.BILLING_MANAGER;
+  if (!billingManagerRole) throw new Error('Seed error: BILLING_MANAGER role was not created above.');
+
+  await prisma.userRole.upsert({
+    where: {
+      userId_roleId_organizationalUnitId: {
+        userId: billingManagerUser.id,
+        roleId: billingManagerRole.id,
+        organizationalUnitId: rootUnit.id,
+      },
+    },
+    update: {},
+    create: {
+      userId: billingManagerUser.id,
+      roleId: billingManagerRole.id,
+      organizationalUnitId: rootUnit.id,
+    },
+  });
+
+  // ── Seed meter reader test user ──
+  const meterReaderUser = await prisma.user.upsert({
+    where: { organizationId_username: { organizationId: organization.id, username: 'meter_reader' } },
+    update: {},
+    create: {
+      organizationId: organization.id,
+      username: 'meter_reader',
+      email: 'meter.reader@example.invalid',
+      passwordHash,
+      isActive: true,
+    },
+  });
+
+  const meterReaderRole = roles.METER_READER;
+  if (!meterReaderRole) throw new Error('Seed error: METER_READER role was not created above.');
+
+  await prisma.userRole.upsert({
+    where: {
+      userId_roleId_organizationalUnitId: {
+        userId: meterReaderUser.id,
+        roleId: meterReaderRole.id,
+        organizationalUnitId: rootUnit.id,
+      },
+    },
+    update: {},
+    create: {
+      userId: meterReaderUser.id,
+      roleId: meterReaderRole.id,
+      organizationalUnitId: rootUnit.id,
+    },
+  });
+
+  // ── Seed billing cashier test user ──
+  const billingCashierUser = await prisma.user.upsert({
+    where: { organizationId_username: { organizationId: organization.id, username: 'billing_cashier' } },
+    update: {},
+    create: {
+      organizationId: organization.id,
+      username: 'billing_cashier',
+      email: 'billing.cashier@example.invalid',
+      passwordHash,
+      isActive: true,
+    },
+  });
+
+  const billingCashierRole = roles.BILLING_CASHIER;
+  if (!billingCashierRole) throw new Error('Seed error: BILLING_CASHIER role was not created above.');
+
+  await prisma.userRole.upsert({
+    where: {
+      userId_roleId_organizationalUnitId: {
+        userId: billingCashierUser.id,
+        roleId: billingCashierRole.id,
+        organizationalUnitId: rootUnit.id,
+      },
+    },
+    update: {},
+    create: {
+      userId: billingCashierUser.id,
+      roleId: billingCashierRole.id,
+      organizationalUnitId: rootUnit.id,
+    },
+  });
+
   // ── UACS Chart of Accounts seed data ──
   // Hierarchical: level 1 = group (header), level 2 = major (header),
   // level 3 = sub/detail (postable). Based on the COA for NGAs/GOCCs.
@@ -1091,6 +1258,9 @@ async function main() {
   console.log(`  BAC Member login: username "bac_member", password "${SEED_ADMIN_PASSWORD}"`);
   console.log(`  Inspection Officer login: username "inspection_officer", password "${SEED_ADMIN_PASSWORD}"`);
   console.log(`  Accountant login: username "accountant", password "${SEED_ADMIN_PASSWORD}"`);
+  console.log(`  Billing Manager login: username "billing_manager", password "${SEED_ADMIN_PASSWORD}"`);
+  console.log(`  Meter Reader login: username "meter_reader", password "${SEED_ADMIN_PASSWORD}"`);
+  console.log(`  Billing Cashier login: username "billing_cashier", password "${SEED_ADMIN_PASSWORD}"`);
 }
 
 main()

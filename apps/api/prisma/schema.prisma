@@ -157,6 +157,14 @@ model Organization {
   journalEntryVouchers  JournalEntryVoucher[]
   checks                Check[]
   bankReconciliations   BankReconciliation[]
+  consumers             Consumer[]
+  meters                Meter[]
+  rateSchedules         RateSchedule[]
+  billingPeriods        BillingPeriod[]
+  meterReadings         MeterReading[]
+  bills                 Bill[]
+  payments              Payment[]
+  disconnectionOrders   DisconnectionOrder[]
 
   @@map("organizations")
 }
@@ -429,6 +437,29 @@ model User {
   updatedBankReconciliations                    BankReconciliation[]   @relation("BankReconciliationsUpdatedBy")
   lockedAccountingPeriods                       AccountingPeriod[]     @relation("AccountingPeriodsLockedBy")
   closedFiscalYears                             FiscalYear[]           @relation("FiscalYearsClosedBy")
+  createdConsumers                              Consumer[]             @relation("ConsumersCreatedBy")
+  updatedConsumers                              Consumer[]             @relation("ConsumersUpdatedBy")
+  createdMeters                                 Meter[]                @relation("MetersCreatedBy")
+  updatedMeters                                 Meter[]                @relation("MetersUpdatedBy")
+  createdRateSchedules                          RateSchedule[]         @relation("RateSchedulesCreatedBy")
+  updatedRateSchedules                          RateSchedule[]         @relation("RateSchedulesUpdatedBy")
+  createdBillingPeriods                         BillingPeriod[]        @relation("BillingPeriodsCreatedBy")
+  updatedBillingPeriods                         BillingPeriod[]        @relation("BillingPeriodsUpdatedBy")
+  meterReadingsAsReader                         MeterReading[]         @relation("MeterReadingsReader")
+  createdMeterReadings                          MeterReading[]         @relation("MeterReadingsCreatedBy")
+  updatedMeterReadings                          MeterReading[]         @relation("MeterReadingsUpdatedBy")
+  createdBills                                  Bill[]                 @relation("BillsCreatedBy")
+  updatedBills                                  Bill[]                 @relation("BillsUpdatedBy")
+  cashieredPayments                             Payment[]              @relation("PaymentsCashier")
+  voidedPayments                                Payment[]              @relation("PaymentsVoidedBy")
+  createdPayments                               Payment[]              @relation("PaymentsCreatedBy")
+  updatedPayments                               Payment[]              @relation("PaymentsUpdatedBy")
+  servedDisconnectionOrders                     DisconnectionOrder[]   @relation("DisconnectionOrdersServedBy")
+  disconnectedDisconnectionOrders               DisconnectionOrder[]   @relation("DisconnectionOrdersDisconnectedBy")
+  reconnectedDisconnectionOrders                DisconnectionOrder[]   @relation("DisconnectionOrdersReconnectedBy")
+  cancelledDisconnectionOrders                  DisconnectionOrder[]   @relation("DisconnectionOrdersCancelledBy")
+  createdDisconnectionOrders                    DisconnectionOrder[]   @relation("DisconnectionOrdersCreatedBy")
+  updatedDisconnectionOrders                    DisconnectionOrder[]   @relation("DisconnectionOrdersUpdatedBy")
 
   @@unique([organizationId, username])
   @@unique([organizationId, email])
@@ -2964,4 +2995,496 @@ model BankReconciliationItem {
   @@index([bankReconciliationId])
   @@index([checkId])
   @@map("bank_reconciliation_items")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// BILLING & COLLECTIONS MODULE
+// ════════════════════════════════════════════════════════════════════
+
+enum ConsumerType {
+  residential
+  commercial
+  industrial
+  government
+  bulk
+
+  @@map("consumer_type")
+}
+
+enum ConsumerStatus {
+  active
+  disconnected
+  inactive
+  closed
+
+  @@map("consumer_status")
+}
+
+enum MeterStatus {
+  active
+  retired
+  condemned
+
+  @@map("meter_status")
+}
+
+enum MeterSize {
+  half_inch
+  three_quarter_inch
+  one_inch
+  one_and_half_inch
+  two_inch
+  three_inch
+  four_inch
+
+  @@map("meter_size")
+}
+
+enum BillingPeriodStatus {
+  open
+  reading
+  billing
+  closed
+
+  @@map("billing_period_status")
+}
+
+enum ReadingStatus {
+  pending
+  confirmed
+  adjusted
+
+  @@map("reading_status")
+}
+
+enum BillStatus {
+  unpaid
+  partial
+  paid
+  cancelled
+  written_off
+
+  @@map("bill_status")
+}
+
+enum PaymentMethod {
+  cash
+  check
+  online
+  bank_deposit
+
+  @@map("payment_method")
+}
+
+enum PaymentStatus {
+  valid
+  voided
+
+  @@map("payment_status")
+}
+
+enum ChargeType {
+  water
+  environmental
+  sewer
+  maintenance
+  penalty
+  senior_discount
+  pwd_discount
+  adjustment
+  arrears
+  reconnection
+  other
+
+  @@map("charge_type")
+}
+
+enum DisconnectionStatus {
+  notice_issued
+  served
+  disconnected
+  cancelled
+  reconnected
+
+  @@map("disconnection_status")
+}
+
+/// Water service consumer / account holder.
+model Consumer {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String         @map("organization_id") @db.Uuid
+  accountNumber    String         @map("account_number") @db.VarChar(20)
+  firstName        String         @map("first_name") @db.VarChar(100)
+  middleName       String?        @map("middle_name") @db.VarChar(100)
+  lastName         String         @map("last_name") @db.VarChar(100)
+  businessName     String?        @map("business_name") @db.VarChar(255)
+  consumerType     ConsumerType   @default(residential) @map("consumer_type")
+  address          String
+  barangay         String?        @db.VarChar(100)
+  municipality     String?        @default("Siquijor") @db.VarChar(100)
+  province         String?        @default("Siquijor") @db.VarChar(100)
+  contactNumber    String?        @map("contact_number") @db.VarChar(20)
+  email            String?        @db.VarChar(255)
+  isSeniorCitizen  Boolean        @default(false) @map("is_senior_citizen")
+  isPwd            Boolean        @default(false) @map("is_pwd")
+  status           ConsumerStatus @default(active)
+  connectionDate   DateTime?      @map("connection_date") @db.Date
+  disconnectionDate DateTime?     @map("disconnection_date") @db.Date
+  notes            String?
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy        String?        @map("created_by") @db.Uuid
+  updatedBy        String?        @map("updated_by") @db.Uuid
+  version          Int            @default(1)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  creator      User?        @relation("ConsumersCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater      User?        @relation("ConsumersUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  consumerMeters       ConsumerMeter[]
+  meterReadings        MeterReading[]
+  bills                Bill[]
+  payments             Payment[]
+  disconnectionOrders  DisconnectionOrder[]
+
+  @@unique([organizationId, accountNumber])
+  @@index([organizationId])
+  @@index([status])
+  @@index([consumerType])
+  @@index([lastName])
+  @@index([barangay])
+  @@map("consumers")
+}
+
+/// Water meter registry.
+model Meter {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String      @map("organization_id") @db.Uuid
+  serialNumber   String      @map("serial_number") @db.VarChar(50)
+  brand          String?     @db.VarChar(100)
+  size           MeterSize   @default(half_inch)
+  status         MeterStatus @default(active)
+  initialReading Decimal     @default(0) @map("initial_reading") @db.Decimal(12, 2)
+  notes          String?
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy      String?     @map("created_by") @db.Uuid
+  updatedBy      String?     @map("updated_by") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  creator      User?        @relation("MetersCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater      User?        @relation("MetersUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  consumerMeters ConsumerMeter[]
+  meterReadings  MeterReading[]
+
+  @@unique([organizationId, serialNumber])
+  @@index([organizationId])
+  @@index([status])
+  @@map("meters")
+}
+
+/// Meter-to-consumer assignment history.
+model ConsumerMeter {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  consumerId          String   @map("consumer_id") @db.Uuid
+  meterId             String   @map("meter_id") @db.Uuid
+  installedDate       DateTime @map("installed_date") @db.Date
+  removedDate         DateTime? @map("removed_date") @db.Date
+  isCurrent           Boolean  @default(true) @map("is_current")
+  installationRemarks String?  @map("installation_remarks")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  consumer Consumer @relation(fields: [consumerId], references: [id], onDelete: Cascade)
+  meter    Meter    @relation(fields: [meterId], references: [id], onDelete: Restrict)
+
+  @@index([consumerId])
+  @@index([meterId])
+  @@map("consumer_meters")
+}
+
+/// Rate schedule header — tiered pricing per consumer type.
+model RateSchedule {
+  id                 String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId     String       @map("organization_id") @db.Uuid
+  name               String       @db.VarChar(100)
+  consumerType       ConsumerType @map("consumer_type")
+  effectiveDate      DateTime     @map("effective_date") @db.Date
+  endDate            DateTime?    @map("end_date") @db.Date
+  minimumCharge      Decimal      @default(0) @map("minimum_charge") @db.Decimal(18, 2)
+  minimumConsumption Decimal      @default(10) @map("minimum_consumption") @db.Decimal(12, 2)
+  environmentalFee   Decimal      @default(0) @map("environmental_fee") @db.Decimal(18, 2)
+  sewerCharge        Decimal      @default(0) @map("sewer_charge") @db.Decimal(18, 2)
+  maintenanceFee     Decimal      @default(0) @map("maintenance_fee") @db.Decimal(18, 2)
+  isActive           Boolean      @default(true) @map("is_active")
+  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy          String?      @map("created_by") @db.Uuid
+  updatedBy          String?      @map("updated_by") @db.Uuid
+  version            Int          @default(1)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  creator      User?        @relation("RateSchedulesCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater      User?        @relation("RateSchedulesUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  tiers RateTier[]
+
+  @@index([organizationId])
+  @@index([consumerType])
+  @@index([isActive])
+  @@map("rate_schedules")
+}
+
+/// Block/tiered rate within a rate schedule.
+model RateTier {
+  id                String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rateScheduleId    String  @map("rate_schedule_id") @db.Uuid
+  minConsumption    Decimal @map("min_consumption") @db.Decimal(12, 2)
+  maxConsumption    Decimal? @map("max_consumption") @db.Decimal(12, 2)
+  ratePerCubicMeter Decimal @map("rate_per_cubic_meter") @db.Decimal(18, 4)
+  sortOrder         Int     @default(0) @map("sort_order")
+
+  rateSchedule RateSchedule @relation(fields: [rateScheduleId], references: [id], onDelete: Cascade)
+
+  @@index([rateScheduleId])
+  @@map("rate_tiers")
+}
+
+/// Monthly billing period for water billing.
+model BillingPeriod {
+  id               String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String              @map("organization_id") @db.Uuid
+  name             String              @db.VarChar(50)
+  billingMonth     Int                 @map("billing_month")
+  billingYear      Int                 @map("billing_year")
+  readingStartDate DateTime?           @map("reading_start_date") @db.Date
+  readingEndDate   DateTime?           @map("reading_end_date") @db.Date
+  dueDate          DateTime            @map("due_date") @db.Date
+  penaltyDate      DateTime            @map("penalty_date") @db.Date
+  status           BillingPeriodStatus @default(open)
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy        String?             @map("created_by") @db.Uuid
+  updatedBy        String?             @map("updated_by") @db.Uuid
+  version          Int                 @default(1)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  creator      User?        @relation("BillingPeriodsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater      User?        @relation("BillingPeriodsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  meterReadings MeterReading[]
+  bills         Bill[]
+
+  @@unique([organizationId, billingMonth, billingYear])
+  @@index([organizationId])
+  @@index([status])
+  @@map("billing_periods")
+}
+
+/// Individual meter reading for a consumer in a billing period.
+model MeterReading {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String        @map("organization_id") @db.Uuid
+  consumerId      String        @map("consumer_id") @db.Uuid
+  meterId         String        @map("meter_id") @db.Uuid
+  billingPeriodId String        @map("billing_period_id") @db.Uuid
+  readingDate     DateTime      @map("reading_date") @db.Date
+  previousReading Decimal       @map("previous_reading") @db.Decimal(12, 2)
+  currentReading  Decimal       @map("current_reading") @db.Decimal(12, 2)
+  consumption     Decimal       @default(0) @db.Decimal(12, 2)
+  status          ReadingStatus @default(pending)
+  remarks         String?
+  readerId        String?       @map("reader_id") @db.Uuid
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy       String?       @map("created_by") @db.Uuid
+  updatedBy       String?       @map("updated_by") @db.Uuid
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  consumer      Consumer      @relation(fields: [consumerId], references: [id], onDelete: Restrict)
+  meter         Meter         @relation(fields: [meterId], references: [id], onDelete: Restrict)
+  billingPeriod BillingPeriod @relation(fields: [billingPeriodId], references: [id], onDelete: Restrict)
+  reader        User?         @relation("MeterReadingsReader", fields: [readerId], references: [id], onDelete: SetNull)
+  creator       User?         @relation("MeterReadingsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater       User?         @relation("MeterReadingsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  bills Bill[]
+
+  @@unique([consumerId, billingPeriodId])
+  @@index([organizationId])
+  @@index([consumerId])
+  @@index([billingPeriodId])
+  @@index([status])
+  @@map("meter_readings")
+}
+
+/// Generated water bill for a consumer.
+model Bill {
+  id                  String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String     @map("organization_id") @db.Uuid
+  billNumber          String     @map("bill_number") @db.VarChar(20)
+  consumerId          String     @map("consumer_id") @db.Uuid
+  billingPeriodId     String     @map("billing_period_id") @db.Uuid
+  meterReadingId      String?    @map("meter_reading_id") @db.Uuid
+  previousReading     Decimal    @default(0) @map("previous_reading") @db.Decimal(12, 2)
+  currentReading      Decimal    @default(0) @map("current_reading") @db.Decimal(12, 2)
+  consumption         Decimal    @default(0) @db.Decimal(12, 2)
+  waterCharge         Decimal    @default(0) @map("water_charge") @db.Decimal(18, 2)
+  environmentalFee    Decimal    @default(0) @map("environmental_fee") @db.Decimal(18, 2)
+  sewerCharge         Decimal    @default(0) @map("sewer_charge") @db.Decimal(18, 2)
+  maintenanceFee      Decimal    @default(0) @map("maintenance_fee") @db.Decimal(18, 2)
+  penaltyAmount       Decimal    @default(0) @map("penalty_amount") @db.Decimal(18, 2)
+  discountAmount      Decimal    @default(0) @map("discount_amount") @db.Decimal(18, 2)
+  arrearsAmount       Decimal    @default(0) @map("arrears_amount") @db.Decimal(18, 2)
+  otherCharges        Decimal    @default(0) @map("other_charges") @db.Decimal(18, 2)
+  totalAmount         Decimal    @default(0) @map("total_amount") @db.Decimal(18, 2)
+  amountPaid          Decimal    @default(0) @map("amount_paid") @db.Decimal(18, 2)
+  balance             Decimal    @default(0) @db.Decimal(18, 2)
+  dueDate             DateTime   @map("due_date") @db.Date
+  penaltyDate         DateTime   @map("penalty_date") @db.Date
+  status              BillStatus @default(unpaid)
+  isSeniorDiscount    Boolean    @default(false) @map("is_senior_discount")
+  isPwdDiscount       Boolean    @default(false) @map("is_pwd_discount")
+  discountPercentage  Decimal    @default(0) @map("discount_percentage") @db.Decimal(5, 2)
+  notes               String?
+  createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy           String?    @map("created_by") @db.Uuid
+  updatedBy           String?    @map("updated_by") @db.Uuid
+  version             Int        @default(1)
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  consumer      Consumer      @relation(fields: [consumerId], references: [id], onDelete: Restrict)
+  billingPeriod BillingPeriod @relation(fields: [billingPeriodId], references: [id], onDelete: Restrict)
+  meterReading  MeterReading? @relation(fields: [meterReadingId], references: [id], onDelete: SetNull)
+  creator       User?         @relation("BillsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater       User?         @relation("BillsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  charges            BillCharge[]
+  paymentAllocations PaymentAllocation[]
+
+  @@unique([organizationId, billNumber])
+  @@unique([consumerId, billingPeriodId])
+  @@index([organizationId])
+  @@index([consumerId])
+  @@index([billingPeriodId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("bills")
+}
+
+/// Line item charge on a bill.
+model BillCharge {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  billId      String     @map("bill_id") @db.Uuid
+  chargeType  ChargeType @map("charge_type")
+  description String     @db.VarChar(255)
+  amount      Decimal    @db.Decimal(18, 2)
+  sortOrder   Int        @default(0) @map("sort_order")
+
+  bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@index([billId])
+  @@map("bill_charges")
+}
+
+/// Payment / Official Receipt for water bill collection.
+model Payment {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String        @map("organization_id") @db.Uuid
+  orNumber        String        @map("or_number") @db.VarChar(20)
+  consumerId      String        @map("consumer_id") @db.Uuid
+  paymentDate     DateTime      @map("payment_date") @db.Date
+  totalAmount     Decimal       @map("total_amount") @db.Decimal(18, 2)
+  paymentMethod   PaymentMethod @default(cash) @map("payment_method")
+  checkNumber     String?       @map("check_number") @db.VarChar(50)
+  checkDate       DateTime?     @map("check_date") @db.Date
+  bankName        String?       @map("bank_name") @db.VarChar(100)
+  referenceNumber String?       @map("reference_number") @db.VarChar(100)
+  remarks         String?
+  status          PaymentStatus @default(valid)
+  cashierId       String?       @map("cashier_id") @db.Uuid
+  voidedAt        DateTime?     @map("voided_at") @db.Timestamptz(6)
+  voidedBy        String?       @map("voided_by") @db.Uuid
+  voidReason      String?       @map("void_reason")
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy       String?       @map("created_by") @db.Uuid
+  updatedBy       String?       @map("updated_by") @db.Uuid
+  version         Int           @default(1)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  consumer     Consumer     @relation(fields: [consumerId], references: [id], onDelete: Restrict)
+  cashier      User?        @relation("PaymentsCashier", fields: [cashierId], references: [id], onDelete: SetNull)
+  voider       User?        @relation("PaymentsVoidedBy", fields: [voidedBy], references: [id], onDelete: SetNull)
+  creator      User?        @relation("PaymentsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater      User?        @relation("PaymentsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  allocations PaymentAllocation[]
+
+  @@unique([organizationId, orNumber])
+  @@index([organizationId])
+  @@index([consumerId])
+  @@index([paymentDate])
+  @@index([status])
+  @@map("payments")
+}
+
+/// Maps a payment to one or more bills it covers.
+model PaymentAllocation {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId     String   @map("payment_id") @db.Uuid
+  billId        String   @map("bill_id") @db.Uuid
+  amountApplied Decimal  @map("amount_applied") @db.Decimal(18, 2)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  bill    Bill    @relation(fields: [billId], references: [id], onDelete: Restrict)
+
+  @@index([paymentId])
+  @@index([billId])
+  @@map("payment_allocations")
+}
+
+/// Disconnection/reconnection workflow.
+model DisconnectionOrder {
+  id               String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String               @map("organization_id") @db.Uuid
+  consumerId       String               @map("consumer_id") @db.Uuid
+  orderNumber      String               @map("order_number") @db.VarChar(20)
+  noticeDate       DateTime             @map("notice_date") @db.Date
+  scheduledDate    DateTime             @map("scheduled_date") @db.Date
+  totalArrears     Decimal              @default(0) @map("total_arrears") @db.Decimal(18, 2)
+  status           DisconnectionStatus  @default(notice_issued)
+  servedDate       DateTime?            @map("served_date") @db.Date
+  servedBy         String?              @map("served_by") @db.Uuid
+  disconnectedDate DateTime?            @map("disconnected_date") @db.Date
+  disconnectedBy   String?              @map("disconnected_by") @db.Uuid
+  reconnectedDate  DateTime?            @map("reconnected_date") @db.Date
+  reconnectedBy    String?              @map("reconnected_by") @db.Uuid
+  reconnectionFee  Decimal?             @map("reconnection_fee") @db.Decimal(18, 2)
+  cancelledDate    DateTime?            @map("cancelled_date") @db.Date
+  cancelledBy      String?              @map("cancelled_by") @db.Uuid
+  cancelReason     String?              @map("cancel_reason")
+  remarks          String?
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy        String?              @map("created_by") @db.Uuid
+  updatedBy        String?              @map("updated_by") @db.Uuid
+  version          Int                  @default(1)
+
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  consumer      Consumer     @relation(fields: [consumerId], references: [id], onDelete: Restrict)
+  server        User?        @relation("DisconnectionOrdersServedBy", fields: [servedBy], references: [id], onDelete: SetNull)
+  disconnector  User?        @relation("DisconnectionOrdersDisconnectedBy", fields: [disconnectedBy], references: [id], onDelete: SetNull)
+  reconnector   User?        @relation("DisconnectionOrdersReconnectedBy", fields: [reconnectedBy], references: [id], onDelete: SetNull)
+  canceller     User?        @relation("DisconnectionOrdersCancelledBy", fields: [cancelledBy], references: [id], onDelete: SetNull)
+  creator       User?        @relation("DisconnectionOrdersCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updater       User?        @relation("DisconnectionOrdersUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, orderNumber])
+  @@index([organizationId])
+  @@index([consumerId])
+  @@index([status])
+  @@map("disconnection_orders")
 }
