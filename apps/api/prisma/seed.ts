@@ -242,6 +242,15 @@ async function main() {
     { code: 'complaint.resolve', name: 'Resolve Complaints',     module: 'complaint' },
     { code: 'complaint.close',   name: 'Close Complaints',       module: 'complaint' },
     { code: 'complaint.reports', name: 'View Complaint Reports', module: 'complaint' },
+
+    // Asset Management
+    { code: 'asset.read',              name: 'View Assets',              module: 'asset' },
+    { code: 'asset.category.manage',   name: 'Manage Asset Categories',  module: 'asset' },
+    { code: 'asset.depreciation.run',  name: 'Run Depreciation',         module: 'asset' },
+    { code: 'asset.depreciation.post', name: 'Post Depreciation',        module: 'asset' },
+    { code: 'asset.transfer.create',   name: 'Create Asset Transfer',    module: 'asset' },
+    { code: 'asset.transfer.approve',  name: 'Approve Asset Transfer',   module: 'asset' },
+    { code: 'asset.reports',           name: 'Asset Reports',            module: 'asset' },
   ];
 
   const permissions: Record<string, { id: string }> = {};
@@ -697,6 +706,42 @@ async function main() {
     'complaint.read',
   ]) {
     await grant('FIELD_SUPERVISOR', code);
+  }
+
+  // ── Asset Management permissions ──
+
+  // General Manager: full asset access.
+  for (const code of [
+    'asset.read',
+    'asset.category.manage',
+    'asset.depreciation.run',
+    'asset.depreciation.post',
+    'asset.transfer.create',
+    'asset.transfer.approve',
+    'asset.reports',
+  ]) {
+    await grant('GENERAL_MANAGER', code);
+  }
+
+  // Supply Officer & Property Custodian: manage assets & transfers.
+  for (const code of [
+    'asset.read',
+    'asset.transfer.create',
+    'asset.reports',
+  ]) {
+    await grant('SUPPLY_OFFICER', code);
+    await grant('PROPERTY_CUSTODIAN', code);
+  }
+
+  // Accountant: depreciation runs & reports.
+  for (const code of [
+    'asset.read',
+    'asset.category.manage',
+    'asset.depreciation.run',
+    'asset.depreciation.post',
+    'asset.reports',
+  ]) {
+    await grant('ACCOUNTANT', code);
   }
 
   // ── 6. Fiscal year setup ──
@@ -1642,6 +1687,36 @@ async function main() {
     }
   }
   console.log(`  Chart of Accounts seeded: ${coaGroups.length} accounts`);
+
+  // ── 8. Asset Categories ──
+  const assetCategoryDefinitions = [
+    { code: 'LAND',       name: 'Land',                       ppeCode: '10601010', accumCode: null,       expCode: null,       life: null },
+    { code: 'BLDG',       name: 'Buildings',                  ppeCode: '10604010', accumCode: '10704010', expCode: '50214010', life: 20 },
+    { code: 'MACH',       name: 'Machinery and Equipment',    ppeCode: '10605010', accumCode: '10705010', expCode: '50214050', life: 10 },
+    { code: 'OFFICE',     name: 'Office Equipment',           ppeCode: '10605020', accumCode: '10705020', expCode: '50214060', life: 5 },
+    { code: 'ICT',        name: 'ICT Equipment',              ppeCode: '10605030', accumCode: '10705030', expCode: '50214070', life: 5 },
+    { code: 'VEHICLE',    name: 'Motor Vehicles',             ppeCode: '10605060', accumCode: '10705060', expCode: '50214100', life: 7 },
+    { code: 'FURNITURE',  name: 'Furniture and Fixtures',     ppeCode: '10605070', accumCode: '10705070', expCode: '50214110', life: 10 },
+    { code: 'WATER_SYS',  name: 'Water Supply Systems',       ppeCode: '10606010', accumCode: '10706010', expCode: '50214120', life: 15 },
+    { code: 'OTHER_PPE',  name: 'Other Machinery and Equipment', ppeCode: '10605990', accumCode: '10705010', expCode: '50214050', life: 10 },
+  ];
+
+  for (const cat of assetCategoryDefinitions) {
+    await prisma.assetCategory.upsert({
+      where: { organizationId_code: { organizationId: organization.id, code: cat.code } },
+      update: {},
+      create: {
+        organizationId: organization.id,
+        code: cat.code,
+        name: cat.name,
+        ppeAccountCode: cat.ppeCode,
+        accumDeprAccountCode: cat.accumCode,
+        deprExpenseAccountCode: cat.expCode,
+        defaultUsefulLife: cat.life,
+      },
+    });
+  }
+  console.log(`  Asset categories seeded: ${assetCategoryDefinitions.length}`);
 
   console.log('Seed complete:');
   console.log(`  Organization: ${organization.name} (${organization.code})`);

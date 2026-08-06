@@ -281,6 +281,81 @@ export class AutoJevService {
     });
   }
 
+  async onDepreciationPosted(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    userId: string,
+    run: {
+      id: string;
+      runNumber: string;
+      periodMonth: number;
+      periodYear: number;
+      categoryTotals: Array<{
+        categoryName: string;
+        deprExpenseAccountCode: string;
+        accumDeprAccountCode: string;
+        totalAmount: number;
+      }>;
+    },
+  ) {
+    const periodLabel = `${run.periodYear}-${String(run.periodMonth).padStart(2, '0')}`;
+    const lines: Array<{ chartOfAccountId: string; debitAmount: number; creditAmount: number; description: string }> = [];
+
+    for (const cat of run.categoryTotals) {
+      if (cat.totalAmount <= 0) continue;
+
+      const deprExpense = await this.resolveByCode(tx, organizationId, cat.deprExpenseAccountCode);
+      const accumDepr = await this.resolveByCode(tx, organizationId, cat.accumDeprAccountCode);
+
+      if (!deprExpense || !accumDepr) {
+        this.logger.warn(
+          `Skipping category ${cat.categoryName}: COA accounts not found (${cat.deprExpenseAccountCode} / ${cat.accumDeprAccountCode}).`,
+        );
+        continue;
+      }
+
+      lines.push({
+        chartOfAccountId: deprExpense.id,
+        debitAmount: cat.totalAmount,
+        creditAmount: 0,
+        description: `Depreciation Expense — ${cat.categoryName} (${periodLabel})`,
+      });
+
+      lines.push({
+        chartOfAccountId: accumDepr.id,
+        debitAmount: 0,
+        creditAmount: cat.totalAmount,
+        description: `Accumulated Depreciation — ${cat.categoryName} (${periodLabel})`,
+      });
+    }
+
+    if (lines.length === 0) return null;
+
+    const lastDay = new Date(run.periodYear, run.periodMonth, 0);
+
+    return this.createAutoJev(tx, {
+      organizationId,
+      userId,
+      jevDate: lastDay,
+      sourceType: 'depreciation',
+      sourceTable: 'depreciation_runs',
+      sourceId: run.id,
+      particulars: `Monthly Depreciation — ${periodLabel} (${run.runNumber})`,
+      lines,
+    });
+  }
+
+  private async resolveByCode(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    accountCode: string,
+  ) {
+    return tx.chartOfAccount.findFirst({
+      where: { organizationId, accountCode, isActive: true },
+      select: { id: true, accountCode: true, name: true },
+    });
+  }
+
   private async resolve(organizationId: string, mappingKey: string) {
     const mapping = await this.prisma.accountMapping.findFirst({
       where: { organizationId, mappingKey, isActive: true },

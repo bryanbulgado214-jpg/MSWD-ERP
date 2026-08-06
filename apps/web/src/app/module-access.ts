@@ -83,6 +83,15 @@ export const MODULE_GATES = {
     'complaint.close',
     'complaint.reports',
   ],
+  asset: [
+    'asset.read',
+    'asset.category.manage',
+    'asset.depreciation.manage',
+    'asset.depreciation.post',
+    'asset.transfer.manage',
+    'asset.transfer.approve',
+    'asset.reports',
+  ],
   accounting: [
     'accounting.read',
     'accounting.coa.manage',

@@ -18,6 +18,7 @@ import { BillingModule } from './modules/billing/billing.module';
 import { HrModule } from './modules/hr/hr.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { WorkflowModule } from './modules/workflow/workflow.module';
+import { AssetModule } from './modules/asset/asset.module';
 import { ComplaintModule } from './modules/complaint/complaint.module';
 import { WorkorderModule } from './modules/workorder/workorder.module';
 
@@ -41,6 +42,7 @@ import { WorkorderModule } from './modules/workorder/workorder.module';
     HrModule,
     WorkorderModule,
     ComplaintModule,
+    AssetModule,
   ],
   controllers: [AppController, DashboardController],
   providers: [AppService, ExecutiveDashboardService],

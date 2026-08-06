@@ -182,6 +182,9 @@ model Organization {
   payrollItems          PayrollItem[]
   workOrders            WorkOrder[]
   complaints            Complaint[]
+  assetCategories       AssetCategory[]
+  depreciationRuns      DepreciationRun[]
+  assetTransfers        AssetTransfer[]
 
   @@map("organizations")
 }
@@ -311,8 +314,10 @@ model Location {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
-  purchaseRequests PurchaseRequest[]
-  propertyRecords  PropertyRecord[]
+  purchaseRequests      PurchaseRequest[]
+  propertyRecords       PropertyRecord[]
+  assetTransfersFrom    AssetTransfer[]    @relation("AssetTransfersFromLocation")
+  assetTransfersTo      AssetTransfer[]    @relation("AssetTransfersToLocation")
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -500,6 +505,13 @@ model User {
   complaintsUpdated                             Complaint[]            @relation("ComplaintsUpdatedBy")
   complaintNotes                                ComplaintNote[]        @relation("ComplaintNotesCreatedBy")
   complaintAttachments                          ComplaintAttachment[]  @relation("ComplaintAttachmentsUploadedBy")
+  depreciationRunsPosted                        DepreciationRun[]      @relation("DepreciationRunsPostedBy")
+  depreciationRunsVoided                        DepreciationRun[]      @relation("DepreciationRunsVoidedBy")
+  depreciationRunsCreated                       DepreciationRun[]      @relation("DepreciationRunsCreatedBy")
+  assetTransfersFrom                            AssetTransfer[]        @relation("AssetTransfersFrom")
+  assetTransfersTo                              AssetTransfer[]        @relation("AssetTransfersTo")
+  assetTransfersApproved                        AssetTransfer[]        @relation("AssetTransfersApprover")
+  assetTransfersCreated                         AssetTransfer[]        @relation("AssetTransfersCreatedBy")
 
   @@unique([organizationId, username])
   @@unique([organizationId, email])
@@ -2411,6 +2423,8 @@ model PropertyRecord {
   updatedBy           String?           @map("updated_by") @db.Uuid
   version             Int               @default(1)
 
+  assetCategoryId     String?           @map("asset_category_id") @db.Uuid
+
   organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   inventoryItem    InventoryItem     @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
   stockReceiptItem StockReceiptItem? @relation(fields: [stockReceiptItemId], references: [id], onDelete: SetNull)
@@ -2418,10 +2432,13 @@ model PropertyRecord {
   accountableUser  User?             @relation("PropertyRecordsAccountable", fields: [accountableUserId], references: [id], onDelete: SetNull)
   creator          User?             @relation("PropertyRecordsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
   updater          User?             @relation("PropertyRecordsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  assetCategory    AssetCategory?    @relation(fields: [assetCategoryId], references: [id], onDelete: SetNull)
 
-  accountabilityItems AccountabilityRecordItem[]
-  physicalCountItems  PhysicalCountItem[]
-  disposalItems       DisposalRequestItem[]
+  accountabilityItems   AccountabilityRecordItem[]
+  physicalCountItems    PhysicalCountItem[]
+  disposalItems         DisposalRequestItem[]
+  depreciationRunItems  DepreciationRunItem[]
+  assetTransfers        AssetTransfer[]
 
   @@unique([organizationId, propertyNumber])
   @@index([organizationId])
@@ -2430,6 +2447,7 @@ model PropertyRecord {
   @@index([locationId])
   @@index([condition])
   @@index([isDisposed])
+  @@index([assetCategoryId])
   @@map("property_records")
 }
 
@@ -2682,6 +2700,8 @@ enum JevSourceType {
   closing
   payroll
   work_order
+  depreciation
+  disposal
 
   @@map("jev_source_type")
 }
@@ -2882,7 +2902,8 @@ model JournalEntryVoucher {
   creator              User?                 @relation("JevsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
   updater              User?                 @relation("JevsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
 
-  lines JevLine[]
+  lines            JevLine[]
+  depreciationRuns DepreciationRun[]
 
   @@unique([organizationId, jevNumber])
   @@index([organizationId])
@@ -4261,4 +4282,142 @@ model ComplaintAttachment {
 
   @@index([complaintId])
   @@map("complaint_attachments")
+}
+
+// ─── Asset Management ─────────────────────────────────────────
+
+enum DepreciationRunStatus {
+  draft
+  posted
+  voided
+
+  @@map("depreciation_run_status")
+}
+
+enum AssetTransferStatus {
+  pending
+  approved
+  completed
+  rejected
+
+  @@map("asset_transfer_status")
+}
+
+enum DepreciationMethod {
+  straight_line
+
+  @@map("depreciation_method")
+}
+
+model AssetCategory {
+  id                    String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId        String              @map("organization_id") @db.Uuid
+  code                  String              @db.VarChar(20)
+  name                  String              @db.VarChar(200)
+  description           String?
+  depreciationMethod    DepreciationMethod   @default(straight_line) @map("depreciation_method")
+  defaultUsefulLife     Int?                @map("default_useful_life")
+  ppeAccountCode        String?             @map("ppe_account_code") @db.VarChar(20)
+  accumDeprAccountCode  String?             @map("accum_depr_account_code") @db.VarChar(20)
+  deprExpenseAccountCode String?            @map("depr_expense_account_code") @db.VarChar(20)
+  isActive              Boolean             @default(true) @map("is_active")
+  createdAt             DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  propertyRecords      PropertyRecord[]
+  depreciationRunItems DepreciationRunItem[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("asset_categories")
+}
+
+model DepreciationRun {
+  id                String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String                @map("organization_id") @db.Uuid
+  runNumber         String                @map("run_number") @db.VarChar(30)
+  periodMonth       Int                   @map("period_month")
+  periodYear        Int                   @map("period_year")
+  status            DepreciationRunStatus @default(draft)
+  totalDepreciation Decimal               @default(0) @map("total_depreciation") @db.Decimal(18, 2)
+  assetCount        Int                   @default(0) @map("asset_count")
+  jevId             String?               @map("jev_id") @db.Uuid
+  postedBy          String?               @map("posted_by") @db.Uuid
+  postedAt          DateTime?             @map("posted_at") @db.Timestamptz(6)
+  voidedBy          String?               @map("voided_by") @db.Uuid
+  voidedAt          DateTime?             @map("voided_at") @db.Timestamptz(6)
+  createdBy         String?               @map("created_by") @db.Uuid
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  version           Int                   @default(1)
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  jev          JournalEntryVoucher?  @relation(fields: [jevId], references: [id], onDelete: SetNull)
+  poster       User?                 @relation("DepreciationRunsPostedBy", fields: [postedBy], references: [id], onDelete: SetNull)
+  voider       User?                 @relation("DepreciationRunsVoidedBy", fields: [voidedBy], references: [id], onDelete: SetNull)
+  creator      User?                 @relation("DepreciationRunsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  items DepreciationRunItem[]
+
+  @@unique([organizationId, periodMonth, periodYear])
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@map("depreciation_runs")
+}
+
+model DepreciationRunItem {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  depreciationRunId  String   @map("depreciation_run_id") @db.Uuid
+  propertyRecordId   String   @map("property_record_id") @db.Uuid
+  assetCategoryId    String?  @map("asset_category_id") @db.Uuid
+  depreciationAmount Decimal  @map("depreciation_amount") @db.Decimal(18, 2)
+  accumBefore        Decimal  @map("accum_before") @db.Decimal(18, 2)
+  accumAfter         Decimal  @map("accum_after") @db.Decimal(18, 2)
+  bookValueBefore    Decimal  @map("book_value_before") @db.Decimal(18, 2)
+  bookValueAfter     Decimal  @map("book_value_after") @db.Decimal(18, 2)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  depreciationRun DepreciationRun @relation(fields: [depreciationRunId], references: [id], onDelete: Cascade)
+  propertyRecord  PropertyRecord  @relation(fields: [propertyRecordId], references: [id], onDelete: Restrict)
+  assetCategory   AssetCategory?  @relation(fields: [assetCategoryId], references: [id], onDelete: SetNull)
+
+  @@index([depreciationRunId])
+  @@index([propertyRecordId])
+  @@map("depreciation_run_items")
+}
+
+model AssetTransfer {
+  id               String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String              @map("organization_id") @db.Uuid
+  transferNumber   String              @map("transfer_number") @db.VarChar(30)
+  propertyRecordId String              @map("property_record_id") @db.Uuid
+  fromUserId       String?             @map("from_user_id") @db.Uuid
+  toUserId         String              @map("to_user_id") @db.Uuid
+  fromLocationId   String?             @map("from_location_id") @db.Uuid
+  toLocationId     String?             @map("to_location_id") @db.Uuid
+  transferDate     DateTime            @default(now()) @map("transfer_date") @db.Timestamptz(6)
+  reason           String?
+  status           AssetTransferStatus @default(pending)
+  approvedBy       String?             @map("approved_by") @db.Uuid
+  approvedAt       DateTime?           @map("approved_at") @db.Timestamptz(6)
+  completedAt      DateTime?           @map("completed_at") @db.Timestamptz(6)
+  createdBy        String?             @map("created_by") @db.Uuid
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  version          Int                 @default(1)
+
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  propertyRecord PropertyRecord @relation(fields: [propertyRecordId], references: [id], onDelete: Restrict)
+  fromUser       User?          @relation("AssetTransfersFrom", fields: [fromUserId], references: [id], onDelete: SetNull)
+  toUser         User           @relation("AssetTransfersTo", fields: [toUserId], references: [id], onDelete: Restrict)
+  fromLocation   Location?      @relation("AssetTransfersFromLocation", fields: [fromLocationId], references: [id], onDelete: SetNull)
+  toLocation     Location?      @relation("AssetTransfersToLocation", fields: [toLocationId], references: [id], onDelete: SetNull)
+  approver       User?          @relation("AssetTransfersApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+  creator        User?          @relation("AssetTransfersCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, transferNumber])
+  @@index([organizationId])
+  @@index([propertyRecordId])
+  @@index([organizationId, status])
+  @@map("asset_transfers")
 }
