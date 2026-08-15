@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 
-import type { PrismaService } from '../../database/prisma.service';
+import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
 
 const JEV_SELECT = {

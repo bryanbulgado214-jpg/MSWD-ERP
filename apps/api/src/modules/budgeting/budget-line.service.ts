@@ -2,9 +2,10 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma, type BudgetLine } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+
 import { runAudited } from './audit-actor.util';
 import { BudgetValidation } from './budget-validation';
-import type { CreateBudgetLineDto, UpdateBudgetLineDto } from './dto/budget-line.dto';
+import { CreateBudgetLineDto, UpdateBudgetLineDto } from './dto/budget-line.dto';
 
 /**
  * budget_lines has no organization_id column of its own (scoped through
@@ -17,7 +18,11 @@ import type { CreateBudgetLineDto, UpdateBudgetLineDto } from './dto/budget-line
 export class BudgetLineService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(organizationId: string, dto: CreateBudgetLineDto, actorUserId?: string): Promise<BudgetLine> {
+  async create(
+    organizationId: string,
+    dto: CreateBudgetLineDto,
+    actorUserId?: string,
+  ): Promise<BudgetLine> {
     const amount = new Prisma.Decimal(dto.amount);
     BudgetValidation.assertNonNegative(amount, 'amount');
     BudgetValidation.assertFixedPrecision(amount, 'amount');
@@ -107,8 +112,13 @@ export class BudgetLineService {
   /** Shared by create/findAllForHeader — confirms the referenced header
    * actually belongs to the caller's organization before doing anything
    * with it. */
-  private async requireHeaderInOrganization(organizationId: string, budgetHeaderId: string): Promise<void> {
-    const header = await this.prisma.budgetHeader.findFirst({ where: { id: budgetHeaderId, organizationId } });
+  private async requireHeaderInOrganization(
+    organizationId: string,
+    budgetHeaderId: string,
+  ): Promise<void> {
+    const header = await this.prisma.budgetHeader.findFirst({
+      where: { id: budgetHeaderId, organizationId },
+    });
     if (!header) {
       throw new NotFoundException(`Budget header ${budgetHeaderId} not found.`);
     }

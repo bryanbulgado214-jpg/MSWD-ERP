@@ -2,8 +2,9 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import type { BudgetCycle } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+
 import { runAudited } from './audit-actor.util';
-import type { CreateBudgetCycleDto, UpdateBudgetCycleDto } from './dto/budget-cycle.dto';
+import { CreateBudgetCycleDto, UpdateBudgetCycleDto } from './dto/budget-cycle.dto';
 
 /**
  * Deliberately simple CRUD — no approval workflow, no cross-field
@@ -17,7 +18,11 @@ import type { CreateBudgetCycleDto, UpdateBudgetCycleDto } from './dto/budget-cy
 export class BudgetCycleService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(organizationId: string, dto: CreateBudgetCycleDto, actorUserId?: string): Promise<BudgetCycle> {
+  async create(
+    organizationId: string,
+    dto: CreateBudgetCycleDto,
+    actorUserId?: string,
+  ): Promise<BudgetCycle> {
     return runAudited(this.prisma, actorUserId, (tx) =>
       tx.budgetCycle.create({
         data: {
@@ -32,7 +37,10 @@ export class BudgetCycleService {
   }
 
   async findAll(organizationId: string): Promise<BudgetCycle[]> {
-    return this.prisma.budgetCycle.findMany({ where: { organizationId }, orderBy: { code: 'asc' } });
+    return this.prisma.budgetCycle.findMany({
+      where: { organizationId },
+      orderBy: { code: 'asc' },
+    });
   }
 
   async findOne(organizationId: string, id: string): Promise<BudgetCycle> {

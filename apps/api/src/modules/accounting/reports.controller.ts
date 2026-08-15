@@ -6,7 +6,7 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
 
-import type { AccountingReportsService } from './reports.service';
+import { AccountingReportsService } from './reports.service';
 
 @Controller('accounting/reports')
 @UseGuards(JwtAuthGuard, PermissionsGuard)

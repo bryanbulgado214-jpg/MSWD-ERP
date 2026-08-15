@@ -1,8 +1,18 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
-import type { CreateBillingPeriodDto, TransitionPeriodDto, UpdateBillingPeriodDto } from './dto/billing-period.dto';
+
+import {
+  CreateBillingPeriodDto,
+  TransitionPeriodDto,
+  UpdateBillingPeriodDto,
+} from './dto/billing-period.dto';
 
 @Injectable()
 export class BillingPeriodService {
@@ -46,7 +56,10 @@ export class BillingPeriodService {
         },
       },
     });
-    if (existing) throw new ConflictException(`Billing period for ${dto.billingMonth}/${dto.billingYear} already exists.`);
+    if (existing)
+      throw new ConflictException(
+        `Billing period for ${dto.billingMonth}/${dto.billingYear} already exists.`,
+      );
 
     return runAudited(this.prisma, userId, (tx) =>
       tx.billingPeriod.create({
@@ -71,7 +84,9 @@ export class BillingPeriodService {
   }
 
   async update(orgId: string, userId: string, id: string, dto: UpdateBillingPeriodDto) {
-    const existing = await this.prisma.billingPeriod.findFirst({ where: { id, organizationId: orgId } });
+    const existing = await this.prisma.billingPeriod.findFirst({
+      where: { id, organizationId: orgId },
+    });
     if (!existing) throw new NotFoundException('Billing period not found.');
     if (existing.version !== dto.expectedVersion)
       throw new ConflictException('Billing period was modified by another user — please reload.');
@@ -100,7 +115,9 @@ export class BillingPeriodService {
   }
 
   async transition(orgId: string, userId: string, id: string, dto: TransitionPeriodDto) {
-    const existing = await this.prisma.billingPeriod.findFirst({ where: { id, organizationId: orgId } });
+    const existing = await this.prisma.billingPeriod.findFirst({
+      where: { id, organizationId: orgId },
+    });
     if (!existing) throw new NotFoundException('Billing period not found.');
     if (existing.version !== dto.expectedVersion)
       throw new ConflictException('Billing period was modified — please reload.');
@@ -112,7 +129,9 @@ export class BillingPeriodService {
     };
     const allowed = validTransitions[existing.status] ?? [];
     if (!allowed.includes(dto.status))
-      throw new BadRequestException(`Cannot transition from "${existing.status}" to "${dto.status}".`);
+      throw new BadRequestException(
+        `Cannot transition from "${existing.status}" to "${dto.status}".`,
+      );
 
     return runAudited(this.prisma, userId, (tx) =>
       tx.billingPeriod.update({

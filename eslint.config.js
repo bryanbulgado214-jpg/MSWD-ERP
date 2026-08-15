@@ -66,5 +66,15 @@ export default [
       'no-console': ['warn', { allow: ['warn', 'error'] }],
     },
   },
+  {
+    // NestJS resolves constructor-injected providers from *value* imports at
+    // runtime (via emitDecoratorMetadata). `consistent-type-imports` would
+    // autofix those to `import type`, which erases the class and breaks DI —
+    // so disable it for the API. (The web app has no DI and keeps the rule.)
+    files: ['apps/api/**/*.ts'],
+    rules: {
+      '@typescript-eslint/consistent-type-imports': 'off',
+    },
+  },
   prettierConfig,
 ];

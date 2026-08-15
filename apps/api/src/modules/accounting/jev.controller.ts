@@ -16,8 +16,8 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
 
-import type { CreateJevDto, PostJevDto, ReverseJevDto, UpdateJevDto, VoidJevDto } from './dto/jev.dto';
-import type { JevService } from './jev.service';
+import { CreateJevDto, PostJevDto, ReverseJevDto, UpdateJevDto, VoidJevDto } from './dto/jev.dto';
+import { JevService } from './jev.service';
 
 @Controller('accounting/jev')
 @UseGuards(JwtAuthGuard, PermissionsGuard)

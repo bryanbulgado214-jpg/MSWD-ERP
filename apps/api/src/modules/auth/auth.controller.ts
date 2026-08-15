@@ -2,10 +2,10 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@n
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { getGrantedPermissionCodes } from '../../common/guards/get-granted-permission-codes';
-import type { PrismaService } from '../../database/prisma.service';
+import { PrismaService } from '../../database/prisma.service';
 
-import type { AuthService } from './auth.service';
-import type { LoginDto } from './dto/login.dto';
+import { AuthService } from './auth.service';
+import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import type { AuthenticatedUser } from './jwt.strategy';
 

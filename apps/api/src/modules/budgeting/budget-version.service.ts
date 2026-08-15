@@ -2,8 +2,9 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import type { BudgetVersion } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+
 import { runAudited } from './audit-actor.util';
-import type { CreateBudgetVersionDto, UpdateBudgetVersionDto } from './dto/budget-version.dto';
+import { CreateBudgetVersionDto, UpdateBudgetVersionDto } from './dto/budget-version.dto';
 
 /**
  * budget_versions has no organization_id column of its own (scoped
@@ -17,7 +18,11 @@ import type { CreateBudgetVersionDto, UpdateBudgetVersionDto } from './dto/budge
 export class BudgetVersionService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(organizationId: string, dto: CreateBudgetVersionDto, actorUserId?: string): Promise<BudgetVersion> {
+  async create(
+    organizationId: string,
+    dto: CreateBudgetVersionDto,
+    actorUserId?: string,
+  ): Promise<BudgetVersion> {
     await this.requireCycleInOrganization(organizationId, dto.budgetCycleId);
 
     return runAudited(this.prisma, actorUserId, (tx) =>
@@ -75,8 +80,13 @@ export class BudgetVersionService {
   /** Shared by create/findAllForCycle — confirms the referenced cycle
    * actually belongs to the caller's organization before doing anything
    * with it. */
-  private async requireCycleInOrganization(organizationId: string, budgetCycleId: string): Promise<void> {
-    const cycle = await this.prisma.budgetCycle.findFirst({ where: { id: budgetCycleId, organizationId } });
+  private async requireCycleInOrganization(
+    organizationId: string,
+    budgetCycleId: string,
+  ): Promise<void> {
+    const cycle = await this.prisma.budgetCycle.findFirst({
+      where: { id: budgetCycleId, organizationId },
+    });
     if (!cycle) {
       throw new NotFoundException(`Budget cycle ${budgetCycleId} not found.`);
     }

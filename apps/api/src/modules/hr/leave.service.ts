@@ -1,8 +1,14 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
-import type { CreateLeaveApplicationDto } from './dto/leave.dto';
+
+import { CreateLeaveApplicationDto } from './dto/leave.dto';
 
 @Injectable()
 export class LeaveService {
@@ -76,11 +82,14 @@ export class LeaveService {
     return { created: toCreate.length };
   }
 
-  async findApplications(orgId: string, filters?: {
-    employeeId?: string;
-    status?: string;
-    year?: number;
-  }) {
+  async findApplications(
+    orgId: string,
+    filters?: {
+      employeeId?: string;
+      status?: string;
+      year?: number;
+    },
+  ) {
     const where: Record<string, unknown> = { organizationId: orgId };
     if (filters?.employeeId) where.employeeId = filters.employeeId;
     if (filters?.status) where.status = filters.status;
@@ -104,7 +113,15 @@ export class LeaveService {
     const app = await this.prisma.leaveApplication.findFirst({
       where: { id, organizationId: orgId },
       include: {
-        employee: { select: { id: true, employeeNumber: true, firstName: true, lastName: true, middleName: true } },
+        employee: {
+          select: {
+            id: true,
+            employeeNumber: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+          },
+        },
         leaveType: { select: { id: true, code: true, name: true } },
         approver: { select: { id: true, username: true } },
         creator: { select: { id: true, username: true } },
@@ -160,8 +177,10 @@ export class LeaveService {
       where: { id, organizationId: orgId },
     });
     if (!app) throw new NotFoundException('Leave application not found');
-    if (app.version !== expectedVersion) throw new ConflictException('Record modified concurrently — reload.');
-    if (app.status !== 'pending') throw new BadRequestException('Only pending applications can be approved');
+    if (app.version !== expectedVersion)
+      throw new ConflictException('Record modified concurrently — reload.');
+    if (app.status !== 'pending')
+      throw new BadRequestException('Only pending applications can be approved');
 
     return runAudited(this.prisma, actorId, async (tx) => {
       const updated = await tx.leaveApplication.update({
@@ -192,13 +211,21 @@ export class LeaveService {
     });
   }
 
-  async rejectApplication(orgId: string, id: string, expectedVersion: number, rejectionReason: string, actorId: string) {
+  async rejectApplication(
+    orgId: string,
+    id: string,
+    expectedVersion: number,
+    rejectionReason: string,
+    actorId: string,
+  ) {
     const app = await this.prisma.leaveApplication.findFirst({
       where: { id, organizationId: orgId },
     });
     if (!app) throw new NotFoundException('Leave application not found');
-    if (app.version !== expectedVersion) throw new ConflictException('Record modified concurrently — reload.');
-    if (app.status !== 'pending') throw new BadRequestException('Only pending applications can be rejected');
+    if (app.version !== expectedVersion)
+      throw new ConflictException('Record modified concurrently — reload.');
+    if (app.status !== 'pending')
+      throw new BadRequestException('Only pending applications can be rejected');
 
     return runAudited(this.prisma, actorId, (tx) =>
       tx.leaveApplication.update({
@@ -222,7 +249,8 @@ export class LeaveService {
       where: { id, organizationId: orgId },
     });
     if (!app) throw new NotFoundException('Leave application not found');
-    if (app.version !== expectedVersion) throw new ConflictException('Record modified concurrently — reload.');
+    if (app.version !== expectedVersion)
+      throw new ConflictException('Record modified concurrently — reload.');
     if (app.status !== 'pending' && app.status !== 'approved') {
       throw new BadRequestException('Only pending or approved applications can be cancelled');
     }

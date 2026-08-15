@@ -1,10 +1,10 @@
 // Route-coverage guard test.
 //
-// The PermissionsGuard FAILS OPEN: a route with no @RequirePermissions metadata
-// is reachable by any authenticated user. This test fails if any *mutating*
-// route (@Post/@Put/@Patch/@Delete) in an accounting controller is missing a
-// @RequirePermissions gate — so a forgotten decorator is caught in CI, not in
-// production.
+// PermissionsGuard now FAILS CLOSED: a guarded route with no @RequirePermissions
+// (and no @AuthenticatedOnly) is denied at runtime. This test is the CI
+// complement — it fails if any *mutating* route (@Post/@Put/@Patch/@Delete) in an
+// accounting controller is missing a @RequirePermissions gate, so a forgotten
+// decorator is caught here rather than surfacing as an unexpected 403.
 import 'reflect-metadata';
 import { RequestMethod } from '@nestjs/common';
 import { METHOD_METADATA } from '@nestjs/common/constants';

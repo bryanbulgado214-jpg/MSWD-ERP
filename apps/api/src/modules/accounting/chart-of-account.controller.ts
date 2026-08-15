@@ -16,7 +16,7 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
 
-import type { ChartOfAccountService } from './chart-of-account.service';
+import { ChartOfAccountService } from './chart-of-account.service';
 import type {
   CreateChartOfAccountDto,
   ImportCoaCsvDto,

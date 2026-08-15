@@ -7,7 +7,7 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
 
-import type { OrganizationProfileService } from './organization-profile.service';
+import { OrganizationProfileService } from './organization-profile.service';
 
 class UpdateOrganizationProfileDto {
   @IsOptional() @IsString() @MaxLength(255) name?: string;

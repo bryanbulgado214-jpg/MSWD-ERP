@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
-import type { PrismaService } from '../../database/prisma.service';
+import { PrismaService } from '../../database/prisma.service';
 
-import type { FinancialStatementsService } from './financial-statements.service';
+import { FinancialStatementsService } from './financial-statements.service';
 
 export interface AccountingDashboardResult {
   fiscalYear: { id: string; year: number; name: string };

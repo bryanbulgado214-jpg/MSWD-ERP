@@ -10,6 +10,8 @@
 import type { ExecutionContext } from '@nestjs/common';
 import type { Reflector } from '@nestjs/core';
 
+import { AUTH_ONLY_KEY } from '../decorators/require-permissions.decorator';
+
 import { PermissionsGuard } from './permissions.guard';
 
 function fakeContext(user: { userId: string } | undefined): ExecutionContext {
@@ -20,8 +22,10 @@ function fakeContext(user: { userId: string } | undefined): ExecutionContext {
   } as unknown as ExecutionContext;
 }
 
-function fakeReflectorRequiring(codes: string[] | undefined): Reflector {
-  return { getAllAndOverride: () => codes } as unknown as Reflector;
+function fakeReflectorRequiring(codes: string[] | undefined, authOnly = false): Reflector {
+  return {
+    getAllAndOverride: (key: string) => (key === AUTH_ONLY_KEY ? authOnly : codes),
+  } as unknown as Reflector;
 }
 
 /** Shape-compatible fake for the one PrismaService method the guard
@@ -50,9 +54,19 @@ function fakePrismaGranting(permissionCodes: string[]) {
 }
 
 describe('PermissionsGuard', () => {
-  it('allows the request when the route requires no permissions', async () => {
+  it('FAILS CLOSED when a guarded route declares no permission requirement', async () => {
     const guard = new PermissionsGuard(
       fakeReflectorRequiring(undefined),
+      fakePrismaGranting([]) as any,
+    );
+    await expect(guard.canActivate(fakeContext({ userId: 'u1' }))).rejects.toThrow(
+      /no permission requirement declared/,
+    );
+  });
+
+  it('allows a route explicitly marked @AuthenticatedOnly', async () => {
+    const guard = new PermissionsGuard(
+      fakeReflectorRequiring(undefined, /* authOnly */ true),
       fakePrismaGranting([]) as any,
     );
     await expect(guard.canActivate(fakeContext({ userId: 'u1' }))).resolves.toBe(true);

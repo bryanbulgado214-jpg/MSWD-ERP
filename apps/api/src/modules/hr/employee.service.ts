@@ -2,18 +2,22 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 
 import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
-import type { CreateEmployeeDto, UpdateEmployeeDto } from './dto/employee.dto';
+
+import { CreateEmployeeDto, UpdateEmployeeDto } from './dto/employee.dto';
 
 @Injectable()
 export class EmployeeService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(orgId: string, filters?: {
-    status?: string;
-    departmentId?: string;
-    employmentType?: string;
-    search?: string;
-  }) {
+  async findAll(
+    orgId: string,
+    filters?: {
+      status?: string;
+      departmentId?: string;
+      employmentType?: string;
+      search?: string;
+    },
+  ) {
     return this.prisma.employee.findMany({
       where: {
         organizationId: orgId,
@@ -56,9 +60,15 @@ export class EmployeeService {
 
   async create(orgId: string, dto: CreateEmployeeDto, actorId: string) {
     const existing = await this.prisma.employee.findUnique({
-      where: { organizationId_employeeNumber: { organizationId: orgId, employeeNumber: dto.employeeNumber } },
+      where: {
+        organizationId_employeeNumber: {
+          organizationId: orgId,
+          employeeNumber: dto.employeeNumber,
+        },
+      },
     });
-    if (existing) throw new ConflictException(`Employee number ${dto.employeeNumber} already exists`);
+    if (existing)
+      throw new ConflictException(`Employee number ${dto.employeeNumber} already exists`);
 
     return runAudited(this.prisma, actorId, (tx) =>
       tx.employee.create({
@@ -106,7 +116,9 @@ export class EmployeeService {
     });
     if (!employee) throw new NotFoundException('Employee not found');
     if (employee.version !== dto.expectedVersion) {
-      throw new ConflictException('Record was modified by another user. Please refresh and try again.');
+      throw new ConflictException(
+        'Record was modified by another user. Please refresh and try again.',
+      );
     }
 
     return runAudited(this.prisma, actorId, (tx) =>
@@ -125,7 +137,9 @@ export class EmployeeService {
           ...(dto.email !== undefined ? { email: dto.email || null } : {}),
           ...(dto.tin !== undefined ? { tin: dto.tin || null } : {}),
           ...(dto.sssGsisNumber !== undefined ? { sssGsisNumber: dto.sssGsisNumber || null } : {}),
-          ...(dto.philhealthNumber !== undefined ? { philhealthNumber: dto.philhealthNumber || null } : {}),
+          ...(dto.philhealthNumber !== undefined
+            ? { philhealthNumber: dto.philhealthNumber || null }
+            : {}),
           ...(dto.pagibigNumber !== undefined ? { pagibigNumber: dto.pagibigNumber || null } : {}),
           ...(dto.departmentId !== undefined ? { departmentId: dto.departmentId || null } : {}),
           ...(dto.positionId !== undefined ? { positionId: dto.positionId || null } : {}),
@@ -135,7 +149,9 @@ export class EmployeeService {
           ...(dto.dateHired ? { dateHired: new Date(dto.dateHired) } : {}),
           ...(dto.dateRegularized ? { dateRegularized: new Date(dto.dateRegularized) } : {}),
           ...(dto.dateSeparated ? { dateSeparated: new Date(dto.dateSeparated) } : {}),
-          ...(dto.separationReason !== undefined ? { separationReason: dto.separationReason || null } : {}),
+          ...(dto.separationReason !== undefined
+            ? { separationReason: dto.separationReason || null }
+            : {}),
           ...(dto.basicSalary !== undefined ? { basicSalary: dto.basicSalary } : {}),
           ...(dto.salaryGrade !== undefined ? { salaryGrade: dto.salaryGrade } : {}),
           ...(dto.salaryStep !== undefined ? { salaryStep: dto.salaryStep } : {}),

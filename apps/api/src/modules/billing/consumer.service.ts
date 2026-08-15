@@ -2,18 +2,22 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 
 import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
-import type { CreateConsumerDto, UpdateConsumerDto } from './dto/consumer.dto';
+
+import { CreateConsumerDto, UpdateConsumerDto } from './dto/consumer.dto';
 
 @Injectable()
 export class ConsumerService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(orgId: string, filters?: {
-    status?: string;
-    consumerType?: string;
-    barangay?: string;
-    search?: string;
-  }) {
+  async findAll(
+    orgId: string,
+    filters?: {
+      status?: string;
+      consumerType?: string;
+      barangay?: string;
+      search?: string;
+    },
+  ) {
     return this.prisma.consumer.findMany({
       where: {
         organizationId: orgId,
@@ -115,11 +119,20 @@ export class ConsumerService {
     );
   }
 
-  async assignMeter(orgId: string, userId: string, consumerId: string, dto: { meterId: string; installedDate: string; remarks?: string }) {
-    const consumer = await this.prisma.consumer.findFirst({ where: { id: consumerId, organizationId: orgId } });
+  async assignMeter(
+    orgId: string,
+    userId: string,
+    consumerId: string,
+    dto: { meterId: string; installedDate: string; remarks?: string },
+  ) {
+    const consumer = await this.prisma.consumer.findFirst({
+      where: { id: consumerId, organizationId: orgId },
+    });
     if (!consumer) throw new NotFoundException('Consumer not found.');
 
-    const meter = await this.prisma.meter.findFirst({ where: { id: dto.meterId, organizationId: orgId, status: 'active' } });
+    const meter = await this.prisma.meter.findFirst({
+      where: { id: dto.meterId, organizationId: orgId, status: 'active' },
+    });
     if (!meter) throw new NotFoundException('Meter not found or not active.');
 
     return runAudited(this.prisma, userId, async (tx) => {

@@ -6,7 +6,7 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
 
-import type { AccountingDashboardService } from './dashboard.service';
+import { AccountingDashboardService } from './dashboard.service';
 
 @Controller('accounting/dashboard')
 @UseGuards(JwtAuthGuard, PermissionsGuard)

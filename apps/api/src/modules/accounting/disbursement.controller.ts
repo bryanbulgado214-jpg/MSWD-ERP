@@ -15,8 +15,8 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
 
-import type { DisbursementService } from './disbursement.service';
-import type { CreateDisbursementDto } from './dto/disbursement.dto';
+import { DisbursementService } from './disbursement.service';
+import { CreateDisbursementDto } from './dto/disbursement.dto';
 
 @Controller('accounting/disbursements')
 @UseGuards(JwtAuthGuard, PermissionsGuard)

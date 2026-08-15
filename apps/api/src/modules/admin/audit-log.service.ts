@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { AuditAction, Prisma } from '@prisma/client';
 
-import type { PrismaService } from '../../database/prisma.service';
+import { PrismaService } from '../../database/prisma.service';
 
 /**
  * Maps database tables to the functional module they belong to, so the

@@ -6,8 +6,8 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
 
-import type { DetailedStatementsService } from './detailed-statements.service';
-import type { FinancialStatementsService } from './financial-statements.service';
+import { DetailedStatementsService } from './detailed-statements.service';
+import { FinancialStatementsService } from './financial-statements.service';
 
 @Controller('accounting/financial-statements')
 @UseGuards(JwtAuthGuard, PermissionsGuard)

@@ -1,9 +1,15 @@
-import { ForbiddenException, Injectable, type CanActivate, type ExecutionContext } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  type CanActivate,
+  type ExecutionContext,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
 import { PrismaService } from '../../database/prisma.service';
 import type { AuthenticatedUser } from '../../modules/auth/jwt.strategy';
-import { PERMISSIONS_KEY } from '../decorators/require-permissions.decorator';
+import { AUTH_ONLY_KEY, PERMISSIONS_KEY } from '../decorators/require-permissions.decorator';
+
 import { getGrantedPermissionCodes } from './get-granted-permission-codes';
 
 /**
@@ -23,19 +29,30 @@ export class PermissionsGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const required = this.reflector.getAllAndOverride<string[] | undefined>(PERMISSIONS_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-    if (!required || required.length === 0) {
-      return true; // route declared no permission requirement
-    }
-
     const request = context.switchToHttp().getRequest();
     const user = request.user as AuthenticatedUser | undefined;
     if (!user) {
       // Should not happen if JwtAuthGuard ran first, but fail closed.
       throw new ForbiddenException('Not authenticated.');
+    }
+
+    const targets = [context.getHandler(), context.getClass()];
+
+    // Explicit opt-out: a deliberately permission-free (login-only) route.
+    if (this.reflector.getAllAndOverride<boolean>(AUTH_ONLY_KEY, targets)) {
+      return true;
+    }
+
+    const required = this.reflector.getAllAndOverride<string[] | undefined>(
+      PERMISSIONS_KEY,
+      targets,
+    );
+    if (!required || required.length === 0) {
+      // FAIL CLOSED. A route behind this guard that declares no permission
+      // requirement is a misconfiguration (a forgotten @RequirePermissions).
+      // Deny it rather than silently exposing it to any authenticated user.
+      // Intentionally permission-free routes must opt in with @AuthenticatedOnly().
+      throw new ForbiddenException('Access denied: route has no permission requirement declared.');
     }
 
     const granted = await getGrantedPermissionCodes(this.prisma, user.userId);

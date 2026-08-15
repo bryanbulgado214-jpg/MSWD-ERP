@@ -13,14 +13,19 @@ fixed** (out of the accounting-cashier scope you set), listed here for triage.
 
 ## Pre-existing holes — NOT fixed (need triage)
 
-### 🔴 1. `PermissionsGuard` fails OPEN
+### ✅ 1. `PermissionsGuard` fails OPEN — FIXED
 
-`apps/api/src/common/guards/permissions.guard.ts` — a route with no `@RequirePermissions`
-returns `true` (any authenticated user passes). There is no global guard and no `@Public()`
-decorator. The whole model depends on every developer adding the decorator.
-**Not fixed:** the correct fix (fail-closed / global `APP_GUARD` + explicit `@Public()`
-allowlist) is app-wide and would immediately deny the `notification` controller (below),
-so it crosses out of the accounting-only scope. **Recommend** doing it as its own change.
+`apps/api/src/common/guards/permissions.guard.ts` now **fails closed**: a route behind the
+guard that declares neither `@RequirePermissions` nor the new `@AuthenticatedOnly()` opt-out
+is **denied** (403), instead of passing any authenticated user. A forgotten decorator can no
+longer silently expose an endpoint — it surfaces immediately as a denial. Audit at the time
+of the fix: all 396 routes across the 68 guarded controllers already declared
+`@RequirePermissions`, so nothing broke. `permissions.guard.spec.ts` asserts both the
+fail-closed default and the `@AuthenticatedOnly` escape hatch.
+**Residual (separate):** this hardens controllers that _use_ PermissionsGuard. Controllers
+that omit the guard entirely (e.g. `notification`, #2) are unaffected — a global `APP_GUARD`
+
+- `@Public()` allowlist would additionally catch those, and remains a good follow-up.
 
 ### 🟡 2. `notification` controller mutations are ungated
 

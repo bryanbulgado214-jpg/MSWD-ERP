@@ -2,7 +2,8 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 
 import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
-import type { CreateRateScheduleDto, UpdateRateScheduleDto } from './dto/rate-schedule.dto';
+
+import { CreateRateScheduleDto, UpdateRateScheduleDto } from './dto/rate-schedule.dto';
 
 @Injectable()
 export class RateScheduleService {
@@ -46,7 +47,9 @@ export class RateScheduleService {
           effectiveDate: new Date(dto.effectiveDate),
           ...(dto.endDate ? { endDate: new Date(dto.endDate) } : {}),
           minimumCharge: dto.minimumCharge,
-          ...(dto.minimumConsumption !== undefined ? { minimumConsumption: dto.minimumConsumption } : {}),
+          ...(dto.minimumConsumption !== undefined
+            ? { minimumConsumption: dto.minimumConsumption }
+            : {}),
           ...(dto.environmentalFee !== undefined ? { environmentalFee: dto.environmentalFee } : {}),
           ...(dto.sewerCharge !== undefined ? { sewerCharge: dto.sewerCharge } : {}),
           ...(dto.maintenanceFee !== undefined ? { maintenanceFee: dto.maintenanceFee } : {}),
@@ -67,7 +70,9 @@ export class RateScheduleService {
   }
 
   async update(orgId: string, userId: string, id: string, dto: UpdateRateScheduleDto) {
-    const existing = await this.prisma.rateSchedule.findFirst({ where: { id, organizationId: orgId } });
+    const existing = await this.prisma.rateSchedule.findFirst({
+      where: { id, organizationId: orgId },
+    });
     if (!existing) throw new NotFoundException('Rate schedule not found.');
     if (existing.version !== dto.expectedVersion)
       throw new ConflictException('Rate schedule was modified by another user — please reload.');
@@ -91,9 +96,13 @@ export class RateScheduleService {
         data: {
           ...(dto.name ? { name: dto.name } : {}),
           ...(dto.effectiveDate ? { effectiveDate: new Date(dto.effectiveDate) } : {}),
-          ...(dto.endDate !== undefined ? { endDate: dto.endDate ? new Date(dto.endDate) : null } : {}),
+          ...(dto.endDate !== undefined
+            ? { endDate: dto.endDate ? new Date(dto.endDate) : null }
+            : {}),
           ...(dto.minimumCharge !== undefined ? { minimumCharge: dto.minimumCharge } : {}),
-          ...(dto.minimumConsumption !== undefined ? { minimumConsumption: dto.minimumConsumption } : {}),
+          ...(dto.minimumConsumption !== undefined
+            ? { minimumConsumption: dto.minimumConsumption }
+            : {}),
           ...(dto.environmentalFee !== undefined ? { environmentalFee: dto.environmentalFee } : {}),
           ...(dto.sewerCharge !== undefined ? { sewerCharge: dto.sewerCharge } : {}),
           ...(dto.maintenanceFee !== undefined ? { maintenanceFee: dto.maintenanceFee } : {}),

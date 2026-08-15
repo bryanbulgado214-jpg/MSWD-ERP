@@ -15,8 +15,8 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
 
-import type { CheckService } from './check.service';
-import type { PrintCheckDto, TransitionCheckDto, VoidCheckDto } from './dto/check.dto';
+import { CheckService } from './check.service';
+import { PrintCheckDto, TransitionCheckDto, VoidCheckDto } from './dto/check.dto';
 
 @Controller('accounting/checks')
 @UseGuards(JwtAuthGuard, PermissionsGuard)

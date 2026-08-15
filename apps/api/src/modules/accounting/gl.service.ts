@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import type { PrismaService } from '../../database/prisma.service';
+import { PrismaService } from '../../database/prisma.service';
 
 export interface TrialBalanceRow {
   accountId: string;

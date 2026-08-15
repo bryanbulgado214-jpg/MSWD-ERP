@@ -1,11 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
-import type { PrismaService } from '../../database/prisma.service';
+import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
 
-import type { AutoJevService } from './auto-jev.service';
-import type { CreateDisbursementDto } from './dto/disbursement.dto';
+import { AutoJevService } from './auto-jev.service';
+import { CreateDisbursementDto } from './dto/disbursement.dto';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 

@@ -2,7 +2,8 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 
 import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
-import type { CreateMeterDto, UpdateMeterDto } from './dto/meter.dto';
+
+import { CreateMeterDto, UpdateMeterDto } from './dto/meter.dto';
 
 @Injectable()
 export class MeterService {
@@ -44,7 +45,13 @@ export class MeterService {
         consumerMeters: {
           include: {
             consumer: {
-              select: { id: true, accountNumber: true, firstName: true, lastName: true, status: true },
+              select: {
+                id: true,
+                accountNumber: true,
+                firstName: true,
+                lastName: true,
+                status: true,
+              },
             },
           },
           orderBy: { installedDate: 'desc' },

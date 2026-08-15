@@ -1,8 +1,14 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
-import type { CreateMeterReadingDto, UpdateMeterReadingDto } from './dto/meter-reading.dto';
+
+import { CreateMeterReadingDto, UpdateMeterReadingDto } from './dto/meter-reading.dto';
 
 @Injectable()
 export class MeterReadingService {
@@ -12,7 +18,16 @@ export class MeterReadingService {
     return this.prisma.meterReading.findMany({
       where: { organizationId: orgId, billingPeriodId },
       include: {
-        consumer: { select: { id: true, accountNumber: true, firstName: true, lastName: true, consumerType: true, status: true } },
+        consumer: {
+          select: {
+            id: true,
+            accountNumber: true,
+            firstName: true,
+            lastName: true,
+            consumerType: true,
+            status: true,
+          },
+        },
         meter: { select: { id: true, serialNumber: true } },
         reader: { select: { id: true, username: true } },
       },
@@ -24,7 +39,15 @@ export class MeterReadingService {
     const reading = await this.prisma.meterReading.findFirst({
       where: { id, organizationId: orgId },
       include: {
-        consumer: { select: { id: true, accountNumber: true, firstName: true, lastName: true, consumerType: true } },
+        consumer: {
+          select: {
+            id: true,
+            accountNumber: true,
+            firstName: true,
+            lastName: true,
+            consumerType: true,
+          },
+        },
         meter: { select: { id: true, serialNumber: true, brand: true } },
         billingPeriod: { select: { id: true, name: true, billingMonth: true, billingYear: true } },
         reader: { select: { id: true, username: true } },
@@ -45,9 +68,17 @@ export class MeterReadingService {
       throw new BadRequestException('Billing period is not open for reading entry.');
 
     const existing = await this.prisma.meterReading.findUnique({
-      where: { consumerId_billingPeriodId: { consumerId: dto.consumerId, billingPeriodId: dto.billingPeriodId } },
+      where: {
+        consumerId_billingPeriodId: {
+          consumerId: dto.consumerId,
+          billingPeriodId: dto.billingPeriodId,
+        },
+      },
     });
-    if (existing) throw new ConflictException('A reading already exists for this consumer in this billing period.');
+    if (existing)
+      throw new ConflictException(
+        'A reading already exists for this consumer in this billing period.',
+      );
 
     if (dto.currentReading < dto.previousReading)
       throw new BadRequestException('Current reading cannot be less than previous reading.');
@@ -71,7 +102,16 @@ export class MeterReadingService {
           updatedBy: userId,
         },
         include: {
-          consumer: { select: { id: true, accountNumber: true, firstName: true, lastName: true, consumerType: true, status: true } },
+          consumer: {
+            select: {
+              id: true,
+              accountNumber: true,
+              firstName: true,
+              lastName: true,
+              consumerType: true,
+              status: true,
+            },
+          },
           meter: { select: { id: true, serialNumber: true } },
         },
       });
@@ -108,7 +148,16 @@ export class MeterReadingService {
           updatedBy: userId,
         },
         include: {
-          consumer: { select: { id: true, accountNumber: true, firstName: true, lastName: true, consumerType: true, status: true } },
+          consumer: {
+            select: {
+              id: true,
+              accountNumber: true,
+              firstName: true,
+              lastName: true,
+              consumerType: true,
+              status: true,
+            },
+          },
           meter: { select: { id: true, serialNumber: true } },
         },
       });
@@ -128,7 +177,10 @@ export class MeterReadingService {
       where: {
         organizationId: orgId,
         status: 'active',
-        id: { notIn: readConsumerIds.length > 0 ? readConsumerIds : ['00000000-0000-0000-0000-000000000000'] },
+        id: {
+          notIn:
+            readConsumerIds.length > 0 ? readConsumerIds : ['00000000-0000-0000-0000-000000000000'],
+        },
         consumerMeters: { some: { isCurrent: true } },
       },
       include: {

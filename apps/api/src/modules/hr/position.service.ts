@@ -1,7 +1,8 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 
 import { PrismaService } from '../../database/prisma.service';
-import type { CreatePositionDto, UpdatePositionDto } from './dto/employee.dto';
+
+import { CreatePositionDto, UpdatePositionDto } from './dto/employee.dto';
 
 @Injectable()
 export class PositionService {

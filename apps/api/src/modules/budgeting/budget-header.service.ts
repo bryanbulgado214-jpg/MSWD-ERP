@@ -4,9 +4,14 @@ import { Prisma, type BudgetHeader } from '@prisma/client';
 import { getGrantedPermissionCodes } from '../../common/guards/get-granted-permission-codes';
 import type { PaginatedResult } from '../../common/types/paginated-result';
 import { PrismaService } from '../../database/prisma.service';
+
 import { runAudited } from './audit-actor.util';
 import { BudgetValidation } from './budget-validation';
-import type { CreateBudgetHeaderDto, ListBudgetHeadersQueryDto, UpdateBudgetHeaderDto } from './dto/budget-header.dto';
+import {
+  CreateBudgetHeaderDto,
+  ListBudgetHeadersQueryDto,
+  UpdateBudgetHeaderDto,
+} from './dto/budget-header.dto';
 
 /** What the list endpoint actually returns per row — the raw
  * BudgetHeader plus the two related names a caller needs to search/
@@ -21,7 +26,11 @@ export type BudgetHeaderListItem = BudgetHeader & {
 export class BudgetHeaderService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(organizationId: string, dto: CreateBudgetHeaderDto, actorUserId?: string): Promise<BudgetHeader> {
+  async create(
+    organizationId: string,
+    dto: CreateBudgetHeaderDto,
+    actorUserId?: string,
+  ): Promise<BudgetHeader> {
     const amount = new Prisma.Decimal(dto.totalAmount);
     BudgetValidation.assertNonNegative(amount, 'totalAmount');
     BudgetValidation.assertFixedPrecision(amount, 'totalAmount');
@@ -67,7 +76,9 @@ export class BudgetHeaderService {
     const where: Prisma.BudgetHeaderWhereInput = {
       organizationId,
       ...(query.budgetVersionId ? { budgetVersionId: query.budgetVersionId } : {}),
-      ...(query.responsibilityCenterId ? { responsibilityCenterId: query.responsibilityCenterId } : {}),
+      ...(query.responsibilityCenterId
+        ? { responsibilityCenterId: query.responsibilityCenterId }
+        : {}),
       ...(query.fundSourceId ? { fundSourceId: query.fundSourceId } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.search
@@ -159,7 +170,10 @@ export class BudgetHeaderService {
     );
   }
 
-  private async requireSameOrganization(organizationId: string, dto: CreateBudgetHeaderDto): Promise<void> {
+  private async requireSameOrganization(
+    organizationId: string,
+    dto: CreateBudgetHeaderDto,
+  ): Promise<void> {
     const [version, responsibilityCenter, fundSource] = await Promise.all([
       this.prisma.budgetVersion.findFirst({
         where: { id: dto.budgetVersionId, budgetCycle: { organizationId } },
@@ -176,7 +190,8 @@ export class BudgetHeaderService {
     ]);
 
     if (!version) throw new NotFoundException(`Budget version ${dto.budgetVersionId} not found.`);
-    if (!responsibilityCenter) throw new NotFoundException(`Responsibility center ${dto.responsibilityCenterId} not found.`);
+    if (!responsibilityCenter)
+      throw new NotFoundException(`Responsibility center ${dto.responsibilityCenterId} not found.`);
     if (!fundSource) throw new NotFoundException(`Fund source ${dto.fundSourceId} not found.`);
   }
 }
