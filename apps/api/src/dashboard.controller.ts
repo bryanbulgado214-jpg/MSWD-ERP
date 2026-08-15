@@ -20,7 +20,14 @@ interface PendingActionItem {
 }
 
 function prItem(
-  pr: { id: string; prNumber: string; title: string; totalAmount: { toString(): string }; createdAt: Date; creator?: { username: string } | null },
+  pr: {
+    id: string;
+    prNumber: string;
+    title: string;
+    totalAmount: { toString(): string };
+    createdAt: Date;
+    creator?: { username: string } | null;
+  },
   type: string,
   actionLabel: string,
 ): PendingActionItem {
@@ -58,7 +65,9 @@ export class DashboardController {
     if (perms.has('procurement.pr.endorse')) {
       const prs = await this.prisma.purchaseRequest.findMany({
         where: { organizationId: orgId, status: 'submitted' },
-        include: prInclude, orderBy: prOrder, take: 20,
+        include: prInclude,
+        orderBy: prOrder,
+        take: 20,
       });
       for (const pr of prs) items.push(prItem(pr, 'pr_endorsement', 'Endorse'));
     }
@@ -66,7 +75,9 @@ export class DashboardController {
     if (perms.has('procurement.pr.budget_certify')) {
       const prs = await this.prisma.purchaseRequest.findMany({
         where: { organizationId: orgId, status: 'endorsed' },
-        include: prInclude, orderBy: prOrder, take: 20,
+        include: prInclude,
+        orderBy: prOrder,
+        take: 20,
       });
       for (const pr of prs) items.push(prItem(pr, 'pr_budget_certification', 'Certify Budget'));
     }
@@ -74,7 +85,9 @@ export class DashboardController {
     if (perms.has('procurement.pr.final_approve')) {
       const prs = await this.prisma.purchaseRequest.findMany({
         where: { organizationId: orgId, status: 'budget_certified' },
-        include: prInclude, orderBy: prOrder, take: 20,
+        include: prInclude,
+        orderBy: prOrder,
+        take: 20,
       });
       for (const pr of prs) items.push(prItem(pr, 'pr_approval', 'Approve'));
     }
@@ -82,9 +95,12 @@ export class DashboardController {
     if (perms.has('procurement.pr.accept_procurement')) {
       const prs = await this.prisma.purchaseRequest.findMany({
         where: { organizationId: orgId, status: 'approved' },
-        include: prInclude, orderBy: prOrder, take: 20,
+        include: prInclude,
+        orderBy: prOrder,
+        take: 20,
       });
-      for (const pr of prs) items.push(prItem(pr, 'pr_procurement_accept', 'Accept for Procurement'));
+      for (const pr of prs)
+        items.push(prItem(pr, 'pr_procurement_accept', 'Accept for Procurement'));
     }
 
     if (perms.has('budgeting.header.approve')) {
@@ -232,7 +248,9 @@ export class DashboardController {
         module: 'procurement',
         type: 'pr_returned',
         label: pr.prNumber,
-        description: pr.remarks ? `${pr.title} — ${pr.remarks}` : `${pr.title} — returned for correction`,
+        description: pr.remarks
+          ? `${pr.title} — ${pr.remarks}`
+          : `${pr.title} — returned for correction`,
         amount: pr.totalAmount.toString(),
         createdAt: pr.updatedAt.toISOString(),
         actionLabel: 'Edit & Resubmit',
@@ -262,29 +280,54 @@ export class DashboardController {
           },
         }),
       ]);
-      stats.push({ label: 'My Drafts', value: myDrafts, color: '#667085', link: '/procurement?status=draft' });
-      stats.push({ label: 'Active PRs', value: totalActive, color: '#175cd3', link: '/procurement?status=active' });
+      stats.push({
+        label: 'My Drafts',
+        value: myDrafts,
+        color: '#667085',
+        link: '/procurement?status=draft',
+      });
+      stats.push({
+        label: 'Active PRs',
+        value: totalActive,
+        color: '#175cd3',
+        link: '/procurement?status=active',
+      });
     }
 
     if (perms.has('procurement.pr.endorse')) {
       const count = await this.prisma.purchaseRequest.count({
         where: { organizationId: orgId, status: 'submitted' },
       });
-      stats.push({ label: 'Awaiting Endorsement', value: count, color: '#f59e0b', link: '/procurement?status=submitted' });
+      stats.push({
+        label: 'Awaiting Endorsement',
+        value: count,
+        color: '#f59e0b',
+        link: '/procurement?status=submitted',
+      });
     }
 
     if (perms.has('procurement.pr.budget_certify')) {
       const count = await this.prisma.purchaseRequest.count({
         where: { organizationId: orgId, status: 'endorsed' },
       });
-      stats.push({ label: 'Awaiting Budget Cert.', value: count, color: '#f59e0b', link: '/procurement?status=endorsed' });
+      stats.push({
+        label: 'Awaiting Budget Cert.',
+        value: count,
+        color: '#f59e0b',
+        link: '/procurement?status=endorsed',
+      });
     }
 
     if (perms.has('procurement.pr.final_approve')) {
       const count = await this.prisma.purchaseRequest.count({
         where: { organizationId: orgId, status: 'budget_certified' },
       });
-      stats.push({ label: 'Awaiting Approval', value: count, color: '#f59e0b', link: '/procurement?status=budget_certified' });
+      stats.push({
+        label: 'Awaiting Approval',
+        value: count,
+        color: '#f59e0b',
+        link: '/procurement?status=budget_certified',
+      });
     }
 
     if (perms.has('procurement.po.create') || perms.has('procurement.pr.accept_procurement')) {
@@ -296,8 +339,18 @@ export class DashboardController {
           where: { organizationId: orgId, status: { notIn: ['cancelled'] } },
         }),
       ]);
-      stats.push({ label: 'Completed PRs', value: completedPRs, color: '#067647', link: '/procurement?status=completed' });
-      stats.push({ label: 'Active POs', value: activePOs, color: '#0369a1', link: '/procurement/purchase-orders?status=active' });
+      stats.push({
+        label: 'Completed PRs',
+        value: completedPRs,
+        color: '#067647',
+        link: '/procurement?status=completed',
+      });
+      stats.push({
+        label: 'Active POs',
+        value: activePOs,
+        color: '#0369a1',
+        link: '/procurement/purchase-orders?status=active',
+      });
     }
 
     return { stats };
@@ -305,7 +358,8 @@ export class DashboardController {
 
   @Get('executive')
   async getExecutiveSummary(@CurrentUser() user: AuthenticatedUser) {
-    return this.executiveDashboard.getSummary(user.organizationId);
+    const perms = await this.getPermissions(user.userId);
+    return this.executiveDashboard.getSummary(user.organizationId, perms);
   }
 
   private async getPermissions(userId: string): Promise<Set<string>> {

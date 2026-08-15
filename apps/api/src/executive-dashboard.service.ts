@@ -57,18 +57,38 @@ export interface ExecutiveSummary {
 export class ExecutiveDashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getSummary(organizationId: string): Promise<ExecutiveSummary> {
-    const [billing, procurement, hr, budget, inventory, accounting] =
-      await Promise.all([
-        this.getBilling(organizationId),
-        this.getProcurement(organizationId),
-        this.getHr(organizationId),
-        this.getBudget(organizationId),
-        this.getInventory(organizationId),
-        this.getAccounting(organizationId),
-      ]);
+  /**
+   * Cross-module summary, gated per-section by the caller's permissions.
+   * Each section is only computed and returned when the user holds that
+   * module's read permission — so a cashier (no `accounting.read`) never
+   * receives GL figures, a clerk never receives payroll totals, etc.
+   */
+  async getSummary(
+    organizationId: string,
+    permissions: Set<string>,
+  ): Promise<Partial<ExecutiveSummary>> {
+    const summary: Partial<ExecutiveSummary> = {};
+    const tasks: Promise<void>[] = [];
 
-    return { billing, procurement, hr, budget, inventory, accounting };
+    const gate = <K extends keyof ExecutiveSummary>(
+      permission: string,
+      key: K,
+      load: () => Promise<ExecutiveSummary[K]>,
+    ) => {
+      if (permissions.has(permission)) {
+        tasks.push(load().then((value) => void (summary[key] = value)));
+      }
+    };
+
+    gate('billing.read', 'billing', () => this.getBilling(organizationId));
+    gate('procurement.read', 'procurement', () => this.getProcurement(organizationId));
+    gate('hr.read', 'hr', () => this.getHr(organizationId));
+    gate('budgeting.read', 'budget', () => this.getBudget(organizationId));
+    gate('inventory.read', 'inventory', () => this.getInventory(organizationId));
+    gate('accounting.read', 'accounting', () => this.getAccounting(organizationId));
+
+    await Promise.all(tasks);
+    return summary;
   }
 
   private async getBilling(orgId: string): Promise<ExecutiveSummary['billing']> {
@@ -96,13 +116,26 @@ export class ExecutiveDashboardService {
     const collectionRate = billedNum > 0 ? Math.round((collectedNum / billedNum) * 10000) / 100 : 0;
 
     const activeConsumers = consumerCounts.find((c) => c.status === 'active')?._count ?? 0;
-    const disconnectedConsumers = consumerCounts.find((c) => c.status === 'disconnected')?._count ?? 0;
+    const disconnectedConsumers =
+      consumerCounts.find((c) => c.status === 'disconnected')?._count ?? 0;
 
-    return { totalBilled, totalCollected, collectionRate, outstandingBalance, activeConsumers, disconnectedConsumers };
+    return {
+      totalBilled,
+      totalCollected,
+      collectionRate,
+      outstandingBalance,
+      activeConsumers,
+      disconnectedConsumers,
+    };
   }
 
   private async getProcurement(orgId: string): Promise<ExecutiveSummary['procurement']> {
-    const terminalStatuses: PurchaseRequestStatus[] = ['cancelled', 'rejected', 'voided', 'completed'];
+    const terminalStatuses: PurchaseRequestStatus[] = [
+      'cancelled',
+      'rejected',
+      'voided',
+      'completed',
+    ];
 
     const [activePRs, activePRAgg, approvedPOs, approvedPOAgg, releasedDVs, releasedDVAgg] =
       await Promise.all([
@@ -140,19 +173,20 @@ export class ExecutiveDashboardService {
   }
 
   private async getHr(orgId: string): Promise<ExecutiveSummary['hr']> {
-    const [totalEmployees, activeEmployees, onLeave, payrollAgg, paidRuns] =
-      await Promise.all([
-        this.prisma.employee.count({ where: { organizationId: orgId } }),
-        this.prisma.employee.count({ where: { organizationId: orgId, isActive: true } }),
-        this.prisma.employee.count({ where: { organizationId: orgId, employmentStatus: 'on_leave' } }),
-        this.prisma.payrollRun.aggregate({
-          where: { organizationId: orgId, status: { in: ['approved', 'paid'] } },
-          _sum: { totalGross: true, totalNet: true },
-        }),
-        this.prisma.payrollRun.count({
-          where: { organizationId: orgId, status: 'paid' },
-        }),
-      ]);
+    const [totalEmployees, activeEmployees, onLeave, payrollAgg, paidRuns] = await Promise.all([
+      this.prisma.employee.count({ where: { organizationId: orgId } }),
+      this.prisma.employee.count({ where: { organizationId: orgId, isActive: true } }),
+      this.prisma.employee.count({
+        where: { organizationId: orgId, employmentStatus: 'on_leave' },
+      }),
+      this.prisma.payrollRun.aggregate({
+        where: { organizationId: orgId, status: { in: ['approved', 'paid'] } },
+        _sum: { totalGross: true, totalNet: true },
+      }),
+      this.prisma.payrollRun.count({
+        where: { organizationId: orgId, status: 'paid' },
+      }),
+    ]);
 
     return {
       totalEmployees,
@@ -181,7 +215,8 @@ export class ExecutiveDashboardService {
     const totalObligated = releaseAgg._sum.reservedAmount?.toString() ?? '0';
     const releasedNum = Number(totalReleased);
     const obligatedNum = Number(totalObligated);
-    const utilizationRate = releasedNum > 0 ? Math.round((obligatedNum / releasedNum) * 10000) / 100 : 0;
+    const utilizationRate =
+      releasedNum > 0 ? Math.round((obligatedNum / releasedNum) * 10000) / 100 : 0;
 
     return { approvedBudget, totalReleased, totalObligated, utilizationRate };
   }

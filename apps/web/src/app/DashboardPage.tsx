@@ -29,8 +29,11 @@ interface StatCard {
   link?: string;
 }
 
+// Each section is present only when the API returns it, which happens only
+// when the signed-in user holds that module's read permission. A missing
+// section therefore means "not permitted" — render nothing for it.
 interface ExecutiveSummary {
-  billing: {
+  billing?: {
     totalBilled: string;
     totalCollected: string;
     collectionRate: number;
@@ -38,7 +41,7 @@ interface ExecutiveSummary {
     activeConsumers: number;
     disconnectedConsumers: number;
   };
-  procurement: {
+  procurement?: {
     activePRs: number;
     activePRValue: string;
     approvedPOs: number;
@@ -46,7 +49,7 @@ interface ExecutiveSummary {
     releasedDVs: number;
     releasedDVValue: string;
   };
-  hr: {
+  hr?: {
     totalEmployees: number;
     activeEmployees: number;
     onLeave: number;
@@ -54,18 +57,18 @@ interface ExecutiveSummary {
     totalPayrollNet: string;
     paidPayrollRuns: number;
   };
-  budget: {
+  budget?: {
     approvedBudget: string;
     totalReleased: string;
     totalObligated: string;
     utilizationRate: number;
   };
-  inventory: {
+  inventory?: {
     totalItems: number;
     totalValue: string;
     belowReorder: number;
   };
-  accounting: {
+  accounting?: {
     postedJevs: number;
     totalDebits: string;
     recentJevs: Array<{
@@ -183,12 +186,12 @@ export function DashboardPage() {
     day: 'numeric',
   });
 
-  const hasBilling = hasModuleAccess(permissions, 'billing');
-  const hasProcurement = hasModuleAccess(permissions, 'procurement');
-  const hasHr = hasModuleAccess(permissions, 'hr');
-  const hasBudgeting = hasModuleAccess(permissions, 'budgeting');
-  const hasInventory = hasModuleAccess(permissions, 'inventory');
-  const hasAccounting = hasModuleAccess(permissions, 'accounting');
+  // Executive-summary cards are gated on the presence of each section, which
+  // the API only returns when the user is permitted to see it. (The Modules
+  // grid below still uses hasModuleAccess — navigation access is broader than
+  // KPI visibility, e.g. a cashier reaches the Accounting module for checks
+  // but must not see GL figures here.)
+  const execSections = exec ? Object.keys(exec).length : 0;
 
   return (
     <div className="dashboard">
@@ -198,13 +201,13 @@ export function DashboardPage() {
       </div>
 
       {/* ── Executive Summary ── */}
-      {exec && (
+      {exec && execSections > 0 && (
         <div className="dashboard__section">
           <h2 className="dashboard__section-title">Executive Summary</h2>
 
           <div className="exec-grid">
             {/* Revenue & Collections */}
-            {hasBilling && (
+            {exec.billing && (
               <Link to="/billing" className="exec-card exec-card--blue">
                 <div className="exec-card__header">Billing & Collections</div>
                 <div className="exec-card__row">
@@ -243,7 +246,7 @@ export function DashboardPage() {
             )}
 
             {/* Budget */}
-            {hasBudgeting && (
+            {exec.budget && (
               <Link to="/budgeting" className="exec-card exec-card--teal">
                 <div className="exec-card__header">Budget</div>
                 <div className="exec-card__row">
@@ -270,7 +273,7 @@ export function DashboardPage() {
             )}
 
             {/* Procurement & Expenditures */}
-            {hasProcurement && (
+            {exec.procurement && (
               <Link to="/procurement" className="exec-card exec-card--navy">
                 <div className="exec-card__header">Procurement</div>
                 <div className="exec-card__row">
@@ -298,7 +301,7 @@ export function DashboardPage() {
             )}
 
             {/* HR & Payroll */}
-            {hasHr && (
+            {exec.hr && (
               <Link to="/hr" className="exec-card exec-card--purple">
                 <div className="exec-card__header">HR & Payroll</div>
                 <div className="exec-card__row">
@@ -329,7 +332,7 @@ export function DashboardPage() {
             )}
 
             {/* Inventory */}
-            {hasInventory && (
+            {exec.inventory && (
               <Link to="/inventory" className="exec-card exec-card--amber">
                 <div className="exec-card__header">Inventory</div>
                 <div className="exec-card__row">
@@ -352,7 +355,7 @@ export function DashboardPage() {
             )}
 
             {/* Accounting */}
-            {hasAccounting && (
+            {exec.accounting && (
               <Link to="/accounting" className="exec-card exec-card--slate">
                 <div className="exec-card__header">Accounting</div>
                 <div className="exec-card__row">
@@ -370,7 +373,7 @@ export function DashboardPage() {
           </div>
 
           {/* Recent JEVs table */}
-          {hasAccounting && exec.accounting.recentJevs.length > 0 && (
+          {exec.accounting && exec.accounting.recentJevs.length > 0 && (
             <div className="exec-jevs">
               <h3 className="exec-jevs__title">Recent Journal Entry Vouchers</h3>
               <table className="exec-jevs__table">
