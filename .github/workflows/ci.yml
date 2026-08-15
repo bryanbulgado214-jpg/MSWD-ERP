@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    # Postgres for the DB-backed integration specs. The smoke test itself needs
+    # no database (it stubs Prisma), so it runs and gates the build even before
+    # the DB is touched.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mswd_erp
+          POSTGRES_PASSWORD: mswd_erp_dev_password
+          POSTGRES_DB: mswd_erp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mswd_erp"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://mswd_erp:mswd_erp_dev_password@localhost:5432/mswd_erp
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate --workspace=apps/api
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      # Fast, database-free gate: boots the whole Nest app (catches DI/wiring
+      # breaks) and drives real HTTP through the ValidationPipe (catches DTO
+      # breaks) — the failure modes unit tests can't see.
+      - name: Smoke test (app boot + request pipeline)
+        run: npm run test:smoke --workspace=apps/api
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
+
+      - name: Seed demo data
+        run: npm run seed:demo --workspace=apps/api
+
+      - name: Full API test suite
+        run: npm test --workspace=apps/api
