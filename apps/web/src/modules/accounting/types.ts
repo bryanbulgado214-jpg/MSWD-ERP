@@ -431,6 +431,8 @@ export interface DisbursementSummary {
   grossAmount: string;
   netAmount: string;
   status: string;
+  /** Latest issued check's status (cashier's payment lifecycle), or null if no check yet. */
+  checkStatus: string | null;
   payeeName: string | null;
   supplier: { name: string } | null;
 }

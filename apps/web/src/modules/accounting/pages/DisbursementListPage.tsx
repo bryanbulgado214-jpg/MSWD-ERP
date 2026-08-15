@@ -28,6 +28,7 @@ const DV_TYPE_LABELS: Record<string, string> = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
+  // DV lifecycle (accountant / procurement side)
   draft: 'Draft',
   for_certification: 'For Certification',
   certified: 'Certified',
@@ -35,7 +36,26 @@ const STATUS_LABELS: Record<string, string> = {
   approved: 'Approved',
   released: 'Released',
   cancelled: 'Cancelled',
+  // Check lifecycle (cashier side) — shown once a check has been issued so the
+  // DV register mirrors the cashier's Check Register.
+  pending: 'Pending (for printing)',
+  assigned: 'Assigned',
+  printed: 'Printed',
+  cleared: 'Cleared',
+  stale_dated: 'Stale-dated',
+  spoiled: 'Spoiled',
+  voided: 'Voided',
 };
+
+/**
+ * Once a check has been issued for a DV, its status (the cashier's payment
+ * lifecycle: pending → printed → released → cleared) is what both the cashier
+ * and the accountant should see. Fall back to the DV's own status before any
+ * check exists.
+ */
+function effectiveStatus(dv: DisbursementSummary): string {
+  return dv.checkStatus ?? dv.status;
+}
 
 export default function DisbursementListPage() {
   const { permissions } = useAuth();
@@ -157,7 +177,9 @@ export default function DisbursementListPage() {
                   </td>
                   <td className="acct-text-right acct-text-mono">{formatPeso(dv.netAmount)}</td>
                   <td>
-                    <span className="acct-badge">{STATUS_LABELS[dv.status] ?? dv.status}</span>
+                    <span className="acct-badge">
+                      {STATUS_LABELS[effectiveStatus(dv)] ?? effectiveStatus(dv)}
+                    </span>
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>

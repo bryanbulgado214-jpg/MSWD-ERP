@@ -57,7 +57,7 @@ export function ApRegisterReportPage() {
                 <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>
                   {formatPeso(r.netAmount)}
                 </td>
-                <td>{r.status.replace(/_/g, ' ')}</td>
+                <td>{(r.checkStatus ?? r.status).replace(/_/g, ' ')}</td>
               </tr>
             ))}
           </tbody>

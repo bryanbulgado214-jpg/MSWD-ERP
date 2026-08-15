@@ -5,7 +5,14 @@ import type { DisbursementSummary } from '../../accounting/types';
 import { formatPeso } from '../../budgeting/format-peso';
 
 const payeeOf = (d: DisbursementSummary) => d.supplier?.name ?? d.payeeName ?? '—';
-const SETTLED = new Set(['released', 'cleared', 'paid']);
+// Once a check is issued, its status is the true payment state (mirrors the
+// cashier and the Disbursement Vouchers register); fall back to the DV's own
+// status for non-check payments.
+const shownStatus = (d: DisbursementSummary) => d.checkStatus ?? d.status;
+// A payable is settled only once the payment actually goes out — the check is
+// released to the payee or cleared by the bank (or, for non-check DVs, the DV
+// itself is released).
+const SETTLED = new Set(['released', 'cleared']);
 
 /** AP Subsidiary Ledger — disbursement vouchers grouped by payee/supplier. */
 export function ApSubsidiaryLedgerPage() {
@@ -79,10 +86,10 @@ export function ApSubsidiaryLedgerPage() {
                   <td className="num">{formatPeso(d.grossAmount)}</td>
                   <td className="num">{formatPeso(d.netAmount)}</td>
                   <td>
-                    <span className={`reports-badge reports-badge--${d.status}`}>
-                      {d.status.replace(/_/g, ' ')}
+                    <span className={`reports-badge reports-badge--${shownStatus(d)}`}>
+                      {shownStatus(d).replace(/_/g, ' ')}
                     </span>
-                    {!SETTLED.has(d.status) && (
+                    {!SETTLED.has(shownStatus(d)) && (
                       <span style={{ color: '#b54708', marginLeft: 6, fontSize: 11 }}>unpaid</span>
                     )}
                   </td>

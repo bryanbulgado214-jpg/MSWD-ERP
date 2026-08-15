@@ -72,7 +72,7 @@ export class DisbursementService {
     if (filters?.status) where.status = filters.status as never;
     if (filters?.dvType) where.dvType = filters.dvType as never;
 
-    return this.prisma.disbursementVoucher.findMany({
+    const dvs = await this.prisma.disbursementVoucher.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       select: {
@@ -86,8 +86,22 @@ export class DisbursementService {
         status: true,
         payeeName: true,
         supplier: { select: { name: true } },
+        // The most recently issued check. Its lifecycle
+        // (pending → printed → released → cleared) is the payment status the
+        // cashier works through; surfacing it here lets the accountant's DV
+        // register show the same state, instead of freezing at "released".
+        checks: {
+          select: { status: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
       },
     });
+
+    return dvs.map(({ checks, ...dv }) => ({
+      ...dv,
+      checkStatus: checks[0]?.status ?? null,
+    }));
   }
 
   async findOne(orgId: string, id: string) {
