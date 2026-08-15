@@ -12,6 +12,7 @@ import type {
   CoaImportConfirmResult,
   CoaImportPreviewResult,
   ApAgingResult,
+  CashActivityResult,
   CreateDisbursementInput,
   ChangesInEquityResult,
   DetailedStatement,
@@ -622,5 +623,11 @@ export async function postDisbursement(id: string): Promise<DisbursementDetail> 
 // ── Accounts-Payable Aging ──
 export async function getApAging(): Promise<ApAgingResult> {
   const res = await authFetch('/accounting/reports/ap-aging');
+  return res.json();
+}
+
+export async function getCashActivity(params?: string): Promise<CashActivityResult> {
+  const qs = params ? `?${params}` : '';
+  const res = await authFetch(`/accounting/reports/cash-activity${qs}`);
   return res.json();
 }

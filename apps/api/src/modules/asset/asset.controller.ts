@@ -1,18 +1,9 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Put,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
 
 import { AssetService } from './asset.service';
@@ -78,10 +69,7 @@ export class AssetController {
 
   @Get('depreciation-runs')
   @RequirePermissions('asset.read')
-  findAllRuns(
-    @CurrentUser() user: AuthenticatedUser,
-    @Query('status') status?: string,
-  ) {
+  findAllRuns(@CurrentUser() user: AuthenticatedUser, @Query('status') status?: string) {
     return this.assetService.findAllRuns(user.organizationId, status);
   }
 
@@ -121,10 +109,7 @@ export class AssetController {
 
   @Get('transfers')
   @RequirePermissions('asset.read')
-  findAllTransfers(
-    @CurrentUser() user: AuthenticatedUser,
-    @Query('status') status?: string,
-  ) {
+  findAllTransfers(@CurrentUser() user: AuthenticatedUser, @Query('status') status?: string) {
     return this.assetService.findAllTransfers(user.organizationId, status);
   }
 
@@ -157,7 +142,13 @@ export class AssetController {
     @Param('id') id: string,
     @Body() dto: RejectAssetTransferDto,
   ) {
-    return this.assetService.rejectTransfer(user.organizationId, user.userId, id, dto.version, dto.reason);
+    return this.assetService.rejectTransfer(
+      user.organizationId,
+      user.userId,
+      id,
+      dto.version,
+      dto.reason,
+    );
   }
 
   @Post('transfers/:id/complete')
@@ -195,5 +186,15 @@ export class AssetController {
     @Query('categoryId') categoryId?: string,
   ) {
     return this.assetService.getDepreciationSchedule(user.organizationId, categoryId);
+  }
+
+  /** Report-scoped fixed-asset register (accountant holds asset.reports, not asset.read). */
+  @Get('reports/register')
+  @RequirePermissions('asset.reports')
+  getRegisterReport(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('categoryId') categoryId?: string,
+  ) {
+    return this.assetService.getAssetRegister(user.organizationId, categoryId);
   }
 }

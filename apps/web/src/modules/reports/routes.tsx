@@ -7,14 +7,18 @@ import TrialBalancePage from '../accounting/pages/TrialBalancePage';
 
 import { ApAgingReportPage } from './pages/ApAgingReportPage';
 import { ApRegisterReportPage } from './pages/ApRegisterReportPage';
+import { ApSubsidiaryLedgerPage } from './pages/ApSubsidiaryLedgerPage';
 import { ArAgingReportPage } from './pages/ArAgingReportPage';
+import { ArSubsidiaryLedgerPage } from './pages/ArSubsidiaryLedgerPage';
 import { BankReconciliationReportPage } from './pages/BankReconciliationReportPage';
 import { BudgetReportPage } from './pages/BudgetReportPage';
+import { CashBankActivityPage } from './pages/CashBankActivityPage';
 import { CheckRegisterReportPage } from './pages/CheckRegisterReportPage';
+import { DepreciationScheduleReportPage } from './pages/DepreciationScheduleReportPage';
 import { FixedAssetLapsingReportPage } from './pages/FixedAssetLapsingReportPage';
+import { FixedAssetRegisterPage } from './pages/FixedAssetRegisterPage';
 import { JournalEntryRegisterPage } from './pages/JournalEntryRegisterPage';
 import { ProcurementReportPage } from './pages/ProcurementReportPage';
-import { ReportPlaceholder } from './pages/ReportPlaceholder';
 import { ReportsLanding } from './pages/ReportsLanding';
 import { ReportsLayout } from './pages/ReportsLayout';
 import { SubsidiaryLedgersIndexPage } from './pages/SubsidiaryLedgersIndexPage';
@@ -39,67 +43,22 @@ export const reportsRoutes = [
 
       // ── Receivables ────────────────────────────────────────────────────
       { path: 'ar-aging', element: <ArAgingReportPage /> },
-      {
-        path: 'ar-subsidiary-ledger',
-        element: (
-          <ReportPlaceholder
-            title="AR Subsidiary Ledger"
-            description="Per-consumer receivable ledger — every bill, payment, and running balance."
-            requiredData="a per-consumer receivable ledger view over the Billing module"
-          />
-        ),
-      },
+      { path: 'ar-subsidiary-ledger', element: <ArSubsidiaryLedgerPage /> },
 
       // ── Payables ───────────────────────────────────────────────────────
       { path: 'ap-register', element: <ApRegisterReportPage /> },
       { path: 'ap-aging', element: <ApAgingReportPage /> },
-      {
-        path: 'ap-subsidiary-ledger',
-        element: (
-          <ReportPlaceholder
-            title="AP Subsidiary Ledger"
-            description="Per-payee/supplier payable ledger — vouchers, payments, and running balance."
-            requiredData="a per-supplier payable ledger view over Disbursement Vouchers"
-          />
-        ),
-      },
+      { path: 'ap-subsidiary-ledger', element: <ApSubsidiaryLedgerPage /> },
 
       // ── Cash & Banks ───────────────────────────────────────────────────
       { path: 'check-register', element: <CheckRegisterReportPage /> },
       { path: 'bank-reconciliation', element: <BankReconciliationReportPage /> },
-      {
-        path: 'cash-bank-activity',
-        element: (
-          <ReportPlaceholder
-            title="Cash / Bank Activity"
-            description="Cash-account movement (receipts and disbursements) over a selected period."
-            requiredData="a cash/bank activity view over posted GL cash-account lines"
-          />
-        ),
-      },
+      { path: 'cash-bank-activity', element: <CashBankActivityPage /> },
 
       // ── Fixed Assets ───────────────────────────────────────────────────
-      {
-        path: 'fixed-asset-register',
-        element: (
-          <ReportPlaceholder
-            title="Fixed Asset Register"
-            description="Complete register of property, plant & equipment with acquisition and custody details."
-            requiredData="a report-scoped Fixed Asset register endpoint (Asset module)"
-          />
-        ),
-      },
+      { path: 'fixed-asset-register', element: <FixedAssetRegisterPage /> },
       { path: 'fixed-asset-lapsing', element: <FixedAssetLapsingReportPage /> },
-      {
-        path: 'depreciation-schedule',
-        element: (
-          <ReportPlaceholder
-            title="Depreciation Schedule"
-            description="Period-by-period depreciation charges generated from posted depreciation runs."
-            requiredData="posted depreciation runs (Asset → Depreciation)"
-          />
-        ),
-      },
+      { path: 'depreciation-schedule', element: <DepreciationScheduleReportPage /> },
 
       // ── Procurement / Budget (existing) ────────────────────────────────
       { path: 'procurement', element: <ProcurementReportPage /> },

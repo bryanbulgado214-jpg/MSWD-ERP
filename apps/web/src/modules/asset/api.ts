@@ -211,6 +211,13 @@ export async function getAssetRegister(params?: string): Promise<AssetRegisterIt
   return res.json();
 }
 
+/** Report-scoped register (for the accountant, who holds asset.reports not asset.read). */
+export async function getAssetRegisterReport(params?: string): Promise<AssetRegisterItem[]> {
+  const qs = params ? `?${params}` : '';
+  const res = await authFetch(`/asset/reports/register${qs}`);
+  return res.json();
+}
+
 export async function getDashboard(): Promise<AssetDashboard> {
   const res = await authFetch('/asset/dashboard');
   return res.json();

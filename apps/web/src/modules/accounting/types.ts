@@ -367,6 +367,22 @@ export interface ChangesInEquityResult {
   notedBy: string;
 }
 
+export interface CashActivityAccount {
+  code: string;
+  name: string;
+  opening: number;
+  receipts: number;
+  disbursements: number;
+  closing: number;
+}
+
+export interface CashActivityResult {
+  fiscalYear: { id: string; name: string };
+  period: { id: string; name: string; periodNumber: number };
+  accounts: CashActivityAccount[];
+  totals: { opening: number; receipts: number; disbursements: number; closing: number };
+}
+
 export interface BankReconciliationDetail extends BankReconciliationListItem {
   items: Array<{
     id: string;
