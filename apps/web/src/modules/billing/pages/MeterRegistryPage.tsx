@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../../app/auth';
 import { BillingApiError, createMeter, getMeters } from '../api';
 import type { MeterListItem, MeterSize } from '../types';
+
 import BillingSubNav from './BillingSubNav';
 import './billing.css';
 
@@ -39,9 +40,13 @@ export default function MeterRegistryPage() {
   const [meterNotes, setMeterNotes] = useState('');
 
   function resetForm() {
-    setSerialNumber(''); setBrand(''); setSize('half_inch');
-    setInitialReading('0'); setMeterNotes('');
-    setFormError(''); setShowForm(false);
+    setSerialNumber('');
+    setBrand('');
+    setSize('half_inch');
+    setInitialReading('0');
+    setMeterNotes('');
+    setFormError('');
+    setShowForm(false);
   }
 
   async function load() {
@@ -53,11 +58,16 @@ export default function MeterRegistryPage() {
       const data = await getMeters(qs || undefined);
       setState({ status: 'loaded', data });
     } catch (err) {
-      setState({ status: 'error', message: err instanceof BillingApiError ? err.message : 'Failed to load meters.' });
+      setState({
+        status: 'error',
+        message: err instanceof BillingApiError ? err.message : 'Failed to load meters.',
+      });
     }
   }
 
-  useEffect(() => { load(); }, [statusFilter, search]);
+  useEffect(() => {
+    load();
+  }, [statusFilter, search]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -128,7 +138,11 @@ export default function MeterRegistryPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '12px' }}>
             <div className="bill-field">
               <label>Serial Number *</label>
-              <input required value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} />
+              <input
+                required
+                value={serialNumber}
+                onChange={(e) => setSerialNumber(e.target.value)}
+              />
             </div>
             <div className="bill-field">
               <label>Brand</label>
@@ -138,13 +152,20 @@ export default function MeterRegistryPage() {
               <label>Size</label>
               <select value={size} onChange={(e) => setSize(e.target.value)}>
                 {METER_SIZES.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
                 ))}
               </select>
             </div>
             <div className="bill-field">
               <label>Initial Reading</label>
-              <input type="number" min="0" value={initialReading} onChange={(e) => setInitialReading(e.target.value)} />
+              <input
+                type="number"
+                min="0"
+                value={initialReading}
+                onChange={(e) => setInitialReading(e.target.value)}
+              />
             </div>
           </div>
           <div className="bill-field">
@@ -152,7 +173,9 @@ export default function MeterRegistryPage() {
             <textarea rows={2} value={meterNotes} onChange={(e) => setMeterNotes(e.target.value)} />
           </div>
           <div className="bill-form-actions">
-            <button type="button" className="bill-btn" onClick={resetForm}>Cancel</button>
+            <button type="button" className="bill-btn" onClick={resetForm}>
+              Cancel
+            </button>
             <button type="submit" className="bill-btn bill-btn--primary" disabled={saving}>
               {saving ? 'Saving...' : 'Create Meter'}
             </button>
@@ -166,34 +189,38 @@ export default function MeterRegistryPage() {
         <div className="bill-empty">No meters found.</div>
       )}
       {state.status === 'loaded' && state.data.length > 0 && (
-        <table className="bill-table">
-          <thead>
-            <tr>
-              <th>Serial #</th>
-              <th>Brand</th>
-              <th>Size</th>
-              <th>Initial</th>
-              <th>Assigned To</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {state.data.map((m) => (
-              <tr key={m.id}>
-                <td>
-                  <Link to={`/billing/meters/${m.id}`} className="bill-table__link">
-                    {m.serialNumber}
-                  </Link>
-                </td>
-                <td>{m.brand || '--'}</td>
-                <td>{sizeLabel(m.size)}</td>
-                <td className="bill-text-mono">{m.initialReading}</td>
-                <td>{currentConsumer(m)}</td>
-                <td><span className={`bill-badge bill-badge--${m.status}`}>{m.status}</span></td>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="bill-table">
+            <thead>
+              <tr>
+                <th>Serial #</th>
+                <th>Brand</th>
+                <th>Size</th>
+                <th>Initial</th>
+                <th>Assigned To</th>
+                <th>Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {state.data.map((m) => (
+                <tr key={m.id}>
+                  <td>
+                    <Link to={`/billing/meters/${m.id}`} className="bill-table__link">
+                      {m.serialNumber}
+                    </Link>
+                  </td>
+                  <td>{m.brand || '--'}</td>
+                  <td>{sizeLabel(m.size)}</td>
+                  <td className="bill-text-mono">{m.initialReading}</td>
+                  <td>{currentConsumer(m)}</td>
+                  <td>
+                    <span className={`bill-badge bill-badge--${m.status}`}>{m.status}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

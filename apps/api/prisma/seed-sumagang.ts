@@ -11,14 +11,14 @@ async function main() {
   const org = await prisma.organization.findFirst();
   if (!org) throw new Error('No organization found');
 
-  // Create j.sumagang user
+  // Create j.delacruz user (sample staff account)
   const user = await prisma.user.upsert({
-    where: { organizationId_username: { organizationId: org.id, username: 'j.sumagang' } },
+    where: { organizationId_username: { organizationId: org.id, username: 'j.delacruz' } },
     update: {},
     create: {
       organizationId: org.id,
-      username: 'j.sumagang',
-      email: 'j.sumagang@mswd.gov.ph',
+      username: 'j.delacruz',
+      email: 'j.delacruz@example.invalid',
       passwordHash,
       isActive: true,
     },
@@ -67,16 +67,80 @@ async function main() {
   });
   if (!dept) throw new Error('ADMIN department not found');
 
-  // Jeramel Sumagang's PPMP items (realistic water district items)
+  // Juan Dela Cruz's PPMP items (realistic water district items)
   const ppmpItems = [
-    { code: 'JBS-001', desc: 'Money Counting Machine', uom: 'unit', qty: 2, cost: 15000, mode: 'Shopping', quarter: 1 },
-    { code: 'JBS-002', desc: 'Bond Paper (A4, 80gsm)', uom: 'ream', qty: 50, cost: 250, mode: 'Shopping', quarter: 1 },
-    { code: 'JBS-003', desc: 'Ink Cartridge (Epson 003)', uom: 'bottle', qty: 24, cost: 350, mode: 'Shopping', quarter: 1 },
-    { code: 'JBS-004', desc: 'Desktop Computer (Core i5, 16GB RAM)', uom: 'unit', qty: 1, cost: 45000, mode: 'Small Value Procurement', quarter: 2 },
-    { code: 'JBS-005', desc: 'Office Chair (Ergonomic)', uom: 'unit', qty: 3, cost: 8500, mode: 'Shopping', quarter: 2 },
-    { code: 'JBS-006', desc: 'External Hard Drive (2TB)', uom: 'unit', qty: 2, cost: 4500, mode: 'Shopping', quarter: 3 },
-    { code: 'JBS-007', desc: 'Whiteboard (4x6 ft)', uom: 'unit', qty: 1, cost: 3500, mode: 'Shopping', quarter: 3 },
-    { code: 'JBS-008', desc: 'Filing Cabinet (4-drawer, steel)', uom: 'unit', qty: 2, cost: 12000, mode: 'Shopping', quarter: 4 },
+    {
+      code: 'JBS-001',
+      desc: 'Money Counting Machine',
+      uom: 'unit',
+      qty: 2,
+      cost: 15000,
+      mode: 'Shopping',
+      quarter: 1,
+    },
+    {
+      code: 'JBS-002',
+      desc: 'Bond Paper (A4, 80gsm)',
+      uom: 'ream',
+      qty: 50,
+      cost: 250,
+      mode: 'Shopping',
+      quarter: 1,
+    },
+    {
+      code: 'JBS-003',
+      desc: 'Ink Cartridge (Epson 003)',
+      uom: 'bottle',
+      qty: 24,
+      cost: 350,
+      mode: 'Shopping',
+      quarter: 1,
+    },
+    {
+      code: 'JBS-004',
+      desc: 'Desktop Computer (Core i5, 16GB RAM)',
+      uom: 'unit',
+      qty: 1,
+      cost: 45000,
+      mode: 'Small Value Procurement',
+      quarter: 2,
+    },
+    {
+      code: 'JBS-005',
+      desc: 'Office Chair (Ergonomic)',
+      uom: 'unit',
+      qty: 3,
+      cost: 8500,
+      mode: 'Shopping',
+      quarter: 2,
+    },
+    {
+      code: 'JBS-006',
+      desc: 'External Hard Drive (2TB)',
+      uom: 'unit',
+      qty: 2,
+      cost: 4500,
+      mode: 'Shopping',
+      quarter: 3,
+    },
+    {
+      code: 'JBS-007',
+      desc: 'Whiteboard (4x6 ft)',
+      uom: 'unit',
+      qty: 1,
+      cost: 3500,
+      mode: 'Shopping',
+      quarter: 3,
+    },
+    {
+      code: 'JBS-008',
+      desc: 'Filing Cabinet (4-drawer, steel)',
+      uom: 'unit',
+      qty: 2,
+      cost: 12000,
+      mode: 'Shopping',
+      quarter: 4,
+    },
   ];
 
   for (const item of ppmpItems) {
@@ -109,14 +173,19 @@ async function main() {
         status: 'approved',
       },
     });
-    console.log(`  PPMP ${item.code}: ${item.desc} (${item.qty} x P${item.cost.toLocaleString()} = P${totalCost.toLocaleString()})`);
+    console.log(
+      `  PPMP ${item.code}: ${item.desc} (${item.qty} x P${item.cost.toLocaleString()} = P${totalCost.toLocaleString()})`,
+    );
   }
 
   const grandTotal = ppmpItems.reduce((sum, i) => sum + i.qty * i.cost, 0);
-  console.log(`\nTotal PPMP allocation for j.sumagang: P${grandTotal.toLocaleString()}`);
-  console.log(`\nLogin: username "j.sumagang", password "${password}"`);
+  console.log(`\nTotal PPMP allocation for j.delacruz: P${grandTotal.toLocaleString()}`);
+  console.log(`\nLogin: username "j.delacruz", password "${password}"`);
 }
 
 main()
-  .catch((e) => { console.error(e); process.exit(1); })
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
   .finally(() => prisma.$disconnect());

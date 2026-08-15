@@ -18,7 +18,7 @@ import type {
   UpdateBudgetLineInput,
 } from './types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
 
 /**
  * Reads the signed-in user's access token. There is no login screen
@@ -78,7 +78,11 @@ async function extractErrorMessage(response: Response, fallback: string): Promis
   return fallback;
 }
 
-async function authFetchMutate(path: string, method: 'POST' | 'PATCH' | 'DELETE', body?: unknown): Promise<Response> {
+async function authFetchMutate(
+  path: string,
+  method: 'POST' | 'PATCH' | 'DELETE',
+  body?: unknown,
+): Promise<Response> {
   const token = getAccessToken();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
@@ -93,22 +97,34 @@ async function authFetchMutate(path: string, method: 'POST' | 'PATCH' | 'DELETE'
     throw new BudgetSummaryApiError('Not signed in, or your session has expired.', 401);
   }
   if (response.status === 403) {
-    throw new BudgetSummaryApiError(await extractErrorMessage(response, 'You do not have permission to do this.'), 403);
+    throw new BudgetSummaryApiError(
+      await extractErrorMessage(response, 'You do not have permission to do this.'),
+      403,
+    );
   }
   if (response.status === 404) {
     throw new BudgetSummaryApiError('Not found.', 404);
   }
   if (response.status === 409) {
     throw new BudgetSummaryApiError(
-      await extractErrorMessage(response, 'This was changed by someone else — reload and try again.'),
+      await extractErrorMessage(
+        response,
+        'This was changed by someone else — reload and try again.',
+      ),
       409,
     );
   }
   if (response.status === 400) {
-    throw new BudgetSummaryApiError(await extractErrorMessage(response, 'That request was invalid.'), 400);
+    throw new BudgetSummaryApiError(
+      await extractErrorMessage(response, 'That request was invalid.'),
+      400,
+    );
   }
   if (!response.ok) {
-    throw new BudgetSummaryApiError(await extractErrorMessage(response, `Request failed (${response.status}).`), response.status);
+    throw new BudgetSummaryApiError(
+      await extractErrorMessage(response, `Request failed (${response.status}).`),
+      response.status,
+    );
   }
   return response;
 }
@@ -126,15 +142,27 @@ export async function editReservationDraft(
   expectedVersion: number,
   input: EditReservationInput,
 ): Promise<ReservationDetail> {
-  return (await authFetchMutate(`/budgeting/reservations/${id}`, 'PATCH', { ...input, expectedVersion })).json();
+  return (
+    await authFetchMutate(`/budgeting/reservations/${id}`, 'PATCH', { ...input, expectedVersion })
+  ).json();
 }
 
-export async function submitReservation(id: string, expectedVersion: number): Promise<ReservationDetail> {
-  return (await authFetchMutate(`/budgeting/reservations/${id}/submit`, 'POST', { expectedVersion })).json();
+export async function submitReservation(
+  id: string,
+  expectedVersion: number,
+): Promise<ReservationDetail> {
+  return (
+    await authFetchMutate(`/budgeting/reservations/${id}/submit`, 'POST', { expectedVersion })
+  ).json();
 }
 
-export async function approveReservation(id: string, expectedVersion: number): Promise<ReservationDetail> {
-  return (await authFetchMutate(`/budgeting/reservations/${id}/approve`, 'POST', { expectedVersion })).json();
+export async function approveReservation(
+  id: string,
+  expectedVersion: number,
+): Promise<ReservationDetail> {
+  return (
+    await authFetchMutate(`/budgeting/reservations/${id}/approve`, 'POST', { expectedVersion })
+  ).json();
 }
 
 export async function rejectReservation(
@@ -142,7 +170,12 @@ export async function rejectReservation(
   expectedVersion: number,
   remarks?: string,
 ): Promise<ReservationDetail> {
-  return (await authFetchMutate(`/budgeting/reservations/${id}/reject`, 'POST', { expectedVersion, remarks })).json();
+  return (
+    await authFetchMutate(`/budgeting/reservations/${id}/reject`, 'POST', {
+      expectedVersion,
+      remarks,
+    })
+  ).json();
 }
 
 export async function cancelReservation(
@@ -150,7 +183,12 @@ export async function cancelReservation(
   expectedVersion: number,
   remarks?: string,
 ): Promise<ReservationDetail> {
-  return (await authFetchMutate(`/budgeting/reservations/${id}/cancel`, 'POST', { expectedVersion, remarks })).json();
+  return (
+    await authFetchMutate(`/budgeting/reservations/${id}/cancel`, 'POST', {
+      expectedVersion,
+      remarks,
+    })
+  ).json();
 }
 
 /** Wraps the existing `GET /budgeting/budget-cycles` endpoint — no
@@ -164,20 +202,26 @@ export async function listBudgetCycles(): Promise<BudgetCycleSummary[]> {
 
 /** Wraps the existing `GET /budgeting/budget-versions?budgetCycleId=`
  * endpoint — no backend change. */
-export async function listBudgetVersionsForCycle(budgetCycleId: string): Promise<BudgetVersionSummary[]> {
+export async function listBudgetVersionsForCycle(
+  budgetCycleId: string,
+): Promise<BudgetVersionSummary[]> {
   return (await authFetch(`/budgeting/budget-versions?budgetCycleId=${budgetCycleId}`)).json();
 }
 
 /** Wraps the existing `POST /budgeting/budget-versions` endpoint — no
  * backend change. Used only by the Create Budget page's optional
  * "create a new version" affordance. */
-export async function createBudgetVersion(input: CreateBudgetVersionInput): Promise<BudgetVersionSummary> {
+export async function createBudgetVersion(
+  input: CreateBudgetVersionInput,
+): Promise<BudgetVersionSummary> {
   return (await authFetchMutate('/budgeting/budget-versions', 'POST', input)).json();
 }
 
 /** Wraps the existing `POST /budgeting/budget-headers` endpoint — no
  * backend change. */
-export async function createBudgetHeader(input: CreateBudgetHeaderInput): Promise<BudgetHeaderListItem> {
+export async function createBudgetHeader(
+  input: CreateBudgetHeaderInput,
+): Promise<BudgetHeaderListItem> {
   return (await authFetchMutate('/budgeting/budget-headers', 'POST', input)).json();
 }
 
@@ -234,21 +278,30 @@ export async function createBudgetLine(input: CreateBudgetLineInput): Promise<Bu
 
 /** Wraps the existing `PATCH /budgeting/budget-lines/:id` endpoint —
  * no backend change; this is its first frontend caller. */
-export async function updateBudgetLine(id: string, input: UpdateBudgetLineInput): Promise<BudgetLineItem> {
+export async function updateBudgetLine(
+  id: string,
+  input: UpdateBudgetLineInput,
+): Promise<BudgetLineItem> {
   return (await authFetchMutate(`/budgeting/budget-lines/${id}`, 'PATCH', input)).json();
 }
 
-export async function listBudgetReleasesForHeader(budgetHeaderId: string): Promise<BudgetReleaseItem[]> {
+export async function listBudgetReleasesForHeader(
+  budgetHeaderId: string,
+): Promise<BudgetReleaseItem[]> {
   return (await authFetch(`/budgeting/budget-releases?budgetHeaderId=${budgetHeaderId}`)).json();
 }
 
 /** Wraps the existing `POST /budgeting/budget-releases` endpoint — no
  * new endpoint; this is its first frontend caller. */
-export async function createBudgetRelease(input: CreateBudgetReleaseInput): Promise<BudgetReleaseItem> {
+export async function createBudgetRelease(
+  input: CreateBudgetReleaseInput,
+): Promise<BudgetReleaseItem> {
   return (await authFetchMutate('/budgeting/budget-releases', 'POST', input)).json();
 }
 
-export async function listReservationsForHeader(budgetHeaderId: string): Promise<ReservationListItem[]> {
+export async function listReservationsForHeader(
+  budgetHeaderId: string,
+): Promise<ReservationListItem[]> {
   return (await authFetch(`/budgeting/reservations?budgetHeaderId=${budgetHeaderId}`)).json();
 }
 
@@ -260,16 +313,20 @@ export async function listBudgetHeaders(
   if (params.search) searchParams.set('search', params.search);
   if (params.status) searchParams.set('status', params.status);
   if (params.budgetVersionId) searchParams.set('budgetVersionId', params.budgetVersionId);
-  if (params.responsibilityCenterId) searchParams.set('responsibilityCenterId', params.responsibilityCenterId);
+  if (params.responsibilityCenterId)
+    searchParams.set('responsibilityCenterId', params.responsibilityCenterId);
   if (params.fundSourceId) searchParams.set('fundSourceId', params.fundSourceId);
   searchParams.set('page', String(params.page ?? 1));
   searchParams.set('pageSize', String(params.pageSize ?? 20));
   searchParams.set('sortBy', params.sortBy ?? 'createdAt');
   searchParams.set('sortOrder', params.sortOrder ?? 'desc');
 
-  const response = await fetch(`${API_BASE_URL}/budgeting/budget-headers?${searchParams.toString()}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+  const response = await fetch(
+    `${API_BASE_URL}/budgeting/budget-headers?${searchParams.toString()}`,
+    {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    },
+  );
 
   if (response.status === 401) {
     throw new BudgetSummaryApiError('Not signed in, or your session has expired.', 401);
@@ -286,9 +343,12 @@ export async function listBudgetHeaders(
 
 export async function getBudgetHeaderSummary(budgetHeaderId: string): Promise<BudgetAmountSummary> {
   const token = getAccessToken();
-  const response = await fetch(`${API_BASE_URL}/budgeting/budget-headers/${budgetHeaderId}/summary`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+  const response = await fetch(
+    `${API_BASE_URL}/budgeting/budget-headers/${budgetHeaderId}/summary`,
+    {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    },
+  );
 
   if (response.status === 401) {
     throw new BudgetSummaryApiError('Not signed in, or your session has expired.', 401);

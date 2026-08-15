@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 
-import { AccountingSubNav } from './AccountingSubNav';
 import './accounting.css';
 import { getSubsidiaryLedger, getGlFiscalYears, getGlPeriods } from '../api';
 import type { SubsidiaryLedgerResult, FiscalYearOption, PeriodOption } from '../types';
@@ -68,12 +67,17 @@ export default function SubsidiaryLedgerPage() {
   const totalCredit = entries.reduce((s, e) => s + parseFloat(e.creditAmount), 0);
 
   return (
-    <div className="acct-page">
-      <AccountingSubNav />
-
+    <div className="acct-page acct-page--embedded">
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-        <Link to="/accounting/gl/trial-balance" className="acct-btn acct-btn--sm">&larr; Trial Balance</Link>
-        <Link to="/accounting/gl" className="acct-btn acct-btn--sm">&larr; General Ledger</Link>
+        <Link to="/reports/subsidiary-ledgers" className="acct-btn acct-btn--sm">
+          &larr; All Ledgers
+        </Link>
+        <Link to="/reports/trial-balance" className="acct-btn acct-btn--sm">
+          &larr; Trial Balance
+        </Link>
+        <Link to="/reports/general-ledger" className="acct-btn acct-btn--sm">
+          &larr; General Ledger
+        </Link>
       </div>
 
       {account && (
@@ -82,7 +86,9 @@ export default function SubsidiaryLedgerPage() {
             {account.accountCode} — {account.name}
           </h1>
           <div style={{ display: 'flex', gap: 8 }}>
-            <span className={`acct-badge acct-badge--${account.accountType}`}>{account.accountType}</span>
+            <span className={`acct-badge acct-badge--${account.accountType}`}>
+              {account.accountType}
+            </span>
             <span style={{ fontSize: 13, color: '#667085' }}>
               Normal balance: {account.normalBalance}
             </span>
@@ -93,13 +99,17 @@ export default function SubsidiaryLedgerPage() {
       <div className="acct-toolbar">
         <select value={selectedFY} onChange={(e) => setSelectedFY(e.target.value)}>
           {fiscalYears.map((fy) => (
-            <option key={fy.id} value={fy.id}>FY {fy.year} — {fy.name}</option>
+            <option key={fy.id} value={fy.id}>
+              FY {fy.year} — {fy.name}
+            </option>
           ))}
         </select>
         <select value={selectedPeriod} onChange={(e) => setSelectedPeriod(e.target.value)}>
           <option value="">All Periods</option>
           {periods.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
           ))}
         </select>
       </div>
@@ -112,48 +122,60 @@ export default function SubsidiaryLedgerPage() {
       )}
 
       {state.status === 'loaded' && entries.length > 0 && (
-        <table className="acct-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>JEV #</th>
-              <th>Particulars</th>
-              <th>Source</th>
-              <th>Period</th>
-              <th className="acct-text-right">Debit</th>
-              <th className="acct-text-right">Credit</th>
-              <th className="acct-text-right">Running Balance</th>
-            </tr>
-          </thead>
-          <tbody>
-            {entriesWithBalance.map((entry) => (
-              <tr key={entry.jevLineId}>
-                <td style={{ whiteSpace: 'nowrap' }}>{new Date(entry.jevDate).toLocaleDateString()}</td>
-                <td>
-                  <Link to={`/accounting/jev/${entry.jevId}`} className="acct-table__link">
-                    {entry.jevNumber}
-                  </Link>
-                </td>
-                <td>{entry.particulars}</td>
-                <td><span className={`acct-badge acct-badge--${entry.sourceType}`}>{entry.sourceType}</span></td>
-                <td>{entry.periodName}</td>
-                <td className="acct-text-right acct-text-mono">{formatPeso(entry.debitAmount)}</td>
-                <td className="acct-text-right acct-text-mono">{formatPeso(entry.creditAmount)}</td>
-                <td className="acct-text-right acct-text-mono" style={{ fontWeight: 600 }}>
-                  {formatPeso(entry.runningBalance)}
-                </td>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="acct-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>JEV #</th>
+                <th>Particulars</th>
+                <th>Source</th>
+                <th>Period</th>
+                <th className="acct-text-right">Debit</th>
+                <th className="acct-text-right">Credit</th>
+                <th className="acct-text-right">Running Balance</th>
               </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr style={{ fontWeight: 700, borderTop: '2px solid var(--mswd-navy)' }}>
-              <td colSpan={5}>Total</td>
-              <td className="acct-text-right acct-text-mono">{formatPeso(totalDebit)}</td>
-              <td className="acct-text-right acct-text-mono">{formatPeso(totalCredit)}</td>
-              <td className="acct-text-right acct-text-mono">{formatPeso(runningBalance)}</td>
-            </tr>
-          </tfoot>
-        </table>
+            </thead>
+            <tbody>
+              {entriesWithBalance.map((entry) => (
+                <tr key={entry.jevLineId}>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    {new Date(entry.jevDate).toLocaleDateString()}
+                  </td>
+                  <td>
+                    <Link to={`/accounting/jev/${entry.jevId}`} className="acct-table__link">
+                      {entry.jevNumber}
+                    </Link>
+                  </td>
+                  <td>{entry.particulars}</td>
+                  <td>
+                    <span className={`acct-badge acct-badge--${entry.sourceType}`}>
+                      {entry.sourceType}
+                    </span>
+                  </td>
+                  <td>{entry.periodName}</td>
+                  <td className="acct-text-right acct-text-mono">
+                    {formatPeso(entry.debitAmount)}
+                  </td>
+                  <td className="acct-text-right acct-text-mono">
+                    {formatPeso(entry.creditAmount)}
+                  </td>
+                  <td className="acct-text-right acct-text-mono" style={{ fontWeight: 600 }}>
+                    {formatPeso(entry.runningBalance)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ fontWeight: 700, borderTop: '2px solid var(--mswd-navy)' }}>
+                <td colSpan={5}>Total</td>
+                <td className="acct-text-right acct-text-mono">{formatPeso(totalDebit)}</td>
+                <td className="acct-text-right acct-text-mono">{formatPeso(totalCredit)}</td>
+                <td className="acct-text-right acct-text-mono">{formatPeso(runningBalance)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       )}
     </div>
   );

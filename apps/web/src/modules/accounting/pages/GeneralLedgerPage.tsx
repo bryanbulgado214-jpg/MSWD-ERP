@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { AccountingSubNav } from './AccountingSubNav';
 import './accounting.css';
 import { getGeneralLedger, getGlFiscalYears } from '../api';
 import type { GeneralLedgerRow, FiscalYearOption } from '../types';
@@ -105,25 +104,30 @@ export default function GeneralLedgerPage() {
 
     return {
       periodColumns: cols,
-      accountGroups: Array.from(acctMap.values()).sort((a, b) => a.accountCode.localeCompare(b.accountCode)),
+      accountGroups: Array.from(acctMap.values()).sort((a, b) =>
+        a.accountCode.localeCompare(b.accountCode),
+      ),
     };
   }, [rows]);
 
   return (
-    <div className="acct-page">
-      <AccountingSubNav />
+    <div className="acct-page acct-page--embedded">
       <h1>General Ledger</h1>
 
       <div className="acct-toolbar">
         <select value={selectedFY} onChange={(e) => setSelectedFY(e.target.value)}>
           {fiscalYears.map((fy) => (
-            <option key={fy.id} value={fy.id}>FY {fy.year} — {fy.name}</option>
+            <option key={fy.id} value={fy.id}>
+              FY {fy.year} — {fy.name}
+            </option>
           ))}
         </select>
 
         <select value={accountType} onChange={(e) => setAccountType(e.target.value)}>
           {ACCOUNT_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>{t.label}</option>
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
           ))}
         </select>
       </div>
@@ -140,24 +144,39 @@ export default function GeneralLedgerPage() {
           <table className="acct-table" style={{ minWidth: 600 + periodColumns.length * 120 }}>
             <thead>
               <tr>
-                <th style={{ position: 'sticky', left: 0, background: '#fff', zIndex: 1 }}>Account</th>
+                <th style={{ position: 'sticky', left: 0, background: '#fff', zIndex: 1 }}>
+                  Account
+                </th>
                 <th>Type</th>
                 {periodColumns.map((col) => (
-                  <th key={col.id} className="acct-text-right">{col.name}</th>
+                  <th key={col.id} className="acct-text-right">
+                    {col.name}
+                  </th>
                 ))}
-                <th className="acct-text-right" style={{ fontWeight: 800 }}>Total</th>
+                <th className="acct-text-right" style={{ fontWeight: 800 }}>
+                  Total
+                </th>
               </tr>
             </thead>
             <tbody>
               {accountGroups.map((acct) => (
                 <tr key={acct.accountId}>
                   <td style={{ position: 'sticky', left: 0, background: '#fff', zIndex: 1 }}>
-                    <Link to={`/accounting/gl/subsidiary/${acct.accountId}`} className="acct-table__link">
+                    <Link
+                      to={`/reports/subsidiary-ledgers/${acct.accountId}`}
+                      className="acct-table__link"
+                    >
                       {acct.accountCode}
                     </Link>
-                    <span style={{ marginLeft: 8, color: '#667085', fontSize: 12 }}>{acct.accountName}</span>
+                    <span style={{ marginLeft: 8, color: '#667085', fontSize: 12 }}>
+                      {acct.accountName}
+                    </span>
                   </td>
-                  <td><span className={`acct-badge acct-badge--${acct.accountType}`}>{acct.accountType}</span></td>
+                  <td>
+                    <span className={`acct-badge acct-badge--${acct.accountType}`}>
+                      {acct.accountType}
+                    </span>
+                  </td>
                   {periodColumns.map((col) => {
                     const p = acct.periods.get(col.id);
                     return (

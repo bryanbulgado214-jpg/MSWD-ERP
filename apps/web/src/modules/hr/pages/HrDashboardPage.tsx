@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { getHrDashboard, HrApiError } from '../api';
 import type { PayrollStatus } from '../types';
+
 import HrSubNav from './HrSubNav';
 import './hr.css';
 
@@ -14,7 +15,11 @@ function formatPeso(val: string | number) {
 
 function fmtDate(d: string | null) {
   if (!d) return '--';
-  return new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+  return new Date(d).toLocaleDateString('en-PH', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 const STATUS_COLORS: Record<PayrollStatus, string> = {
@@ -39,8 +44,20 @@ export default function HrDashboardPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="hr-page"><HrSubNav /><p>Loading dashboard...</p></div>;
-  if (error) return <div className="hr-page"><HrSubNav /><div className="hr-error">{error}</div></div>;
+  if (loading)
+    return (
+      <div className="hr-page">
+        <HrSubNav />
+        <p>Loading dashboard...</p>
+      </div>
+    );
+  if (error)
+    return (
+      <div className="hr-page">
+        <HrSubNav />
+        <div className="hr-error">{error}</div>
+      </div>
+    );
   if (!data) return null;
 
   return (
@@ -55,7 +72,9 @@ export default function HrDashboardPage() {
         </Link>
         <Link to="/hr/employees" className="hr-dash-card">
           <div className="hr-dash-card__label">Active</div>
-          <div className="hr-dash-card__value hr-dash-card__value--green">{data.activeEmployees}</div>
+          <div className="hr-dash-card__value hr-dash-card__value--green">
+            {data.activeEmployees}
+          </div>
         </Link>
         <Link to="/hr/leave" className="hr-dash-card">
           <div className="hr-dash-card__label">On Leave</div>
@@ -63,7 +82,9 @@ export default function HrDashboardPage() {
         </Link>
         <Link to="/hr/leave" className="hr-dash-card">
           <div className="hr-dash-card__label">Pending Leave Requests</div>
-          <div className="hr-dash-card__value hr-dash-card__value--red">{data.pendingLeaveApps}</div>
+          <div className="hr-dash-card__value hr-dash-card__value--red">
+            {data.pendingLeaveApps}
+          </div>
         </Link>
       </div>
 
@@ -71,30 +92,48 @@ export default function HrDashboardPage() {
         {/* Recent Payroll Runs */}
         <div>
           <h3 className="hr-dash-section-title">Recent Payroll Runs</h3>
-          {data.recentPayrollRuns.length === 0 && <div className="hr-empty">No payroll runs yet.</div>}
+          {data.recentPayrollRuns.length === 0 && (
+            <div className="hr-empty">No payroll runs yet.</div>
+          )}
           {data.recentPayrollRuns.length > 0 && (
-            <table className="hr-table">
-              <thead>
-                <tr>
-                  <th>Run #</th><th>Period</th><th>Status</th>
-                  <th style={{ textAlign: 'right' }}>Employees</th>
-                  <th style={{ textAlign: 'right' }}>Net Pay</th>
-                  <th>Pay Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.recentPayrollRuns.map((run: any) => (
-                  <tr key={run.id}>
-                    <td><Link to="/hr/payroll" className="hr-link">{run.runNumber}</Link></td>
-                    <td>{run.payrollPeriod.name}</td>
-                    <td><span className={`hr-badge hr-badge--${STATUS_COLORS[run.status as PayrollStatus] ?? 'pending'}`}>{run.status}</span></td>
-                    <td style={{ textAlign: 'right' }}>{run.employeeCount}</td>
-                    <td className="hr-text-mono" style={{ textAlign: 'right', fontWeight: 600 }}>{formatPeso(run.totalNet)}</td>
-                    <td>{fmtDate(run.payrollPeriod.payDate)}</td>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="hr-table">
+                <thead>
+                  <tr>
+                    <th>Run #</th>
+                    <th>Period</th>
+                    <th>Status</th>
+                    <th style={{ textAlign: 'right' }}>Employees</th>
+                    <th style={{ textAlign: 'right' }}>Net Pay</th>
+                    <th>Pay Date</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {data.recentPayrollRuns.map((run: any) => (
+                    <tr key={run.id}>
+                      <td>
+                        <Link to="/hr/payroll" className="hr-link">
+                          {run.runNumber}
+                        </Link>
+                      </td>
+                      <td>{run.payrollPeriod.name}</td>
+                      <td>
+                        <span
+                          className={`hr-badge hr-badge--${STATUS_COLORS[run.status as PayrollStatus] ?? 'pending'}`}
+                        >
+                          {run.status}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>{run.employeeCount}</td>
+                      <td className="hr-text-mono" style={{ textAlign: 'right', fontWeight: 600 }}>
+                        {formatPeso(run.totalNet)}
+                      </td>
+                      <td>{fmtDate(run.payrollPeriod.payDate)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 
@@ -104,7 +143,12 @@ export default function HrDashboardPage() {
           {data.departmentBreakdown.length === 0 && <div className="hr-empty">No departments.</div>}
           {data.departmentBreakdown.length > 0 && (
             <table className="hr-table">
-              <thead><tr><th>Department</th><th style={{ textAlign: 'right' }}>Count</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Department</th>
+                  <th style={{ textAlign: 'right' }}>Count</th>
+                </tr>
+              </thead>
               <tbody>
                 {data.departmentBreakdown.map((d: any) => (
                   <tr key={d.department}>
@@ -116,15 +160,28 @@ export default function HrDashboardPage() {
             </table>
           )}
 
-          <h3 className="hr-dash-section-title" style={{ marginTop: 20 }}>By Status</h3>
+          <h3 className="hr-dash-section-title" style={{ marginTop: 20 }}>
+            By Status
+          </h3>
           {data.statusBreakdown.length === 0 && <div className="hr-empty">No data.</div>}
           {data.statusBreakdown.length > 0 && (
             <table className="hr-table">
-              <thead><tr><th>Status</th><th style={{ textAlign: 'right' }}>Count</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th style={{ textAlign: 'right' }}>Count</th>
+                </tr>
+              </thead>
               <tbody>
                 {data.statusBreakdown.map((s: any) => (
                   <tr key={s.status}>
-                    <td><span className={`hr-badge hr-badge--${s.status === 'active' ? 'active' : 'resigned'}`}>{s.status.replace('_', ' ')}</span></td>
+                    <td>
+                      <span
+                        className={`hr-badge hr-badge--${s.status === 'active' ? 'active' : 'resigned'}`}
+                      >
+                        {s.status.replace('_', ' ')}
+                      </span>
+                    </td>
                     <td style={{ textAlign: 'right', fontWeight: 600 }}>{s.count}</td>
                   </tr>
                 ))}

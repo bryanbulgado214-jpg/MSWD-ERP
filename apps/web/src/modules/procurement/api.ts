@@ -1,6 +1,16 @@
-import type { Caf, CreatePurchaseRequestInput, DisbursementVoucher, InspectionReport, Ors, PurchaseOrder, PurchaseRequest, Supplier, UpdatePurchaseRequestInput } from './types';
+import type {
+  Caf,
+  CreatePurchaseRequestInput,
+  DisbursementVoucher,
+  InspectionReport,
+  Ors,
+  PurchaseOrder,
+  PurchaseRequest,
+  Supplier,
+  UpdatePurchaseRequestInput,
+} from './types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
 
 function getAccessToken(): string | null {
   return localStorage.getItem('mswd_access_token');
@@ -32,14 +42,21 @@ async function authFetch(path: string): Promise<Response> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
-  if (response.status === 401) throw new ProcurementApiError('Not signed in, or your session has expired.', 401);
-  if (response.status === 403) throw new ProcurementApiError('You do not have permission to view this.', 403);
+  if (response.status === 401)
+    throw new ProcurementApiError('Not signed in, or your session has expired.', 401);
+  if (response.status === 403)
+    throw new ProcurementApiError('You do not have permission to view this.', 403);
   if (response.status === 404) throw new ProcurementApiError('Not found.', 404);
-  if (!response.ok) throw new ProcurementApiError(`Request failed (${response.status}).`, response.status);
+  if (!response.ok)
+    throw new ProcurementApiError(`Request failed (${response.status}).`, response.status);
   return response;
 }
 
-async function authFetchMutate(path: string, method: 'POST' | 'PATCH', body?: unknown): Promise<Response> {
+async function authFetchMutate(
+  path: string,
+  method: 'POST' | 'PATCH',
+  body?: unknown,
+): Promise<Response> {
   const token = getAccessToken();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
@@ -50,11 +67,21 @@ async function authFetchMutate(path: string, method: 'POST' | 'PATCH', body?: un
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
   if (response.status === 401) throw new ProcurementApiError('Not signed in.', 401);
-  if (response.status === 403) throw new ProcurementApiError(await extractErrorMessage(response, 'Forbidden.'), 403);
+  if (response.status === 403)
+    throw new ProcurementApiError(await extractErrorMessage(response, 'Forbidden.'), 403);
   if (response.status === 404) throw new ProcurementApiError('Not found.', 404);
-  if (response.status === 409) throw new ProcurementApiError(await extractErrorMessage(response, 'Modified concurrently — reload.'), 409);
-  if (response.status === 400) throw new ProcurementApiError(await extractErrorMessage(response, 'Invalid request.'), 400);
-  if (!response.ok) throw new ProcurementApiError(await extractErrorMessage(response, `Failed (${response.status}).`), response.status);
+  if (response.status === 409)
+    throw new ProcurementApiError(
+      await extractErrorMessage(response, 'Modified concurrently — reload.'),
+      409,
+    );
+  if (response.status === 400)
+    throw new ProcurementApiError(await extractErrorMessage(response, 'Invalid request.'), 400);
+  if (!response.ok)
+    throw new ProcurementApiError(
+      await extractErrorMessage(response, `Failed (${response.status}).`),
+      response.status,
+    );
   return response;
 }
 
@@ -89,53 +116,112 @@ export async function getPurchaseRequest(id: string): Promise<PurchaseRequest> {
   return res.json();
 }
 
-export async function createPurchaseRequest(input: CreatePurchaseRequestInput): Promise<PurchaseRequest> {
+export async function createPurchaseRequest(
+  input: CreatePurchaseRequestInput,
+): Promise<PurchaseRequest> {
   const res = await authFetchMutate('/procurement/purchase-requests', 'POST', input);
   return res.json();
 }
 
-export async function updatePurchaseRequest(id: string, input: UpdatePurchaseRequestInput): Promise<PurchaseRequest> {
+export async function updatePurchaseRequest(
+  id: string,
+  input: UpdatePurchaseRequestInput,
+): Promise<PurchaseRequest> {
   const res = await authFetchMutate(`/procurement/purchase-requests/${id}`, 'PATCH', input);
   return res.json();
 }
 
-export async function submitPurchaseRequest(id: string, expectedVersion: number): Promise<PurchaseRequest> {
-  const res = await authFetchMutate(`/procurement/purchase-requests/${id}/submit`, 'POST', { expectedVersion });
+export async function submitPurchaseRequest(
+  id: string,
+  expectedVersion: number,
+): Promise<PurchaseRequest> {
+  const res = await authFetchMutate(`/procurement/purchase-requests/${id}/submit`, 'POST', {
+    expectedVersion,
+  });
   return res.json();
 }
 
-export async function endorsePurchaseRequest(id: string, expectedVersion: number, remarks?: string): Promise<PurchaseRequest> {
-  const res = await authFetchMutate(`/procurement/purchase-requests/${id}/endorse`, 'POST', { expectedVersion, ...(remarks ? { remarks } : {}) });
+export async function endorsePurchaseRequest(
+  id: string,
+  expectedVersion: number,
+  remarks?: string,
+): Promise<PurchaseRequest> {
+  const res = await authFetchMutate(`/procurement/purchase-requests/${id}/endorse`, 'POST', {
+    expectedVersion,
+    ...(remarks ? { remarks } : {}),
+  });
   return res.json();
 }
 
-export async function budgetCertifyPurchaseRequest(id: string, expectedVersion: number, remarks?: string): Promise<PurchaseRequest> {
-  const res = await authFetchMutate(`/procurement/purchase-requests/${id}/budget-certify`, 'POST', { expectedVersion, ...(remarks ? { remarks } : {}) });
+export async function budgetCertifyPurchaseRequest(
+  id: string,
+  expectedVersion: number,
+  remarks?: string,
+): Promise<PurchaseRequest> {
+  const res = await authFetchMutate(`/procurement/purchase-requests/${id}/budget-certify`, 'POST', {
+    expectedVersion,
+    ...(remarks ? { remarks } : {}),
+  });
   return res.json();
 }
 
-export async function finalApprovePurchaseRequest(id: string, expectedVersion: number, remarks?: string): Promise<PurchaseRequest> {
-  const res = await authFetchMutate(`/procurement/purchase-requests/${id}/approve`, 'POST', { expectedVersion, ...(remarks ? { remarks } : {}) });
+export async function finalApprovePurchaseRequest(
+  id: string,
+  expectedVersion: number,
+  remarks?: string,
+): Promise<PurchaseRequest> {
+  const res = await authFetchMutate(`/procurement/purchase-requests/${id}/approve`, 'POST', {
+    expectedVersion,
+    ...(remarks ? { remarks } : {}),
+  });
   return res.json();
 }
 
-export async function acceptForProcurement(id: string, expectedVersion: number): Promise<PurchaseRequest> {
-  const res = await authFetchMutate(`/procurement/purchase-requests/${id}/accept-procurement`, 'POST', { expectedVersion });
+export async function acceptForProcurement(
+  id: string,
+  expectedVersion: number,
+): Promise<PurchaseRequest> {
+  const res = await authFetchMutate(
+    `/procurement/purchase-requests/${id}/accept-procurement`,
+    'POST',
+    { expectedVersion },
+  );
   return res.json();
 }
 
-export async function returnPurchaseRequest(id: string, expectedVersion: number, remarks?: string): Promise<PurchaseRequest> {
-  const res = await authFetchMutate(`/procurement/purchase-requests/${id}/return`, 'POST', { expectedVersion, ...(remarks ? { remarks } : {}) });
+export async function returnPurchaseRequest(
+  id: string,
+  expectedVersion: number,
+  remarks?: string,
+): Promise<PurchaseRequest> {
+  const res = await authFetchMutate(`/procurement/purchase-requests/${id}/return`, 'POST', {
+    expectedVersion,
+    ...(remarks ? { remarks } : {}),
+  });
   return res.json();
 }
 
-export async function rejectPurchaseRequest(id: string, expectedVersion: number, remarks?: string): Promise<PurchaseRequest> {
-  const res = await authFetchMutate(`/procurement/purchase-requests/${id}/reject`, 'POST', { expectedVersion, ...(remarks ? { remarks } : {}) });
+export async function rejectPurchaseRequest(
+  id: string,
+  expectedVersion: number,
+  remarks?: string,
+): Promise<PurchaseRequest> {
+  const res = await authFetchMutate(`/procurement/purchase-requests/${id}/reject`, 'POST', {
+    expectedVersion,
+    ...(remarks ? { remarks } : {}),
+  });
   return res.json();
 }
 
-export async function cancelPurchaseRequest(id: string, expectedVersion: number, remarks?: string): Promise<PurchaseRequest> {
-  const res = await authFetchMutate(`/procurement/purchase-requests/${id}/cancel`, 'POST', { expectedVersion, ...(remarks ? { remarks } : {}) });
+export async function cancelPurchaseRequest(
+  id: string,
+  expectedVersion: number,
+  remarks?: string,
+): Promise<PurchaseRequest> {
+  const res = await authFetchMutate(`/procurement/purchase-requests/${id}/cancel`, 'POST', {
+    expectedVersion,
+    ...(remarks ? { remarks } : {}),
+  });
   return res.json();
 }
 
@@ -224,7 +310,10 @@ export async function createPpmpItem(input: CreatePpmpItemInput): Promise<PpmpIt
   return res.json();
 }
 
-export async function updatePpmpItem(id: string, input: Partial<CreatePpmpItemInput>): Promise<PpmpItem> {
+export async function updatePpmpItem(
+  id: string,
+  input: Partial<CreatePpmpItemInput>,
+): Promise<PpmpItem> {
   const res = await authFetchMutate(`/procurement/ppmp-items/${id}`, 'PATCH', input);
   return res.json();
 }
@@ -275,24 +364,40 @@ export async function getSupplier(id: string): Promise<Supplier> {
 }
 
 export async function createSupplier(data: {
-  name: string; tin?: string; address?: string;
-  contactPerson?: string; contactNumber?: string; email?: string;
+  name: string;
+  tin?: string;
+  address?: string;
+  contactPerson?: string;
+  contactNumber?: string;
+  email?: string;
 }): Promise<Supplier> {
   const res = await authFetchMutate('/procurement/suppliers', 'POST', data);
   return res.json();
 }
 
-export async function updateSupplier(id: string, data: {
-  expectedVersion: number; name?: string; tin?: string; address?: string;
-  contactPerson?: string; contactNumber?: string; email?: string; isActive?: boolean;
-}): Promise<Supplier> {
+export async function updateSupplier(
+  id: string,
+  data: {
+    expectedVersion: number;
+    name?: string;
+    tin?: string;
+    address?: string;
+    contactPerson?: string;
+    contactNumber?: string;
+    email?: string;
+    isActive?: boolean;
+  },
+): Promise<Supplier> {
   const res = await authFetchMutate(`/procurement/suppliers/${id}`, 'PATCH', data);
   return res.json();
 }
 
 // ── Purchase Orders ──
 
-export async function listPurchaseOrders(filters?: { status?: string; purchaseRequestId?: string }): Promise<PurchaseOrder[]> {
+export async function listPurchaseOrders(filters?: {
+  status?: string;
+  purchaseRequestId?: string;
+}): Promise<PurchaseOrder[]> {
   const params = new URLSearchParams();
   if (filters?.status) params.set('status', filters.status);
   if (filters?.purchaseRequestId) params.set('purchaseRequestId', filters.purchaseRequestId);
@@ -307,32 +412,57 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrder> {
 }
 
 export async function createPurchaseOrder(data: {
-  purchaseRequestId: string; supplierId: string; poDate: string; contractAmount: number;
-  awardDate?: string; awardNoticeNumber?: string; modeOfProcurement?: string;
-  deliveryTerms?: string; paymentTerms?: string; remarks?: string;
+  purchaseRequestId: string;
+  supplierId: string;
+  poDate: string;
+  contractAmount: number;
+  awardDate?: string;
+  awardNoticeNumber?: string;
+  modeOfProcurement?: string;
+  deliveryTerms?: string;
+  paymentTerms?: string;
+  remarks?: string;
 }): Promise<PurchaseOrder> {
   const res = await authFetchMutate('/procurement/purchase-orders', 'POST', data);
   return res.json();
 }
 
 export async function submitPoForCaf(id: string, expectedVersion: number): Promise<PurchaseOrder> {
-  const res = await authFetchMutate(`/procurement/purchase-orders/${id}/submit-for-caf`, 'POST', { expectedVersion });
+  const res = await authFetchMutate(`/procurement/purchase-orders/${id}/submit-for-caf`, 'POST', {
+    expectedVersion,
+  });
   return res.json();
 }
 
-export async function approvePurchaseOrder(id: string, expectedVersion: number): Promise<PurchaseOrder> {
-  const res = await authFetchMutate(`/procurement/purchase-orders/${id}/approve`, 'POST', { expectedVersion });
+export async function approvePurchaseOrder(
+  id: string,
+  expectedVersion: number,
+): Promise<PurchaseOrder> {
+  const res = await authFetchMutate(`/procurement/purchase-orders/${id}/approve`, 'POST', {
+    expectedVersion,
+  });
   return res.json();
 }
 
-export async function cancelPurchaseOrder(id: string, expectedVersion: number, remarks?: string): Promise<PurchaseOrder> {
-  const res = await authFetchMutate(`/procurement/purchase-orders/${id}/cancel`, 'POST', { expectedVersion, remarks });
+export async function cancelPurchaseOrder(
+  id: string,
+  expectedVersion: number,
+  remarks?: string,
+): Promise<PurchaseOrder> {
+  const res = await authFetchMutate(`/procurement/purchase-orders/${id}/cancel`, 'POST', {
+    expectedVersion,
+    remarks,
+  });
   return res.json();
 }
 
 // ── CAFs ──
 
-export async function listCafs(filters?: { status?: string; purchaseRequestId?: string; purchaseOrderId?: string }): Promise<Caf[]> {
+export async function listCafs(filters?: {
+  status?: string;
+  purchaseRequestId?: string;
+  purchaseOrderId?: string;
+}): Promise<Caf[]> {
   const params = new URLSearchParams();
   if (filters?.status) params.set('status', filters.status);
   if (filters?.purchaseRequestId) params.set('purchaseRequestId', filters.purchaseRequestId);
@@ -348,9 +478,14 @@ export async function getCaf(id: string): Promise<Caf> {
 }
 
 export async function createCaf(data: {
-  purchaseRequestId: string; purchaseOrderId?: string; budgetReleaseId: string;
-  budgetReservationId?: string; budgetLineId?: string; certifiedAmount: number;
-  accountCode?: string; remarks?: string;
+  purchaseRequestId: string;
+  purchaseOrderId?: string;
+  budgetReleaseId: string;
+  budgetReservationId?: string;
+  budgetLineId?: string;
+  certifiedAmount: number;
+  accountCode?: string;
+  remarks?: string;
 }): Promise<Caf> {
   const res = await authFetchMutate('/procurement/cafs', 'POST', data);
   return res.json();
@@ -366,19 +501,37 @@ export async function certifyCaf(id: string, expectedVersion: number): Promise<C
   return res.json();
 }
 
-export async function rejectCaf(id: string, expectedVersion: number, remarks?: string): Promise<Caf> {
-  const res = await authFetchMutate(`/procurement/cafs/${id}/reject`, 'POST', { expectedVersion, remarks });
+export async function rejectCaf(
+  id: string,
+  expectedVersion: number,
+  remarks?: string,
+): Promise<Caf> {
+  const res = await authFetchMutate(`/procurement/cafs/${id}/reject`, 'POST', {
+    expectedVersion,
+    remarks,
+  });
   return res.json();
 }
 
-export async function cancelCaf(id: string, expectedVersion: number, remarks?: string): Promise<Caf> {
-  const res = await authFetchMutate(`/procurement/cafs/${id}/cancel`, 'POST', { expectedVersion, remarks });
+export async function cancelCaf(
+  id: string,
+  expectedVersion: number,
+  remarks?: string,
+): Promise<Caf> {
+  const res = await authFetchMutate(`/procurement/cafs/${id}/cancel`, 'POST', {
+    expectedVersion,
+    remarks,
+  });
   return res.json();
 }
 
 // ── ORS ──
 
-export async function listOrs(filters?: { status?: string; cafId?: string; purchaseRequestId?: string }): Promise<Ors[]> {
+export async function listOrs(filters?: {
+  status?: string;
+  cafId?: string;
+  purchaseRequestId?: string;
+}): Promise<Ors[]> {
   const params = new URLSearchParams();
   if (filters?.status) params.set('status', filters.status);
   if (filters?.cafId) params.set('cafId', filters.cafId);
@@ -394,8 +547,13 @@ export async function getOrs(id: string): Promise<Ors> {
 }
 
 export async function createOrs(data: {
-  cafId: string; orsDate: string; originalAmount: number;
-  budgetLineId?: string; accountCode?: string; requestingOfficeId?: string; remarks?: string;
+  cafId: string;
+  orsDate: string;
+  originalAmount: number;
+  budgetLineId?: string;
+  accountCode?: string;
+  requestingOfficeId?: string;
+  remarks?: string;
 }): Promise<Ors> {
   const res = await authFetchMutate('/procurement/ors', 'POST', data);
   return res.json();
@@ -407,44 +565,82 @@ export async function submitOrs(id: string, expectedVersion: number): Promise<Or
 }
 
 export async function certifyOrsRequesting(id: string, expectedVersion: number): Promise<Ors> {
-  const res = await authFetchMutate(`/procurement/ors/${id}/certify-requesting`, 'POST', { expectedVersion });
+  const res = await authFetchMutate(`/procurement/ors/${id}/certify-requesting`, 'POST', {
+    expectedVersion,
+  });
   return res.json();
 }
 
 export async function certifyOrsBudget(id: string, expectedVersion: number): Promise<Ors> {
-  const res = await authFetchMutate(`/procurement/ors/${id}/certify-budget`, 'POST', { expectedVersion });
+  const res = await authFetchMutate(`/procurement/ors/${id}/certify-budget`, 'POST', {
+    expectedVersion,
+  });
   return res.json();
 }
 
-export async function cancelOrs(id: string, expectedVersion: number, remarks?: string): Promise<Ors> {
-  const res = await authFetchMutate(`/procurement/ors/${id}/cancel`, 'POST', { expectedVersion, remarks });
+export async function cancelOrs(
+  id: string,
+  expectedVersion: number,
+  remarks?: string,
+): Promise<Ors> {
+  const res = await authFetchMutate(`/procurement/ors/${id}/cancel`, 'POST', {
+    expectedVersion,
+    remarks,
+  });
   return res.json();
 }
 
-export async function addOrsChild(orsId: string, data: {
-  childType: string; childDate: string; amount: number;
-  referenceNumber?: string; description?: string; remarks?: string;
-}): Promise<unknown> {
+export async function addOrsChild(
+  orsId: string,
+  data: {
+    childType: string;
+    childDate: string;
+    amount: number;
+    referenceNumber?: string;
+    description?: string;
+    remarks?: string;
+  },
+): Promise<unknown> {
   const res = await authFetchMutate(`/procurement/ors/${orsId}/children`, 'POST', data);
   return res.json();
 }
 
-export async function addOrsAdjustment(orsId: string, data: {
-  adjustmentType: string; signedAmount: number; reason: string; cafId?: string;
-}): Promise<unknown> {
+export async function addOrsAdjustment(
+  orsId: string,
+  data: {
+    adjustmentType: string;
+    signedAmount: number;
+    reason: string;
+    cafId?: string;
+  },
+): Promise<unknown> {
   const res = await authFetchMutate(`/procurement/ors/${orsId}/adjustments`, 'POST', data);
   return res.json();
 }
 
 // ── Lifecycle transitions ──
 
-export async function markPrLifecycle(id: string, expectedVersion: number, targetStatus: string): Promise<PurchaseRequest> {
-  const res = await authFetchMutate(`/procurement/purchase-requests/${id}/lifecycle`, 'POST', { expectedVersion, targetStatus });
+export async function markPrLifecycle(
+  id: string,
+  expectedVersion: number,
+  targetStatus: string,
+): Promise<PurchaseRequest> {
+  const res = await authFetchMutate(`/procurement/purchase-requests/${id}/lifecycle`, 'POST', {
+    expectedVersion,
+    targetStatus,
+  });
   return res.json();
 }
 
-export async function inspectPr(id: string, expectedVersion: number, remarks?: string): Promise<PurchaseRequest> {
-  const res = await authFetchMutate(`/procurement/purchase-requests/${id}/inspect`, 'POST', { expectedVersion, ...(remarks ? { remarks } : {}) });
+export async function inspectPr(
+  id: string,
+  expectedVersion: number,
+  remarks?: string,
+): Promise<PurchaseRequest> {
+  const res = await authFetchMutate(`/procurement/purchase-requests/${id}/inspect`, 'POST', {
+    expectedVersion,
+    ...(remarks ? { remarks } : {}),
+  });
   return res.json();
 }
 
@@ -460,7 +656,11 @@ export interface AuditLogEntry {
   performedAt: string;
 }
 
-export async function listAuditTrail(filters?: { tableName?: string; recordId?: string; limit?: number }): Promise<AuditLogEntry[]> {
+export async function listAuditTrail(filters?: {
+  tableName?: string;
+  recordId?: string;
+  limit?: number;
+}): Promise<AuditLogEntry[]> {
   const params = new URLSearchParams();
   if (filters?.tableName) params.set('tableName', filters.tableName);
   if (filters?.recordId) params.set('recordId', filters.recordId);
@@ -485,7 +685,10 @@ export interface AppItem {
   fiscalYear: { id: string; year: number; name: string };
 }
 
-export async function listAppItems(filters?: { fiscalYearId?: string; status?: string }): Promise<AppItem[]> {
+export async function listAppItems(filters?: {
+  fiscalYearId?: string;
+  status?: string;
+}): Promise<AppItem[]> {
   const params = new URLSearchParams();
   if (filters?.fiscalYearId) params.set('fiscalYearId', filters.fiscalYearId);
   if (filters?.status) params.set('status', filters.status);
@@ -515,7 +718,11 @@ export interface Delegation {
   creator: { id: string; username: string } | null;
 }
 
-export async function listDelegations(filters?: { delegatorUserId?: string; delegateUserId?: string; status?: string }): Promise<Delegation[]> {
+export async function listDelegations(filters?: {
+  delegatorUserId?: string;
+  delegateUserId?: string;
+  status?: string;
+}): Promise<Delegation[]> {
   const params = new URLSearchParams();
   if (filters?.delegatorUserId) params.set('delegatorUserId', filters.delegatorUserId);
   if (filters?.delegateUserId) params.set('delegateUserId', filters.delegateUserId);
@@ -538,7 +745,11 @@ export async function createDelegation(data: {
   return res.json();
 }
 
-export async function revokeDelegation(id: string, expectedVersion: number, remarks?: string): Promise<Delegation> {
+export async function revokeDelegation(
+  id: string,
+  expectedVersion: number,
+  remarks?: string,
+): Promise<Delegation> {
   const res = await authFetchMutate(`/procurement/delegations/${id}/revoke`, 'PATCH', {
     expectedVersion,
     ...(remarks ? { remarks } : {}),
@@ -583,7 +794,10 @@ export async function listLookupDepartments(): Promise<LookupDepartment[]> {
 
 // ── Inspection Reports ──
 
-export async function listInspections(filters?: { purchaseOrderId?: string; status?: string }): Promise<InspectionReport[]> {
+export async function listInspections(filters?: {
+  purchaseOrderId?: string;
+  status?: string;
+}): Promise<InspectionReport[]> {
   const params = new URLSearchParams();
   if (filters?.purchaseOrderId) params.set('purchaseOrderId', filters.purchaseOrderId);
   if (filters?.status) params.set('status', filters.status);
@@ -621,18 +835,37 @@ export async function createInspection(data: {
   return res.json();
 }
 
-export async function submitInspection(id: string, expectedVersion: number): Promise<InspectionReport> {
-  const res = await authFetchMutate(`/procurement/inspections/${id}/submit`, 'POST', { expectedVersion });
+export async function submitInspection(
+  id: string,
+  expectedVersion: number,
+): Promise<InspectionReport> {
+  const res = await authFetchMutate(`/procurement/inspections/${id}/submit`, 'POST', {
+    expectedVersion,
+  });
   return res.json();
 }
 
-export async function acceptInspection(id: string, expectedVersion: number, remarks?: string): Promise<InspectionReport> {
-  const res = await authFetchMutate(`/procurement/inspections/${id}/accept`, 'POST', { expectedVersion, ...(remarks ? { remarks } : {}) });
+export async function acceptInspection(
+  id: string,
+  expectedVersion: number,
+  remarks?: string,
+): Promise<InspectionReport> {
+  const res = await authFetchMutate(`/procurement/inspections/${id}/accept`, 'POST', {
+    expectedVersion,
+    ...(remarks ? { remarks } : {}),
+  });
   return res.json();
 }
 
-export async function rejectInspection(id: string, expectedVersion: number, remarks?: string): Promise<InspectionReport> {
-  const res = await authFetchMutate(`/procurement/inspections/${id}/reject`, 'POST', { expectedVersion, ...(remarks ? { remarks } : {}) });
+export async function rejectInspection(
+  id: string,
+  expectedVersion: number,
+  remarks?: string,
+): Promise<InspectionReport> {
+  const res = await authFetchMutate(`/procurement/inspections/${id}/reject`, 'POST', {
+    expectedVersion,
+    ...(remarks ? { remarks } : {}),
+  });
   return res.json();
 }
 
@@ -665,38 +898,76 @@ export async function createDv(data: {
   return res.json();
 }
 
-export async function submitDvForCertification(id: string, expectedVersion: number): Promise<DisbursementVoucher> {
-  const res = await authFetchMutate(`/procurement/dvs/${id}/submit-for-certification`, 'POST', { expectedVersion });
+export async function submitDvForCertification(
+  id: string,
+  expectedVersion: number,
+): Promise<DisbursementVoucher> {
+  const res = await authFetchMutate(`/procurement/dvs/${id}/submit-for-certification`, 'POST', {
+    expectedVersion,
+  });
   return res.json();
 }
 
-export async function certifyDv(id: string, expectedVersion: number, remarks?: string): Promise<DisbursementVoucher> {
-  const res = await authFetchMutate(`/procurement/dvs/${id}/certify`, 'POST', { expectedVersion, ...(remarks ? { remarks } : {}) });
+export async function certifyDv(
+  id: string,
+  expectedVersion: number,
+  remarks?: string,
+): Promise<DisbursementVoucher> {
+  const res = await authFetchMutate(`/procurement/dvs/${id}/certify`, 'POST', {
+    expectedVersion,
+    ...(remarks ? { remarks } : {}),
+  });
   return res.json();
 }
 
-export async function submitDvForApproval(id: string, expectedVersion: number): Promise<DisbursementVoucher> {
-  const res = await authFetchMutate(`/procurement/dvs/${id}/submit-for-approval`, 'POST', { expectedVersion });
+export async function submitDvForApproval(
+  id: string,
+  expectedVersion: number,
+): Promise<DisbursementVoucher> {
+  const res = await authFetchMutate(`/procurement/dvs/${id}/submit-for-approval`, 'POST', {
+    expectedVersion,
+  });
   return res.json();
 }
 
-export async function approveDv(id: string, expectedVersion: number, remarks?: string): Promise<DisbursementVoucher> {
-  const res = await authFetchMutate(`/procurement/dvs/${id}/approve`, 'POST', { expectedVersion, ...(remarks ? { remarks } : {}) });
+export async function approveDv(
+  id: string,
+  expectedVersion: number,
+  remarks?: string,
+): Promise<DisbursementVoucher> {
+  const res = await authFetchMutate(`/procurement/dvs/${id}/approve`, 'POST', {
+    expectedVersion,
+    ...(remarks ? { remarks } : {}),
+  });
   return res.json();
 }
 
-export async function releaseDv(id: string, expectedVersion: number, payment?: {
-  checkNumber?: string;
-  checkDate?: string;
-  bankName?: string;
-  remarks?: string;
-}): Promise<DisbursementVoucher> {
-  const res = await authFetchMutate(`/procurement/dvs/${id}/release`, 'POST', { expectedVersion, ...(payment ?? {}) });
+export async function releaseDv(
+  id: string,
+  expectedVersion: number,
+  payment?: {
+    checkNumber?: string;
+    checkDate?: string;
+    bankName?: string;
+    remarks?: string;
+  },
+): Promise<DisbursementVoucher> {
+  const res = await authFetchMutate(`/procurement/dvs/${id}/release`, 'POST', {
+    expectedVersion,
+    ...(payment ?? {}),
+  });
   return res.json();
 }
 
-export async function cancelDv(id: string, expectedVersion: number, remarks?: string): Promise<DisbursementVoucher> {
-  const res = await authFetchMutate(`/procurement/dvs/${id}/cancel`, 'POST', { expectedVersion, ...(remarks ? { remarks } : {}) });
+export async function cancelDv(
+  id: string,
+  expectedVersion: number,
+  remarks?: string,
+): Promise<DisbursementVoucher> {
+  const res = await authFetchMutate(`/procurement/dvs/${id}/cancel`, 'POST', {
+    expectedVersion,
+    ...(remarks ? { remarks } : {}),
+  });
   return res.json();
 }
 

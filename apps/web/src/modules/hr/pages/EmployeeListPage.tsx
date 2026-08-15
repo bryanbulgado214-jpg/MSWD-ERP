@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../app/auth';
 import { getEmployees, getDepartments, HrApiError } from '../api';
 import type { Employee } from '../types';
+
 import HrSubNav from './HrSubNav';
 import './hr.css';
 
@@ -23,7 +24,9 @@ export default function EmployeeListPage() {
   const { hasPermission } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [state, setState] = useState<LoadState>({ status: 'loading' });
-  const [departments, setDepartments] = useState<Array<{ id: string; code: string; name: string }>>([]);
+  const [departments, setDepartments] = useState<Array<{ id: string; code: string; name: string }>>(
+    [],
+  );
 
   const search = searchParams.get('search') || '';
   const statusFilter = searchParams.get('status') || '';
@@ -39,12 +42,18 @@ export default function EmployeeListPage() {
     if (typeFilter) params.set('employmentType', typeFilter);
     getEmployees(params.toString() || undefined)
       .then((data) => setState({ status: 'loaded', data }))
-      .catch((err) => setState({ status: 'error', message: err instanceof HrApiError ? err.message : 'Failed.' }));
+      .catch((err) =>
+        setState({ status: 'error', message: err instanceof HrApiError ? err.message : 'Failed.' }),
+      );
   }
 
-  useEffect(() => { load(); }, [search, statusFilter, deptFilter, typeFilter]);
   useEffect(() => {
-    getDepartments().then(setDepartments).catch(() => {});
+    load();
+  }, [search, statusFilter, deptFilter, typeFilter]);
+  useEffect(() => {
+    getDepartments()
+      .then(setDepartments)
+      .catch(() => {});
   }, []);
 
   function setFilter(key: string, value: string) {
@@ -84,16 +93,24 @@ export default function EmployeeListPage() {
             <option value="elected">Elected</option>
           </select>
           {departments.length > 0 && (
-            <select value={deptFilter} onChange={(e) => setFilter('departmentId', e.target.value)}>
+            <select
+              value={deptFilter}
+              onChange={(e) => setFilter('departmentId', e.target.value)}
+              style={{ width: '100%', maxWidth: 240, boxSizing: 'border-box' }}
+            >
               <option value="">All Departments</option>
               {departments.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
               ))}
             </select>
           )}
         </div>
         {hasPermission('hr.employee.manage') && (
-          <Link to="/hr/employees/new" className="hr-btn hr-btn--primary">+ New Employee</Link>
+          <Link to="/hr/employees/new" className="hr-btn hr-btn--primary">
+            + New Employee
+          </Link>
         )}
       </div>
 
@@ -103,39 +120,54 @@ export default function EmployeeListPage() {
         <div className="hr-empty">No employees found.</div>
       )}
       {state.status === 'loaded' && state.data.length > 0 && (
-        <table className="hr-table">
-          <thead>
-            <tr>
-              <th>Emp #</th>
-              <th>Name</th>
-              <th>Position</th>
-              <th>Department</th>
-              <th>Type</th>
-              <th>Status</th>
-              <th style={{ textAlign: 'right' }}>Basic Salary</th>
-            </tr>
-          </thead>
-          <tbody>
-            {state.data.map((e) => (
-              <tr key={e.id}>
-                <td className="hr-text-mono">
-                  <Link to={`/hr/employees/${e.id}`} className="hr-table__link">{e.employeeNumber}</Link>
-                </td>
-                <td>
-                  <Link to={`/hr/employees/${e.id}`} className="hr-table__link">
-                    {e.lastName}, {e.firstName}{e.middleName ? ` ${e.middleName.charAt(0)}.` : ''}
-                    {e.suffix ? ` ${e.suffix}` : ''}
-                  </Link>
-                </td>
-                <td>{e.position?.title ?? '--'}</td>
-                <td>{e.department?.name ?? '--'}</td>
-                <td><span className={`hr-badge hr-badge--${e.employmentType}`}>{e.employmentType.replace('_', ' ')}</span></td>
-                <td><span className={`hr-badge hr-badge--${e.employmentStatus}`}>{e.employmentStatus.replace('_', ' ')}</span></td>
-                <td className="hr-text-mono" style={{ textAlign: 'right' }}>{formatPeso(e.basicSalary)}</td>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="hr-table">
+            <thead>
+              <tr>
+                <th>Emp #</th>
+                <th>Name</th>
+                <th>Position</th>
+                <th>Department</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th style={{ textAlign: 'right' }}>Basic Salary</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {state.data.map((e) => (
+                <tr key={e.id}>
+                  <td className="hr-text-mono">
+                    <Link to={`/hr/employees/${e.id}`} className="hr-table__link">
+                      {e.employeeNumber}
+                    </Link>
+                  </td>
+                  <td>
+                    <Link to={`/hr/employees/${e.id}`} className="hr-table__link">
+                      {e.lastName}, {e.firstName}
+                      {e.middleName ? ` ${e.middleName.charAt(0)}.` : ''}
+                      {e.suffix ? ` ${e.suffix}` : ''}
+                    </Link>
+                  </td>
+                  <td>{e.position?.title ?? '--'}</td>
+                  <td>{e.department?.name ?? '--'}</td>
+                  <td>
+                    <span className={`hr-badge hr-badge--${e.employmentType}`}>
+                      {e.employmentType.replace('_', ' ')}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`hr-badge hr-badge--${e.employmentStatus}`}>
+                      {e.employmentStatus.replace('_', ' ')}
+                    </span>
+                  </td>
+                  <td className="hr-text-mono" style={{ textAlign: 'right' }}>
+                    {formatPeso(e.basicSalary)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

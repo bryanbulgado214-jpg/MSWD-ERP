@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'react';
 
 import { AccountingSubNav } from './AccountingSubNav';
+
 import './accounting.css';
 import {
-  getPeriodFiscalYears, createFiscalYear, closeFiscalYear,
-  getPeriodList, lockPeriod, unlockPeriod, closePeriod, reopenPeriod,
+  getPeriodFiscalYears,
+  createFiscalYear,
+  closeFiscalYear,
+  getPeriodList,
+  lockPeriod,
+  unlockPeriod,
+  closePeriod,
+  reopenPeriod,
 } from '../api';
 import type { FiscalYearDetail, PeriodDetail } from '../types';
 
@@ -30,11 +37,18 @@ export default function PeriodManagementPage() {
     }
   };
 
-  useEffect(() => { loadFiscalYears(); }, []);
+  useEffect(() => {
+    loadFiscalYears();
+  }, []);
 
   useEffect(() => {
-    if (!selectedFY) { setPeriods([]); return; }
-    getPeriodList(selectedFY.id).then(setPeriods).catch((err) => setError(err.message));
+    if (!selectedFY) {
+      setPeriods([]);
+      return;
+    }
+    getPeriodList(selectedFY.id)
+      .then(setPeriods)
+      .catch((err) => setError(err.message));
   }, [selectedFY?.id]);
 
   const handleCreateFY = async (e: React.FormEvent) => {
@@ -68,10 +82,19 @@ export default function PeriodManagementPage() {
     }
   };
 
-  const handlePeriodAction = async (period: PeriodDetail, action: 'lock' | 'unlock' | 'close' | 'reopen') => {
+  const handlePeriodAction = async (
+    period: PeriodDetail,
+    action: 'lock' | 'unlock' | 'close' | 'reopen',
+  ) => {
     setError('');
-    const actions = { lock: lockPeriod, unlock: unlockPeriod, close: closePeriod, reopen: reopenPeriod };
-    if (action === 'close' && !confirm(`Close ${period.name}? Posting will no longer be allowed.`)) return;
+    const actions = {
+      lock: lockPeriod,
+      unlock: unlockPeriod,
+      close: closePeriod,
+      reopen: reopenPeriod,
+    };
+    if (action === 'close' && !confirm(`Close ${period.name}? Posting will no longer be allowed.`))
+      return;
     try {
       const updated = await actions[action](period.id, period.version);
       setPeriods((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
@@ -107,7 +130,9 @@ export default function PeriodManagementPage() {
         </select>
 
         {selectedFY && selectedFY.status === 'open' && (
-          <button className="acct-btn" onClick={handleCloseFY}>Close Fiscal Year</button>
+          <button className="acct-btn" onClick={handleCloseFY}>
+            Close Fiscal Year
+          </button>
         )}
 
         <button className="acct-btn acct-btn--primary" onClick={() => setShowFYForm(!showFYForm)}>
@@ -120,12 +145,23 @@ export default function PeriodManagementPage() {
           <div className="acct-form-row">
             <div className="acct-field">
               <label>Year</label>
-              <input type="number" min="2020" max="2099" value={fyYear} onChange={(e) => setFyYear(Number(e.target.value))} required />
+              <input
+                type="number"
+                min="2020"
+                max="2099"
+                value={fyYear}
+                onChange={(e) => setFyYear(Number(e.target.value))}
+                required
+              />
             </div>
             <div className="acct-field" style={{ display: 'flex', alignItems: 'flex-end' }}>
               <div className="acct-form-actions" style={{ margin: 0 }}>
-                <button type="button" className="acct-btn" onClick={() => setShowFYForm(false)}>Cancel</button>
-                <button type="submit" className="acct-btn acct-btn--primary">Create FY{fyYear}</button>
+                <button type="button" className="acct-btn" onClick={() => setShowFYForm(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="acct-btn acct-btn--primary">
+                  Create FY{fyYear}
+                </button>
               </div>
             </div>
           </div>
@@ -135,7 +171,9 @@ export default function PeriodManagementPage() {
       {selectedFY && (
         <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
           <div className="acct-form" style={{ flex: 1, padding: 12, textAlign: 'center' }}>
-            <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--mswd-navy)' }}>{openCount}</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--mswd-navy)' }}>
+              {openCount}
+            </div>
             <div style={{ fontSize: 12, color: '#667085' }}>Open</div>
           </div>
           <div className="acct-form" style={{ flex: 1, padding: 12, textAlign: 'center' }}>
@@ -152,69 +190,97 @@ export default function PeriodManagementPage() {
       {loading && <div className="acct-empty">Loading...</div>}
 
       {!loading && periods.length > 0 && (
-        <table className="acct-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Period</th>
-              <th>Date Range</th>
-              <th>JEVs</th>
-              <th>Status</th>
-              <th>Locked</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {periods.map((p) => {
-              const isOpen = p.status === 'open';
-              const isLocked = !!p.lockedAt;
-              const isClosed = p.status === 'closed';
-              const fyIsClosed = selectedFY?.status === 'closed';
+        <div style={{ overflowX: 'auto' }}>
+          <table className="acct-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Period</th>
+                <th>Date Range</th>
+                <th>JEVs</th>
+                <th>Status</th>
+                <th>Locked</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {periods.map((p) => {
+                const isOpen = p.status === 'open';
+                const isLocked = !!p.lockedAt;
+                const isClosed = p.status === 'closed';
+                const fyIsClosed = selectedFY?.status === 'closed';
 
-              return (
-                <tr key={p.id}>
-                  <td>{p.periodNumber}</td>
-                  <td style={{ fontWeight: 600 }}>{p.name}</td>
-                  <td style={{ whiteSpace: 'nowrap', fontSize: 13 }}>
-                    {new Date(p.startDate).toLocaleDateString()} — {new Date(p.endDate).toLocaleDateString()}
-                  </td>
-                  <td className="acct-text-mono">{p._count.journalEntryVouchers}</td>
-                  <td>
-                    <span className={`acct-badge ${isClosed ? 'acct-badge--closed' : 'acct-badge--active'}`}>
-                      {p.status}
-                    </span>
-                  </td>
-                  <td>
-                    {isLocked && (
-                      <span style={{ fontSize: 12, color: '#a16207' }}>
-                        Locked by {p.locker?.username} on {new Date(p.lockedAt!).toLocaleDateString()}
+                return (
+                  <tr key={p.id}>
+                    <td>{p.periodNumber}</td>
+                    <td style={{ fontWeight: 600 }}>{p.name}</td>
+                    <td style={{ whiteSpace: 'nowrap', fontSize: 13 }}>
+                      {new Date(p.startDate).toLocaleDateString()} —{' '}
+                      {new Date(p.endDate).toLocaleDateString()}
+                    </td>
+                    <td className="acct-text-mono">{p._count.journalEntryVouchers}</td>
+                    <td>
+                      <span
+                        className={`acct-badge ${isClosed ? 'acct-badge--closed' : 'acct-badge--active'}`}
+                      >
+                        {p.status}
                       </span>
-                    )}
-                    {!isLocked && isOpen && <span style={{ fontSize: 12, color: '#667085' }}>Unlocked</span>}
-                  </td>
-                  <td>
-                    {!fyIsClosed && (
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                        {isOpen && !isLocked && (
-                          <button className="acct-btn acct-btn--sm" onClick={() => handlePeriodAction(p, 'lock')}>Lock</button>
-                        )}
-                        {isOpen && isLocked && (
-                          <button className="acct-btn acct-btn--sm" onClick={() => handlePeriodAction(p, 'unlock')}>Unlock</button>
-                        )}
-                        {isOpen && (
-                          <button className="acct-btn acct-btn--sm" onClick={() => handlePeriodAction(p, 'close')}>Close</button>
-                        )}
-                        {isClosed && (
-                          <button className="acct-btn acct-btn--sm" onClick={() => handlePeriodAction(p, 'reopen')}>Reopen</button>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    </td>
+                    <td>
+                      {isLocked && (
+                        <span style={{ fontSize: 12, color: '#a16207' }}>
+                          Locked by {p.locker?.username} on{' '}
+                          {new Date(p.lockedAt!).toLocaleDateString()}
+                        </span>
+                      )}
+                      {!isLocked && isOpen && (
+                        <span style={{ fontSize: 12, color: '#667085' }}>Unlocked</span>
+                      )}
+                    </td>
+                    <td>
+                      {!fyIsClosed && (
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {isOpen && !isLocked && (
+                            <button
+                              className="acct-btn acct-btn--sm"
+                              onClick={() => handlePeriodAction(p, 'lock')}
+                            >
+                              Lock
+                            </button>
+                          )}
+                          {isOpen && isLocked && (
+                            <button
+                              className="acct-btn acct-btn--sm"
+                              onClick={() => handlePeriodAction(p, 'unlock')}
+                            >
+                              Unlock
+                            </button>
+                          )}
+                          {isOpen && (
+                            <button
+                              className="acct-btn acct-btn--sm"
+                              onClick={() => handlePeriodAction(p, 'close')}
+                            >
+                              Close
+                            </button>
+                          )}
+                          {isClosed && (
+                            <button
+                              className="acct-btn acct-btn--sm"
+                              onClick={() => handlePeriodAction(p, 'reopen')}
+                            >
+                              Reopen
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

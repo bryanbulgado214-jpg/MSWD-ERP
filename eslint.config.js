@@ -44,6 +44,11 @@ export default [
     },
     rules: {
       ...tsPlugin.configs.recommended.rules,
+      // TypeScript's own compiler already checks for undefined identifiers, and
+      // `no-undef` false-positives on type-only / global namespace references
+      // (e.g. `React.CSSProperties` under the new JSX transform). Disabling it
+      // for TS is the typescript-eslint-recommended configuration.
+      'no-undef': 'off',
       '@typescript-eslint/no-unused-vars': [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },

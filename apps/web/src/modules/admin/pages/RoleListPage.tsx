@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 
 import type { RoleSummary } from '../api';
 import { listRoles } from '../api';
+
+import { AdminSubNav } from './AdminSubNav';
 import './admin.css';
 
 export function RoleListPage() {
@@ -16,10 +18,16 @@ export function RoleListPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="admin-page"><div className="admin-loading">Loading roles...</div></div>;
+  if (loading)
+    return (
+      <div className="admin-page">
+        <div className="admin-loading">Loading roles...</div>
+      </div>
+    );
 
   return (
     <div className="admin-page">
+      <AdminSubNav />
       <div className="admin-header">
         <h1 className="admin-title">Role Management</h1>
       </div>
@@ -46,12 +54,16 @@ export function RoleListPage() {
                 <td style={{ textAlign: 'center' }}>{r._count.userRoles}</td>
                 <td style={{ textAlign: 'center' }}>{r._count.rolePermissions}</td>
                 <td>
-                  <span className={`admin-badge ${r.isSystemRole ? 'admin-badge--system' : 'admin-badge--custom'}`}>
+                  <span
+                    className={`admin-badge ${r.isSystemRole ? 'admin-badge--system' : 'admin-badge--custom'}`}
+                  >
                     {r.isSystemRole ? 'System' : 'Custom'}
                   </span>
                 </td>
                 <td>
-                  <Link to={`/admin/roles/${r.id}`} className="admin-btn admin-btn--sm">Manage</Link>
+                  <Link to={`/admin/roles/${r.id}`} className="admin-btn admin-btn--sm">
+                    Manage
+                  </Link>
                 </td>
               </tr>
             ))}

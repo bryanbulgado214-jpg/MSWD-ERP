@@ -11,6 +11,10 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
+    "seed:demo": "ts-node prisma/seed-demo-sbwd.ts && ts-node prisma/seed-sbwd-fy2025.ts && ts-node prisma/seed-sbwd-report-data.ts",
+    "seed:demo:reset": "ts-node prisma/seed-demo-sbwd.ts && ts-node prisma/seed-sbwd-fy2025.ts && ts-node prisma/seed-sbwd-report-data.ts",
+    "seed:demo:reports": "ts-node prisma/seed-sbwd-report-data.ts",
+    "seed:demo:fy2025": "ts-node prisma/seed-sbwd-fy2025.ts",
     "test": "jest"
   },
   "prisma": {
@@ -33,11 +37,12 @@
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "xlsx": "^0.18.5",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@nestjs/cli": "^10.4.4",
+    "@nestjs/cli": "^11.0.24",
+    "@nestjs/schematics": "^11.1.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/jest": "^29.5.12",
     "@types/multer": "^2.2.0",

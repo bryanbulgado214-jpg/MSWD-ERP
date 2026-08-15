@@ -96,3 +96,17 @@ export class VoidJevDto {
   @MinLength(1)
   voidReason!: string;
 }
+
+export class ReverseJevDto {
+  @IsInt()
+  expectedVersion!: number;
+
+  @IsOptional()
+  @IsDateString()
+  reversalDate?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
+}

@@ -1,6 +1,12 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
-import { PrismaService } from '../../database/prisma.service';
+import type { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
 
 const CHECK_SELECT = {
@@ -15,8 +21,15 @@ const CHECK_SELECT = {
   createdAt: true,
   updatedAt: true,
   version: true,
-  bankAccount: { select: { id: true, accountNumber: true, accountName: true, bank: { select: { code: true, name: true } } } },
-  disbursementVoucher: { select: { id: true, dvNumber: true } },
+  bankAccount: {
+    select: {
+      id: true,
+      accountNumber: true,
+      accountName: true,
+      bank: { select: { code: true, name: true } },
+    },
+  },
+  disbursementVoucher: { select: { id: true, dvNumber: true, status: true } },
   releaser: { select: { username: true } },
   voider: { select: { username: true } },
   creator: { select: { username: true } },
@@ -40,6 +53,7 @@ const CHECK_DETAIL_SELECT = {
 } as const;
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
+  pending: ['voided'],
   assigned: ['printed', 'released', 'spoiled', 'voided'],
   printed: ['released', 'spoiled', 'voided'],
   released: ['cleared', 'stale_dated', 'voided'],
@@ -112,7 +126,9 @@ export class CheckService {
           amount: data.amount,
           checkDate: new Date(data.checkDate),
           payeeName: data.payeeName,
-          ...(data.disbursementVoucherId ? { disbursementVoucherId: data.disbursementVoucherId } : {}),
+          ...(data.disbursementVoucherId
+            ? { disbursementVoucherId: data.disbursementVoucherId }
+            : {}),
           createdBy: userId,
           updatedBy: userId,
         },
@@ -146,18 +162,22 @@ export class CheckService {
       throw new ConflictException('Check was modified. Please refresh.');
     }
 
+    // Void/spoil are destructive and go through voidCheck() (approver-only,
+    // maker != checker). transition() only handles the forward lifecycle.
+    if (data.toStatus === 'voided' || data.toStatus === 'spoiled') {
+      throw new BadRequestException(
+        'Use the void action — voiding/spoiling a check requires an approver.',
+      );
+    }
+
     const allowed = VALID_TRANSITIONS[check.status] ?? [];
     if (!allowed.includes(data.toStatus)) {
       throw new BadRequestException(`Cannot transition from ${check.status} to ${data.toStatus}.`);
     }
 
-    const isVoid = data.toStatus === 'voided';
     const isCleared = data.toStatus === 'cleared';
     const isReleased = data.toStatus === 'released';
 
-    if (isVoid && !data.remarks) {
-      throw new BadRequestException('Void reason is required.');
-    }
     if (isCleared && !data.clearedDate) {
       throw new BadRequestException('Cleared date is required.');
     }
@@ -167,7 +187,6 @@ export class CheckService {
         where: { id },
         data: {
           status: data.toStatus as any,
-          ...(isVoid ? { voidedBy: userId, voidedAt: new Date(), voidReason: data.remarks } : {}),
           ...(isReleased ? { releasedBy: userId, releasedAt: new Date() } : {}),
           ...(isCleared ? { clearedDate: new Date(data.clearedDate!) } : {}),
           updatedBy: userId,
@@ -183,6 +202,168 @@ export class CheckService {
           toStatus: data.toStatus as any,
           changedBy: userId,
           ...(data.remarks ? { remarks: data.remarks } : {}),
+        },
+      });
+
+      return updated;
+    });
+  }
+
+  /**
+   * Cashier action: assign the physical check number to a PENDING check and mark
+   * it printed. The check's DV must already be posted. Also stamps the DV so its
+   * printout shows the check number.
+   */
+  async printCheck(
+    organizationId: string,
+    userId: string,
+    id: string,
+    data: { checkNumber: string; checkDate?: string },
+  ) {
+    const number = data.checkNumber?.trim();
+    if (!number) throw new BadRequestException('Check number is required.');
+
+    const check = await this.prisma.check.findFirst({
+      where: { id, organizationId },
+      select: {
+        id: true,
+        status: true,
+        bankAccountId: true,
+        disbursementVoucherId: true,
+        disbursementVoucher: { select: { status: true } },
+      },
+    });
+    if (!check) throw new NotFoundException('Check not found.');
+    if (check.status !== 'pending') {
+      throw new BadRequestException('Only a pending check can be assigned a number and printed.');
+    }
+    if (check.disbursementVoucher && check.disbursementVoucher.status === 'draft') {
+      throw new BadRequestException(
+        'The disbursement voucher must be posted before the check can be printed.',
+      );
+    }
+
+    const dup = await this.prisma.check.findFirst({
+      where: {
+        organizationId,
+        bankAccountId: check.bankAccountId,
+        checkNumber: number,
+        NOT: { id },
+      },
+      select: { id: true },
+    });
+    if (dup)
+      throw new ConflictException('That check number is already used for this bank account.');
+
+    return runAudited(this.prisma, userId, async (tx) => {
+      const updated = await tx.check.update({
+        where: { id },
+        data: {
+          checkNumber: number,
+          ...(data.checkDate ? { checkDate: new Date(data.checkDate) } : {}),
+          status: 'printed',
+          printedBy: userId,
+          printedAt: new Date(),
+          updatedBy: userId,
+          version: { increment: 1 },
+        },
+        select: CHECK_DETAIL_SELECT,
+      });
+
+      await tx.checkStatusHistory.create({
+        data: {
+          checkId: id,
+          fromStatus: 'pending',
+          toStatus: 'printed',
+          changedBy: userId,
+          remarks: `Check ${number} assigned and printed`,
+        },
+      });
+
+      // Stamp the DV so its Appendix 32 printout reflects the issued check.
+      if (check.disbursementVoucherId) {
+        await tx.disbursementVoucher.update({
+          where: { id: check.disbursementVoucherId },
+          data: {
+            checkNumber: number,
+            ...(data.checkDate ? { checkDate: new Date(data.checkDate) } : {}),
+            updatedBy: userId,
+          },
+        });
+      }
+
+      return updated;
+    });
+  }
+
+  /**
+   * Approver-only: void or spoil a check. Enforces maker != checker — the person
+   * who prepared, printed, or released the check may NOT be the one who voids it
+   * (segregation of duties; the person who handled the cash can't reverse the
+   * record). Gated at the controller by accounting.check.void.
+   */
+  async voidCheck(
+    organizationId: string,
+    userId: string,
+    id: string,
+    data: { expectedVersion: number; toStatus: 'voided' | 'spoiled'; remarks: string },
+  ) {
+    if (data.toStatus !== 'voided' && data.toStatus !== 'spoiled') {
+      throw new BadRequestException('This action only voids or spoils a check.');
+    }
+    if (!data.remarks || !data.remarks.trim()) {
+      throw new BadRequestException('A reason is required to void or spoil a check.');
+    }
+
+    const check = await this.prisma.check.findFirst({
+      where: { id, organizationId },
+      select: {
+        id: true,
+        status: true,
+        version: true,
+        createdBy: true,
+        printedBy: true,
+        releasedBy: true,
+      },
+    });
+    if (!check) throw new NotFoundException('Check not found.');
+    if (check.version !== data.expectedVersion) {
+      throw new ConflictException('Check was modified. Please refresh.');
+    }
+    if (check.status === 'voided' || check.status === 'spoiled' || check.status === 'cleared') {
+      throw new BadRequestException(`A ${check.status} check cannot be voided.`);
+    }
+
+    // Maker != checker: the approver must be a different user than anyone who
+    // prepared, printed, or released this check.
+    const handlers = [check.createdBy, check.printedBy, check.releasedBy].filter(Boolean);
+    if (handlers.includes(userId)) {
+      throw new ForbiddenException(
+        'Segregation of duties: the person who prepared, printed, or released a check cannot void it. A different approver must void.',
+      );
+    }
+
+    return runAudited(this.prisma, userId, async (tx) => {
+      const updated = await tx.check.update({
+        where: { id },
+        data: {
+          status: data.toStatus,
+          voidedBy: userId,
+          voidedAt: new Date(),
+          voidReason: data.remarks.trim(),
+          updatedBy: userId,
+          version: { increment: 1 },
+        },
+        select: CHECK_DETAIL_SELECT,
+      });
+
+      await tx.checkStatusHistory.create({
+        data: {
+          checkId: id,
+          fromStatus: check.status,
+          toStatus: data.toStatus,
+          changedBy: userId,
+          remarks: data.remarks.trim(),
         },
       });
 

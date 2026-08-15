@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { BillingApiError, getBillingPeriods, getBills } from '../api';
 import type { BillingPeriod, BillListItem } from '../types';
+
 import BillingSubNav from './BillingSubNav';
 import './billing.css';
 
@@ -20,12 +21,18 @@ export default function BillListPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    getBillingPeriods().then(setPeriods).catch(() => {});
+    getBillingPeriods()
+      .then(setPeriods)
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
-    if (!selectedPeriodId) { setBills([]); return; }
-    setLoading(true); setError('');
+    if (!selectedPeriodId) {
+      setBills([]);
+      return;
+    }
+    setLoading(true);
+    setError('');
     getBills(`billingPeriodId=${selectedPeriodId}`)
       .then(setBills)
       .catch((err) => setError(err instanceof BillingApiError ? err.message : 'Failed.'))
@@ -45,12 +52,16 @@ export default function BillListPage() {
         <select value={selectedPeriodId} onChange={(e) => setSelectedPeriodId(e.target.value)}>
           <option value="">Select Billing Period</option>
           {periods.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
           ))}
         </select>
       </div>
 
-      {!selectedPeriodId && <div className="bill-empty">Select a billing period to view bills.</div>}
+      {!selectedPeriodId && (
+        <div className="bill-empty">Select a billing period to view bills.</div>
+      )}
       {loading && <p>Loading bills...</p>}
       {error && <div className="bill-error">{error}</div>}
 
@@ -61,47 +72,64 @@ export default function BillListPage() {
       {bills.length > 0 && (
         <>
           <div style={{ display: 'flex', gap: '24px', marginBottom: '12px', fontSize: '13px' }}>
-            <span>Total: <strong>{formatPeso(totalAmount)}</strong></span>
-            <span>Paid: <strong>{formatPeso(totalPaid)}</strong></span>
-            <span>Balance: <strong style={{ color: totalBalance > 0 ? '#d92d20' : '#039855' }}>{formatPeso(totalBalance)}</strong></span>
-            <span>Count: <strong>{bills.length}</strong></span>
+            <span>
+              Total: <strong>{formatPeso(totalAmount)}</strong>
+            </span>
+            <span>
+              Paid: <strong>{formatPeso(totalPaid)}</strong>
+            </span>
+            <span>
+              Balance:{' '}
+              <strong style={{ color: totalBalance > 0 ? '#d92d20' : '#039855' }}>
+                {formatPeso(totalBalance)}
+              </strong>
+            </span>
+            <span>
+              Count: <strong>{bills.length}</strong>
+            </span>
           </div>
-          <table className="bill-table">
-            <thead>
-              <tr>
-                <th>Bill #</th>
-                <th>Account #</th>
-                <th>Consumer</th>
-                <th>Consumption</th>
-                <th>Total</th>
-                <th>Paid</th>
-                <th>Balance</th>
-                <th>Due Date</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bills.map((b) => (
-                <tr key={b.id}>
-                  <td>
-                    <Link to={`/billing/bills/${b.id}`} className="bill-table__link">
-                      {b.billNumber}
-                    </Link>
-                  </td>
-                  <td className="bill-text-mono">{b.consumer.accountNumber}</td>
-                  <td>{b.consumer.lastName}, {b.consumer.firstName}</td>
-                  <td className="bill-text-mono">{b.consumption} cu.m.</td>
-                  <td className="bill-text-mono">{formatPeso(b.totalAmount)}</td>
-                  <td className="bill-text-mono">{formatPeso(b.amountPaid)}</td>
-                  <td className="bill-text-mono" style={{ fontWeight: 600 }}>{formatPeso(b.balance)}</td>
-                  <td>{new Date(b.dueDate).toLocaleDateString()}</td>
-                  <td>
-                    <span className={`bill-badge bill-badge--${b.status}`}>{b.status}</span>
-                  </td>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="bill-table">
+              <thead>
+                <tr>
+                  <th>Bill #</th>
+                  <th>Account #</th>
+                  <th>Consumer</th>
+                  <th>Consumption</th>
+                  <th>Total</th>
+                  <th>Paid</th>
+                  <th>Balance</th>
+                  <th>Due Date</th>
+                  <th>Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {bills.map((b) => (
+                  <tr key={b.id}>
+                    <td>
+                      <Link to={`/billing/bills/${b.id}`} className="bill-table__link">
+                        {b.billNumber}
+                      </Link>
+                    </td>
+                    <td className="bill-text-mono">{b.consumer.accountNumber}</td>
+                    <td>
+                      {b.consumer.lastName}, {b.consumer.firstName}
+                    </td>
+                    <td className="bill-text-mono">{b.consumption} cu.m.</td>
+                    <td className="bill-text-mono">{formatPeso(b.totalAmount)}</td>
+                    <td className="bill-text-mono">{formatPeso(b.amountPaid)}</td>
+                    <td className="bill-text-mono" style={{ fontWeight: 600 }}>
+                      {formatPeso(b.balance)}
+                    </td>
+                    <td>{new Date(b.dueDate).toLocaleDateString()}</td>
+                    <td>
+                      <span className={`bill-badge bill-badge--${b.status}`}>{b.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </div>

@@ -17,7 +17,16 @@ interface ItemRow {
 }
 
 function emptyRow(): ItemRow {
-  return { description: '', unitOfMeasure: '', quantityOrdered: '0', quantityDelivered: '0', quantityAccepted: '0', quantityRejected: '0', result: 'pending', remarks: '' };
+  return {
+    description: '',
+    unitOfMeasure: '',
+    quantityOrdered: '0',
+    quantityDelivered: '0',
+    quantityAccepted: '0',
+    quantityRejected: '0',
+    result: 'pending',
+    remarks: '',
+  };
 }
 
 export function NewInspectionPage() {
@@ -35,7 +44,9 @@ export function NewInspectionPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    listPurchaseOrders().then(setPos).catch(() => {});
+    listPurchaseOrders()
+      .then(setPos)
+      .catch(() => {});
   }, []);
 
   const selectedPo = pos.find((p) => p.id === selectedPoId);
@@ -45,7 +56,13 @@ export function NewInspectionPage() {
     const po = pos.find((p) => p.id === poId);
     if (!po) return;
 
-    const prItems = (po as PurchaseOrder & { purchaseRequest?: { items?: Array<{ description: string; unitOfMeasure: string; quantity: string }> } }).purchaseRequest?.items;
+    const prItems = (
+      po as PurchaseOrder & {
+        purchaseRequest?: {
+          items?: Array<{ description: string; unitOfMeasure: string; quantity: string }>;
+        };
+      }
+    ).purchaseRequest?.items;
     if (prItems && prItems.length > 0) {
       setItems(
         prItems.map((item) => ({
@@ -77,8 +94,14 @@ export function NewInspectionPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedPoId) { setError('Select a Purchase Order.'); return; }
-    if (items.some((i) => !i.description.trim())) { setError('All items must have a description.'); return; }
+    if (!selectedPoId) {
+      setError('Select a Purchase Order.');
+      return;
+    }
+    if (items.some((i) => !i.description.trim())) {
+      setError('All items must have a description.');
+      return;
+    }
 
     setSubmitting(true);
     setError('');
@@ -104,7 +127,9 @@ export function NewInspectionPage() {
       });
       navigate(`/procurement/inspections/${report.id}`);
     } catch (e) {
-      setError(e instanceof ProcurementApiError ? e.message : 'Failed to create inspection report.');
+      setError(
+        e instanceof ProcurementApiError ? e.message : 'Failed to create inspection report.',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -119,7 +144,12 @@ export function NewInspectionPage() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
           <div className="pr-form-field">
             <label>Purchase Order *</label>
-            <select value={selectedPoId} onChange={(e) => handlePoChange(e.target.value)} required>
+            <select
+              value={selectedPoId}
+              onChange={(e) => handlePoChange(e.target.value)}
+              required
+              style={{ width: '100%', maxWidth: 360, boxSizing: 'border-box' }}
+            >
               <option value="">Select a PO...</option>
               {pos.map((po) => (
                 <option key={po.id} value={po.id}>
@@ -130,25 +160,54 @@ export function NewInspectionPage() {
           </div>
           <div className="pr-form-field">
             <label>Delivery Date *</label>
-            <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} required />
+            <input
+              type="date"
+              value={deliveryDate}
+              onChange={(e) => setDeliveryDate(e.target.value)}
+              required
+            />
           </div>
           <div className="pr-form-field">
             <label>Delivery Note / DR No.</label>
-            <input type="text" value={deliveryNote} onChange={(e) => setDeliveryNote(e.target.value)} maxLength={100} />
+            <input
+              type="text"
+              value={deliveryNote}
+              onChange={(e) => setDeliveryNote(e.target.value)}
+              maxLength={100}
+            />
           </div>
           <div className="pr-form-field">
             <label>Invoice Number</label>
-            <input type="text" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} maxLength={50} />
+            <input
+              type="text"
+              value={invoiceNumber}
+              onChange={(e) => setInvoiceNumber(e.target.value)}
+              maxLength={50}
+            />
           </div>
           <div className="pr-form-field">
             <label>Invoice Date</label>
-            <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
+            <input
+              type="date"
+              value={invoiceDate}
+              onChange={(e) => setInvoiceDate(e.target.value)}
+            />
           </div>
         </div>
 
         {selectedPo && (
-          <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13 }}>
-            <strong>PO: {selectedPo.poNumber}</strong> — PR: {selectedPo.purchaseRequest.prNumber} — {selectedPo.purchaseRequest.title}
+          <div
+            style={{
+              background: '#f0f9ff',
+              border: '1px solid #bae6fd',
+              borderRadius: 8,
+              padding: 12,
+              marginBottom: 16,
+              fontSize: 13,
+            }}
+          >
+            <strong>PO: {selectedPo.poNumber}</strong> — PR: {selectedPo.purchaseRequest.prNumber} —{' '}
+            {selectedPo.purchaseRequest.title}
           </div>
         )}
 
@@ -179,7 +238,14 @@ export function NewInspectionPage() {
                       type="text"
                       value={item.description}
                       onChange={(e) => updateItem(idx, 'description', e.target.value)}
-                      style={{ width: '100%', minWidth: 150, padding: '4px 6px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13 }}
+                      style={{
+                        width: '100%',
+                        minWidth: 150,
+                        padding: '4px 6px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: 4,
+                        fontSize: 13,
+                      }}
                       required
                     />
                   </td>
@@ -188,23 +254,82 @@ export function NewInspectionPage() {
                       type="text"
                       value={item.unitOfMeasure}
                       onChange={(e) => updateItem(idx, 'unitOfMeasure', e.target.value)}
-                      style={{ width: 60, padding: '4px 6px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13 }}
+                      style={{
+                        width: 60,
+                        padding: '4px 6px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: 4,
+                        fontSize: 13,
+                      }}
                     />
                   </td>
                   <td>
-                    <input type="number" value={item.quantityOrdered} onChange={(e) => updateItem(idx, 'quantityOrdered', e.target.value)} style={{ width: 70, padding: '4px 6px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13 }} />
+                    <input
+                      type="number"
+                      value={item.quantityOrdered}
+                      onChange={(e) => updateItem(idx, 'quantityOrdered', e.target.value)}
+                      style={{
+                        width: 70,
+                        padding: '4px 6px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: 4,
+                        fontSize: 13,
+                      }}
+                    />
                   </td>
                   <td>
-                    <input type="number" value={item.quantityDelivered} onChange={(e) => updateItem(idx, 'quantityDelivered', e.target.value)} style={{ width: 70, padding: '4px 6px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13 }} />
+                    <input
+                      type="number"
+                      value={item.quantityDelivered}
+                      onChange={(e) => updateItem(idx, 'quantityDelivered', e.target.value)}
+                      style={{
+                        width: 70,
+                        padding: '4px 6px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: 4,
+                        fontSize: 13,
+                      }}
+                    />
                   </td>
                   <td>
-                    <input type="number" value={item.quantityAccepted} onChange={(e) => updateItem(idx, 'quantityAccepted', e.target.value)} style={{ width: 70, padding: '4px 6px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13 }} />
+                    <input
+                      type="number"
+                      value={item.quantityAccepted}
+                      onChange={(e) => updateItem(idx, 'quantityAccepted', e.target.value)}
+                      style={{
+                        width: 70,
+                        padding: '4px 6px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: 4,
+                        fontSize: 13,
+                      }}
+                    />
                   </td>
                   <td>
-                    <input type="number" value={item.quantityRejected} onChange={(e) => updateItem(idx, 'quantityRejected', e.target.value)} style={{ width: 70, padding: '4px 6px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13 }} />
+                    <input
+                      type="number"
+                      value={item.quantityRejected}
+                      onChange={(e) => updateItem(idx, 'quantityRejected', e.target.value)}
+                      style={{
+                        width: 70,
+                        padding: '4px 6px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: 4,
+                        fontSize: 13,
+                      }}
+                    />
                   </td>
                   <td>
-                    <select value={item.result} onChange={(e) => updateItem(idx, 'result', e.target.value)} style={{ padding: '4px 6px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13 }}>
+                    <select
+                      value={item.result}
+                      onChange={(e) => updateItem(idx, 'result', e.target.value)}
+                      style={{
+                        padding: '4px 6px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: 4,
+                        fontSize: 13,
+                      }}
+                    >
                       <option value="pending">Pending</option>
                       <option value="accepted">Accepted</option>
                       <option value="rejected">Rejected</option>
@@ -212,11 +337,32 @@ export function NewInspectionPage() {
                     </select>
                   </td>
                   <td>
-                    <input type="text" value={item.remarks} onChange={(e) => updateItem(idx, 'remarks', e.target.value)} style={{ width: 100, padding: '4px 6px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13 }} />
+                    <input
+                      type="text"
+                      value={item.remarks}
+                      onChange={(e) => updateItem(idx, 'remarks', e.target.value)}
+                      style={{
+                        width: 100,
+                        padding: '4px 6px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: 4,
+                        fontSize: 13,
+                      }}
+                    />
                   </td>
                   <td>
                     {items.length > 1 && (
-                      <button type="button" onClick={() => removeItem(idx)} style={{ background: 'none', border: 'none', color: '#b91c1c', cursor: 'pointer', fontSize: 16 }}>
+                      <button
+                        type="button"
+                        onClick={() => removeItem(idx)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#b91c1c',
+                          cursor: 'pointer',
+                          fontSize: 16,
+                        }}
+                      >
                         x
                       </button>
                     )}
@@ -237,7 +383,11 @@ export function NewInspectionPage() {
           </div>
           <div className="pr-form-field">
             <label>Recommendations</label>
-            <textarea value={recommendations} onChange={(e) => setRecommendations(e.target.value)} rows={3} />
+            <textarea
+              value={recommendations}
+              onChange={(e) => setRecommendations(e.target.value)}
+              rows={3}
+            />
           </div>
         </div>
 
@@ -245,7 +395,11 @@ export function NewInspectionPage() {
           <button type="submit" className="pr-btn pr-btn--primary" disabled={submitting}>
             {submitting ? 'Creating...' : 'Create Inspection Report'}
           </button>
-          <button type="button" className="pr-btn" onClick={() => navigate('/procurement/inspections')}>
+          <button
+            type="button"
+            className="pr-btn"
+            onClick={() => navigate('/procurement/inspections')}
+          >
             Cancel
           </button>
         </div>

@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 
-import { PrismaService } from '../../database/prisma.service';
+import type { PrismaService } from '../../database/prisma.service';
 
 @Injectable()
 export class AutoJevService {
@@ -36,7 +36,12 @@ export class AutoJevService {
       return null;
     }
 
-    const lines: Array<{ chartOfAccountId: string; debitAmount: number; creditAmount: number; description: string }> = [];
+    const lines: Array<{
+      chartOfAccountId: string;
+      debitAmount: number;
+      creditAmount: number;
+      description: string;
+    }> = [];
 
     lines.push({
       chartOfAccountId: apAccount.id,
@@ -83,6 +88,52 @@ export class AutoJevService {
       ...(dv.fundSourceId ? { fundSourceId: dv.fundSourceId } : {}),
       ...(dv.responsibilityCenterId ? { responsibilityCenterId: dv.responsibilityCenterId } : {}),
       lines,
+    });
+  }
+
+  /**
+   * Post the accounting entry for a Disbursement Voucher created directly in the
+   * Accounting module (non-procurement: travel, reimbursement, payroll, etc.).
+   * The caller supplies the exact, already-balanced lines; this reuses the same
+   * period resolution, JEV numbering and posting path as the procurement DV.
+   */
+  async postDisbursementEntry(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    userId: string,
+    dv: {
+      id: string;
+      dvNumber: string;
+      dvDate: Date;
+      particulars: string;
+      fundSourceId: string | null;
+      responsibilityCenterId: string | null;
+    },
+    lines: Array<{
+      chartOfAccountId: string;
+      debitAmount: number;
+      creditAmount: number;
+      description?: string;
+    }>,
+    status: 'draft' | 'posted' = 'posted',
+  ) {
+    return this.createAutoJev(tx, {
+      organizationId,
+      userId,
+      jevDate: dv.dvDate,
+      sourceType: 'disbursement',
+      sourceTable: 'disbursement_vouchers',
+      sourceId: dv.id,
+      particulars: `DV ${dv.dvNumber}: ${dv.particulars}`,
+      status,
+      ...(dv.fundSourceId ? { fundSourceId: dv.fundSourceId } : {}),
+      ...(dv.responsibilityCenterId ? { responsibilityCenterId: dv.responsibilityCenterId } : {}),
+      lines: lines.map((l) => ({
+        chartOfAccountId: l.chartOfAccountId,
+        debitAmount: l.debitAmount,
+        creditAmount: l.creditAmount,
+        description: l.description ?? '',
+      })),
     });
   }
 
@@ -299,7 +350,12 @@ export class AutoJevService {
     },
   ) {
     const periodLabel = `${run.periodYear}-${String(run.periodMonth).padStart(2, '0')}`;
-    const lines: Array<{ chartOfAccountId: string; debitAmount: number; creditAmount: number; description: string }> = [];
+    const lines: Array<{
+      chartOfAccountId: string;
+      debitAmount: number;
+      creditAmount: number;
+      description: string;
+    }> = [];
 
     for (const cat of run.categoryTotals) {
       if (cat.totalAmount <= 0) continue;
@@ -376,7 +432,13 @@ export class AutoJevService {
       particulars: string;
       fundSourceId?: string;
       responsibilityCenterId?: string;
-      lines: Array<{ chartOfAccountId: string; debitAmount: number; creditAmount: number; description: string }>;
+      status?: 'draft' | 'posted';
+      lines: Array<{
+        chartOfAccountId: string;
+        debitAmount: number;
+        creditAmount: number;
+        description: string;
+      }>;
     },
   ) {
     const period = await tx.accountingPeriod.findFirst({
@@ -396,7 +458,11 @@ export class AutoJevService {
       return null;
     }
 
-    const jevNumber = await this.generateJevNumber(tx, data.organizationId);
+    const jevNumber = await this.generateJevNumber(
+      tx,
+      data.organizationId,
+      data.jevDate.getUTCFullYear(),
+    );
 
     const totalDebit = data.lines.reduce((s, l) => s + l.debitAmount, 0);
     const totalCredit = data.lines.reduce((s, l) => s + l.creditAmount, 0);
@@ -412,12 +478,15 @@ export class AutoJevService {
         sourceId: data.sourceId,
         particulars: data.particulars,
         ...(data.fundSourceId ? { fundSourceId: data.fundSourceId } : {}),
-        ...(data.responsibilityCenterId ? { responsibilityCenterId: data.responsibilityCenterId } : {}),
+        ...(data.responsibilityCenterId
+          ? { responsibilityCenterId: data.responsibilityCenterId }
+          : {}),
         totalDebit,
         totalCredit,
-        status: 'posted',
-        postedBy: data.userId,
-        postedAt: new Date(),
+        status: data.status ?? 'posted',
+        ...((data.status ?? 'posted') === 'posted'
+          ? { postedBy: data.userId, postedAt: new Date() }
+          : {}),
         createdBy: data.userId,
         updatedBy: data.userId,
         lines: {
@@ -439,6 +508,7 @@ export class AutoJevService {
   private async generateJevNumber(
     tx: Prisma.TransactionClient,
     organizationId: string,
+    year: number,
   ): Promise<string> {
     const [seq] = await tx.$queryRaw<[{ next_number: bigint }]>`
       UPDATE document_sequences
@@ -449,7 +519,7 @@ export class AutoJevService {
     `;
 
     if (seq) {
-      return `JEV-${String(seq.next_number).padStart(6, '0')}`;
+      return `JEV-${year}-${String(seq.next_number).padStart(6, '0')}`;
     }
 
     const [inserted] = await tx.$queryRaw<[{ next_number: bigint }]>`
@@ -458,6 +528,6 @@ export class AutoJevService {
       RETURNING next_number
     `;
     if (!inserted) throw new Error('Failed to generate JEV number.');
-    return `JEV-${String(inserted.next_number).padStart(6, '0')}`;
+    return `JEV-${year}-${String(inserted.next_number).padStart(6, '0')}`;
   }
 }

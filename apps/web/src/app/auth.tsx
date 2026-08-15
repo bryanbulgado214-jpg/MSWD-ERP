@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
 const TOKEN_KEY = 'mswd_access_token';
 
 interface AuthUser {
@@ -9,8 +9,18 @@ interface AuthUser {
   organizationId: string;
 }
 
+export interface OrganizationProfile {
+  id: string;
+  name: string;
+  legalName: string;
+  address: string | null;
+  contact: string | null;
+  logoUrl: string | null;
+}
+
 interface AuthContextValue {
   user: AuthUser | null;
+  organization: OrganizationProfile | null;
   permissions: Set<string>;
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
@@ -21,6 +31,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
+  organization: null,
   permissions: new Set(),
   loading: true,
   login: async () => {},
@@ -46,21 +57,27 @@ function decodePayload(token: string): AuthUser | null {
   }
 }
 
-async function fetchPermissions(token: string): Promise<Set<string>> {
+async function fetchMe(
+  token: string,
+): Promise<{ permissions: Set<string>; organization: OrganizationProfile | null }> {
   try {
     const response = await fetch(`${API_BASE_URL}/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!response.ok) return new Set();
+    if (!response.ok) return { permissions: new Set(), organization: null };
     const body = await response.json();
-    return new Set(body.permissions as string[]);
+    return {
+      permissions: new Set(body.permissions as string[]),
+      organization: (body.organization as OrganizationProfile | null) ?? null,
+    };
   } catch {
-    return new Set();
+    return { permissions: new Set(), organization: null };
   }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [organization, setOrganization] = useState<OrganizationProfile | null>(null);
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
@@ -70,8 +87,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const decoded = decodePayload(token);
       if (decoded) {
         setUser(decoded);
-        fetchPermissions(token).then((perms) => {
-          setPermissions(perms);
+        fetchMe(token).then((me) => {
+          setPermissions(me.permissions);
+          setOrganization(me.organization);
           setLoading(false);
         });
         return;
@@ -94,21 +112,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(TOKEN_KEY, accessToken);
     const decoded = decodePayload(accessToken);
     setUser(decoded);
-    const perms = await fetchPermissions(accessToken);
-    setPermissions(perms);
+    const me = await fetchMe(accessToken);
+    setPermissions(me.permissions);
+    setOrganization(me.organization);
   }, []);
 
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     setUser(null);
+    setOrganization(null);
     setPermissions(new Set());
   }, []);
 
   const hasPermission = useCallback((code: string) => permissions.has(code), [permissions]);
-  const hasAnyPermission = useCallback((...codes: string[]) => codes.some((c) => permissions.has(c)), [permissions]);
+  const hasAnyPermission = useCallback(
+    (...codes: string[]) => codes.some((c) => permissions.has(c)),
+    [permissions],
+  );
 
   return (
-    <AuthContext.Provider value={{ user, permissions, loading, login, logout, hasPermission, hasAnyPermission }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        organization,
+        permissions,
+        loading,
+        login,
+        logout,
+        hasPermission,
+        hasAnyPermission,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

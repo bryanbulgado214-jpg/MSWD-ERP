@@ -136,7 +136,8 @@ export interface Supplier {
 
 // ── Purchase Order ──
 
-export type PurchaseOrderStatus = 'draft' | 'pending_caf' | 'for_approval' | 'approved' | 'cancelled';
+export type PurchaseOrderStatus =
+  'draft' | 'pending_caf' | 'for_approval' | 'approved' | 'cancelled';
 
 export interface PurchaseOrder {
   id: string;
@@ -154,7 +155,13 @@ export interface PurchaseOrder {
   createdAt: string;
   updatedAt: string;
   version: number;
-  purchaseRequest: { id: string; prNumber: string; title: string; totalAmount: string; status: string };
+  purchaseRequest: {
+    id: string;
+    prNumber: string;
+    title: string;
+    totalAmount: string;
+    status: string;
+  };
   supplier: { id: string; name: string; tin: string | null; address: string | null };
   approver?: UserRef;
   creator?: UserRef;
@@ -162,7 +169,8 @@ export interface PurchaseOrder {
 
 // ── CAF ──
 
-export type CafStatus = 'draft' | 'for_certification' | 'certified' | 'rejected' | 'cancelled' | 'superseded';
+export type CafStatus =
+  'draft' | 'for_certification' | 'certified' | 'rejected' | 'cancelled' | 'superseded';
 
 export interface Caf {
   id: string;
@@ -353,7 +361,14 @@ export interface InspectionReport {
   items: InspectionReportItem[];
 }
 
-export type DvStatus = 'draft' | 'for_certification' | 'certified' | 'for_approval' | 'approved' | 'released' | 'cancelled';
+export type DvStatus =
+  | 'draft'
+  | 'for_certification'
+  | 'certified'
+  | 'for_approval'
+  | 'approved'
+  | 'released'
+  | 'cancelled';
 export type PaymentMode = 'check' | 'ada' | 'others';
 
 export interface DisbursementVoucher {
@@ -386,7 +401,7 @@ export interface DisbursementVoucher {
     contractAmount: string;
     supplier: { id: string; name: string };
   };
-  supplier: { id: string; name: string; tin: string | null };
+  supplier: { id: string; name: string; tin: string | null; address: string | null };
   inspectionReport: { id: string; reportNumber: string; overallResult: string } | null;
   fundSource: { id: string; code: string; name: string } | null;
   responsibilityCenter: { id: string; code: string; name: string } | null;
@@ -395,4 +410,18 @@ export interface DisbursementVoucher {
   releaser: UserRef | null;
   creator: UserRef | null;
   updater: UserRef | null;
+  // Posted accounting entry (auto-generated JEV on release). Drives Box B of
+  // the printed DV. Null until the DV is released and the JEV is posted.
+  journalEntry: {
+    id: string;
+    jevNumber: string;
+    jevDate: string;
+    status: string;
+    lines: Array<{
+      debitAmount: string;
+      creditAmount: string;
+      description: string | null;
+      chartOfAccount: { accountCode: string; name: string };
+    }>;
+  } | null;
 }

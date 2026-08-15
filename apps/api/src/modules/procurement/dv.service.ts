@@ -1,15 +1,19 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
-import { PrismaService } from '../../database/prisma.service';
-import { AutoJevService } from '../accounting/auto-jev.service';
+import type { PrismaService } from '../../database/prisma.service';
+import type { AutoJevService } from '../accounting/auto-jev.service';
 import { runAudited } from '../budgeting/audit-actor.util';
 
 const DV_SELECT = {
   id: true,
   dvNumber: true,
   dvDate: true,
+  dvType: true,
   particulars: true,
+  payeeName: true,
+  payeeTin: true,
+  payeeAddress: true,
   paymentMode: true,
   grossAmount: true,
   taxAmount: true,
@@ -46,7 +50,7 @@ const DV_SELECT = {
       supplier: { select: { id: true, name: true } },
     },
   },
-  supplier: { select: { id: true, name: true, tin: true } },
+  supplier: { select: { id: true, name: true, tin: true, address: true } },
   inspectionReport: {
     select: { id: true, reportNumber: true, overallResult: true },
   },
@@ -98,7 +102,37 @@ export class DvService {
       select: DV_SELECT,
     });
     if (!dv) throw new NotFoundException('Disbursement voucher not found.');
-    return dv;
+
+    // Box B of the Disbursement Voucher (Appendix 32) shows the accounting
+    // entry. The real entry is the posted JEV auto-generated when the DV is
+    // released (sourceType='disbursement', sourceId=dv.id). We surface that
+    // posted entry so the printout reflects the actual GL, never a re-derivation.
+    const journalEntry = await this.prisma.journalEntryVoucher.findFirst({
+      where: {
+        organizationId: orgId,
+        sourceType: 'disbursement',
+        sourceId: id,
+        status: { in: ['posted', 'reversed'] },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        jevNumber: true,
+        jevDate: true,
+        status: true,
+        lines: {
+          orderBy: { debitAmount: 'desc' },
+          select: {
+            debitAmount: true,
+            creditAmount: true,
+            description: true,
+            chartOfAccount: { select: { accountCode: true, name: true } },
+          },
+        },
+      },
+    });
+
+    return { ...dv, journalEntry };
   }
 
   async create(orgId: string, userId: string, data: CreateDvData) {
@@ -135,7 +169,9 @@ export class DvService {
           supplierId: ors.supplier!.id,
           ...(data.inspectionReportId ? { inspectionReportId: data.inspectionReportId } : {}),
           ...(ors.fundSource ? { fundSourceId: ors.fundSource.id } : {}),
-          ...(ors.responsibilityCenter ? { responsibilityCenterId: ors.responsibilityCenter.id } : {}),
+          ...(ors.responsibilityCenter
+            ? { responsibilityCenterId: ors.responsibilityCenter.id }
+            : {}),
           ...(data.accountCode ? { accountCode: data.accountCode } : {}),
           particulars: data.particulars,
           ...(data.paymentMode ? { paymentMode: data.paymentMode } : {}),
@@ -160,24 +196,40 @@ export class DvService {
     if (dv.status !== 'draft') {
       throw new BadRequestException('Only draft DVs can be submitted for certification.');
     }
-    return this.updateWithVersionCheck(id, expectedVersion, {
-      status: 'for_certification',
-      updatedBy: userId,
-    }, userId);
+    return this.updateWithVersionCheck(
+      id,
+      expectedVersion,
+      {
+        status: 'for_certification',
+        updatedBy: userId,
+      },
+      userId,
+    );
   }
 
-  async certify(orgId: string, id: string, expectedVersion: number, userId: string, remarks?: string) {
+  async certify(
+    orgId: string,
+    id: string,
+    expectedVersion: number,
+    userId: string,
+    remarks?: string,
+  ) {
     const dv = await this.requireDv(orgId, id);
     if (dv.status !== 'for_certification') {
       throw new BadRequestException('Only DVs pending certification can be certified.');
     }
-    return this.updateWithVersionCheck(id, expectedVersion, {
-      status: 'certified',
-      certifiedBy: userId,
-      certifiedAt: new Date(),
-      updatedBy: userId,
-      ...(remarks ? { remarks } : {}),
-    }, userId);
+    return this.updateWithVersionCheck(
+      id,
+      expectedVersion,
+      {
+        status: 'certified',
+        certifiedBy: userId,
+        certifiedAt: new Date(),
+        updatedBy: userId,
+        ...(remarks ? { remarks } : {}),
+      },
+      userId,
+    );
   }
 
   async submitForApproval(orgId: string, id: string, expectedVersion: number, userId: string) {
@@ -185,24 +237,40 @@ export class DvService {
     if (dv.status !== 'certified') {
       throw new BadRequestException('Only certified DVs can be submitted for approval.');
     }
-    return this.updateWithVersionCheck(id, expectedVersion, {
-      status: 'for_approval',
-      updatedBy: userId,
-    }, userId);
+    return this.updateWithVersionCheck(
+      id,
+      expectedVersion,
+      {
+        status: 'for_approval',
+        updatedBy: userId,
+      },
+      userId,
+    );
   }
 
-  async approve(orgId: string, id: string, expectedVersion: number, userId: string, remarks?: string) {
+  async approve(
+    orgId: string,
+    id: string,
+    expectedVersion: number,
+    userId: string,
+    remarks?: string,
+  ) {
     const dv = await this.requireDv(orgId, id);
     if (dv.status !== 'for_approval') {
       throw new BadRequestException('Only DVs pending approval can be approved.');
     }
-    return this.updateWithVersionCheck(id, expectedVersion, {
-      status: 'approved',
-      approvedBy: userId,
-      approvedAt: new Date(),
-      updatedBy: userId,
-      ...(remarks ? { remarks } : {}),
-    }, userId);
+    return this.updateWithVersionCheck(
+      id,
+      expectedVersion,
+      {
+        status: 'approved',
+        approvedBy: userId,
+        approvedAt: new Date(),
+        updatedBy: userId,
+        ...(remarks ? { remarks } : {}),
+      },
+      userId,
+    );
   }
 
   async release(
@@ -234,18 +302,22 @@ export class DvService {
         select: DV_SELECT,
       });
 
-      await tx.orsChild.create({
-        data: {
-          orsId: dv.orsId,
-          childType: 'disbursement_voucher',
-          referenceNumber: dv.dvNumber,
-          childDate: new Date(),
-          amount: dv.netAmount,
-          description: `DV ${dv.dvNumber} released`,
-          createdBy: userId,
-          updatedBy: userId,
-        },
-      });
+      // Procurement DVs are always tied to an ORS; the guard satisfies the now-
+      // nullable orsId (non-procurement DVs never travel through this path).
+      if (dv.orsId) {
+        await tx.orsChild.create({
+          data: {
+            orsId: dv.orsId,
+            childType: 'disbursement_voucher',
+            referenceNumber: dv.dvNumber,
+            childDate: new Date(),
+            amount: dv.netAmount,
+            description: `DV ${dv.dvNumber} released`,
+            createdBy: userId,
+            updatedBy: userId,
+          },
+        });
+      }
 
       await this.autoJev.onDvReleased(tx, orgId, userId, {
         id: dv.id,
@@ -264,16 +336,27 @@ export class DvService {
     });
   }
 
-  async cancel(orgId: string, id: string, expectedVersion: number, userId: string, remarks?: string) {
+  async cancel(
+    orgId: string,
+    id: string,
+    expectedVersion: number,
+    userId: string,
+    remarks?: string,
+  ) {
     const dv = await this.requireDv(orgId, id);
     if (dv.status === 'released' || dv.status === 'cancelled') {
       throw new BadRequestException('Released or cancelled DVs cannot be cancelled.');
     }
-    return this.updateWithVersionCheck(id, expectedVersion, {
-      status: 'cancelled',
-      updatedBy: userId,
-      ...(remarks ? { remarks } : {}),
-    }, userId);
+    return this.updateWithVersionCheck(
+      id,
+      expectedVersion,
+      {
+        status: 'cancelled',
+        updatedBy: userId,
+        ...(remarks ? { remarks } : {}),
+      },
+      userId,
+    );
   }
 
   private async requireDv(orgId: string, id: string) {

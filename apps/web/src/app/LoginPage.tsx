@@ -5,7 +5,10 @@ import { useAuth } from './auth';
 import './login.css';
 
 const ROLE_HINTS: Record<string, string> = {
-  'j.sumagang': 'Employee — Jeramel Sumagang (8 PPMP items)',
+  'sbwd.accountant': 'Accountant — prepares JEVs, views ledgers & statements',
+  'sbwd.cashier': 'Cashier — disburses: assigns check #, prints, releases',
+  'sbwd.gm': 'General Manager — dedicated check-void approver',
+  'j.delacruz': 'Employee — Juan Dela Cruz (8 PPMP items)',
   end_user: 'Create & submit purchase requests',
   dept_head: 'Endorse purchase requests',
   budget_officer: 'Budget certification & management',
@@ -58,8 +61,8 @@ export function LoginPage() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <h1 className="login-title">MSWD ERP</h1>
-          <p className="login-subtitle">Metro Siquijor Water District</p>
+          <img src="/aquabooks-logo.png" alt="AquaBooks" className="login-logo" />
+          <p className="login-subtitle">AquaBooks by Officient</p>
         </div>
 
         {error && <p className="login-error">{error}</p>}
@@ -88,7 +91,11 @@ export function LoginPage() {
             />
           </label>
 
-          <button type="submit" className="login-button" disabled={submitting || !username || !password}>
+          <button
+            type="submit"
+            className="login-button"
+            disabled={submitting || !username || !password}
+          >
             {submitting ? 'Signing in…' : 'Sign In'}
           </button>
         </form>

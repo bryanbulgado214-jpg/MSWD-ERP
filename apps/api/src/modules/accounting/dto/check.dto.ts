@@ -1,4 +1,13 @@
-import { IsDateString, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsIn,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Min,
+} from 'class-validator';
 
 export class CreateCheckDto {
   @IsUUID()
@@ -24,12 +33,23 @@ export class CreateCheckDto {
   disbursementVoucherId?: string;
 }
 
+export class PrintCheckDto {
+  @IsString()
+  @IsNotEmpty()
+  checkNumber!: string;
+
+  @IsDateString()
+  @IsOptional()
+  checkDate?: string;
+}
+
 export class TransitionCheckDto {
   @IsNumber()
   expectedVersion!: number;
 
+  // Forward lifecycle only — void/spoil go through the void endpoint.
   @IsString()
-  @IsIn(['printed', 'released', 'cleared', 'stale_dated', 'spoiled', 'voided'])
+  @IsIn(['released', 'cleared', 'stale_dated'])
   toStatus!: string;
 
   @IsString()
@@ -39,4 +59,17 @@ export class TransitionCheckDto {
   @IsDateString()
   @IsOptional()
   clearedDate?: string;
+}
+
+export class VoidCheckDto {
+  @IsNumber()
+  expectedVersion!: number;
+
+  @IsString()
+  @IsIn(['voided', 'spoiled'])
+  toStatus!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  remarks!: string;
 }

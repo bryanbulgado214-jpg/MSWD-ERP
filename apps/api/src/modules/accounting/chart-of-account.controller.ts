@@ -1,12 +1,27 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
-import { ChartOfAccountService } from './chart-of-account.service';
-import { CreateChartOfAccountDto, UpdateChartOfAccountDto } from './dto/chart-of-account.dto';
+
+import type { ChartOfAccountService } from './chart-of-account.service';
+import type {
+  CreateChartOfAccountDto,
+  ImportCoaCsvDto,
+  UpdateChartOfAccountDto,
+} from './dto/chart-of-account.dto';
 
 @Controller('accounting/coa')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -36,20 +51,26 @@ export class ChartOfAccountController {
 
   @Get(':id')
   @RequirePermissions('accounting.read')
-  findOne(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
+  findOne(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.coaService.findOne(user.organizationId, id);
   }
 
   @Post()
   @RequirePermissions('accounting.coa.manage')
-  create(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body() dto: CreateChartOfAccountDto,
-  ) {
+  create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateChartOfAccountDto) {
     return this.coaService.create(user.organizationId, user.userId, dto);
+  }
+
+  @Post('import/preview')
+  @RequirePermissions('accounting.coa.manage')
+  importPreview(@CurrentUser() user: AuthenticatedUser, @Body() dto: ImportCoaCsvDto) {
+    return this.coaService.importPreview(user.organizationId, dto.csv);
+  }
+
+  @Post('import/confirm')
+  @RequirePermissions('accounting.coa.manage')
+  importConfirm(@CurrentUser() user: AuthenticatedUser, @Body() dto: ImportCoaCsvDto) {
+    return this.coaService.importConfirm(user.organizationId, user.userId, dto.csv);
   }
 
   @Patch(':id')

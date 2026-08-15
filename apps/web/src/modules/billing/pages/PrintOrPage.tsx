@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
+import { GovLetterhead } from '../../../app/GovLetterhead';
 import { getPayment } from '../api';
 import type { Payment } from '../types';
 import './print-billing.css';
@@ -13,17 +14,65 @@ function formatPeso(val: string | number) {
 
 function numberToWords(n: number): string {
   if (n === 0) return 'Zero';
-  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
-    'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
-  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  const ones = [
+    '',
+    'One',
+    'Two',
+    'Three',
+    'Four',
+    'Five',
+    'Six',
+    'Seven',
+    'Eight',
+    'Nine',
+    'Ten',
+    'Eleven',
+    'Twelve',
+    'Thirteen',
+    'Fourteen',
+    'Fifteen',
+    'Sixteen',
+    'Seventeen',
+    'Eighteen',
+    'Nineteen',
+  ];
+  const tens = [
+    '',
+    '',
+    'Twenty',
+    'Thirty',
+    'Forty',
+    'Fifty',
+    'Sixty',
+    'Seventy',
+    'Eighty',
+    'Ninety',
+  ];
 
   function convert(num: number): string {
     if (num < 20) return ones[num]!;
     if (num < 100) return tens[Math.floor(num / 10)]! + (num % 10 ? ' ' + ones[num % 10]! : '');
-    if (num < 1000) return ones[Math.floor(num / 100)]! + ' Hundred' + (num % 100 ? ' ' + convert(num % 100) : '');
-    if (num < 1000000) return convert(Math.floor(num / 1000)) + ' Thousand' + (num % 1000 ? ' ' + convert(num % 1000) : '');
-    if (num < 1000000000) return convert(Math.floor(num / 1000000)) + ' Million' + (num % 1000000 ? ' ' + convert(num % 1000000) : '');
-    return convert(Math.floor(num / 1000000000)) + ' Billion' + (num % 1000000000 ? ' ' + convert(num % 1000000000) : '');
+    if (num < 1000)
+      return (
+        ones[Math.floor(num / 100)]! + ' Hundred' + (num % 100 ? ' ' + convert(num % 100) : '')
+      );
+    if (num < 1000000)
+      return (
+        convert(Math.floor(num / 1000)) +
+        ' Thousand' +
+        (num % 1000 ? ' ' + convert(num % 1000) : '')
+      );
+    if (num < 1000000000)
+      return (
+        convert(Math.floor(num / 1000000)) +
+        ' Million' +
+        (num % 1000000 ? ' ' + convert(num % 1000000) : '')
+      );
+    return (
+      convert(Math.floor(num / 1000000000)) +
+      ' Billion' +
+      (num % 1000000000 ? ' ' + convert(num % 1000000000) : '')
+    );
   }
 
   const whole = Math.floor(Math.abs(n));
@@ -49,28 +98,41 @@ export default function PrintOrPage() {
 
   useEffect(() => {
     if (!id) return;
-    getPayment(id).then(setPayment).catch((e) => setError(e instanceof Error ? e.message : 'Failed to load.'));
+    getPayment(id)
+      .then(setPayment)
+      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load.'));
   }, [id]);
 
   if (error) return <div style={{ padding: 32, color: '#b42318' }}>{error}</div>;
   if (!payment) return <div style={{ padding: 32, color: '#667085' }}>Loading...</div>;
 
-  const payDate = new Date(payment.paymentDate).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
-  const totalNum = typeof payment.totalAmount === 'string' ? parseFloat(payment.totalAmount) : payment.totalAmount;
+  const payDate = new Date(payment.paymentDate).toLocaleDateString('en-PH', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+  const totalNum =
+    typeof payment.totalAmount === 'string' ? parseFloat(payment.totalAmount) : payment.totalAmount;
   const amountInWords = numberToWords(totalNum);
   const consumerName = `${payment.consumer.lastName}, ${payment.consumer.firstName}`;
 
   return (
     <div className="bill-print-page">
       <div className="bill-print-controls">
-        <button type="button" onClick={() => window.print()}>Print</button>
-        <button type="button" onClick={() => navigate(-1)}>Back</button>
+        <button type="button" onClick={() => window.print()}>
+          Print
+        </button>
+        <button type="button" onClick={() => navigate(-1)}>
+          Back
+        </button>
       </div>
 
       <div className="bill-print-sheet bill-print-sheet--half">
         <div className="bill-print-header">
-          <p className="bill-print-header__entity">METRO SIQUIJOR WATER DISTRICT</p>
-          <p className="bill-print-header__sub">Siquijor, Siquijor</p>
+          <GovLetterhead
+            entityClass="bill-print-header__entity"
+            subClass="bill-print-header__sub"
+          />
           <p className="bill-print-header__title">Official Receipt</p>
         </div>
 
@@ -137,8 +199,12 @@ export default function PrintOrPage() {
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={2} style={{ textAlign: 'right', fontWeight: 700 }}>TOTAL</td>
-              <td className="bp-right" style={{ fontWeight: 700 }}>{formatPeso(payment.totalAmount)}</td>
+              <td colSpan={2} style={{ textAlign: 'right', fontWeight: 700 }}>
+                TOTAL
+              </td>
+              <td className="bp-right" style={{ fontWeight: 700 }}>
+                {formatPeso(payment.totalAmount)}
+              </td>
             </tr>
           </tfoot>
         </table>
@@ -154,7 +220,18 @@ export default function PrintOrPage() {
         )}
 
         {payment.status === 'voided' && (
-          <div style={{ textAlign: 'center', margin: '16px 0', padding: '8px', border: '3px solid #b42318', color: '#b42318', fontWeight: 700, fontSize: '18pt', letterSpacing: '4px' }}>
+          <div
+            style={{
+              textAlign: 'center',
+              margin: '16px 0',
+              padding: '8px',
+              border: '3px solid #b42318',
+              color: '#b42318',
+              fontWeight: 700,
+              fontSize: '18pt',
+              letterSpacing: '4px',
+            }}
+          >
             VOIDED
           </div>
         )}

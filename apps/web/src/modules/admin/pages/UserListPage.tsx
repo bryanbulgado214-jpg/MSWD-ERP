@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 
 import type { UserSummary, RoleSummary } from '../api';
 import { listUsers, listRoles, createUser, updateUser, assignRole, revokeRole } from '../api';
+
+import { AdminSubNav } from './AdminSubNav';
 import './admin.css';
 
 export function UserListPage() {
@@ -19,12 +21,17 @@ export function UserListPage() {
   function load() {
     setLoading(true);
     Promise.all([listUsers(), listRoles()])
-      .then(([u, r]) => { setUsers(u); setRoles(r); })
+      .then(([u, r]) => {
+        setUsers(u);
+        setRoles(r);
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -71,37 +78,78 @@ export function UserListPage() {
     }
   }
 
-  if (loading) return <div className="admin-page"><div className="admin-loading">Loading users...</div></div>;
+  if (loading)
+    return (
+      <div className="admin-page">
+        <div className="admin-loading">Loading users...</div>
+      </div>
+    );
 
   return (
     <div className="admin-page">
+      <AdminSubNav />
       <div className="admin-header">
         <h1 className="admin-title">User Management</h1>
-        <button type="button" className="admin-btn admin-btn--primary" onClick={() => setShowCreate(true)}>
+        <button
+          type="button"
+          className="admin-btn admin-btn--primary"
+          onClick={() => setShowCreate(true)}
+        >
           + New User
         </button>
       </div>
 
-      {error && <div className="admin-error">{error} <button type="button" onClick={() => setError('')}>dismiss</button></div>}
+      {error && (
+        <div className="admin-error">
+          {error}{' '}
+          <button type="button" onClick={() => setError('')}>
+            dismiss
+          </button>
+        </div>
+      )}
 
       {showCreate && (
         <div className="admin-modal-overlay" onClick={() => setShowCreate(false)}>
-          <form className="admin-modal" onClick={(e) => e.stopPropagation()} onSubmit={handleCreate}>
+          <form
+            className="admin-modal"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={handleCreate}
+          >
             <h2 className="admin-modal__title">Create User</h2>
             <label className="admin-field">
               <span className="admin-field__label">Username</span>
-              <input className="admin-input" value={createForm.username} onChange={(e) => setCreateForm((f) => ({ ...f, username: e.target.value }))} required />
+              <input
+                className="admin-input"
+                value={createForm.username}
+                onChange={(e) => setCreateForm((f) => ({ ...f, username: e.target.value }))}
+                required
+              />
             </label>
             <label className="admin-field">
               <span className="admin-field__label">Email</span>
-              <input className="admin-input" type="email" value={createForm.email} onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))} required />
+              <input
+                className="admin-input"
+                type="email"
+                value={createForm.email}
+                onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
+                required
+              />
             </label>
             <label className="admin-field">
               <span className="admin-field__label">Password</span>
-              <input className="admin-input" type="password" value={createForm.password} onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))} required minLength={8} />
+              <input
+                className="admin-input"
+                type="password"
+                value={createForm.password}
+                onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
+                required
+                minLength={8}
+              />
             </label>
             <div className="admin-modal__actions">
-              <button type="button" className="admin-btn" onClick={() => setShowCreate(false)}>Cancel</button>
+              <button type="button" className="admin-btn" onClick={() => setShowCreate(false)}>
+                Cancel
+              </button>
               <button type="submit" className="admin-btn admin-btn--primary" disabled={creating}>
                 {creating ? 'Creating...' : 'Create'}
               </button>
@@ -114,15 +162,30 @@ export function UserListPage() {
         <div className="admin-modal-overlay" onClick={() => setRoleModal(null)}>
           <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
             <h2 className="admin-modal__title">Assign Role to {roleModal.username}</h2>
-            <select className="admin-input" value={selectedRoleId} onChange={(e) => setSelectedRoleId(e.target.value)}>
+            <select
+              className="admin-input"
+              value={selectedRoleId}
+              onChange={(e) => setSelectedRoleId(e.target.value)}
+            >
               <option value="">Select a role...</option>
               {roles.map((r) => (
-                <option key={r.id} value={r.id}>{r.name} ({r.code})</option>
+                <option key={r.id} value={r.id}>
+                  {r.name} ({r.code})
+                </option>
               ))}
             </select>
             <div className="admin-modal__actions">
-              <button type="button" className="admin-btn" onClick={() => setRoleModal(null)}>Cancel</button>
-              <button type="button" className="admin-btn admin-btn--primary" disabled={!selectedRoleId} onClick={handleAssignRole}>Assign</button>
+              <button type="button" className="admin-btn" onClick={() => setRoleModal(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="admin-btn admin-btn--primary"
+                disabled={!selectedRoleId}
+                onClick={handleAssignRole}
+              >
+                Assign
+              </button>
             </div>
           </div>
         </div>
@@ -146,7 +209,9 @@ export function UserListPage() {
                 <td className="admin-table__user">{u.username}</td>
                 <td>{u.email}</td>
                 <td>
-                  <span className={`admin-badge ${u.isActive ? 'admin-badge--active' : 'admin-badge--inactive'}`}>
+                  <span
+                    className={`admin-badge ${u.isActive ? 'admin-badge--active' : 'admin-badge--inactive'}`}
+                  >
                     {u.isActive ? 'Active' : 'Inactive'}
                   </span>
                 </td>
@@ -155,17 +220,34 @@ export function UserListPage() {
                     {u.roles.map((r) => (
                       <span key={r.assignmentId} className="admin-role-tag">
                         {r.code}
-                        <button type="button" className="admin-role-tag__remove" title="Remove role" onClick={() => handleRevokeRole(u.id, r.assignmentId)}>&times;</button>
+                        <button
+                          type="button"
+                          className="admin-role-tag__remove"
+                          title="Remove role"
+                          onClick={() => handleRevokeRole(u.id, r.assignmentId)}
+                        >
+                          &times;
+                        </button>
                       </span>
                     ))}
-                    <button type="button" className="admin-role-tag admin-role-tag--add" onClick={() => setRoleModal({ userId: u.id, username: u.username })}>+</button>
+                    <button
+                      type="button"
+                      className="admin-role-tag admin-role-tag--add"
+                      onClick={() => setRoleModal({ userId: u.id, username: u.username })}
+                    >
+                      +
+                    </button>
                   </div>
                 </td>
                 <td className="admin-table__date">
                   {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : 'Never'}
                 </td>
                 <td>
-                  <button type="button" className={`admin-btn admin-btn--sm ${u.isActive ? 'admin-btn--danger' : 'admin-btn--success'}`} onClick={() => handleToggleActive(u)}>
+                  <button
+                    type="button"
+                    className={`admin-btn admin-btn--sm ${u.isActive ? 'admin-btn--danger' : 'admin-btn--success'}`}
+                    onClick={() => handleToggleActive(u)}
+                  >
                     {u.isActive ? 'Deactivate' : 'Activate'}
                   </button>
                 </td>

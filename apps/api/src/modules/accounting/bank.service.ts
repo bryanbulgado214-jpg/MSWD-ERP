@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 
-import { PrismaService } from '../../database/prisma.service';
+import type { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
 
 const BANK_SELECT = {
@@ -27,6 +27,7 @@ const BANK_ACCOUNT_SELECT = {
   version: true,
   bank: { select: { id: true, code: true, name: true } },
   fundSource: { select: { id: true, code: true, name: true } },
+  chartOfAccount: { select: { id: true, accountCode: true, name: true } },
 } as const;
 
 @Injectable()
@@ -89,7 +90,10 @@ export class BankService {
 
   // ── Bank Accounts ──
 
-  async findAllBankAccounts(organizationId: string, filters?: { bankId?: string; status?: string }) {
+  async findAllBankAccounts(
+    organizationId: string,
+    filters?: { bankId?: string; status?: string },
+  ) {
     return this.prisma.bankAccount.findMany({
       where: {
         organizationId,

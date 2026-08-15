@@ -20,7 +20,7 @@ const MODULE_NAV = [
 ];
 
 export function AppLayout() {
-  const { user, loading, logout, permissions } = useAuth();
+  const { user, organization, loading, logout, permissions } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -41,9 +41,32 @@ export function AppLayout() {
 
   return (
     <div className="app-layout">
+      <div className="app-demo-banner" role="note">
+        DEMONSTRATION DATA — NOT ACTUAL WATER DISTRICT RECORDS
+      </div>
       <nav className="app-nav">
         <div className="app-nav__left">
-          <Link to="/" className="app-nav__brand" style={{ textDecoration: 'none', color: 'inherit' }}>MSWD ERP</Link>
+          <Link
+            to="/"
+            className="app-nav__brand"
+            style={{
+              textDecoration: 'none',
+              color: 'inherit',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <img
+              src="/aquabooks-mark.png"
+              alt=""
+              style={{ height: 30, width: 'auto', display: 'block' }}
+            />
+            AquaBooks
+            {organization?.name ? (
+              <span className="app-nav__org"> · {organization.name}</span>
+            ) : null}
+          </Link>
           <div className="app-nav__links">
             <Link
               to="/"
@@ -65,8 +88,16 @@ export function AppLayout() {
         <div className="app-nav__user">
           <NotificationBell />
           <span className="app-nav__username">{user.username}</span>
-          <button type="button" className="app-nav__btn" onClick={handleSwitchUser}>Switch User</button>
-          <button type="button" className="app-nav__btn app-nav__btn--logout" onClick={handleLogout}>Logout</button>
+          <button type="button" className="app-nav__btn" onClick={handleSwitchUser}>
+            Switch User
+          </button>
+          <button
+            type="button"
+            className="app-nav__btn app-nav__btn--logout"
+            onClick={handleLogout}
+          >
+            Logout
+          </button>
         </div>
       </nav>
       <main className="app-main">

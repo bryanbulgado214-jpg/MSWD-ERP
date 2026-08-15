@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
 import { AccountingApiError, getJevList } from '../api';
 import type { JevListItem } from '../types';
+
 import { AccountingSubNav } from './AccountingSubNav';
 import './accounting.css';
 
@@ -20,17 +21,20 @@ function formatPeso(value: string | number): string {
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Draft',
   for_review: 'For Review',
+  approved: 'Approved',
   posted: 'Posted',
   voided: 'Voided',
+  reversed: 'Reversed',
 };
 
 export default function JevListPage() {
   const { permissions } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const canCreate = permissions.has('accounting.jev.create');
 
   const [state, setState] = useState<LoadState>({ status: 'loading' });
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') ?? '');
   const [search, setSearch] = useState('');
 
   const load = useCallback(async () => {
@@ -41,11 +45,16 @@ export default function JevListPage() {
       const data = await getJevList(params.toString());
       setState({ status: 'loaded', data });
     } catch (e) {
-      setState({ status: 'error', message: e instanceof AccountingApiError ? e.message : 'Failed to load JEVs.' });
+      setState({
+        status: 'error',
+        message: e instanceof AccountingApiError ? e.message : 'Failed to load JEVs.',
+      });
     }
   }, [statusFilter, search]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   return (
     <div className="acct-page">
@@ -57,7 +66,9 @@ export default function JevListPage() {
           <option value="">All Statuses</option>
           <option value="draft">Draft</option>
           <option value="for_review">For Review</option>
+          <option value="approved">Approved</option>
           <option value="posted">Posted</option>
+          <option value="reversed">Reversed</option>
           <option value="voided">Voided</option>
         </select>
         <input
@@ -106,7 +117,14 @@ export default function JevListPage() {
                     </Link>
                   </td>
                   <td>{new Date(jev.jevDate).toLocaleDateString('en-PH')}</td>
-                  <td style={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <td
+                    style={{
+                      maxWidth: 300,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
                     {jev.particulars}
                   </td>
                   <td>{jev.accountingPeriod.name}</td>

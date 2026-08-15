@@ -1,7 +1,13 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 
-import { PrismaService } from '../../database/prisma.service';
+import type { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
 
 const JEV_SELECT = {
@@ -33,6 +39,10 @@ const JEV_DETAIL_SELECT = {
   voidReason: true,
   sourceTable: true,
   sourceId: true,
+  createdBy: true,
+  reversalOfId: true,
+  reversalOf: { select: { id: true, jevNumber: true, status: true, jevDate: true } },
+  reversedBy: { select: { id: true, jevNumber: true, status: true, jevDate: true } },
   lines: {
     select: {
       id: true,
@@ -41,7 +51,10 @@ const JEV_DETAIL_SELECT = {
       description: true,
       chartOfAccount: { select: { id: true, accountCode: true, name: true, accountType: true } },
     },
-    orderBy: [{ debitAmount: 'desc' as const }, { creditAmount: 'desc' as const }] as Prisma.JevLineOrderByWithRelationInput[],
+    orderBy: [
+      { debitAmount: 'desc' as const },
+      { creditAmount: 'desc' as const },
+    ] as Prisma.JevLineOrderByWithRelationInput[],
   },
 } as const;
 
@@ -106,7 +119,12 @@ export class JevService {
       particulars: string;
       responsibilityCenterId?: string;
       fundSourceId?: string;
-      lines: Array<{ chartOfAccountId: string; debitAmount: number; creditAmount: number; description?: string }>;
+      lines: Array<{
+        chartOfAccountId: string;
+        debitAmount: number;
+        creditAmount: number;
+        description?: string;
+      }>;
     },
   ) {
     this.validateLines(data.lines);
@@ -114,7 +132,11 @@ export class JevService {
     const period = await this.findOpenPeriod(organizationId, new Date(data.jevDate));
 
     return runAudited(this.prisma, userId, async (tx) => {
-      const jevNumber = await this.generateJevNumber(tx, organizationId);
+      const jevNumber = await this.generateJevNumber(
+        tx,
+        organizationId,
+        new Date(data.jevDate).getUTCFullYear(),
+      );
 
       const totalDebit = data.lines.reduce((sum, l) => sum + l.debitAmount, 0);
       const totalCredit = data.lines.reduce((sum, l) => sum + l.creditAmount, 0);
@@ -127,7 +149,9 @@ export class JevService {
           accountingPeriodId: period.id,
           sourceType: 'manual',
           particulars: data.particulars,
-          ...(data.responsibilityCenterId ? { responsibilityCenterId: data.responsibilityCenterId } : {}),
+          ...(data.responsibilityCenterId
+            ? { responsibilityCenterId: data.responsibilityCenterId }
+            : {}),
           ...(data.fundSourceId ? { fundSourceId: data.fundSourceId } : {}),
           totalDebit,
           totalCredit,
@@ -157,7 +181,12 @@ export class JevService {
       particulars?: string;
       responsibilityCenterId?: string;
       fundSourceId?: string;
-      lines?: Array<{ chartOfAccountId: string; debitAmount: number; creditAmount: number; description?: string }>;
+      lines?: Array<{
+        chartOfAccountId: string;
+        debitAmount: number;
+        creditAmount: number;
+        description?: string;
+      }>;
     },
   ) {
     const jev = await this.prisma.journalEntryVoucher.findFirst({
@@ -192,14 +221,14 @@ export class JevService {
       return tx.journalEntryVoucher.update({
         where: { id },
         data: {
-          ...(data.jevDate ? { jevDate: new Date(data.jevDate), accountingPeriodId: periodId } : {}),
+          ...(data.jevDate
+            ? { jevDate: new Date(data.jevDate), accountingPeriodId: periodId }
+            : {}),
           ...(data.particulars ? { particulars: data.particulars } : {}),
           ...(data.responsibilityCenterId !== undefined
             ? { responsibilityCenterId: data.responsibilityCenterId || null }
             : {}),
-          ...(data.fundSourceId !== undefined
-            ? { fundSourceId: data.fundSourceId || null }
-            : {}),
+          ...(data.fundSourceId !== undefined ? { fundSourceId: data.fundSourceId || null } : {}),
           ...(totalDebit !== undefined ? { totalDebit } : {}),
           ...(totalCredit !== undefined ? { totalCredit } : {}),
           updatedBy: userId,
@@ -227,7 +256,8 @@ export class JevService {
       where: { id, organizationId },
     });
     if (!jev) throw new NotFoundException('JEV not found.');
-    if (jev.status !== 'draft') throw new BadRequestException('Only draft JEVs can be submitted for review.');
+    if (jev.status !== 'draft')
+      throw new BadRequestException('Only draft JEVs can be submitted for review.');
     if (jev.version !== expectedVersion) {
       throw new ConflictException('JEV was modified. Please refresh.');
     }
@@ -251,15 +281,67 @@ export class JevService {
     );
   }
 
+  /**
+   * Approves a JEV that is under review (for_review -> approved). This is the
+   * middle stage of the three-person separation of duties. The approver is
+   * recorded in reviewedBy/reviewedAt and may not be the preparer. Approval is
+   * optional — a for_review JEV can still be posted directly (see post()).
+   */
+  async approve(organizationId: string, id: string, userId: string, expectedVersion: number) {
+    const jev = await this.prisma.journalEntryVoucher.findFirst({
+      where: { id, organizationId },
+    });
+    if (!jev) throw new NotFoundException('JEV not found.');
+    if (jev.status !== 'for_review') {
+      throw new BadRequestException('Only JEVs under review can be approved.');
+    }
+    if (jev.version !== expectedVersion) {
+      throw new ConflictException('JEV was modified. Please refresh.');
+    }
+    // Separation of duties: the preparer cannot approve their own entry.
+    if (jev.createdBy && jev.createdBy === userId) {
+      throw new ForbiddenException(
+        'The preparer of a JEV cannot approve it. Approval must be done by a different user (separation of duties).',
+      );
+    }
+    if (Number(jev.totalDebit) !== Number(jev.totalCredit)) {
+      throw new BadRequestException('Debits and credits must balance before approval.');
+    }
+
+    return runAudited(this.prisma, userId, (tx) =>
+      tx.journalEntryVoucher.update({
+        where: { id },
+        data: {
+          status: 'approved',
+          reviewedBy: userId,
+          reviewedAt: new Date(),
+          updatedBy: userId,
+          version: { increment: 1 },
+        },
+        select: JEV_DETAIL_SELECT,
+      }),
+    );
+  }
+
   async post(organizationId: string, id: string, userId: string, expectedVersion: number) {
     const jev = await this.prisma.journalEntryVoucher.findFirst({
       where: { id, organizationId },
       include: { accountingPeriod: true },
     });
     if (!jev) throw new NotFoundException('JEV not found.');
-    if (jev.status !== 'for_review') throw new BadRequestException('Only JEVs under review can be posted.');
+    if (jev.status !== 'for_review' && jev.status !== 'approved') {
+      throw new BadRequestException('Only JEVs under review or approved can be posted.');
+    }
     if (jev.version !== expectedVersion) {
       throw new ConflictException('JEV was modified. Please refresh.');
+    }
+    // Separation of duties: the person who prepared/created a JEV may not be
+    // the one who posts it. Enforced server-side (not just in the UI) so it
+    // holds regardless of client.
+    if (jev.createdBy && jev.createdBy === userId) {
+      throw new ForbiddenException(
+        'The preparer of a JEV cannot post it. Posting must be done by a different user (separation of duties).',
+      );
     }
     if (jev.accountingPeriod.status !== 'open') {
       throw new BadRequestException('Cannot post to a closed accounting period.');
@@ -275,8 +357,10 @@ export class JevService {
           status: 'posted',
           postedBy: userId,
           postedAt: new Date(),
-          reviewedBy: userId,
-          reviewedAt: new Date(),
+          // Preserve the approver if the JEV was approved first; otherwise the
+          // poster also stands as the reviewer of record.
+          reviewedBy: jev.reviewedBy ?? userId,
+          reviewedAt: jev.reviewedAt ?? new Date(),
           updatedBy: userId,
           version: { increment: 1 },
         },
@@ -316,6 +400,102 @@ export class JevService {
     );
   }
 
+  /**
+   * Reverses a POSTED JEV by posting a new, linked equal-and-opposite entry
+   * (debits and credits swapped). Posted entries are immutable — this is the
+   * only sanctioned correction path. The original is marked `reversed` and
+   * both entries remain in the ledger (they net to zero), so the reversal is
+   * fully auditable rather than erasing history. GL / Trial Balance /
+   * Financial Statements count both `posted` and `reversed` entries for
+   * exactly this reason.
+   */
+  async reverse(
+    organizationId: string,
+    id: string,
+    userId: string,
+    data: { expectedVersion: number; reversalDate?: string; reason?: string },
+  ) {
+    const original = await this.prisma.journalEntryVoucher.findFirst({
+      where: { id, organizationId },
+      include: {
+        lines: true,
+        reversedBy: { select: { jevNumber: true } },
+      },
+    });
+    if (!original) throw new NotFoundException('JEV not found.');
+    if (original.status !== 'posted') {
+      throw new BadRequestException('Only posted JEVs can be reversed.');
+    }
+    if (original.reversedBy) {
+      throw new BadRequestException(
+        `This JEV was already reversed by ${original.reversedBy.jevNumber}.`,
+      );
+    }
+    if (original.version !== data.expectedVersion) {
+      throw new ConflictException('JEV was modified. Please refresh.');
+    }
+
+    const reversalDate = data.reversalDate ? new Date(data.reversalDate) : new Date();
+    const period = await this.findOpenPeriod(organizationId, reversalDate);
+
+    return runAudited(this.prisma, userId, async (tx) => {
+      const jevNumber = await this.generateJevNumber(
+        tx,
+        organizationId,
+        reversalDate.getUTCFullYear(),
+      );
+
+      const reversal = await tx.journalEntryVoucher.create({
+        data: {
+          organizationId,
+          jevNumber,
+          jevDate: reversalDate,
+          accountingPeriodId: period.id,
+          sourceType: 'adjustment',
+          particulars:
+            `Reversal of ${original.jevNumber}` +
+            (data.reason ? ` — ${data.reason}` : '') +
+            `: ${original.particulars}`,
+          ...(original.responsibilityCenterId
+            ? { responsibilityCenterId: original.responsibilityCenterId }
+            : {}),
+          ...(original.fundSourceId ? { fundSourceId: original.fundSourceId } : {}),
+          totalDebit: original.totalCredit,
+          totalCredit: original.totalDebit,
+          status: 'posted',
+          reversalOfId: original.id,
+          reviewedBy: userId,
+          reviewedAt: new Date(),
+          postedBy: userId,
+          postedAt: new Date(),
+          createdBy: userId,
+          updatedBy: userId,
+          lines: {
+            create: original.lines.map((line) => ({
+              chartOfAccountId: line.chartOfAccountId,
+              // equal-and-opposite: swap debit and credit
+              debitAmount: line.creditAmount,
+              creditAmount: line.debitAmount,
+              ...(line.description ? { description: `Reversal: ${line.description}` } : {}),
+            })),
+          },
+        },
+        select: JEV_DETAIL_SELECT,
+      });
+
+      await tx.journalEntryVoucher.update({
+        where: { id: original.id },
+        data: {
+          status: 'reversed',
+          updatedBy: userId,
+          version: { increment: 1 },
+        },
+      });
+
+      return reversal;
+    });
+  }
+
   async getOpenPeriods(organizationId: string) {
     return this.prisma.accountingPeriod.findMany({
       where: {
@@ -330,9 +510,7 @@ export class JevService {
 
   // ── Helpers ──
 
-  private validateLines(
-    lines: Array<{ debitAmount: number; creditAmount: number }>,
-  ) {
+  private validateLines(lines: Array<{ debitAmount: number; creditAmount: number }>) {
     for (const line of lines) {
       if (line.debitAmount > 0 && line.creditAmount > 0) {
         throw new BadRequestException('A line cannot have both debit and credit amounts.');
@@ -373,6 +551,7 @@ export class JevService {
   private async generateJevNumber(
     tx: Prisma.TransactionClient,
     organizationId: string,
+    year: number,
   ): Promise<string> {
     const [seq] = await tx.$queryRaw<[{ next_number: bigint }]>`
       UPDATE document_sequences
@@ -383,7 +562,7 @@ export class JevService {
     `;
 
     if (seq) {
-      return `JEV-${String(seq.next_number).padStart(6, '0')}`;
+      return `JEV-${year}-${String(seq.next_number).padStart(6, '0')}`;
     }
 
     const [inserted] = await tx.$queryRaw<[{ next_number: bigint }]>`
@@ -392,6 +571,6 @@ export class JevService {
       RETURNING next_number
     `;
     if (!inserted) throw new Error('Failed to generate JEV number.');
-    return `JEV-${String(inserted.next_number).padStart(6, '0')}`;
+    return `JEV-${year}-${String(inserted.next_number).padStart(6, '0')}`;
   }
 }

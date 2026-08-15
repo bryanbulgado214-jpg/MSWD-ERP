@@ -244,6 +244,7 @@
 
   .app-nav,
   .app-layout__sidebar,
+  .app-demo-banner,
   .gov-print-controls {
     display: none !important;
   }

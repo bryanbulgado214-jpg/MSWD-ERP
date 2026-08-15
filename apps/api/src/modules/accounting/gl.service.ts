@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { PrismaService } from '../../database/prisma.service';
+import type { PrismaService } from '../../database/prisma.service';
 
 export interface TrialBalanceRow {
   accountId: string;
@@ -56,9 +56,7 @@ export class GlService {
         : '';
 
     const param2 = filters.periodId ?? filters.fiscalYearId;
-    const params: unknown[] = param2
-      ? [organizationId, param2]
-      : [organizationId];
+    const params: unknown[] = param2 ? [organizationId, param2] : [organizationId];
 
     const rows = await this.prisma.$queryRawUnsafe<TrialBalanceRow[]>(
       `
@@ -83,7 +81,7 @@ export class GlService {
           JOIN accounting_periods ap ON ap.id = j.accounting_period_id
           WHERE j.id = l.jev_id
             AND j.organization_id = $1::uuid
-            AND j.status = 'posted'
+            AND j.status IN ('posted', 'reversed')
             ${periodClause}
         )
       WHERE c.organization_id = $1::uuid
@@ -119,9 +117,7 @@ export class GlService {
       idx++;
     }
 
-    const extraWhere = conditions.length > 0
-      ? 'AND ' + conditions.join(' AND ')
-      : '';
+    const extraWhere = conditions.length > 0 ? 'AND ' + conditions.join(' AND ') : '';
 
     const rows = await this.prisma.$queryRawUnsafe<GeneralLedgerRow[]>(
       `
@@ -145,7 +141,7 @@ export class GlService {
       JOIN accounting_periods ap ON ap.id = j.accounting_period_id
       JOIN chart_of_accounts c ON c.id = l.chart_of_account_id
       WHERE j.organization_id = $1::uuid
-        AND j.status = 'posted'
+        AND j.status IN ('posted', 'reversed')
         AND c.is_header = false
         ${extraWhere}
       GROUP BY c.id, c.account_code, c.name, c.account_type, c.normal_balance,
@@ -163,7 +159,13 @@ export class GlService {
     accountId: string,
     filters: { startDate?: string; endDate?: string; periodId?: string },
   ): Promise<{
-    account: { id: string; accountCode: string; name: string; accountType: string; normalBalance: string };
+    account: {
+      id: string;
+      accountCode: string;
+      name: string;
+      accountType: string;
+      normalBalance: string;
+    };
     entries: SubsidiaryLedgerEntry[];
   }> {
     const account = await this.prisma.chartOfAccount.findFirst({
@@ -172,7 +174,13 @@ export class GlService {
     });
     if (!account) {
       return {
-        account: { id: accountId, accountCode: '', name: 'Unknown', accountType: '', normalBalance: 'debit' },
+        account: {
+          id: accountId,
+          accountCode: '',
+          name: 'Unknown',
+          accountType: '',
+          normalBalance: 'debit',
+        },
         entries: [],
       };
     }
@@ -197,9 +205,7 @@ export class GlService {
       idx++;
     }
 
-    const extraWhere = conditions.length > 0
-      ? 'AND ' + conditions.join(' AND ')
-      : '';
+    const extraWhere = conditions.length > 0 ? 'AND ' + conditions.join(' AND ') : '';
 
     const entries = await this.prisma.$queryRawUnsafe<SubsidiaryLedgerEntry[]>(
       `
@@ -217,7 +223,7 @@ export class GlService {
       JOIN journal_entry_vouchers j ON j.id = l.jev_id
       JOIN accounting_periods ap ON ap.id = j.accounting_period_id
       WHERE j.organization_id = $1::uuid
-        AND j.status = 'posted'
+        AND j.status IN ('posted', 'reversed')
         AND l.chart_of_account_id = $2::uuid
         ${extraWhere}
       ORDER BY j.jev_date, j.jev_number
@@ -242,7 +248,14 @@ export class GlService {
         fiscalYearId,
         fiscalYear: { organizationId },
       },
-      select: { id: true, name: true, periodNumber: true, startDate: true, endDate: true, status: true },
+      select: {
+        id: true,
+        name: true,
+        periodNumber: true,
+        startDate: true,
+        endDate: true,
+        status: true,
+      },
       orderBy: { periodNumber: 'asc' },
     });
   }

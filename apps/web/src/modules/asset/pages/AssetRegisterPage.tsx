@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+
 import { getAssetRegister, getCategories } from '../api';
 import type { AssetRegisterItem, AssetCategory } from '../types';
+
 import AssetSubNav from './AssetSubNav';
 import '../asset.css';
 
@@ -33,13 +35,23 @@ export default function AssetRegisterPage() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { loadRegister(); }, [categoryFilter, disposedFilter]);
-  useEffect(() => { getCategories().then(setCategories).catch(() => {}); }, []);
+  useEffect(() => {
+    loadRegister();
+  }, [categoryFilter, disposedFilter]);
+  useEffect(() => {
+    getCategories()
+      .then(setCategories)
+      .catch(() => {});
+  }, []);
 
   function setFilter(key: string, value: string) {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      if (value) { next.set(key, value); } else { next.delete(key); }
+      if (value) {
+        next.set(key, value);
+      } else {
+        next.delete(key);
+      }
       return next;
     });
   }
@@ -54,13 +66,24 @@ export default function AssetRegisterPage() {
       {error && <div className="am-error">{error}</div>}
 
       <div className="am-filters">
-        <select className="am-select" value={categoryFilter} onChange={(e) => setFilter('categoryId', e.target.value)}>
+        <select
+          className="am-select"
+          value={categoryFilter}
+          onChange={(e) => setFilter('categoryId', e.target.value)}
+          style={{ width: '100%', maxWidth: 240, boxSizing: 'border-box' }}
+        >
           <option value="">All Categories</option>
           {categories.map((cat) => (
-            <option key={cat.id} value={cat.id}>{cat.code} — {cat.name}</option>
+            <option key={cat.id} value={cat.id}>
+              {cat.code} — {cat.name}
+            </option>
           ))}
         </select>
-        <select className="am-select" value={disposedFilter} onChange={(e) => setFilter('isDisposed', e.target.value)}>
+        <select
+          className="am-select"
+          value={disposedFilter}
+          onChange={(e) => setFilter('isDisposed', e.target.value)}
+        >
           <option value="">Active &amp; Disposed</option>
           <option value="false">Active Only</option>
           <option value="true">Disposed Only</option>
@@ -98,7 +121,9 @@ export default function AssetRegisterPage() {
                   <td style={{ textAlign: 'right' }}>{formatCurrency(item.acquisitionCost)}</td>
                   <td style={{ textAlign: 'right' }}>{formatCurrency(item.salvageValue)}</td>
                   <td style={{ textAlign: 'right' }}>{formatCurrency(item.monthlyDepreciation)}</td>
-                  <td style={{ textAlign: 'right' }}>{formatCurrency(item.accumulatedDepreciation)}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    {formatCurrency(item.accumulatedDepreciation)}
+                  </td>
                   <td style={{ textAlign: 'right' }}>{formatCurrency(item.bookValue)}</td>
                   <td>{item.condition}</td>
                   <td>{item.location?.name ?? '—'}</td>

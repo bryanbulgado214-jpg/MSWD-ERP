@@ -11,6 +11,92 @@
   margin: 0 0 20px;
 }
 
+.reports-page__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.reports-export {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.reports-export__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #175cd3;
+  background: #fff;
+  border: 1px solid #b2ccf4;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.reports-export__btn:hover {
+  background: #eff4ff;
+  border-color: #175cd3;
+}
+
+@media print {
+  .reports-page__header, .reports-export, .app-nav, .app-demo-banner { display: none !important; }
+}
+
+/* ── Reports home (shortcut cards) ───────────────────────────────────────── */
+.reports-home__intro {
+  color: #667085;
+  font-size: 13px;
+  margin: 0 0 22px;
+}
+.reports-home__section { margin-bottom: 26px; }
+.reports-home__cat {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #98a2b3;
+  margin: 0 0 12px;
+}
+.reports-home__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+.reports-home__card {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid #e4e7ec;
+  border-radius: 11px;
+  text-decoration: none;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+.reports-home__card:hover {
+  border-color: #175cd3;
+  box-shadow: 0 4px 14px rgba(16, 24, 40, 0.08);
+  transform: translateY(-1px);
+}
+.reports-home__icon {
+  font-size: 23px;
+  line-height: 1;
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eff4ff;
+  border-radius: 11px;
+  flex-shrink: 0;
+}
+.reports-home__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.reports-home__label { font-size: 14px; font-weight: 700; color: #0f172a; }
+.reports-home__blurb { font-size: 12px; color: #667085; }
+
 .reports-page h2 {
   font-size: 16px;
   font-weight: 700;
@@ -289,3 +375,186 @@
   font-weight: 600;
   color: #475569;
 }
+
+/* ── Vertical left-sidebar sub-nav (matches Accounting; no horizontal scroll) ── */
+.reports-subnav {
+  position: absolute;
+  left: 24px;
+  top: 28px;
+  width: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  border-bottom: none;
+  overflow: visible;
+}
+.reports-subnav__link {
+  display: block;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border-left: 3px solid transparent;
+  border-bottom: none;
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+.reports-subnav__link:hover { background: #f2f4f7; }
+.reports-subnav__link--active {
+  border-left-color: #175cd3;
+  background: #eff4ff;
+  border-bottom-color: transparent;
+}
+.reports-page {
+  position: relative;
+  padding-left: 186px; /* category rail only; the report flyout overlays content */
+  min-height: 460px;
+}
+@media (max-width: 860px) {
+  .reports-page { padding-left: 24px; min-height: 0; }
+  .reports-subnav {
+    position: static;
+    flex-direction: column;
+    margin-bottom: 16px;
+    width: auto;
+  }
+  /* On narrow screens the flyout drops inline under its category. */
+  .reports-subnav__flyout {
+    position: static;
+    box-shadow: none;
+    border: none;
+    border-radius: 0;
+    padding: 2px 0 6px 14px;
+    min-width: 0;
+  }
+}
+
+/* ── Grouped report categories — one open at a time, reports fly out right ── */
+.reports-subnav__group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.reports-subnav__group + .reports-subnav__group {
+  margin-top: 2px;
+}
+.reports-subnav__group-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  padding: 9px 10px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #667085;
+  text-align: left;
+  line-height: 1.25;
+}
+.reports-subnav__group-label:hover { background: #f2f4f7; color: #344054; }
+.reports-subnav__group-label--open { background: #eff4ff; color: #175cd3; }
+
+.reports-subnav__chevron {
+  flex-shrink: 0;
+  font-size: 16px;
+  line-height: 1;
+  color: #98a2b3;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+.reports-subnav__group-label--open .reports-subnav__chevron {
+  color: #175cd3;
+  transform: translateX(2px);
+}
+
+/* Reports for the open category, floating to the right of its label. */
+.reports-subnav__flyout {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 8px);
+  z-index: 20;
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+  box-shadow: 0 8px 22px rgba(16, 24, 40, 0.12);
+}
+
+/* Subtitle / links / errors / empty (shared by all report pages) */
+.reports-subtitle {
+  font-size: 13px;
+  color: #667085;
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+.reports-link {
+  color: #175cd3;
+  text-decoration: none;
+  font-weight: 600;
+}
+.reports-link:hover { text-decoration: underline; }
+.reports-error {
+  padding: 12px 16px;
+  background: #fef3f2;
+  border: 1px solid #fecdca;
+  border-radius: 8px;
+  color: #b42318;
+  font-size: 13px;
+}
+
+/* Placeholder (report pending its data source) */
+.reports-placeholder {
+  border: 1px dashed #d0d5dd;
+  border-radius: 12px;
+  background: #fcfcfd;
+  padding: 40px 32px;
+  text-align: center;
+  max-width: 620px;
+}
+.reports-placeholder__badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #fffaeb;
+  color: #b54708;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 14px;
+}
+.reports-placeholder__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #344054;
+  margin: 0 0 8px;
+}
+.reports-placeholder__detail {
+  font-size: 13px;
+  color: #667085;
+  margin: 0;
+}
+
+/* Status badge variants used across the accounting reports */
+.reports-badge--posted,
+.reports-badge--released,
+.reports-badge--cleared,
+.reports-badge--issued { background: #ecfdf3; color: #027a48; }
+.reports-badge--for_review,
+.reports-badge--pending { background: #fffaeb; color: #b54708; }
+.reports-badge--voided,
+.reports-badge--void,
+.reports-badge--spoiled,
+.reports-badge--stale_dated { background: #fef3f2; color: #b42318; }
+.reports-badge--reversed { background: #fdf2fa; color: #9b2c6f; }
+.reports-badge--in_progress,
+.reports-badge--open { background: #eff8ff; color: #175cd3; }

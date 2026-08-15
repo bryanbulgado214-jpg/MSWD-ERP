@@ -23,6 +23,14 @@
   margin-bottom: 28px;
 }
 
+.login-logo {
+  display: block;
+  width: 210px;
+  height: auto;
+  object-fit: contain;
+  margin: 0 auto 6px;
+}
+
 .login-title {
   margin: 0;
   font-size: 26px;

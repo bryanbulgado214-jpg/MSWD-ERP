@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { formatPeso } from '../modules/budgeting/format-peso';
+
 import { useAuth } from './auth';
 import { hasModuleAccess } from './module-access';
-import { formatPeso } from '../modules/budgeting/format-peso';
 import './dashboard.css';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
 
 interface PendingActionItem {
   id: string;
@@ -85,16 +86,56 @@ const MODULE_CARDS: Array<{
   name: string;
   description: string;
 }> = [
-  { key: 'budgeting', to: '/budgeting', icon: '\u{1F4CA}', name: 'Budgeting', description: 'Budget cycles, fund sources, appropriations & releases.' },
-  { key: 'procurement', to: '/procurement', icon: '\u{1F4CB}', name: 'Procurement', description: 'Purchase requests, orders, CAF, ORS & disbursements.' },
-  { key: 'inventory', to: '/inventory', icon: '\u{1F4E6}', name: 'Inventory', description: 'Item catalog, stock receipts, issuances & property.' },
-  { key: 'billing', to: '/billing', icon: '\u{1F4B0}', name: 'Billing & Collections', description: 'Consumer billing, meter readings, payments & arrears.' },
-  { key: 'hr', to: '/hr', icon: '\u{1F465}', name: 'HR & Payroll', description: 'Employees, attendance, leave, payroll & remittances.' },
-  { key: 'accounting', to: '/accounting', icon: '\u{1F4D2}', name: 'Accounting', description: 'Chart of accounts, JEVs, GL, bank reconciliation.' },
+  {
+    key: 'budgeting',
+    to: '/budgeting',
+    icon: '\u{1F4CA}',
+    name: 'Budgeting',
+    description: 'Budget cycles, fund sources, appropriations & releases.',
+  },
+  {
+    key: 'procurement',
+    to: '/procurement',
+    icon: '\u{1F4CB}',
+    name: 'Procurement',
+    description: 'Purchase requests, orders, CAF, ORS & disbursements.',
+  },
+  {
+    key: 'inventory',
+    to: '/inventory',
+    icon: '\u{1F4E6}',
+    name: 'Inventory',
+    description: 'Item catalog, stock receipts, issuances & property.',
+  },
+  {
+    key: 'billing',
+    to: '/billing',
+    icon: '\u{1F4B0}',
+    name: 'Billing & Collections',
+    description: 'Consumer billing, meter readings, payments & arrears.',
+  },
+  {
+    key: 'hr',
+    to: '/hr',
+    icon: '\u{1F465}',
+    name: 'HR & Payroll',
+    description: 'Employees, attendance, leave, payroll & remittances.',
+  },
+  {
+    key: 'accounting',
+    to: '/accounting',
+    icon: '\u{1F4D2}',
+    name: 'Accounting',
+    description: 'Chart of accounts, JEVs, GL, bank reconciliation.',
+  },
 ];
 
 function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+  return new Date(d).toLocaleDateString('en-PH', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 export function DashboardPage() {
@@ -106,7 +147,10 @@ export function DashboardPage() {
 
   useEffect(() => {
     const token = localStorage.getItem('mswd_access_token');
-    if (!token) { setLoading(false); return; }
+    if (!token) {
+      setLoading(false);
+      return;
+    }
 
     const headers = { Authorization: `Bearer ${token}` };
 
@@ -169,22 +213,30 @@ export function DashboardPage() {
                 </div>
                 <div className="exec-card__row">
                   <span className="exec-card__label">Collected</span>
-                  <span className="exec-card__value exec-card__value--green">{formatPeso(exec.billing.totalCollected)}</span>
+                  <span className="exec-card__value exec-card__value--green">
+                    {formatPeso(exec.billing.totalCollected)}
+                  </span>
                 </div>
                 <div className="exec-card__row">
                   <span className="exec-card__label">Collection Rate</span>
-                  <span className={`exec-card__value ${exec.billing.collectionRate >= 80 ? 'exec-card__value--green' : 'exec-card__value--amber'}`}>
+                  <span
+                    className={`exec-card__value ${exec.billing.collectionRate >= 80 ? 'exec-card__value--green' : 'exec-card__value--amber'}`}
+                  >
                     {exec.billing.collectionRate}%
                   </span>
                 </div>
                 <div className="exec-card__row">
                   <span className="exec-card__label">Outstanding</span>
-                  <span className="exec-card__value exec-card__value--red">{formatPeso(exec.billing.outstandingBalance)}</span>
+                  <span className="exec-card__value exec-card__value--red">
+                    {formatPeso(exec.billing.outstandingBalance)}
+                  </span>
                 </div>
                 <div className="exec-card__footer">
                   <span>{exec.billing.activeConsumers} active consumers</span>
                   {exec.billing.disconnectedConsumers > 0 && (
-                    <span className="exec-card__tag--warn">{exec.billing.disconnectedConsumers} disconnected</span>
+                    <span className="exec-card__tag--warn">
+                      {exec.billing.disconnectedConsumers} disconnected
+                    </span>
                   )}
                 </div>
               </Link>
@@ -208,7 +260,9 @@ export function DashboardPage() {
                 </div>
                 <div className="exec-card__row">
                   <span className="exec-card__label">Utilization</span>
-                  <span className={`exec-card__value ${exec.budget.utilizationRate >= 50 ? 'exec-card__value--green' : 'exec-card__value--amber'}`}>
+                  <span
+                    className={`exec-card__value ${exec.budget.utilizationRate >= 50 ? 'exec-card__value--green' : 'exec-card__value--amber'}`}
+                  >
                     {exec.budget.utilizationRate}%
                   </span>
                 </div>
@@ -221,15 +275,21 @@ export function DashboardPage() {
                 <div className="exec-card__header">Procurement</div>
                 <div className="exec-card__row">
                   <span className="exec-card__label">Active PRs</span>
-                  <span className="exec-card__value">{exec.procurement.activePRs} ({formatPeso(exec.procurement.activePRValue)})</span>
+                  <span className="exec-card__value">
+                    {exec.procurement.activePRs} ({formatPeso(exec.procurement.activePRValue)})
+                  </span>
                 </div>
                 <div className="exec-card__row">
                   <span className="exec-card__label">Approved POs</span>
-                  <span className="exec-card__value">{exec.procurement.approvedPOs} ({formatPeso(exec.procurement.approvedPOValue)})</span>
+                  <span className="exec-card__value">
+                    {exec.procurement.approvedPOs} ({formatPeso(exec.procurement.approvedPOValue)})
+                  </span>
                 </div>
                 <div className="exec-card__row">
                   <span className="exec-card__label">Disbursed (DVs)</span>
-                  <span className="exec-card__value exec-card__value--green">{formatPeso(exec.procurement.releasedDVValue)}</span>
+                  <span className="exec-card__value exec-card__value--green">
+                    {formatPeso(exec.procurement.releasedDVValue)}
+                  </span>
                 </div>
                 <div className="exec-card__footer">
                   <span>{exec.procurement.releasedDVs} DVs released</span>
@@ -247,7 +307,9 @@ export function DashboardPage() {
                 </div>
                 <div className="exec-card__row">
                   <span className="exec-card__label">Active</span>
-                  <span className="exec-card__value exec-card__value--green">{exec.hr.activeEmployees}</span>
+                  <span className="exec-card__value exec-card__value--green">
+                    {exec.hr.activeEmployees}
+                  </span>
                 </div>
                 <div className="exec-card__row">
                   <span className="exec-card__label">Payroll Gross</span>
@@ -281,7 +343,9 @@ export function DashboardPage() {
                 {exec.inventory.belowReorder > 0 && (
                   <div className="exec-card__row">
                     <span className="exec-card__label">Below Reorder</span>
-                    <span className="exec-card__value exec-card__value--red">{exec.inventory.belowReorder}</span>
+                    <span className="exec-card__value exec-card__value--red">
+                      {exec.inventory.belowReorder}
+                    </span>
                   </div>
                 )}
               </Link>
@@ -297,7 +361,9 @@ export function DashboardPage() {
                 </div>
                 <div className="exec-card__row">
                   <span className="exec-card__label">Total Debits</span>
-                  <span className="exec-card__value">{formatPeso(exec.accounting.totalDebits)}</span>
+                  <span className="exec-card__value">
+                    {formatPeso(exec.accounting.totalDebits)}
+                  </span>
                 </div>
               </Link>
             )}
@@ -323,8 +389,12 @@ export function DashboardPage() {
                       <td className="exec-jevs__mono">{j.jevNumber}</td>
                       <td>{fmtDate(j.jevDate)}</td>
                       <td className="exec-jevs__desc">{j.particulars}</td>
-                      <td><span className="exec-jevs__source">{j.sourceType}</span></td>
-                      <td className="exec-jevs__mono" style={{ textAlign: 'right' }}>{formatPeso(j.totalDebit)}</td>
+                      <td>
+                        <span className="exec-jevs__source">{j.sourceType}</span>
+                      </td>
+                      <td className="exec-jevs__mono" style={{ textAlign: 'right' }}>
+                        {formatPeso(j.totalDebit)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -341,12 +411,18 @@ export function DashboardPage() {
             const clickable = s.value > 0 && s.link;
             const content = (
               <>
-                <div className="dashboard__stat-value" style={{ color: s.color }}>{s.value}</div>
+                <div className="dashboard__stat-value" style={{ color: s.color }}>
+                  {s.value}
+                </div>
                 <div className="dashboard__stat-label">{s.label}</div>
               </>
             );
             return clickable ? (
-              <Link key={s.label} to={s.link!} className="dashboard__stat-card dashboard__stat-card--clickable">
+              <Link
+                key={s.label}
+                to={s.link!}
+                className="dashboard__stat-card dashboard__stat-card--clickable"
+              >
                 {content}
               </Link>
             ) : (
@@ -362,7 +438,9 @@ export function DashboardPage() {
       <div className="dashboard__section">
         <h2 className="dashboard__section-title">
           Pending Actions
-          <span className={`dashboard__count-badge${items.length === 0 ? ' dashboard__count-badge--zero' : ''}`}>
+          <span
+            className={`dashboard__count-badge${items.length === 0 ? ' dashboard__count-badge--zero' : ''}`}
+          >
             {loading ? '...' : items.length}
           </span>
         </h2>
@@ -370,16 +448,16 @@ export function DashboardPage() {
         {loading && <div className="dashboard__loading">Loading pending actions...</div>}
 
         {!loading && items.length === 0 && (
-          <div className="dashboard__empty">
-            No items require your action right now.
-          </div>
+          <div className="dashboard__empty">No items require your action right now.</div>
         )}
 
         {!loading && items.length > 0 && (
           <div className="dashboard__actions-list">
             {items.map((item) => (
               <div key={`${item.type}-${item.id}`} className="dashboard__action-card">
-                <span className={`dashboard__action-module dashboard__action-module--${item.module}`}>
+                <span
+                  className={`dashboard__action-module dashboard__action-module--${item.module}`}
+                >
                   {item.module}
                 </span>
                 <div className="dashboard__action-body">

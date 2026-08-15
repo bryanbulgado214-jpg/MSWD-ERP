@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { PrismaService } from '../../database/prisma.service';
+import type { PrismaService } from '../../database/prisma.service';
 
 export interface FinancialStatementRow {
   accountId: string;
@@ -43,9 +43,7 @@ export class FinancialStatementsService {
         : '';
 
     const param2 = filters.periodId ?? filters.fiscalYearId;
-    const params: unknown[] = param2
-      ? [organizationId, param2]
-      : [organizationId];
+    const params: unknown[] = param2 ? [organizationId, param2] : [organizationId];
 
     const rows = await this.prisma.$queryRawUnsafe<FinancialStatementRow[]>(
       `
@@ -71,7 +69,7 @@ export class FinancialStatementsService {
           JOIN accounting_periods ap ON ap.id = j.accounting_period_id
           WHERE j.id = l.jev_id
             AND j.organization_id = $1::uuid
-            AND j.status = 'posted'
+            AND j.status IN ('posted', 'reversed')
             ${periodClause}
         )
       WHERE c.organization_id = $1::uuid

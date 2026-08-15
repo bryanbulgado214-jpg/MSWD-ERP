@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { getEmployees, getLeaveTypes, getLeaveBalances, createLeaveApplication, HrApiError } from '../api';
+import {
+  getEmployees,
+  getLeaveTypes,
+  getLeaveBalances,
+  createLeaveApplication,
+  HrApiError,
+} from '../api';
 import type { Employee, LeaveType, LeaveBalance } from '../types';
+
 import HrSubNav from './HrSubNav';
 import './hr.css';
 
@@ -22,13 +29,19 @@ export default function LeaveNewPage() {
   const [reason, setReason] = useState('');
 
   useEffect(() => {
-    getEmployees().then(setEmployees).catch(() => {});
-    getLeaveTypes().then(setLeaveTypes).catch(() => {});
+    getEmployees()
+      .then(setEmployees)
+      .catch(() => {});
+    getLeaveTypes()
+      .then(setLeaveTypes)
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
     if (employeeId) {
-      getLeaveBalances(employeeId).then(setBalances).catch(() => setBalances([]));
+      getLeaveBalances(employeeId)
+        .then(setBalances)
+        .catch(() => setBalances([]));
     } else {
       setBalances([]);
     }
@@ -87,47 +100,101 @@ export default function LeaveNewPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div className="hr-field">
               <label>Employee *</label>
-              <select required value={employeeId} onChange={(ev) => setEmployeeId(ev.target.value)}>
+              <select
+                required
+                value={employeeId}
+                onChange={(ev) => setEmployeeId(ev.target.value)}
+                style={{ width: '100%', maxWidth: 360, boxSizing: 'border-box' }}
+              >
                 <option value="">-- Select Employee --</option>
                 {employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>{emp.lastName}, {emp.firstName} ({emp.employeeNumber})</option>
+                  <option key={emp.id} value={emp.id}>
+                    {emp.lastName}, {emp.firstName} ({emp.employeeNumber})
+                  </option>
                 ))}
               </select>
             </div>
             <div className="hr-field">
               <label>Leave Type *</label>
-              <select required value={leaveTypeId} onChange={(ev) => setLeaveTypeId(ev.target.value)}>
+              <select
+                required
+                value={leaveTypeId}
+                onChange={(ev) => setLeaveTypeId(ev.target.value)}
+                style={{ width: '100%', maxWidth: 360, boxSizing: 'border-box' }}
+              >
                 <option value="">-- Select Type --</option>
-                {leaveTypes.filter((lt) => lt.isActive).map((lt) => (
-                  <option key={lt.id} value={lt.id}>{lt.name} ({lt.code})</option>
-                ))}
+                {leaveTypes
+                  .filter((lt) => lt.isActive)
+                  .map((lt) => (
+                    <option key={lt.id} value={lt.id}>
+                      {lt.name} ({lt.code})
+                    </option>
+                  ))}
               </select>
             </div>
           </div>
 
           {selectedBalance && (
-            <div className="hr-info-box" style={{ margin: '8px 0', padding: '8px 12px', background: 'var(--bg-info, #f0f4ff)', borderRadius: 6, fontSize: '13px' }}>
-              Balance: <strong>{Number(selectedBalance.balance)} days</strong> (Earned: {Number(selectedBalance.earned)}, Used: {Number(selectedBalance.used)}, Carry-over: {Number(selectedBalance.carryOver)})
+            <div
+              className="hr-info-box"
+              style={{
+                margin: '8px 0',
+                padding: '8px 12px',
+                background: 'var(--bg-info, #f0f4ff)',
+                borderRadius: 6,
+                fontSize: '13px',
+              }}
+            >
+              Balance: <strong>{Number(selectedBalance.balance)} days</strong> (Earned:{' '}
+              {Number(selectedBalance.earned)}, Used: {Number(selectedBalance.used)}, Carry-over:{' '}
+              {Number(selectedBalance.carryOver)})
             </div>
           )}
           {employeeId && balances.length === 0 && (
-            <div className="hr-info-box" style={{ margin: '8px 0', padding: '8px 12px', background: 'var(--bg-warning, #fff8e1)', borderRadius: 6, fontSize: '13px' }}>
-              No leave balances found for this year. Balances will be initialized automatically upon approval.
+            <div
+              className="hr-info-box"
+              style={{
+                margin: '8px 0',
+                padding: '8px 12px',
+                background: 'var(--bg-warning, #fff8e1)',
+                borderRadius: 6,
+                fontSize: '13px',
+              }}
+            >
+              No leave balances found for this year. Balances will be initialized automatically upon
+              approval.
             </div>
           )}
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 120px', gap: '12px' }}>
             <div className="hr-field">
               <label>Start Date *</label>
-              <input type="date" required value={startDate} onChange={(ev) => setStartDate(ev.target.value)} />
+              <input
+                type="date"
+                required
+                value={startDate}
+                onChange={(ev) => setStartDate(ev.target.value)}
+              />
             </div>
             <div className="hr-field">
               <label>End Date *</label>
-              <input type="date" required value={endDate} onChange={(ev) => setEndDate(ev.target.value)} />
+              <input
+                type="date"
+                required
+                value={endDate}
+                onChange={(ev) => setEndDate(ev.target.value)}
+              />
             </div>
             <div className="hr-field">
               <label>Days *</label>
-              <input type="number" required step="0.5" min="0.5" value={daysApplied} onChange={(ev) => setDaysApplied(ev.target.value)} />
+              <input
+                type="number"
+                required
+                step="0.5"
+                min="0.5"
+                value={daysApplied}
+                onChange={(ev) => setDaysApplied(ev.target.value)}
+              />
             </div>
           </div>
 
@@ -138,8 +205,12 @@ export default function LeaveNewPage() {
         </fieldset>
 
         <div className="hr-form-actions">
-          <button type="button" className="hr-btn" onClick={() => navigate('/hr/leave')}>Cancel</button>
-          <button type="submit" className="hr-btn hr-btn--primary" disabled={saving}>{saving ? 'Filing...' : 'File Leave'}</button>
+          <button type="button" className="hr-btn" onClick={() => navigate('/hr/leave')}>
+            Cancel
+          </button>
+          <button type="submit" className="hr-btn hr-btn--primary" disabled={saving}>
+            {saving ? 'Filing...' : 'File Leave'}
+          </button>
         </div>
       </form>
     </div>

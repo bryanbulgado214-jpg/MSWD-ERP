@@ -39,12 +39,22 @@ function fakePrismaGranting(permissionCodes: string[]) {
         },
       ]),
     },
+    // The guard now also reads active delegated authorities via
+    // getGrantedPermissionCodes → prisma.delegationAuthority.findMany.
+    // These unit tests exercise role-based grants only, so return an
+    // empty delegation set (no delegated permissions).
+    delegationAuthority: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
   };
 }
 
 describe('PermissionsGuard', () => {
   it('allows the request when the route requires no permissions', async () => {
-    const guard = new PermissionsGuard(fakeReflectorRequiring(undefined), fakePrismaGranting([]) as any);
+    const guard = new PermissionsGuard(
+      fakeReflectorRequiring(undefined),
+      fakePrismaGranting([]) as any,
+    );
     await expect(guard.canActivate(fakeContext({ userId: 'u1' }))).resolves.toBe(true);
   });
 
@@ -61,7 +71,9 @@ describe('PermissionsGuard', () => {
       fakeReflectorRequiring(['budgeting.reservation.approve']),
       fakePrismaGranting(['budgeting.reservation.create']) as any, // has a DIFFERENT permission
     );
-    await expect(guard.canActivate(fakeContext({ userId: 'u1' }))).rejects.toThrow(/Missing required permission/);
+    await expect(guard.canActivate(fakeContext({ userId: 'u1' }))).rejects.toThrow(
+      /Missing required permission/,
+    );
   });
 
   it('requires ALL listed permissions, not just one of them', async () => {
@@ -94,11 +106,16 @@ describe('PermissionsGuard', () => {
           },
         ]),
       },
+      delegationAuthority: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
     };
     const guard = new PermissionsGuard(
       fakeReflectorRequiring(['budgeting.reservation.create']),
       inactiveRolePrisma as any,
     );
-    await expect(guard.canActivate(fakeContext({ userId: 'u1' }))).rejects.toThrow(/Missing required permission/);
+    await expect(guard.canActivate(fakeContext({ userId: 'u1' }))).rejects.toThrow(
+      /Missing required permission/,
+    );
   });
 });

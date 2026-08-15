@@ -200,6 +200,10 @@ model OrganizationSettings {
   defaultCurrencyCode    String   @default("PHP") @map("default_currency_code") @db.VarChar(3)
   fiscalYearStartMonth   Int      @default(1) @map("fiscal_year_start_month") @db.SmallInt
   timezone               String   @default("Asia/Manila") @db.VarChar(50)
+  // Configurable "District Profile" — shown on printed forms and headings.
+  address                String?  @db.VarChar(500)
+  contact                String?  @db.VarChar(255)
+  logoUrl                String?  @map("logo_url") @db.VarChar(1000)
   createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   updatedBy              String?  @map("updated_by") @db.Uuid
@@ -1990,15 +1994,30 @@ enum PaymentMode {
   @@map("payment_mode")
 }
 
+enum DvType {
+  procurement
+  travel
+  reimbursement
+  payroll
+  utility
+  other
+
+  @@map("dv_type")
+}
+
 model DisbursementVoucher {
   id                     String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId         String      @map("organization_id") @db.Uuid
   dvNumber               String      @map("dv_number") @db.VarChar(30)
   dvDate                 DateTime    @default(now()) @map("dv_date") @db.Timestamptz(6)
-  orsId                  String      @map("ors_id") @db.Uuid
-  purchaseRequestId      String      @map("purchase_request_id") @db.Uuid
-  purchaseOrderId        String      @map("purchase_order_id") @db.Uuid
-  supplierId             String      @map("supplier_id") @db.Uuid
+  dvType                 DvType      @default(procurement) @map("dv_type")
+  orsId                  String?     @map("ors_id") @db.Uuid
+  purchaseRequestId      String?     @map("purchase_request_id") @db.Uuid
+  purchaseOrderId        String?     @map("purchase_order_id") @db.Uuid
+  supplierId             String?     @map("supplier_id") @db.Uuid
+  payeeName              String?     @map("payee_name") @db.VarChar(200)
+  payeeTin               String?     @map("payee_tin") @db.VarChar(30)
+  payeeAddress           String?     @map("payee_address")
   inspectionReportId     String?     @map("inspection_report_id") @db.Uuid
   fundSourceId           String?     @map("fund_source_id") @db.Uuid
   responsibilityCenterId String?     @map("responsibility_center_id") @db.Uuid
@@ -2027,10 +2046,10 @@ model DisbursementVoucher {
   version                Int         @default(1)
 
   organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  ors                  ObligationRequest     @relation(fields: [orsId], references: [id], onDelete: Restrict)
-  purchaseRequest      PurchaseRequest       @relation(fields: [purchaseRequestId], references: [id], onDelete: Restrict)
-  purchaseOrder        PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
-  supplier             Supplier              @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  ors                  ObligationRequest?    @relation(fields: [orsId], references: [id], onDelete: Restrict)
+  purchaseRequest      PurchaseRequest?      @relation(fields: [purchaseRequestId], references: [id], onDelete: Restrict)
+  purchaseOrder        PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  supplier             Supplier?             @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   inspectionReport     InspectionReport?     @relation(fields: [inspectionReportId], references: [id], onDelete: SetNull)
   fundSource           FundSource?           @relation(fields: [fundSourceId], references: [id], onDelete: Restrict)
   responsibilityCenter ResponsibilityCenter? @relation(fields: [responsibilityCenterId], references: [id], onDelete: Restrict)
@@ -2684,8 +2703,10 @@ enum BankAccountStatus {
 enum JevStatus {
   draft
   for_review
+  approved
   posted
   voided
+  reversed
 
   @@map("jev_status")
 }
@@ -2707,6 +2728,7 @@ enum JevSourceType {
 }
 
 enum CheckStatus {
+  pending
   assigned
   printed
   released
@@ -2769,6 +2791,7 @@ model ChartOfAccount {
 
   jevLines        JevLine[]
   accountMappings AccountMapping[]
+  bankAccounts    BankAccount[]    @relation("BankAccountGl")
 
   @@unique([organizationId, accountCode])
   @@index([organizationId])
@@ -2805,6 +2828,7 @@ model BankAccount {
   organizationId String            @map("organization_id") @db.Uuid
   bankId         String            @map("bank_id") @db.Uuid
   fundSourceId   String?           @map("fund_source_id") @db.Uuid
+  chartOfAccountId String?         @map("chart_of_account_id") @db.Uuid
   accountNumber  String            @map("account_number") @db.VarChar(50)
   accountName    String            @map("account_name") @db.VarChar(255)
   accountType    BankAccountType   @map("account_type")
@@ -2820,6 +2844,7 @@ model BankAccount {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   bank         Bank         @relation(fields: [bankId], references: [id], onDelete: Restrict)
   fundSource   FundSource?  @relation(fields: [fundSourceId], references: [id], onDelete: SetNull)
+  chartOfAccount ChartOfAccount? @relation("BankAccountGl", fields: [chartOfAccountId], references: [id], onDelete: SetNull)
   creator      User?        @relation("BankAccountsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
   updater      User?        @relation("BankAccountsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
 
@@ -2890,6 +2915,7 @@ model JournalEntryVoucher {
   updatedAt              DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   createdBy              String?       @map("created_by") @db.Uuid
   updatedBy              String?       @map("updated_by") @db.Uuid
+  reversalOfId           String?       @unique @map("reversal_of_id") @db.Uuid
   version                Int           @default(1)
 
   organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
@@ -2901,6 +2927,10 @@ model JournalEntryVoucher {
   voider               User?                 @relation("JevsVoidedBy", fields: [voidedBy], references: [id], onDelete: SetNull)
   creator              User?                 @relation("JevsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
   updater              User?                 @relation("JevsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  // A reversing entry points at the original it reverses; `reversedBy` is
+  // the inverse (the reversing entry that reversed this one), one-to-one.
+  reversalOf           JournalEntryVoucher?  @relation("JevReversal", fields: [reversalOfId], references: [id], onDelete: SetNull)
+  reversedBy           JournalEntryVoucher?  @relation("JevReversal")
 
   lines            JevLine[]
   depreciationRuns DepreciationRun[]
@@ -2943,11 +2973,13 @@ model Check {
   organizationId        String      @map("organization_id") @db.Uuid
   disbursementVoucherId String?     @map("disbursement_voucher_id") @db.Uuid
   bankAccountId         String      @map("bank_account_id") @db.Uuid
-  checkNumber           String      @map("check_number") @db.VarChar(30)
+  checkNumber           String?     @map("check_number") @db.VarChar(30)
   amount                Decimal     @db.Decimal(18, 2)
   checkDate             DateTime    @map("check_date") @db.Date
   payeeName             String      @map("payee_name") @db.VarChar(255)
   status                CheckStatus @default(assigned)
+  printedBy             String?     @map("printed_by") @db.Uuid
+  printedAt             DateTime?   @map("printed_at") @db.Timestamptz(6)
   releasedBy            String?     @map("released_by") @db.Uuid
   releasedAt            DateTime?   @map("released_at") @db.Timestamptz(6)
   clearedDate           DateTime?   @map("cleared_date") @db.Date

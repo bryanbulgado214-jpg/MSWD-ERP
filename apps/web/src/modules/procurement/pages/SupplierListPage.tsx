@@ -1,13 +1,9 @@
 import { useEffect, useState } from 'react';
 
 import { useAuth } from '../../../app/auth';
-import {
-  createSupplier,
-  listSuppliers,
-  ProcurementApiError,
-  updateSupplier,
-} from '../api';
+import { createSupplier, listSuppliers, ProcurementApiError, updateSupplier } from '../api';
 import type { Supplier } from '../types';
+
 import { ProcurementSubNav } from './ProcurementSubNav';
 import './procurement.css';
 
@@ -50,10 +46,17 @@ export function SupplierListPage() {
     setState({ status: 'loading' });
     listSuppliers(showInactive)
       .then((data) => setState({ status: 'loaded', data }))
-      .catch((e) => setState({ status: 'error', message: e instanceof ProcurementApiError ? e.message : 'Failed to load suppliers.' }));
+      .catch((e) =>
+        setState({
+          status: 'error',
+          message: e instanceof ProcurementApiError ? e.message : 'Failed to load suppliers.',
+        }),
+      );
   }
 
-  useEffect(() => { load(); }, [showInactive]);
+  useEffect(() => {
+    load();
+  }, [showInactive]);
 
   function openCreate() {
     setEditingId(null);
@@ -84,12 +87,16 @@ export function SupplierListPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name.trim()) { setError('Supplier name is required.'); return; }
+    if (!form.name.trim()) {
+      setError('Supplier name is required.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
       if (editingId) {
-        const existing = state.status === 'loaded' ? state.data.find((s) => s.id === editingId) : undefined;
+        const existing =
+          state.status === 'loaded' ? state.data.find((s) => s.id === editingId) : undefined;
         await updateSupplier(editingId, {
           expectedVersion: existing?.version ?? 1,
           name: form.name.trim(),
@@ -139,7 +146,11 @@ export function SupplierListPage() {
 
       <div className="pr-toolbar">
         <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={showInactive}
+            onChange={(e) => setShowInactive(e.target.checked)}
+          />
           Show inactive
         </label>
         {canManage && (
@@ -152,7 +163,10 @@ export function SupplierListPage() {
       {error && <div className="pr-error">{error}</div>}
 
       {showForm && (
-        <form onSubmit={handleSubmit} style={{ background: '#f8f9fc', borderRadius: 8, padding: 16, marginBottom: 20 }}>
+        <form
+          onSubmit={handleSubmit}
+          style={{ background: '#f8f9fc', borderRadius: 8, padding: 16, marginBottom: 20 }}
+        >
           <div className="pr-form" style={{ gap: 12 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div className="pr-field">
@@ -171,11 +185,17 @@ export function SupplierListPage() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               <div className="pr-field">
                 <label>Contact Person</label>
-                <input value={form.contactPerson} onChange={(e) => setField('contactPerson', e.target.value)} />
+                <input
+                  value={form.contactPerson}
+                  onChange={(e) => setField('contactPerson', e.target.value)}
+                />
               </div>
               <div className="pr-field">
                 <label>Contact Number</label>
-                <input value={form.contactNumber} onChange={(e) => setField('contactNumber', e.target.value)} />
+                <input
+                  value={form.contactNumber}
+                  onChange={(e) => setField('contactNumber', e.target.value)}
+                />
               </div>
               <div className="pr-field">
                 <label>Email</label>
@@ -183,7 +203,9 @@ export function SupplierListPage() {
               </div>
             </div>
             <div className="pr-form-actions">
-              <button type="button" className="pr-btn" onClick={cancelForm}>Cancel</button>
+              <button type="button" className="pr-btn" onClick={cancelForm}>
+                Cancel
+              </button>
               <button type="submit" className="pr-btn pr-btn--primary" disabled={saving}>
                 {saving ? 'Saving...' : editingId ? 'Update Supplier' : 'Create Supplier'}
               </button>
@@ -198,45 +220,55 @@ export function SupplierListPage() {
         <div className="pr-empty">No suppliers found.</div>
       )}
       {state.status === 'loaded' && state.data.length > 0 && (
-        <table className="pr-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>TIN</th>
-              <th>Contact Person</th>
-              <th>Contact Number</th>
-              <th>Status</th>
-              {canManage && <th>Actions</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {state.data.map((s) => (
-              <tr key={s.id}>
-                <td style={{ fontWeight: 600 }}>{s.name}</td>
-                <td>{s.tin ?? '—'}</td>
-                <td>{s.contactPerson ?? '—'}</td>
-                <td>{s.contactNumber ?? '—'}</td>
-                <td>
-                  <span className={`pr-badge ${s.isActive ? 'pr-badge--approved' : 'pr-badge--cancelled'}`}>
-                    {s.isActive ? 'Active' : 'Inactive'}
-                  </span>
-                </td>
-                {canManage && (
-                  <td>
-                    <button className="pr-btn" style={{ marginRight: 6, padding: '4px 10px', fontSize: 12 }} onClick={() => openEdit(s)}>Edit</button>
-                    <button
-                      className={`pr-btn ${s.isActive ? 'pr-btn--danger' : 'pr-btn--success'}`}
-                      style={{ padding: '4px 10px', fontSize: 12 }}
-                      onClick={() => toggleActive(s)}
-                    >
-                      {s.isActive ? 'Deactivate' : 'Activate'}
-                    </button>
-                  </td>
-                )}
+        <div style={{ overflowX: 'auto' }}>
+          <table className="pr-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>TIN</th>
+                <th>Contact Person</th>
+                <th>Contact Number</th>
+                <th>Status</th>
+                {canManage && <th>Actions</th>}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {state.data.map((s) => (
+                <tr key={s.id}>
+                  <td style={{ fontWeight: 600 }}>{s.name}</td>
+                  <td>{s.tin ?? '—'}</td>
+                  <td>{s.contactPerson ?? '—'}</td>
+                  <td>{s.contactNumber ?? '—'}</td>
+                  <td>
+                    <span
+                      className={`pr-badge ${s.isActive ? 'pr-badge--approved' : 'pr-badge--cancelled'}`}
+                    >
+                      {s.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  {canManage && (
+                    <td>
+                      <button
+                        className="pr-btn"
+                        style={{ marginRight: 6, padding: '4px 10px', fontSize: 12 }}
+                        onClick={() => openEdit(s)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className={`pr-btn ${s.isActive ? 'pr-btn--danger' : 'pr-btn--success'}`}
+                        style={{ padding: '4px 10px', fontSize: 12 }}
+                        onClick={() => toggleActive(s)}
+                      >
+                        {s.isActive ? 'Deactivate' : 'Activate'}
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

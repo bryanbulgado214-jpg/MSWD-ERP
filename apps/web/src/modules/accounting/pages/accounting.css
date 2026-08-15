@@ -1,39 +1,101 @@
 @import '../../budgeting/mswd-tokens.css';
 
-/* ── Sub-navigation ── */
+/* ── Sub-navigation (vertical left sidebar) ── */
 .acct-subnav {
+  position: absolute;
+  left: 24px;
+  top: 28px;
+  width: 178px;
   display: flex;
-  gap: 4px;
-  margin-bottom: 20px;
-  border-bottom: 1.5px solid #eaecf0;
-  padding-bottom: 0;
-  overflow-x: auto;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  border-bottom: none;
+  overflow: visible;
 }
 
 .acct-subnav__link {
-  padding: 8px 14px;
+  display: block;
+  padding: 8px 12px;
   font-size: 13px;
   font-weight: 600;
   color: #667085;
   text-decoration: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1.5px;
-  transition: color 0.15s, border-color 0.15s;
+  border-radius: 6px;
+  border-left: 3px solid transparent;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
   white-space: nowrap;
 }
 
-.acct-subnav__link:hover { color: var(--mswd-navy); }
+.acct-subnav__link:hover { color: var(--mswd-navy); background: #f2f4f7; }
 
 .acct-subnav__link--active {
   color: var(--mswd-blue);
-  border-bottom-color: var(--mswd-blue);
+  background: #eff4ff;
+  border-left-color: var(--mswd-blue);
 }
 
 .acct-page {
-  max-width: 1200px;
+  position: relative;
+  max-width: 1240px;
   margin: 0 auto;
-  padding: 32px 24px;
+  padding: 28px 24px 32px 224px; /* left space reserved for the vertical sidebar */
+  min-height: 460px;
   font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* Reused under the Reports layout (which already supplies nav + padding): drop
+   the accounting sidebar spacing so the page renders as plain content. */
+.acct-page--embedded {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+}
+
+/* Detailed financial-statement "paper" (SFP / SCI). */
+.fs-doc {
+  background: #fff;
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+  padding: 28px 32px 24px;
+  max-width: 860px;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.05);
+}
+.fs-table tbody tr:hover td {
+  background: #f8fafc;
+}
+@media print {
+  .acct-subnav, .reports-subnav, .app-nav, .app-demo-banner, .acct-toolbar { display: none !important; }
+  .fs-doc { border: none; box-shadow: none; max-width: none; padding: 0; }
+}
+
+/* Group heading inside the accounting sidebar (e.g. "Accounting Setup"). */
+.acct-subnav__heading {
+  margin: 14px 0 4px;
+  padding: 0 12px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #98a2b3;
+  border-top: 1px solid #eaecf0;
+  padding-top: 12px;
+}
+
+/* Narrow screens: fall back to a horizontal, wrapping bar on top (still no scroll) */
+@media (max-width: 860px) {
+  .acct-page {
+    padding-left: 24px;
+    min-height: 0;
+  }
+  .acct-subnav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    width: auto;
+  }
 }
 
 .acct-page h1 {
@@ -118,6 +180,37 @@
 .acct-badge--closed { background: #fef3f2; color: #b42318; }
 .acct-badge--header { background: #f2f4f7; color: #475467; }
 .acct-badge--postable { background: #eff8ff; color: #175cd3; }
+
+/* CSV import action badges */
+.acct-badge--create { background: #ecfdf3; color: #067647; }
+.acct-badge--update { background: #eff8ff; color: #175cd3; }
+.acct-badge--error { background: #fef3f2; color: #b42318; }
+.acct-row-error td { background: #fffbfa; }
+.acct-import-errors { color: #b42318; font-size: 12px; line-height: 1.5; }
+.acct-import-summary {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 12px 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475467;
+}
+.acct-import-hint { font-size: 12px; color: #667085; line-height: 1.6; margin: 0 0 12px; }
+.acct-import-hint code {
+  background: #f2f4f7;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.acct-success {
+  background: #ecfdf3;
+  color: #067647;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
 
 .acct-badge--asset { background: #eff8ff; color: #175cd3; }
 .acct-badge--liability { background: #fef3f2; color: #b42318; }
@@ -229,6 +322,7 @@
 .acct-badge--for_review { background: #fefce8; color: #a16207; }
 .acct-badge--posted { background: #ecfdf3; color: #067647; }
 .acct-badge--voided { background: #fef3f2; color: #b42318; }
+.acct-badge--reversed { background: #fffaeb; color: #b54708; }
 
 /* JEV source type badges */
 .acct-badge--manual { background: #f2f4f7; color: #475467; }
@@ -251,3 +345,65 @@
 .acct-badge--in_progress { background: #eff8ff; color: #175cd3; }
 .acct-badge--completed { background: #ecfdf3; color: #067647; }
 .acct-badge--approved { background: #dcfce7; color: #166534; }
+
+/* Drill-down figure link — signals a number is clickable through to its
+   underlying ledger detail (Financial Statements → subsidiary ledger → JEV). */
+.acct-drill {
+  color: var(--mswd-blue);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--mswd-blue);
+  cursor: pointer;
+}
+.acct-drill:hover {
+  text-decoration: none;
+  border-bottom-style: solid;
+  background: rgba(21, 92, 211, 0.06);
+}
+
+/* Accounting Dashboard KPI cards */
+.acct-kpi-group {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--mswd-navy);
+  margin: 20px 0 8px;
+}
+.acct-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px;
+}
+.acct-kpi {
+  display: block;
+  background: #fff;
+  border: 1px solid #eaecf0;
+  border-radius: 10px;
+  padding: 16px;
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+.acct-kpi:hover {
+  box-shadow: 0 4px 14px rgba(16, 24, 40, 0.1);
+  transform: translateY(-1px);
+}
+.acct-kpi__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #667085;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.acct-kpi__value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--mswd-navy);
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.acct-kpi__sub {
+  font-size: 11px;
+  color: var(--mswd-blue);
+  margin-top: 8px;
+}

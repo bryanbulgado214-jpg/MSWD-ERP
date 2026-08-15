@@ -423,3 +423,54 @@
   color: var(--mswd-blue);
   border-bottom-color: var(--mswd-blue);
 }
+
+/* Audit trail action badges */
+.admin-badge--insert { background: #ecfdf3; color: #067647; }
+.admin-badge--update { background: #eff8ff; color: #175cd3; }
+.admin-badge--delete { background: #fef3f2; color: #b42318; }
+.admin-toolbar select,
+.admin-toolbar input { padding: 6px 8px; border: 1px solid #d0d5dd; border-radius: 6px; font-size: 13px; }
+
+/* ── Vertical left-sidebar sub-nav (matches Accounting; no horizontal scroll) ── */
+.admin-subnav {
+  position: absolute;
+  left: 24px;
+  top: 28px;
+  width: 178px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  border-bottom: none;
+  overflow: visible;
+}
+.admin-subnav__link {
+  display: block;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border-left: 3px solid transparent;
+  border-bottom: none;
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+.admin-subnav__link:hover { background: #f2f4f7; }
+.admin-subnav__link--active {
+  border-left-color: #175cd3;
+  background: #eff4ff;
+  border-bottom-color: transparent;
+}
+.admin-page {
+  position: relative;
+  padding-left: 224px;
+  min-height: 460px;
+}
+@media (max-width: 860px) {
+  .admin-page { padding-left: 24px; min-height: 0; }
+  .admin-subnav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    width: auto;
+  }
+}

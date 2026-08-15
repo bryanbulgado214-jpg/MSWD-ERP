@@ -1,12 +1,18 @@
 import type {
-  AccountabilityListItem, AccountabilityRecord,
-  DisposalListItem, InventoryItem, InventorySummary,
-  PhysicalCountListItem, PropertyRecord,
-  Ris, RisListItem,
-  StockReceipt, StockReceiptListItem,
+  AccountabilityListItem,
+  AccountabilityRecord,
+  DisposalListItem,
+  InventoryItem,
+  InventorySummary,
+  PhysicalCountListItem,
+  PropertyRecord,
+  Ris,
+  RisListItem,
+  StockReceipt,
+  StockReceiptListItem,
 } from './types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
 
 function getAccessToken(): string | null {
   return localStorage.getItem('mswd_access_token');
@@ -27,7 +33,9 @@ async function extractErrorMessage(response: Response, fallback: string): Promis
     const body = await response.json();
     if (Array.isArray(body.message)) return body.message.join(' ');
     if (typeof body.message === 'string') return body.message;
-  } catch { /* not JSON */ }
+  } catch {
+    /* not JSON */
+  }
   return fallback;
 }
 
@@ -36,14 +44,21 @@ async function authFetch(path: string): Promise<Response> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
-  if (response.status === 401) throw new InventoryApiError('Not signed in, or your session has expired.', 401);
-  if (response.status === 403) throw new InventoryApiError('You do not have permission to view this.', 403);
+  if (response.status === 401)
+    throw new InventoryApiError('Not signed in, or your session has expired.', 401);
+  if (response.status === 403)
+    throw new InventoryApiError('You do not have permission to view this.', 403);
   if (response.status === 404) throw new InventoryApiError('Not found.', 404);
-  if (!response.ok) throw new InventoryApiError(`Request failed (${response.status}).`, response.status);
+  if (!response.ok)
+    throw new InventoryApiError(`Request failed (${response.status}).`, response.status);
   return response;
 }
 
-async function authFetchMutate(path: string, method: 'POST' | 'PATCH', body?: unknown): Promise<Response> {
+async function authFetchMutate(
+  path: string,
+  method: 'POST' | 'PATCH',
+  body?: unknown,
+): Promise<Response> {
   const token = getAccessToken();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
@@ -54,11 +69,21 @@ async function authFetchMutate(path: string, method: 'POST' | 'PATCH', body?: un
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
   if (response.status === 401) throw new InventoryApiError('Not signed in.', 401);
-  if (response.status === 403) throw new InventoryApiError(await extractErrorMessage(response, 'Forbidden.'), 403);
+  if (response.status === 403)
+    throw new InventoryApiError(await extractErrorMessage(response, 'Forbidden.'), 403);
   if (response.status === 404) throw new InventoryApiError('Not found.', 404);
-  if (response.status === 409) throw new InventoryApiError(await extractErrorMessage(response, 'Modified concurrently — reload.'), 409);
-  if (response.status === 400) throw new InventoryApiError(await extractErrorMessage(response, 'Invalid request.'), 400);
-  if (!response.ok) throw new InventoryApiError(await extractErrorMessage(response, `Failed (${response.status}).`), response.status);
+  if (response.status === 409)
+    throw new InventoryApiError(
+      await extractErrorMessage(response, 'Modified concurrently — reload.'),
+      409,
+    );
+  if (response.status === 400)
+    throw new InventoryApiError(await extractErrorMessage(response, 'Invalid request.'), 400);
+  if (!response.ok)
+    throw new InventoryApiError(
+      await extractErrorMessage(response, `Failed (${response.status}).`),
+      response.status,
+    );
   return response;
 }
 
@@ -76,17 +101,30 @@ export async function getInventoryItem(id: string): Promise<InventoryItem> {
 }
 
 export async function createInventoryItem(data: {
-  itemCode: string; description: string; unitOfMeasure: string;
-  classification: string; category?: string; accountCode?: string; reorderPoint?: number;
+  itemCode: string;
+  description: string;
+  unitOfMeasure: string;
+  classification: string;
+  category?: string;
+  accountCode?: string;
+  reorderPoint?: number;
 }): Promise<InventoryItem> {
   const res = await authFetchMutate('/inventory/items', 'POST', data);
   return res.json();
 }
 
-export async function updateInventoryItem(id: string, data: {
-  expectedVersion: number; description?: string; unitOfMeasure?: string;
-  category?: string; accountCode?: string; reorderPoint?: number; isActive?: boolean;
-}): Promise<InventoryItem> {
+export async function updateInventoryItem(
+  id: string,
+  data: {
+    expectedVersion: number;
+    description?: string;
+    unitOfMeasure?: string;
+    category?: string;
+    accountCode?: string;
+    reorderPoint?: number;
+    isActive?: boolean;
+  },
+): Promise<InventoryItem> {
   const res = await authFetchMutate(`/inventory/items/${id}`, 'PATCH', data);
   return res.json();
 }
@@ -110,12 +148,19 @@ export async function createStockReceipt(data: unknown): Promise<StockReceipt> {
 }
 
 export async function postStockReceipt(id: string, expectedVersion: number): Promise<StockReceipt> {
-  const res = await authFetchMutate(`/inventory/stock-receipts/${id}/post`, 'POST', { expectedVersion });
+  const res = await authFetchMutate(`/inventory/stock-receipts/${id}/post`, 'POST', {
+    expectedVersion,
+  });
   return res.json();
 }
 
-export async function cancelStockReceipt(id: string, expectedVersion: number): Promise<StockReceipt> {
-  const res = await authFetchMutate(`/inventory/stock-receipts/${id}/cancel`, 'POST', { expectedVersion });
+export async function cancelStockReceipt(
+  id: string,
+  expectedVersion: number,
+): Promise<StockReceipt> {
+  const res = await authFetchMutate(`/inventory/stock-receipts/${id}/cancel`, 'POST', {
+    expectedVersion,
+  });
   return res.json();
 }
 
@@ -147,7 +192,10 @@ export async function approveRis(id: string, expectedVersion: number): Promise<R
   return res.json();
 }
 
-export async function issueRis(id: string, data: { expectedVersion: number; items: Array<{ risItemId: string; quantityIssued: number }> }): Promise<Ris> {
+export async function issueRis(
+  id: string,
+  data: { expectedVersion: number; items: Array<{ risItemId: string; quantityIssued: number }> },
+): Promise<Ris> {
   const res = await authFetchMutate(`/inventory/ris/${id}/issue`, 'POST', data);
   return res.json();
 }
@@ -198,13 +246,23 @@ export async function createAccountabilityRecord(data: unknown): Promise<Account
   return res.json();
 }
 
-export async function returnAccountability(id: string, data: { expectedVersion: number; returnDate: string }): Promise<AccountabilityRecord> {
+export async function returnAccountability(
+  id: string,
+  data: { expectedVersion: number; returnDate: string },
+): Promise<AccountabilityRecord> {
   const res = await authFetchMutate(`/inventory/accountability-records/${id}/return`, 'POST', data);
   return res.json();
 }
 
-export async function transferAccountability(id: string, data: { expectedVersion: number; newUserId: string }): Promise<AccountabilityRecord> {
-  const res = await authFetchMutate(`/inventory/accountability-records/${id}/transfer`, 'POST', data);
+export async function transferAccountability(
+  id: string,
+  data: { expectedVersion: number; newUserId: string },
+): Promise<AccountabilityRecord> {
+  const res = await authFetchMutate(
+    `/inventory/accountability-records/${id}/transfer`,
+    'POST',
+    data,
+  );
   return res.json();
 }
 

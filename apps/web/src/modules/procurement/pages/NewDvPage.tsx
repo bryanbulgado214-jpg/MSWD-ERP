@@ -23,7 +23,9 @@ export function NewDvPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    listOrs({ status: 'obligated' }).then(setOrsList).catch(() => {});
+    listOrs({ status: 'obligated' })
+      .then(setOrsList)
+      .catch(() => {});
   }, []);
 
   const selectedOrs = orsList.find((o) => o.id === selectedOrsId);
@@ -33,7 +35,9 @@ export function NewDvPage() {
     const ors = orsList.find((o) => o.id === orsId);
     if (ors) {
       setGrossAmount(String(ors.originalAmount));
-      setParticulars(`Payment for ${ors.purchaseRequest.title} per PO ${ors.purchaseOrder?.poNumber ?? 'N/A'}`);
+      setParticulars(
+        `Payment for ${ors.purchaseRequest.title} per PO ${ors.purchaseOrder?.poNumber ?? 'N/A'}`,
+      );
     }
   }
 
@@ -44,9 +48,18 @@ export function NewDvPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedOrsId) { setError('Select an Obligation Request.'); return; }
-    if (!particulars.trim()) { setError('Particulars are required.'); return; }
-    if (gross <= 0) { setError('Gross amount must be greater than zero.'); return; }
+    if (!selectedOrsId) {
+      setError('Select an Obligation Request.');
+      return;
+    }
+    if (!particulars.trim()) {
+      setError('Particulars are required.');
+      return;
+    }
+    if (gross <= 0) {
+      setError('Gross amount must be greater than zero.');
+      return;
+    }
 
     setSubmitting(true);
     setError('');
@@ -80,7 +93,12 @@ export function NewDvPage() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
           <div className="pr-form-field" style={{ gridColumn: '1 / -1' }}>
             <label>Obligation Request (ORS) *</label>
-            <select value={selectedOrsId} onChange={(e) => handleOrsChange(e.target.value)} required>
+            <select
+              value={selectedOrsId}
+              onChange={(e) => handleOrsChange(e.target.value)}
+              required
+              style={{ width: '100%', maxWidth: 360, boxSizing: 'border-box' }}
+            >
               <option value="">Select an ORS...</option>
               {orsList.map((ors) => (
                 <option key={ors.id} value={ors.id}>
@@ -91,22 +109,43 @@ export function NewDvPage() {
           </div>
 
           {selectedOrs && (
-            <div style={{ gridColumn: '1 / -1', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: 12, fontSize: 13 }}>
+            <div
+              style={{
+                gridColumn: '1 / -1',
+                background: '#f0f9ff',
+                border: '1px solid #bae6fd',
+                borderRadius: 8,
+                padding: 12,
+                fontSize: 13,
+              }}
+            >
               <strong>ORS: {selectedOrs.orsNumber}</strong>
-              {' — PR: '}{selectedOrs.purchaseRequest.prNumber} — {selectedOrs.purchaseRequest.title}
-              {selectedOrs.purchaseOrder && <span> — PO: {selectedOrs.purchaseOrder.poNumber}</span>}
-              {' — Amount: '}{formatPeso(selectedOrs.originalAmount)}
+              {' — PR: '}
+              {selectedOrs.purchaseRequest.prNumber} — {selectedOrs.purchaseRequest.title}
+              {selectedOrs.purchaseOrder && (
+                <span> — PO: {selectedOrs.purchaseOrder.poNumber}</span>
+              )}
+              {' — Amount: '}
+              {formatPeso(selectedOrs.originalAmount)}
             </div>
           )}
 
           <div className="pr-form-field" style={{ gridColumn: '1 / -1' }}>
             <label>Particulars *</label>
-            <textarea value={particulars} onChange={(e) => setParticulars(e.target.value)} rows={3} required />
+            <textarea
+              value={particulars}
+              onChange={(e) => setParticulars(e.target.value)}
+              rows={3}
+              required
+            />
           </div>
 
           <div className="pr-form-field">
             <label>Payment Mode</label>
-            <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value as 'check' | 'ada' | 'others')}>
+            <select
+              value={paymentMode}
+              onChange={(e) => setPaymentMode(e.target.value as 'check' | 'ada' | 'others')}
+            >
               <option value="check">Check</option>
               <option value="ada">Advice to Debit Account (ADA)</option>
               <option value="others">Others</option>
@@ -114,28 +153,62 @@ export function NewDvPage() {
           </div>
           <div className="pr-form-field">
             <label>Account Code</label>
-            <input type="text" value={accountCode} onChange={(e) => setAccountCode(e.target.value)} maxLength={30} />
+            <input
+              type="text"
+              value={accountCode}
+              onChange={(e) => setAccountCode(e.target.value)}
+              maxLength={30}
+            />
           </div>
         </div>
 
         {/* Financial */}
         <h3 style={{ fontSize: 15, fontWeight: 700, margin: '16px 0 8px' }}>Financial Details</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
+        <div
+          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}
+        >
           <div className="pr-form-field">
             <label>Gross Amount *</label>
-            <input type="number" step="0.01" value={grossAmount} onChange={(e) => setGrossAmount(e.target.value)} required />
+            <input
+              type="number"
+              step="0.01"
+              value={grossAmount}
+              onChange={(e) => setGrossAmount(e.target.value)}
+              required
+            />
           </div>
           <div className="pr-form-field">
             <label>Tax Withheld</label>
-            <input type="number" step="0.01" value={taxAmount} onChange={(e) => setTaxAmount(e.target.value)} />
+            <input
+              type="number"
+              step="0.01"
+              value={taxAmount}
+              onChange={(e) => setTaxAmount(e.target.value)}
+            />
           </div>
           <div className="pr-form-field">
             <label>Other Deductions</label>
-            <input type="number" step="0.01" value={otherDeductions} onChange={(e) => setOtherDeductions(e.target.value)} />
+            <input
+              type="number"
+              step="0.01"
+              value={otherDeductions}
+              onChange={(e) => setOtherDeductions(e.target.value)}
+            />
           </div>
         </div>
 
-        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: 12, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div
+          style={{
+            background: '#f0fdf4',
+            border: '1px solid #bbf7d0',
+            borderRadius: 8,
+            padding: 12,
+            marginBottom: 16,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
           <span style={{ fontWeight: 600, color: '#0f172a' }}>Net Amount Payable:</span>
           <span style={{ fontWeight: 700, fontSize: 18, color: '#067647' }}>{formatPeso(net)}</span>
         </div>
@@ -143,19 +216,42 @@ export function NewDvPage() {
         {/* Check details */}
         {paymentMode === 'check' && (
           <>
-            <h3 style={{ fontSize: 15, fontWeight: 700, margin: '16px 0 8px' }}>Check Details (Optional)</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, margin: '16px 0 8px' }}>
+              Check Details (Optional)
+            </h3>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr 1fr',
+                gap: 16,
+                marginBottom: 16,
+              }}
+            >
               <div className="pr-form-field">
                 <label>Check Number</label>
-                <input type="text" value={checkNumber} onChange={(e) => setCheckNumber(e.target.value)} maxLength={50} />
+                <input
+                  type="text"
+                  value={checkNumber}
+                  onChange={(e) => setCheckNumber(e.target.value)}
+                  maxLength={50}
+                />
               </div>
               <div className="pr-form-field">
                 <label>Check Date</label>
-                <input type="date" value={checkDate} onChange={(e) => setCheckDate(e.target.value)} />
+                <input
+                  type="date"
+                  value={checkDate}
+                  onChange={(e) => setCheckDate(e.target.value)}
+                />
               </div>
               <div className="pr-form-field">
                 <label>Bank Name</label>
-                <input type="text" value={bankName} onChange={(e) => setBankName(e.target.value)} maxLength={100} />
+                <input
+                  type="text"
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  maxLength={100}
+                />
               </div>
             </div>
           </>

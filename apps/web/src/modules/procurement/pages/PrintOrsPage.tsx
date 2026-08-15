@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
+import { GovLetterhead } from '../../../app/GovLetterhead';
 import { formatPeso } from '../../budgeting/format-peso';
 import { getOrs } from '../api';
 import type { Ors } from '../types';
@@ -13,20 +14,25 @@ export function PrintOrsPage() {
 
   useEffect(() => {
     if (!id) return;
-    getOrs(id).then(setOrs).catch((e) => setError(e.message));
+    getOrs(id)
+      .then(setOrs)
+      .catch((e) => setError(e.message));
   }, [id]);
 
   if (error) return <div style={{ padding: 32, color: '#b42318' }}>{error}</div>;
   if (!ors) return <div style={{ padding: 32, color: '#667085' }}>Loading...</div>;
 
-  const orsDate = new Date(ors.orsDate).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
+  const orsDate = new Date(ors.orsDate).toLocaleDateString('en-PH', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
 
   return (
     <div className="gov-print-page">
       <div className="gov-print-sheet">
         <div className="gov-appendix">Appendix 40</div>
-        <div className="gov-entity">METRO SIQUIJOR WATER DISTRICT</div>
-        <div className="gov-subtitle">Siquijor, Siquijor</div>
+        <GovLetterhead />
         <div className="gov-title">OBLIGATION REQUEST AND STATUS</div>
 
         <div className="gov-info-grid">
@@ -78,18 +84,28 @@ export function PrintOrsPage() {
               <td className="gov-right gov-mono gov-bold">{formatPeso(ors.originalAmount)}</td>
             </tr>
             {Array.from({ length: 5 }).map((_, i) => (
-              <tr key={i}><td>&nbsp;</td><td></td><td></td></tr>
+              <tr key={i}>
+                <td>&nbsp;</td>
+                <td></td>
+                <td></td>
+              </tr>
             ))}
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={2} className="gov-right gov-bold">TOTAL</td>
-              <td className="gov-right gov-mono gov-bold" style={{ borderTop: '2px solid #000' }}>{formatPeso(ors.originalAmount)}</td>
+              <td colSpan={2} className="gov-right gov-bold">
+                TOTAL
+              </td>
+              <td className="gov-right gov-mono gov-bold" style={{ borderTop: '2px solid #000' }}>
+                {formatPeso(ors.originalAmount)}
+              </td>
             </tr>
           </tfoot>
         </table>
 
-        <h3 style={{ fontSize: '12pt', fontWeight: 700, margin: '20px 0 8px' }}>Obligation Status</h3>
+        <h3 style={{ fontSize: '12pt', fontWeight: 700, margin: '20px 0 8px' }}>
+          Obligation Status
+        </h3>
         <table className="gov-table">
           <thead>
             <tr>
@@ -116,13 +132,16 @@ export function PrintOrsPage() {
             <div className="gov-sig-block">
               <div className="gov-sig-header">Certified:</div>
               <div className="gov-sig-row" style={{ fontSize: '10pt', marginBottom: 8 }}>
-                Charges to appropriation/allotment is necessary, lawful, and under my direct supervision.
+                Charges to appropriation/allotment is necessary, lawful, and under my direct
+                supervision.
               </div>
               <div className="gov-sig-line"></div>
               <div className="gov-sig-name"></div>
               <div className="gov-sig-title">Head, Requesting Office/Authorized Representative</div>
               {ors.requestingOfficeCertifiedAt && (
-                <div className="gov-sig-date">Date: {new Date(ors.requestingOfficeCertifiedAt).toLocaleDateString('en-PH')}</div>
+                <div className="gov-sig-date">
+                  Date: {new Date(ors.requestingOfficeCertifiedAt).toLocaleDateString('en-PH')}
+                </div>
               )}
             </div>
           </div>
@@ -136,7 +155,9 @@ export function PrintOrsPage() {
               <div className="gov-sig-name"></div>
               <div className="gov-sig-title">Budget Officer / Head of Budget Division/Unit</div>
               {ors.budgetCertifiedAt && (
-                <div className="gov-sig-date">Date: {new Date(ors.budgetCertifiedAt).toLocaleDateString('en-PH')}</div>
+                <div className="gov-sig-date">
+                  Date: {new Date(ors.budgetCertifiedAt).toLocaleDateString('en-PH')}
+                </div>
               )}
             </div>
           </div>

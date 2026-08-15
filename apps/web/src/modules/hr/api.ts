@@ -1,6 +1,22 @@
-import type { AllowanceType, DeductionType, DtrRecord, DtrUpload, Employee, EmployeeAllowance, EmployeeDeduction, LeaveApplication, LeaveBalance, LeaveType, PayrollPeriod, PayrollRun, Position, RemittanceAgencyDetail, RemittanceSummary } from './types';
+import type {
+  AllowanceType,
+  DeductionType,
+  DtrRecord,
+  DtrUpload,
+  Employee,
+  EmployeeAllowance,
+  EmployeeDeduction,
+  LeaveApplication,
+  LeaveBalance,
+  LeaveType,
+  PayrollPeriod,
+  PayrollRun,
+  Position,
+  RemittanceAgencyDetail,
+  RemittanceSummary,
+} from './types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
 
 function getAccessToken(): string | null {
   return localStorage.getItem('mswd_access_token');
@@ -21,7 +37,9 @@ async function extractErrorMessage(response: Response, fallback: string): Promis
     const body = await response.json();
     if (Array.isArray(body.message)) return body.message.join(' ');
     if (typeof body.message === 'string') return body.message;
-  } catch { /* not JSON */ }
+  } catch {
+    /* not JSON */
+  }
   return fallback;
 }
 
@@ -30,14 +48,20 @@ async function authFetch(path: string): Promise<Response> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
-  if (response.status === 401) throw new HrApiError('Not signed in, or your session has expired.', 401);
-  if (response.status === 403) throw new HrApiError('You do not have permission to view this.', 403);
+  if (response.status === 401)
+    throw new HrApiError('Not signed in, or your session has expired.', 401);
+  if (response.status === 403)
+    throw new HrApiError('You do not have permission to view this.', 403);
   if (response.status === 404) throw new HrApiError('Not found.', 404);
   if (!response.ok) throw new HrApiError(`Request failed (${response.status}).`, response.status);
   return response;
 }
 
-async function authFetchMutate(path: string, method: 'POST' | 'PATCH', body?: unknown): Promise<Response> {
+async function authFetchMutate(
+  path: string,
+  method: 'POST' | 'PATCH',
+  body?: unknown,
+): Promise<Response> {
   const token = getAccessToken();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
@@ -48,11 +72,21 @@ async function authFetchMutate(path: string, method: 'POST' | 'PATCH', body?: un
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
   if (response.status === 401) throw new HrApiError('Not signed in.', 401);
-  if (response.status === 403) throw new HrApiError(await extractErrorMessage(response, 'Forbidden.'), 403);
+  if (response.status === 403)
+    throw new HrApiError(await extractErrorMessage(response, 'Forbidden.'), 403);
   if (response.status === 404) throw new HrApiError('Not found.', 404);
-  if (response.status === 409) throw new HrApiError(await extractErrorMessage(response, 'Modified concurrently — reload.'), 409);
-  if (response.status === 400) throw new HrApiError(await extractErrorMessage(response, 'Invalid request.'), 400);
-  if (!response.ok) throw new HrApiError(await extractErrorMessage(response, `Failed (${response.status}).`), response.status);
+  if (response.status === 409)
+    throw new HrApiError(
+      await extractErrorMessage(response, 'Modified concurrently — reload.'),
+      409,
+    );
+  if (response.status === 400)
+    throw new HrApiError(await extractErrorMessage(response, 'Invalid request.'), 400);
+  if (!response.ok)
+    throw new HrApiError(
+      await extractErrorMessage(response, `Failed (${response.status}).`),
+      response.status,
+    );
   return response;
 }
 
@@ -64,9 +98,15 @@ async function authFetchFormData(path: string, formData: FormData): Promise<Resp
     body: formData,
   });
   if (response.status === 401) throw new HrApiError('Not signed in.', 401);
-  if (response.status === 403) throw new HrApiError(await extractErrorMessage(response, 'Forbidden.'), 403);
-  if (response.status === 400) throw new HrApiError(await extractErrorMessage(response, 'Invalid request.'), 400);
-  if (!response.ok) throw new HrApiError(await extractErrorMessage(response, `Failed (${response.status}).`), response.status);
+  if (response.status === 403)
+    throw new HrApiError(await extractErrorMessage(response, 'Forbidden.'), 403);
+  if (response.status === 400)
+    throw new HrApiError(await extractErrorMessage(response, 'Invalid request.'), 400);
+  if (!response.ok)
+    throw new HrApiError(
+      await extractErrorMessage(response, `Failed (${response.status}).`),
+      response.status,
+    );
   return response;
 }
 
@@ -135,7 +175,10 @@ export async function getLeaveBalances(employeeId: string, year?: number): Promi
   return res.json();
 }
 
-export async function initLeaveBalances(employeeId: string, year: number): Promise<{ created: number }> {
+export async function initLeaveBalances(
+  employeeId: string,
+  year: number,
+): Promise<{ created: number }> {
   const res = await authFetchMutate('/hr/leave/balances/init', 'POST', { employeeId, year });
   return res.json();
 }
@@ -151,23 +194,36 @@ export async function getLeaveApplication(id: string): Promise<LeaveApplication>
   return res.json();
 }
 
-export async function createLeaveApplication(data: Record<string, unknown>): Promise<LeaveApplication> {
+export async function createLeaveApplication(
+  data: Record<string, unknown>,
+): Promise<LeaveApplication> {
   const res = await authFetchMutate('/hr/leave/applications', 'POST', data);
   return res.json();
 }
 
 export async function approveLeave(id: string, expectedVersion: number): Promise<LeaveApplication> {
-  const res = await authFetchMutate(`/hr/leave/applications/${id}/approve`, 'PATCH', { expectedVersion });
+  const res = await authFetchMutate(`/hr/leave/applications/${id}/approve`, 'PATCH', {
+    expectedVersion,
+  });
   return res.json();
 }
 
-export async function rejectLeave(id: string, expectedVersion: number, rejectionReason: string): Promise<LeaveApplication> {
-  const res = await authFetchMutate(`/hr/leave/applications/${id}/reject`, 'PATCH', { expectedVersion, rejectionReason });
+export async function rejectLeave(
+  id: string,
+  expectedVersion: number,
+  rejectionReason: string,
+): Promise<LeaveApplication> {
+  const res = await authFetchMutate(`/hr/leave/applications/${id}/reject`, 'PATCH', {
+    expectedVersion,
+    rejectionReason,
+  });
   return res.json();
 }
 
 export async function cancelLeave(id: string, expectedVersion: number): Promise<LeaveApplication> {
-  const res = await authFetchMutate(`/hr/leave/applications/${id}/cancel`, 'PATCH', { expectedVersion });
+  const res = await authFetchMutate(`/hr/leave/applications/${id}/cancel`, 'PATCH', {
+    expectedVersion,
+  });
   return res.json();
 }
 
@@ -189,7 +245,11 @@ export async function getDtrUploads(): Promise<DtrUpload[]> {
   return res.json();
 }
 
-export async function uploadDtrExcel(file: File, periodStart: string, periodEnd: string): Promise<DtrUpload> {
+export async function uploadDtrExcel(
+  file: File,
+  periodStart: string,
+  periodEnd: string,
+): Promise<DtrUpload> {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('periodStart', periodStart);
@@ -210,7 +270,10 @@ export async function createAllowanceType(data: Record<string, unknown>): Promis
   return res.json();
 }
 
-export async function updateAllowanceType(id: string, data: Record<string, unknown>): Promise<AllowanceType> {
+export async function updateAllowanceType(
+  id: string,
+  data: Record<string, unknown>,
+): Promise<AllowanceType> {
   const res = await authFetchMutate(`/hr/compensation/allowance-types/${id}`, 'PATCH', data);
   return res.json();
 }
@@ -225,7 +288,10 @@ export async function createDeductionType(data: Record<string, unknown>): Promis
   return res.json();
 }
 
-export async function updateDeductionType(id: string, data: Record<string, unknown>): Promise<DeductionType> {
+export async function updateDeductionType(
+  id: string,
+  data: Record<string, unknown>,
+): Promise<DeductionType> {
   const res = await authFetchMutate(`/hr/compensation/deduction-types/${id}`, 'PATCH', data);
   return res.json();
 }
@@ -235,12 +301,17 @@ export async function getEmployeeAllowances(employeeId: string): Promise<Employe
   return res.json();
 }
 
-export async function createEmployeeAllowance(data: Record<string, unknown>): Promise<EmployeeAllowance> {
+export async function createEmployeeAllowance(
+  data: Record<string, unknown>,
+): Promise<EmployeeAllowance> {
   const res = await authFetchMutate('/hr/compensation/employee-allowances', 'POST', data);
   return res.json();
 }
 
-export async function updateEmployeeAllowance(id: string, data: Record<string, unknown>): Promise<EmployeeAllowance> {
+export async function updateEmployeeAllowance(
+  id: string,
+  data: Record<string, unknown>,
+): Promise<EmployeeAllowance> {
   const res = await authFetchMutate(`/hr/compensation/employee-allowances/${id}`, 'PATCH', data);
   return res.json();
 }
@@ -250,12 +321,17 @@ export async function getEmployeeDeductions(employeeId: string): Promise<Employe
   return res.json();
 }
 
-export async function createEmployeeDeduction(data: Record<string, unknown>): Promise<EmployeeDeduction> {
+export async function createEmployeeDeduction(
+  data: Record<string, unknown>,
+): Promise<EmployeeDeduction> {
   const res = await authFetchMutate('/hr/compensation/employee-deductions', 'POST', data);
   return res.json();
 }
 
-export async function updateEmployeeDeduction(id: string, data: Record<string, unknown>): Promise<EmployeeDeduction> {
+export async function updateEmployeeDeduction(
+  id: string,
+  data: Record<string, unknown>,
+): Promise<EmployeeDeduction> {
   const res = await authFetchMutate(`/hr/compensation/employee-deductions/${id}`, 'PATCH', data);
   return res.json();
 }
@@ -273,7 +349,10 @@ export async function createPayrollPeriod(data: Record<string, unknown>): Promis
   return res.json();
 }
 
-export async function lockPayrollPeriod(id: string, expectedVersion: number): Promise<PayrollPeriod> {
+export async function lockPayrollPeriod(
+  id: string,
+  expectedVersion: number,
+): Promise<PayrollPeriod> {
   const res = await authFetchMutate(`/hr/payroll/periods/${id}/lock`, 'PATCH', { expectedVersion });
   return res.json();
 }
@@ -309,8 +388,15 @@ export async function payPayroll(id: string, expectedVersion: number): Promise<P
   return res.json();
 }
 
-export async function voidPayroll(id: string, expectedVersion: number, voidReason: string): Promise<PayrollRun> {
-  const res = await authFetchMutate(`/hr/payroll/runs/${id}/void`, 'PATCH', { expectedVersion, voidReason });
+export async function voidPayroll(
+  id: string,
+  expectedVersion: number,
+  voidReason: string,
+): Promise<PayrollRun> {
+  const res = await authFetchMutate(`/hr/payroll/runs/${id}/void`, 'PATCH', {
+    expectedVersion,
+    voidReason,
+  });
   return res.json();
 }
 
@@ -322,7 +408,10 @@ export async function getRemittanceSummary(params?: string): Promise<RemittanceS
   return res.json();
 }
 
-export async function getRemittanceAgencyDetail(code: string, params?: string): Promise<RemittanceAgencyDetail> {
+export async function getRemittanceAgencyDetail(
+  code: string,
+  params?: string,
+): Promise<RemittanceAgencyDetail> {
   const qs = params ? `?${params}` : '';
   const res = await authFetch(`/hr/remittances/agency/${code}${qs}`);
   return res.json();

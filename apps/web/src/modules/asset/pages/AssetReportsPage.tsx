@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+
 import { getDepreciationSchedule, getCategories } from '../api';
 import type { DepreciationScheduleItem, AssetCategory } from '../types';
+
 import AssetSubNav from './AssetSubNav';
 import '../asset.css';
 
@@ -27,12 +29,20 @@ export default function AssetReportsPage() {
       .finally(() => setLoading(false));
   }, [categoryFilter]);
 
-  useEffect(() => { getCategories().then(setCategories).catch(() => {}); }, []);
+  useEffect(() => {
+    getCategories()
+      .then(setCategories)
+      .catch(() => {});
+  }, []);
 
   function setFilter(value: string) {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      if (value) { next.set('categoryId', value); } else { next.delete('categoryId'); }
+      if (value) {
+        next.set('categoryId', value);
+      } else {
+        next.delete('categoryId');
+      }
       return next;
     });
   }
@@ -51,10 +61,17 @@ export default function AssetReportsPage() {
       {error && <div className="am-error">{error}</div>}
 
       <div className="am-filters">
-        <select className="am-select" value={categoryFilter} onChange={(e) => setFilter(e.target.value)}>
+        <select
+          className="am-select"
+          value={categoryFilter}
+          onChange={(e) => setFilter(e.target.value)}
+          style={{ width: '100%', maxWidth: 240, boxSizing: 'border-box' }}
+        >
           <option value="">All Categories</option>
           {categories.map((cat) => (
-            <option key={cat.id} value={cat.id}>{cat.code} — {cat.name}</option>
+            <option key={cat.id} value={cat.id}>
+              {cat.code} — {cat.name}
+            </option>
           ))}
         </select>
       </div>
@@ -107,8 +124,12 @@ export default function AssetReportsPage() {
                     <td>{item.category}</td>
                     <td style={{ textAlign: 'right' }}>{formatCurrency(item.acquisitionCost)}</td>
                     <td style={{ textAlign: 'right' }}>{formatCurrency(item.salvageValue)}</td>
-                    <td style={{ textAlign: 'right' }}>{formatCurrency(item.monthlyDepreciation)}</td>
-                    <td style={{ textAlign: 'right' }}>{formatCurrency(item.accumulatedDepreciation)}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      {formatCurrency(item.monthlyDepreciation)}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      {formatCurrency(item.accumulatedDepreciation)}
+                    </td>
                     <td style={{ textAlign: 'right' }}>{formatCurrency(item.bookValue)}</td>
                     <td style={{ textAlign: 'right' }}>{item.remainingLife ?? '—'}</td>
                   </tr>

@@ -4,13 +4,12 @@ import { Link } from 'react-router-dom';
 import { formatPeso } from '../../budgeting/format-peso';
 import { listOrs, ProcurementApiError } from '../api';
 import type { Ors, OrsStatus } from '../types';
+
 import { ProcurementSubNav } from './ProcurementSubNav';
 import './procurement.css';
 
 type LoadState =
-  | { status: 'loading' }
-  | { status: 'error'; message: string }
-  | { status: 'loaded'; data: Ors[] };
+  { status: 'loading' } | { status: 'error'; message: string } | { status: 'loaded'; data: Ors[] };
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: '', label: 'All statuses' },
@@ -45,11 +44,19 @@ export function OrsListPage() {
     let cancelled = false;
     setState({ status: 'loading' });
     listOrs(statusFilter ? { status: statusFilter } : undefined)
-      .then((data) => { if (!cancelled) setState({ status: 'loaded', data }); })
+      .then((data) => {
+        if (!cancelled) setState({ status: 'loaded', data });
+      })
       .catch((e) => {
-        if (!cancelled) setState({ status: 'error', message: e instanceof ProcurementApiError ? e.message : 'Failed to load ORS.' });
+        if (!cancelled)
+          setState({
+            status: 'error',
+            message: e instanceof ProcurementApiError ? e.message : 'Failed to load ORS.',
+          });
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [statusFilter]);
 
   return (
@@ -60,7 +67,9 @@ export function OrsListPage() {
       <div className="pr-toolbar">
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           {STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
           ))}
         </select>
       </div>
@@ -71,58 +80,63 @@ export function OrsListPage() {
         <div className="pr-empty">No ORS records found.</div>
       )}
       {state.status === 'loaded' && state.data.length > 0 && (
-        <table className="pr-table">
-          <thead>
-            <tr>
-              <th>ORS No.</th>
-              <th>CAF No.</th>
-              <th>PR No.</th>
-              <th>Original Amt</th>
-              <th>Adjusted Amt</th>
-              <th>Remaining</th>
-              <th>Status</th>
-              <th>Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {state.data.map((ors) => (
-              <tr key={ors.id}>
-                <td>
-                  <Link to={`/procurement/ors/${ors.id}`} className="pr-table__link">
-                    {ors.orsNumber}
-                  </Link>
-                </td>
-                <td>
-                  <Link to={`/procurement/cafs/${ors.caf.id}`} className="pr-table__link">
-                    {ors.caf.cafNumber}
-                  </Link>
-                </td>
-                <td>
-                  <Link to={`/procurement/purchase-requests/${ors.purchaseRequest.id}`} className="pr-table__link">
-                    {ors.purchaseRequest.prNumber}
-                  </Link>
-                </td>
-                <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                  {formatPeso(ors.originalAmount)}
-                </td>
-                <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                  {formatPeso(ors.adjustedAmount)}
-                </td>
-                <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                  {formatPeso(ors.remainingUnpaid)}
-                </td>
-                <td>
-                  <span className={`pr-badge pr-badge--${ors.status}`}>
-                    {STATUS_LABELS[ors.status] ?? ors.status}
-                  </span>
-                </td>
-                <td style={{ fontSize: 12, color: '#667085' }}>
-                  {new Date(ors.orsDate).toLocaleDateString()}
-                </td>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="pr-table">
+            <thead>
+              <tr>
+                <th>ORS No.</th>
+                <th>CAF No.</th>
+                <th>PR No.</th>
+                <th>Original Amt</th>
+                <th>Adjusted Amt</th>
+                <th>Remaining</th>
+                <th>Status</th>
+                <th>Date</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {state.data.map((ors) => (
+                <tr key={ors.id}>
+                  <td>
+                    <Link to={`/procurement/ors/${ors.id}`} className="pr-table__link">
+                      {ors.orsNumber}
+                    </Link>
+                  </td>
+                  <td>
+                    <Link to={`/procurement/cafs/${ors.caf.id}`} className="pr-table__link">
+                      {ors.caf.cafNumber}
+                    </Link>
+                  </td>
+                  <td>
+                    <Link
+                      to={`/procurement/purchase-requests/${ors.purchaseRequest.id}`}
+                      className="pr-table__link"
+                    >
+                      {ors.purchaseRequest.prNumber}
+                    </Link>
+                  </td>
+                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    {formatPeso(ors.originalAmount)}
+                  </td>
+                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    {formatPeso(ors.adjustedAmount)}
+                  </td>
+                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    {formatPeso(ors.remainingUnpaid)}
+                  </td>
+                  <td>
+                    <span className={`pr-badge pr-badge--${ors.status}`}>
+                      {STATUS_LABELS[ors.status] ?? ors.status}
+                    </span>
+                  </td>
+                  <td style={{ fontSize: 12, color: '#667085' }}>
+                    {new Date(ors.orsDate).toLocaleDateString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

@@ -1,12 +1,23 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
-import { CreateJevDto, PostJevDto, UpdateJevDto, VoidJevDto } from './dto/jev.dto';
-import { JevService } from './jev.service';
+
+import type { CreateJevDto, PostJevDto, ReverseJevDto, UpdateJevDto, VoidJevDto } from './dto/jev.dto';
+import type { JevService } from './jev.service';
 
 @Controller('accounting/jev')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -46,19 +57,13 @@ export class JevController {
 
   @Get(':id')
   @RequirePermissions('accounting.read')
-  findOne(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
+  findOne(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.jevService.findOne(user.organizationId, id);
   }
 
   @Post()
   @RequirePermissions('accounting.jev.create')
-  create(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body() dto: CreateJevDto,
-  ) {
+  create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateJevDto) {
     return this.jevService.create(user.organizationId, user.userId, dto);
   }
 
@@ -82,6 +87,16 @@ export class JevController {
     return this.jevService.submit(user.organizationId, id, user.userId, dto.expectedVersion);
   }
 
+  @Post(':id/approve')
+  @RequirePermissions('accounting.jev.approve')
+  approve(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PostJevDto,
+  ) {
+    return this.jevService.approve(user.organizationId, id, user.userId, dto.expectedVersion);
+  }
+
   @Post(':id/post')
   @RequirePermissions('accounting.jev.post')
   post(
@@ -100,5 +115,15 @@ export class JevController {
     @Body() dto: VoidJevDto,
   ) {
     return this.jevService.void(user.organizationId, id, user.userId, dto);
+  }
+
+  @Post(':id/reverse')
+  @RequirePermissions('accounting.jev.reverse')
+  reverse(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReverseJevDto,
+  ) {
+    return this.jevService.reverse(user.organizationId, id, user.userId, dto);
   }
 }

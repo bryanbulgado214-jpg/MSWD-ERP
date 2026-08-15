@@ -256,3 +256,24 @@
   color: #98a2b3;
   margin-top: 4px;
 }
+
+/* Demonstration banner + district name in the top bar */
+.app-demo-banner {
+  background: repeating-linear-gradient(45deg, #fef0c7, #fef0c7 12px, #fedf89 12px, #fedf89 24px);
+  color: #7a2e0e;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-align: center;
+  padding: 4px 8px;
+  border-bottom: 1px solid #f79009;
+  text-transform: uppercase;
+}
+.app-nav__org {
+  font-weight: 500;
+  opacity: 0.8;
+  font-size: 13px;
+}
+@media print {
+  .app-demo-banner { background: #fff; color: #7a2e0e; }
+}

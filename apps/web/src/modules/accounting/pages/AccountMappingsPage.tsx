@@ -8,13 +8,12 @@ import {
   upsertAccountMapping,
 } from '../api';
 import type { AccountMapping, ChartOfAccount } from '../types';
+
 import { AccountingSubNav } from './AccountingSubNav';
 import './accounting.css';
 
 type LoadState<T> =
-  | { status: 'loading' }
-  | { status: 'error'; message: string }
-  | { status: 'loaded'; data: T };
+  { status: 'loading' } | { status: 'error'; message: string } | { status: 'loaded'; data: T };
 
 const STANDARD_MAPPINGS = [
   { key: 'ap.accounts_payable', label: 'Accounts Payable' },
@@ -50,11 +49,16 @@ export default function AccountMappingsPage() {
       setMappings({ status: 'loaded', data: m });
       setAccounts(a.filter((x) => !x.isHeader));
     } catch (e) {
-      setMappings({ status: 'error', message: e instanceof AccountingApiError ? e.message : 'Failed to load.' });
+      setMappings({
+        status: 'error',
+        message: e instanceof AccountingApiError ? e.message : 'Failed to load.',
+      });
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   async function handleMap(mappingKey: string, chartOfAccountId: string) {
     if (!chartOfAccountId) return;
@@ -80,8 +84,8 @@ export default function AccountMappingsPage() {
       <AccountingSubNav />
       <h1>Account Mappings</h1>
       <p style={{ color: '#667085', fontSize: 13, marginBottom: 20 }}>
-        Configure which COA account is used for each transaction type.
-        This avoids hardcoding UACS codes in integrations.
+        Configure which COA account is used for each transaction type. This avoids hardcoding UACS
+        codes in integrations.
       </p>
 
       {error && <div className="acct-error">{error}</div>}
@@ -104,12 +108,16 @@ export default function AccountMappingsPage() {
                 const existing = mappingMap.get(sm.key);
                 return (
                   <tr key={sm.key}>
-                    <td className="acct-text-mono" style={{ fontSize: 12 }}>{sm.key}</td>
+                    <td className="acct-text-mono" style={{ fontSize: 12 }}>
+                      {sm.key}
+                    </td>
                     <td style={{ fontWeight: 500 }}>{sm.label}</td>
                     <td>
                       {existing ? (
                         <span>
-                          <span className="acct-text-mono">{existing.chartOfAccount.accountCode}</span>
+                          <span className="acct-text-mono">
+                            {existing.chartOfAccount.accountCode}
+                          </span>
                           {' — '}
                           {existing.chartOfAccount.name}
                         </span>
@@ -120,7 +128,13 @@ export default function AccountMappingsPage() {
                     {canManage && (
                       <td>
                         <select
-                          style={{ fontSize: 12, padding: '4px 8px' }}
+                          style={{
+                            fontSize: 12,
+                            padding: '4px 8px',
+                            width: '100%',
+                            maxWidth: 340,
+                            boxSizing: 'border-box',
+                          }}
                           value={existing?.chartOfAccount.id ?? ''}
                           onChange={(e) => handleMap(sm.key, e.target.value)}
                           disabled={saving === sm.key}

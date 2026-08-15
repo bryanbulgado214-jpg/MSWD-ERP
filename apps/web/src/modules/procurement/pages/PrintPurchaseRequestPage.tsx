@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
+import { useAuth } from '../../../app/auth';
 import { formatPeso } from '../../budgeting/format-peso';
 import { getPurchaseRequest, ProcurementApiError } from '../api';
 import type { PurchaseRequest } from '../types';
@@ -8,6 +9,7 @@ import './print-pr.css';
 
 export function PrintPurchaseRequestPage() {
   const { id } = useParams<{ id: string }>();
+  const { organization } = useAuth();
   const [pr, setPr] = useState<PurchaseRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,7 +22,6 @@ export function PrintPurchaseRequestPage() {
       );
   }, [id]);
 
-
   if (error) {
     return (
       <div className="print-error">
@@ -31,15 +32,18 @@ export function PrintPurchaseRequestPage() {
   }
 
   if (!pr) {
-    return <div className="print-error"><p>Loading...</p></div>;
+    return (
+      <div className="print-error">
+        <p>Loading...</p>
+      </div>
+    );
   }
 
-  const rcName = pr.responsibilityCenter?.code
-    ?? pr.budgetRelease?.budgetHeader?.responsibilityCenter?.code
-    ?? '';
-  const fundCluster = pr.fundSource?.name
-    ?? pr.budgetRelease?.budgetHeader?.fundSource?.name
-    ?? '';
+  const rcName =
+    pr.responsibilityCenter?.code ??
+    pr.budgetRelease?.budgetHeader?.responsibilityCenter?.code ??
+    '';
+  const fundCluster = pr.fundSource?.name ?? pr.budgetRelease?.budgetHeader?.fundSource?.name ?? '';
   const officeName = pr.department?.name ?? '';
 
   const prDate = new Date(pr.createdAt).toLocaleDateString('en-PH', {
@@ -66,7 +70,9 @@ export function PrintPurchaseRequestPage() {
           <div className="pr-print-header__row">
             <div className="pr-print-header__left">
               <span className="pr-print-label">Entity Name: </span>
-              <span className="pr-print-value pr-print-value--bold">METRO SIQUIJOR WATER DISTRICT</span>
+              <span className="pr-print-value pr-print-value--bold">
+                {(organization?.name ?? 'Sta. Barbara Water District').toUpperCase()}
+              </span>
             </div>
             <div className="pr-print-header__right">
               <span className="pr-print-label">Fund Cluster: </span>
@@ -112,12 +118,26 @@ export function PrintPurchaseRequestPage() {
         <table className="pr-print-table">
           <thead>
             <tr>
-              <th className="pr-print-th" style={{ width: '12%' }}>Stock/<br />Property No.</th>
-              <th className="pr-print-th" style={{ width: '8%' }}>Unit</th>
-              <th className="pr-print-th" style={{ width: '36%' }}>Item Description</th>
-              <th className="pr-print-th" style={{ width: '10%' }}>Quantity</th>
-              <th className="pr-print-th" style={{ width: '15%' }}>Unit Cost</th>
-              <th className="pr-print-th" style={{ width: '19%' }}>Total Cost</th>
+              <th className="pr-print-th" style={{ width: '12%' }}>
+                Stock/
+                <br />
+                Property No.
+              </th>
+              <th className="pr-print-th" style={{ width: '8%' }}>
+                Unit
+              </th>
+              <th className="pr-print-th" style={{ width: '36%' }}>
+                Item Description
+              </th>
+              <th className="pr-print-th" style={{ width: '10%' }}>
+                Quantity
+              </th>
+              <th className="pr-print-th" style={{ width: '15%' }}>
+                Unit Cost
+              </th>
+              <th className="pr-print-th" style={{ width: '19%' }}>
+                Total Cost
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -129,8 +149,12 @@ export function PrintPurchaseRequestPage() {
                 <td className="pr-print-td pr-print-td--center">
                   {parseFloat(item.quantity).toLocaleString()}
                 </td>
-                <td className="pr-print-td pr-print-td--right">{formatPeso(item.estimatedUnitCost)}</td>
-                <td className="pr-print-td pr-print-td--right">{formatPeso(item.estimatedTotalCost)}</td>
+                <td className="pr-print-td pr-print-td--right">
+                  {formatPeso(item.estimatedUnitCost)}
+                </td>
+                <td className="pr-print-td pr-print-td--right">
+                  {formatPeso(item.estimatedTotalCost)}
+                </td>
               </tr>
             ))}
             {Array.from({ length: emptyRows }).map((_, idx) => (
@@ -146,7 +170,9 @@ export function PrintPurchaseRequestPage() {
           </tbody>
           <tfoot>
             <tr>
-              <td className="pr-print-td" colSpan={4}>&nbsp;</td>
+              <td className="pr-print-td" colSpan={4}>
+                &nbsp;
+              </td>
               <td className="pr-print-td pr-print-td--right pr-print-td--bold">Total:</td>
               <td className="pr-print-td pr-print-td--right pr-print-td--bold">
                 {formatPeso(pr.totalAmount)}
@@ -158,9 +184,7 @@ export function PrintPurchaseRequestPage() {
         {/* Purpose */}
         <div className="pr-print-purpose">
           <span className="pr-print-label">Purpose: </span>
-          <span className="pr-print-value">
-            {pr.purpose || pr.description || pr.title}
-          </span>
+          <span className="pr-print-value">{pr.purpose || pr.description || pr.title}</span>
         </div>
 
         {/* Signature Section */}
@@ -181,9 +205,7 @@ export function PrintPurchaseRequestPage() {
               </div>
               <div className="pr-print-sig-row">
                 <span className="pr-print-sig-label">Designation :</span>
-                <span className="pr-print-sig-desg">
-                  {pr.department?.name ?? ''}
-                </span>
+                <span className="pr-print-sig-desg">{pr.department?.name ?? ''}</span>
               </div>
             </div>
           </div>

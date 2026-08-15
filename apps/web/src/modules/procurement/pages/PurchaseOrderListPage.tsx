@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { formatPeso } from '../../budgeting/format-peso';
 import { listPurchaseOrders, ProcurementApiError } from '../api';
 import type { PurchaseOrder, PurchaseOrderStatus } from '../types';
+
 import { ProcurementSubNav } from './ProcurementSubNav';
 import './procurement.css';
 
@@ -51,15 +52,21 @@ export function PurchaseOrderListPage() {
     listPurchaseOrders(apiStatus ? { status: apiStatus } : undefined)
       .then((data) => {
         if (cancelled) return;
-        const filtered = statusFilter === 'active'
-          ? data.filter((po) => po.status !== 'cancelled')
-          : data;
+        const filtered =
+          statusFilter === 'active' ? data.filter((po) => po.status !== 'cancelled') : data;
         setState({ status: 'loaded', data: filtered });
       })
       .catch((e) => {
-        if (!cancelled) setState({ status: 'error', message: e instanceof ProcurementApiError ? e.message : 'Failed to load Purchase Orders.' });
+        if (!cancelled)
+          setState({
+            status: 'error',
+            message:
+              e instanceof ProcurementApiError ? e.message : 'Failed to load Purchase Orders.',
+          });
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [statusFilter]);
 
   return (
@@ -70,7 +77,9 @@ export function PurchaseOrderListPage() {
       <div className="pr-toolbar">
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           {STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
           ))}
         </select>
       </div>
@@ -81,46 +90,51 @@ export function PurchaseOrderListPage() {
         <div className="pr-empty">No purchase orders found.</div>
       )}
       {state.status === 'loaded' && state.data.length > 0 && (
-        <table className="pr-table">
-          <thead>
-            <tr>
-              <th>PO No.</th>
-              <th>PR No.</th>
-              <th>Supplier</th>
-              <th>Contract Amount</th>
-              <th>Status</th>
-              <th>PO Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {state.data.map((po) => (
-              <tr key={po.id}>
-                <td>
-                  <Link to={`/procurement/purchase-orders/${po.id}`} className="pr-table__link">
-                    {po.poNumber}
-                  </Link>
-                </td>
-                <td>
-                  <Link to={`/procurement/purchase-requests/${po.purchaseRequest.id}`} className="pr-table__link">
-                    {po.purchaseRequest.prNumber}
-                  </Link>
-                </td>
-                <td>{po.supplier.name}</td>
-                <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                  {formatPeso(po.contractAmount)}
-                </td>
-                <td>
-                  <span className={`pr-badge pr-badge--${po.status}`}>
-                    {STATUS_LABELS[po.status] ?? po.status}
-                  </span>
-                </td>
-                <td style={{ fontSize: 12, color: '#667085' }}>
-                  {new Date(po.poDate).toLocaleDateString()}
-                </td>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="pr-table">
+            <thead>
+              <tr>
+                <th>PO No.</th>
+                <th>PR No.</th>
+                <th>Supplier</th>
+                <th>Contract Amount</th>
+                <th>Status</th>
+                <th>PO Date</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {state.data.map((po) => (
+                <tr key={po.id}>
+                  <td>
+                    <Link to={`/procurement/purchase-orders/${po.id}`} className="pr-table__link">
+                      {po.poNumber}
+                    </Link>
+                  </td>
+                  <td>
+                    <Link
+                      to={`/procurement/purchase-requests/${po.purchaseRequest.id}`}
+                      className="pr-table__link"
+                    >
+                      {po.purchaseRequest.prNumber}
+                    </Link>
+                  </td>
+                  <td>{po.supplier.name}</td>
+                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    {formatPeso(po.contractAmount)}
+                  </td>
+                  <td>
+                    <span className={`pr-badge pr-badge--${po.status}`}>
+                      {STATUS_LABELS[po.status] ?? po.status}
+                    </span>
+                  </td>
+                  <td style={{ fontSize: 12, color: '#667085' }}>
+                    {new Date(po.poDate).toLocaleDateString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

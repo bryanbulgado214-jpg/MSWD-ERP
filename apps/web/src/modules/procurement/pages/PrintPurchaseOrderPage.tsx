@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
+import { GovLetterhead } from '../../../app/GovLetterhead';
 import { formatPeso } from '../../budgeting/format-peso';
 import { getPurchaseOrder } from '../api';
 import type { PurchaseOrder } from '../types';
@@ -13,19 +14,24 @@ export function PrintPurchaseOrderPage() {
 
   useEffect(() => {
     if (!id) return;
-    getPurchaseOrder(id).then(setPo).catch((e) => setError(e.message));
+    getPurchaseOrder(id)
+      .then(setPo)
+      .catch((e) => setError(e.message));
   }, [id]);
 
   if (error) return <div style={{ padding: 32, color: '#b42318' }}>{error}</div>;
   if (!po) return <div style={{ padding: 32, color: '#667085' }}>Loading...</div>;
 
-  const poDate = new Date(po.poDate).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
+  const poDate = new Date(po.poDate).toLocaleDateString('en-PH', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
 
   return (
     <div className="gov-print-page">
       <div className="gov-print-sheet">
-        <div className="gov-entity">METRO SIQUIJOR WATER DISTRICT</div>
-        <div className="gov-subtitle">Siquijor, Siquijor</div>
+        <GovLetterhead />
         <div className="gov-title">PURCHASE ORDER</div>
 
         <div className="gov-info-grid">
@@ -64,7 +70,8 @@ export function PrintPurchaseOrderPage() {
         </div>
 
         <p style={{ fontSize: '11pt', marginBottom: 8 }}>
-          Gentlemen: Please furnish this office the following articles subject to the terms and conditions contained herein:
+          Gentlemen: Please furnish this office the following articles subject to the terms and
+          conditions contained herein:
         </p>
 
         <div className="gov-info-grid" style={{ marginBottom: 8 }}>
@@ -78,7 +85,9 @@ export function PrintPurchaseOrderPage() {
           </div>
           <div className="gov-info-row">
             <span className="gov-info-label">Date of Delivery:</span>
-            <span className="gov-info-value">{po.awardDate ? new Date(po.awardDate).toLocaleDateString('en-PH') : ''}</span>
+            <span className="gov-info-value">
+              {po.awardDate ? new Date(po.awardDate).toLocaleDateString('en-PH') : ''}
+            </span>
           </div>
           <div className="gov-info-row">
             <span className="gov-info-label">Payment Term:</span>
@@ -107,13 +116,28 @@ export function PrintPurchaseOrderPage() {
               <td className="gov-right gov-mono gov-bold">{formatPeso(po.contractAmount)}</td>
             </tr>
             {Array.from({ length: 12 }).map((_, i) => (
-              <tr key={i}><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td></tr>
+              <tr key={i}>
+                <td>&nbsp;</td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+              </tr>
             ))}
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={5} className="gov-right gov-bold" style={{ borderTop: '2px solid #000' }}>TOTAL AMOUNT</td>
-              <td className="gov-right gov-mono gov-bold" style={{ borderTop: '2px solid #000' }}>{formatPeso(po.contractAmount)}</td>
+              <td
+                colSpan={5}
+                className="gov-right gov-bold"
+                style={{ borderTop: '2px solid #000' }}
+              >
+                TOTAL AMOUNT
+              </td>
+              <td className="gov-right gov-mono gov-bold" style={{ borderTop: '2px solid #000' }}>
+                {formatPeso(po.contractAmount)}
+              </td>
             </tr>
           </tfoot>
         </table>
@@ -140,7 +164,11 @@ export function PrintPurchaseOrderPage() {
               <div className="gov-sig-line"></div>
               <div className="gov-sig-name">{po.approver?.username?.toUpperCase() ?? ''}</div>
               <div className="gov-sig-title">General Manager</div>
-              {po.approvedAt && <div className="gov-sig-date">Date: {new Date(po.approvedAt).toLocaleDateString('en-PH')}</div>}
+              {po.approvedAt && (
+                <div className="gov-sig-date">
+                  Date: {new Date(po.approvedAt).toLocaleDateString('en-PH')}
+                </div>
+              )}
             </div>
           </div>
         </div>

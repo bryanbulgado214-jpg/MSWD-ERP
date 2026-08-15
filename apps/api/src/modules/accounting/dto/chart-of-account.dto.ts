@@ -1,4 +1,13 @@
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class CreateChartOfAccountDto {
   @IsString()
@@ -31,6 +40,12 @@ export class CreateChartOfAccountDto {
   @IsString()
   @MaxLength(30)
   uacsCode?: string;
+}
+
+export class ImportCoaCsvDto {
+  @IsString()
+  @IsNotEmpty()
+  csv!: string;
 }
 
 export class UpdateChartOfAccountDto {

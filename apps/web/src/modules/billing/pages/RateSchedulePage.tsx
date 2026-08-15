@@ -3,6 +3,7 @@ import { Fragment, useEffect, useState } from 'react';
 import { useAuth } from '../../../app/auth';
 import { BillingApiError, createRateSchedule, getRateSchedules, updateRateSchedule } from '../api';
 import type { ConsumerType, RateSchedule } from '../types';
+
 import BillingSubNav from './BillingSubNav';
 import './billing.css';
 
@@ -17,7 +18,13 @@ interface TierRow {
   ratePerCubicMeter: string;
 }
 
-const CONSUMER_TYPES: ConsumerType[] = ['residential', 'commercial', 'industrial', 'government', 'institutional'];
+const CONSUMER_TYPES: ConsumerType[] = [
+  'residential',
+  'commercial',
+  'industrial',
+  'government',
+  'institutional',
+];
 
 function formatPeso(val: string | number) {
   const num = typeof val === 'string' ? parseFloat(val) : val;
@@ -55,16 +62,25 @@ export default function RateSchedulePage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   function resetForm() {
-    setName(''); setConsumerType('residential'); setEffectiveDate('');
-    setEndDate(''); setMinimumCharge('0'); setMinimumConsumption('10');
-    setEnvironmentalFee('0'); setSewerCharge('0'); setMaintenanceFee('0');
-    setIsActive(true); setEditingId(''); setEditVersion(0);
+    setName('');
+    setConsumerType('residential');
+    setEffectiveDate('');
+    setEndDate('');
+    setMinimumCharge('0');
+    setMinimumConsumption('10');
+    setEnvironmentalFee('0');
+    setSewerCharge('0');
+    setMaintenanceFee('0');
+    setIsActive(true);
+    setEditingId('');
+    setEditVersion(0);
     setTiers([
       { minConsumption: '0', maxConsumption: '10', ratePerCubicMeter: '0' },
       { minConsumption: '11', maxConsumption: '20', ratePerCubicMeter: '0' },
       { minConsumption: '21', maxConsumption: '', ratePerCubicMeter: '0' },
     ]);
-    setFormError(''); setShowForm(false);
+    setFormError('');
+    setShowForm(false);
   }
 
   function startEdit(rs: RateSchedule) {
@@ -80,11 +96,13 @@ export default function RateSchedulePage() {
     setSewerCharge(rs.sewerCharge);
     setMaintenanceFee(rs.maintenanceFee);
     setIsActive(rs.isActive);
-    setTiers(rs.tiers.map((t) => ({
-      minConsumption: t.minConsumption,
-      maxConsumption: t.maxConsumption || '',
-      ratePerCubicMeter: t.ratePerCubicMeter,
-    })));
+    setTiers(
+      rs.tiers.map((t) => ({
+        minConsumption: t.minConsumption,
+        maxConsumption: t.maxConsumption || '',
+        ratePerCubicMeter: t.ratePerCubicMeter,
+      })),
+    );
     setFormError('');
     setShowForm(true);
   }
@@ -97,15 +115,21 @@ export default function RateSchedulePage() {
       const data = await getRateSchedules(qs || undefined);
       setState({ status: 'loaded', data });
     } catch (err) {
-      setState({ status: 'error', message: err instanceof BillingApiError ? err.message : 'Failed to load rate schedules.' });
+      setState({
+        status: 'error',
+        message: err instanceof BillingApiError ? err.message : 'Failed to load rate schedules.',
+      });
     }
   }
 
-  useEffect(() => { load(); }, [typeFilter]);
+  useEffect(() => {
+    load();
+  }, [typeFilter]);
 
   function addTier() {
     const lastTier = tiers[tiers.length - 1];
-    const nextMin = lastTier && lastTier.maxConsumption ? String(Number(lastTier.maxConsumption) + 1) : '0';
+    const nextMin =
+      lastTier && lastTier.maxConsumption ? String(Number(lastTier.maxConsumption) + 1) : '0';
     setTiers([...tiers, { minConsumption: nextMin, maxConsumption: '', ratePerCubicMeter: '0' }]);
   }
 
@@ -115,7 +139,7 @@ export default function RateSchedulePage() {
   }
 
   function updateTier(idx: number, field: keyof TierRow, value: string) {
-    setTiers(tiers.map((t, i) => i === idx ? { ...t, [field]: value } : t));
+    setTiers(tiers.map((t, i) => (i === idx ? { ...t, [field]: value } : t)));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -125,7 +149,9 @@ export default function RateSchedulePage() {
     try {
       const tierData = tiers.map((t, i) => ({
         minConsumption: Number(t.minConsumption),
-        ...(t.maxConsumption ? { maxConsumption: Number(t.maxConsumption) } : { maxConsumption: null }),
+        ...(t.maxConsumption
+          ? { maxConsumption: Number(t.maxConsumption) }
+          : { maxConsumption: null }),
         ratePerCubicMeter: Number(t.ratePerCubicMeter),
         sortOrder: i,
       }));
@@ -146,7 +172,9 @@ export default function RateSchedulePage() {
         });
       } else {
         await createRateSchedule({
-          name, consumerType, effectiveDate,
+          name,
+          consumerType,
+          effectiveDate,
           ...(endDate ? { endDate } : {}),
           minimumCharge: Number(minimumCharge),
           minimumConsumption: Number(minimumConsumption),
@@ -174,14 +202,19 @@ export default function RateSchedulePage() {
         <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
           <option value="">All Consumer Types</option>
           {CONSUMER_TYPES.map((t) => (
-            <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+            <option key={t} value={t}>
+              {t.charAt(0).toUpperCase() + t.slice(1)}
+            </option>
           ))}
         </select>
         {hasPermission('billing.rate.manage') && (
           <button
             className="bill-btn bill-btn--primary"
             type="button"
-            onClick={() => { if (showForm) resetForm(); else setShowForm(true); }}
+            onClick={() => {
+              if (showForm) resetForm();
+              else setShowForm(true);
+            }}
           >
             {showForm ? 'Cancel' : 'New Rate Schedule'}
           </button>
@@ -194,19 +227,35 @@ export default function RateSchedulePage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
             <div className="bill-field">
               <label>Name *</label>
-              <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Residential 2026" />
+              <input
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Residential 2026"
+              />
             </div>
             <div className="bill-field">
               <label>Consumer Type</label>
-              <select value={consumerType} onChange={(e) => setConsumerType(e.target.value)} disabled={!!editingId}>
+              <select
+                value={consumerType}
+                onChange={(e) => setConsumerType(e.target.value)}
+                disabled={!!editingId}
+              >
                 {CONSUMER_TYPES.map((t) => (
-                  <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                  <option key={t} value={t}>
+                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                  </option>
                 ))}
               </select>
             </div>
             <div className="bill-field">
               <label>Effective Date *</label>
-              <input type="date" required value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} />
+              <input
+                type="date"
+                required
+                value={effectiveDate}
+                onChange={(e) => setEffectiveDate(e.target.value)}
+              />
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '12px' }}>
@@ -216,35 +265,72 @@ export default function RateSchedulePage() {
             </div>
             <div className="bill-field">
               <label>Minimum Charge</label>
-              <input type="number" step="0.01" min="0" value={minimumCharge} onChange={(e) => setMinimumCharge(e.target.value)} />
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={minimumCharge}
+                onChange={(e) => setMinimumCharge(e.target.value)}
+              />
             </div>
             <div className="bill-field">
               <label>Min. Consumption (cu.m.)</label>
-              <input type="number" step="0.01" min="0" value={minimumConsumption} onChange={(e) => setMinimumConsumption(e.target.value)} />
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={minimumConsumption}
+                onChange={(e) => setMinimumConsumption(e.target.value)}
+              />
             </div>
             <div className="bill-field">
               <label>Environmental Fee</label>
-              <input type="number" step="0.01" min="0" value={environmentalFee} onChange={(e) => setEnvironmentalFee(e.target.value)} />
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={environmentalFee}
+                onChange={(e) => setEnvironmentalFee(e.target.value)}
+              />
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
             <div className="bill-field">
               <label>Sewer Charge</label>
-              <input type="number" step="0.01" min="0" value={sewerCharge} onChange={(e) => setSewerCharge(e.target.value)} />
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={sewerCharge}
+                onChange={(e) => setSewerCharge(e.target.value)}
+              />
             </div>
             <div className="bill-field">
               <label>Maintenance Fee</label>
-              <input type="number" step="0.01" min="0" value={maintenanceFee} onChange={(e) => setMaintenanceFee(e.target.value)} />
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={maintenanceFee}
+                onChange={(e) => setMaintenanceFee(e.target.value)}
+              />
             </div>
             {editingId && (
               <div className="bill-checkbox-row" style={{ alignSelf: 'end', marginBottom: '14px' }}>
-                <input type="checkbox" id="isActive" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  id="isActive"
+                  checked={isActive}
+                  onChange={(e) => setIsActive(e.target.checked)}
+                />
                 <label htmlFor="isActive">Active</label>
               </div>
             )}
           </div>
 
-          <h3 className="bill-section-title" style={{ marginTop: '16px' }}>Rate Tiers</h3>
+          <h3 className="bill-section-title" style={{ marginTop: '16px' }}>
+            Rate Tiers
+          </h3>
           <table className="bill-table" style={{ marginBottom: '12px' }}>
             <thead>
               <tr>
@@ -259,32 +345,63 @@ export default function RateSchedulePage() {
                 <tr key={idx}>
                   <td>
                     <input
-                      type="number" step="0.01" min="0" required
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      required
                       value={tier.minConsumption}
                       onChange={(e) => updateTier(idx, 'minConsumption', e.target.value)}
-                      style={{ width: '100%', padding: '6px 8px', border: '1px solid #d0d5dd', borderRadius: '4px', fontSize: '13px' }}
+                      style={{
+                        width: '100%',
+                        padding: '6px 8px',
+                        border: '1px solid #d0d5dd',
+                        borderRadius: '4px',
+                        fontSize: '13px',
+                      }}
                     />
                   </td>
                   <td>
                     <input
-                      type="number" step="0.01" min="0"
+                      type="number"
+                      step="0.01"
+                      min="0"
                       value={tier.maxConsumption}
                       onChange={(e) => updateTier(idx, 'maxConsumption', e.target.value)}
                       placeholder="No limit"
-                      style={{ width: '100%', padding: '6px 8px', border: '1px solid #d0d5dd', borderRadius: '4px', fontSize: '13px' }}
+                      style={{
+                        width: '100%',
+                        padding: '6px 8px',
+                        border: '1px solid #d0d5dd',
+                        borderRadius: '4px',
+                        fontSize: '13px',
+                      }}
                     />
                   </td>
                   <td>
                     <input
-                      type="number" step="0.0001" min="0" required
+                      type="number"
+                      step="0.0001"
+                      min="0"
+                      required
                       value={tier.ratePerCubicMeter}
                       onChange={(e) => updateTier(idx, 'ratePerCubicMeter', e.target.value)}
-                      style={{ width: '100%', padding: '6px 8px', border: '1px solid #d0d5dd', borderRadius: '4px', fontSize: '13px' }}
+                      style={{
+                        width: '100%',
+                        padding: '6px 8px',
+                        border: '1px solid #d0d5dd',
+                        borderRadius: '4px',
+                        fontSize: '13px',
+                      }}
                     />
                   </td>
                   <td>
                     {tiers.length > 1 && (
-                      <button type="button" className="bill-btn bill-btn--danger" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={() => removeTier(idx)}>
+                      <button
+                        type="button"
+                        className="bill-btn bill-btn--danger"
+                        style={{ padding: '4px 8px', fontSize: '11px' }}
+                        onClick={() => removeTier(idx)}
+                      >
                         Remove
                       </button>
                     )}
@@ -293,10 +410,19 @@ export default function RateSchedulePage() {
               ))}
             </tbody>
           </table>
-          <button type="button" className="bill-btn" onClick={addTier} style={{ marginBottom: '12px' }}>+ Add Tier</button>
+          <button
+            type="button"
+            className="bill-btn"
+            onClick={addTier}
+            style={{ marginBottom: '12px' }}
+          >
+            + Add Tier
+          </button>
 
           <div className="bill-form-actions">
-            <button type="button" className="bill-btn" onClick={resetForm}>Cancel</button>
+            <button type="button" className="bill-btn" onClick={resetForm}>
+              Cancel
+            </button>
             <button type="submit" className="bill-btn bill-btn--primary" disabled={saving}>
               {saving ? 'Saving...' : editingId ? 'Update Schedule' : 'Create Schedule'}
             </button>
@@ -310,86 +436,122 @@ export default function RateSchedulePage() {
         <div className="bill-empty">No rate schedules configured.</div>
       )}
       {state.status === 'loaded' && state.data.length > 0 && (
-        <table className="bill-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Type</th>
-              <th>Effective</th>
-              <th>Min. Charge</th>
-              <th>Min. cu.m.</th>
-              <th>Tiers</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {state.data.map((rs) => (
-              <Fragment key={rs.id}>
-                <tr>
-                  <td style={{ fontWeight: 600 }}>{rs.name}</td>
-                  <td><span className={`bill-badge bill-badge--${rs.consumerType}`}>{rs.consumerType}</span></td>
-                  <td>{new Date(rs.effectiveDate).toLocaleDateString()}{rs.endDate ? ` — ${new Date(rs.endDate).toLocaleDateString()}` : ''}</td>
-                  <td className="bill-text-mono">{formatPeso(rs.minimumCharge)}</td>
-                  <td className="bill-text-mono">{rs.minimumConsumption}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="bill-table__link"
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px' }}
-                      onClick={() => setExpandedId(expandedId === rs.id ? null : rs.id)}
-                    >
-                      {rs.tiers.length} tier{rs.tiers.length !== 1 ? 's' : ''} {expandedId === rs.id ? '▲' : '▼'}
-                    </button>
-                  </td>
-                  <td>
-                    <span className={`bill-badge bill-badge--${rs.isActive ? 'active' : 'inactive'}`}>
-                      {rs.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td>
-                    {hasPermission('billing.rate.manage') && (
-                      <button type="button" className="bill-btn" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => startEdit(rs)}>
-                        Edit
+        <div style={{ overflowX: 'auto' }}>
+          <table className="bill-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Effective</th>
+                <th>Min. Charge</th>
+                <th>Min. cu.m.</th>
+                <th>Tiers</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {state.data.map((rs) => (
+                <Fragment key={rs.id}>
+                  <tr>
+                    <td style={{ fontWeight: 600 }}>{rs.name}</td>
+                    <td>
+                      <span className={`bill-badge bill-badge--${rs.consumerType}`}>
+                        {rs.consumerType}
+                      </span>
+                    </td>
+                    <td>
+                      {new Date(rs.effectiveDate).toLocaleDateString()}
+                      {rs.endDate ? ` — ${new Date(rs.endDate).toLocaleDateString()}` : ''}
+                    </td>
+                    <td className="bill-text-mono">{formatPeso(rs.minimumCharge)}</td>
+                    <td className="bill-text-mono">{rs.minimumConsumption}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="bill-table__link"
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontSize: '13px',
+                        }}
+                        onClick={() => setExpandedId(expandedId === rs.id ? null : rs.id)}
+                      >
+                        {rs.tiers.length} tier{rs.tiers.length !== 1 ? 's' : ''}{' '}
+                        {expandedId === rs.id ? '▲' : '▼'}
                       </button>
-                    )}
-                  </td>
-                </tr>
-                {expandedId === rs.id && (
-                  <tr key={`${rs.id}-tiers`}>
-                    <td colSpan={8} style={{ padding: '0 12px 12px', background: '#f8f9fc' }}>
-                      <table className="bill-table" style={{ marginTop: '8px' }}>
-                        <thead>
-                          <tr>
-                            <th>From (cu.m.)</th>
-                            <th>To (cu.m.)</th>
-                            <th>Rate / cu.m.</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rs.tiers.map((t) => (
-                            <tr key={t.id}>
-                              <td className="bill-text-mono">{t.minConsumption}</td>
-                              <td className="bill-text-mono">{t.maxConsumption ?? 'No limit'}</td>
-                              <td className="bill-text-mono">{formatPeso(t.ratePerCubicMeter)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      {(Number(rs.environmentalFee) > 0 || Number(rs.sewerCharge) > 0 || Number(rs.maintenanceFee) > 0) && (
-                        <div style={{ fontSize: '12px', color: '#667085', marginTop: '8px' }}>
-                          {Number(rs.environmentalFee) > 0 && <span style={{ marginRight: '16px' }}>Env. Fee: {formatPeso(rs.environmentalFee)}</span>}
-                          {Number(rs.sewerCharge) > 0 && <span style={{ marginRight: '16px' }}>Sewer: {formatPeso(rs.sewerCharge)}</span>}
-                          {Number(rs.maintenanceFee) > 0 && <span>Maint.: {formatPeso(rs.maintenanceFee)}</span>}
-                        </div>
+                    </td>
+                    <td>
+                      <span
+                        className={`bill-badge bill-badge--${rs.isActive ? 'active' : 'inactive'}`}
+                      >
+                        {rs.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td>
+                      {hasPermission('billing.rate.manage') && (
+                        <button
+                          type="button"
+                          className="bill-btn"
+                          style={{ padding: '4px 10px', fontSize: '12px' }}
+                          onClick={() => startEdit(rs)}
+                        >
+                          Edit
+                        </button>
                       )}
                     </td>
                   </tr>
-                )}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
+                  {expandedId === rs.id && (
+                    <tr key={`${rs.id}-tiers`}>
+                      <td colSpan={8} style={{ padding: '0 12px 12px', background: '#f8f9fc' }}>
+                        <table className="bill-table" style={{ marginTop: '8px' }}>
+                          <thead>
+                            <tr>
+                              <th>From (cu.m.)</th>
+                              <th>To (cu.m.)</th>
+                              <th>Rate / cu.m.</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rs.tiers.map((t) => (
+                              <tr key={t.id}>
+                                <td className="bill-text-mono">{t.minConsumption}</td>
+                                <td className="bill-text-mono">{t.maxConsumption ?? 'No limit'}</td>
+                                <td className="bill-text-mono">
+                                  {formatPeso(t.ratePerCubicMeter)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {(Number(rs.environmentalFee) > 0 ||
+                          Number(rs.sewerCharge) > 0 ||
+                          Number(rs.maintenanceFee) > 0) && (
+                          <div style={{ fontSize: '12px', color: '#667085', marginTop: '8px' }}>
+                            {Number(rs.environmentalFee) > 0 && (
+                              <span style={{ marginRight: '16px' }}>
+                                Env. Fee: {formatPeso(rs.environmentalFee)}
+                              </span>
+                            )}
+                            {Number(rs.sewerCharge) > 0 && (
+                              <span style={{ marginRight: '16px' }}>
+                                Sewer: {formatPeso(rs.sewerCharge)}
+                              </span>
+                            )}
+                            {Number(rs.maintenanceFee) > 0 && (
+                              <span>Maint.: {formatPeso(rs.maintenanceFee)}</span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

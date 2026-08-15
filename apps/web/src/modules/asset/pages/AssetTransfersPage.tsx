@@ -1,20 +1,26 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import {
-  getTransfers,
-  createTransfer,
-  getAssetRegister,
-  getUsers,
-  getLocations,
-} from '../api';
+
+import { getTransfers, createTransfer, getAssetRegister, getUsers, getLocations } from '../api';
 import type { AssetTransfer, AssetTransferStatus } from '../types';
 import { TRANSFER_STATUS_LABELS } from '../types';
+
 import AssetSubNav from './AssetSubNav';
 import '../asset.css';
 
-interface RegisterOption { id: string; propertyNumber: string; description: string }
-interface UserOption { id: string; username: string }
-interface LocationOption { id: string; name: string }
+interface RegisterOption {
+  id: string;
+  propertyNumber: string;
+  description: string;
+}
+interface UserOption {
+  id: string;
+  username: string;
+}
+interface LocationOption {
+  id: string;
+  name: string;
+}
 
 export default function AssetTransfersPage() {
   const navigate = useNavigate();
@@ -47,7 +53,9 @@ export default function AssetTransfersPage() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { loadTransfers(); }, [statusFilter]);
+  useEffect(() => {
+    loadTransfers();
+  }, [statusFilter]);
 
   function openForm() {
     setShowForm(true);
@@ -58,10 +66,22 @@ export default function AssetTransfersPage() {
     setReason('');
     setTransferDate(new Date().toISOString().slice(0, 10));
     getAssetRegister('isDisposed=false')
-      .then((items) => setProperties(items.map((r) => ({ id: r.id, propertyNumber: r.propertyNumber, description: r.description }))))
+      .then((items) =>
+        setProperties(
+          items.map((r) => ({
+            id: r.id,
+            propertyNumber: r.propertyNumber,
+            description: r.description,
+          })),
+        ),
+      )
       .catch(() => {});
-    getUsers().then(setUsers).catch(() => {});
-    getLocations().then(setLocations).catch(() => {});
+    getUsers()
+      .then(setUsers)
+      .catch(() => {});
+    getLocations()
+      .then(setLocations)
+      .catch(() => {});
   }
 
   async function handleCreate(e: { preventDefault(): void }) {
@@ -92,7 +112,11 @@ export default function AssetTransfersPage() {
   function setFilter(value: string) {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      if (value) { next.set('status', value); } else { next.delete('status'); }
+      if (value) {
+        next.set('status', value);
+      } else {
+        next.delete('status');
+      }
       return next;
     });
   }
@@ -103,7 +127,11 @@ export default function AssetTransfersPage() {
       <div className="am-page__header">
         <h1>Asset Transfers</h1>
         <div className="am-page__actions">
-          <button type="button" className="am-btn am-btn--primary" onClick={() => showForm ? setShowForm(false) : openForm()}>
+          <button
+            type="button"
+            className="am-btn am-btn--primary"
+            onClick={() => (showForm ? setShowForm(false) : openForm())}
+          >
             {showForm ? 'Cancel' : '+ New Transfer'}
           </button>
         </div>
@@ -119,45 +147,82 @@ export default function AssetTransfersPage() {
             <div className="am-form__grid">
               <div className="am-form__field">
                 <label className="am-form__label">Property Record *</label>
-                <select className="am-select" value={propertyRecordId} onChange={(e) => setPropertyRecordId(e.target.value)}>
+                <select
+                  className="am-select"
+                  value={propertyRecordId}
+                  onChange={(e) => setPropertyRecordId(e.target.value)}
+                  style={{ width: '100%', maxWidth: 360, boxSizing: 'border-box' }}
+                >
                   <option value="">Select property...</option>
                   {properties.map((p) => (
-                    <option key={p.id} value={p.id}>{p.propertyNumber} — {p.description}</option>
+                    <option key={p.id} value={p.id}>
+                      {p.propertyNumber} — {p.description}
+                    </option>
                   ))}
                 </select>
               </div>
               <div className="am-form__field">
                 <label className="am-form__label">Transfer To (User) *</label>
-                <select className="am-select" value={toUserId} onChange={(e) => setToUserId(e.target.value)}>
+                <select
+                  className="am-select"
+                  value={toUserId}
+                  onChange={(e) => setToUserId(e.target.value)}
+                  style={{ width: '100%', maxWidth: 360, boxSizing: 'border-box' }}
+                >
                   <option value="">Select user...</option>
                   {users.map((u) => (
-                    <option key={u.id} value={u.id}>{u.username}</option>
+                    <option key={u.id} value={u.id}>
+                      {u.username}
+                    </option>
                   ))}
                 </select>
               </div>
               <div className="am-form__field">
                 <label className="am-form__label">To Location</label>
-                <select className="am-select" value={toLocationId} onChange={(e) => setToLocationId(e.target.value)}>
+                <select
+                  className="am-select"
+                  value={toLocationId}
+                  onChange={(e) => setToLocationId(e.target.value)}
+                  style={{ width: '100%', maxWidth: 360, boxSizing: 'border-box' }}
+                >
                   <option value="">Select location...</option>
                   {locations.map((loc) => (
-                    <option key={loc.id} value={loc.id}>{loc.name}</option>
+                    <option key={loc.id} value={loc.id}>
+                      {loc.name}
+                    </option>
                   ))}
                 </select>
               </div>
               <div className="am-form__field">
                 <label className="am-form__label">Transfer Date *</label>
-                <input className="am-input" type="date" value={transferDate} onChange={(e) => setTransferDate(e.target.value)} />
+                <input
+                  className="am-input"
+                  type="date"
+                  value={transferDate}
+                  onChange={(e) => setTransferDate(e.target.value)}
+                />
               </div>
               <div className="am-form__field am-form__field--full">
                 <label className="am-form__label">Reason</label>
-                <textarea className="am-textarea" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason for transfer..." />
+                <textarea
+                  className="am-textarea"
+                  rows={2}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="Reason for transfer..."
+                />
               </div>
             </div>
             <div className="am-form__actions">
               <button type="submit" className="am-btn am-btn--primary" disabled={creating}>
                 {creating ? 'Creating...' : 'Create Transfer'}
               </button>
-              <button type="button" className="am-btn" onClick={() => setShowForm(false)} disabled={creating}>
+              <button
+                type="button"
+                className="am-btn"
+                onClick={() => setShowForm(false)}
+                disabled={creating}
+              >
                 Cancel
               </button>
             </div>
@@ -166,7 +231,11 @@ export default function AssetTransfersPage() {
       )}
 
       <div className="am-filters">
-        <select className="am-select" value={statusFilter} onChange={(e) => setFilter(e.target.value)}>
+        <select
+          className="am-select"
+          value={statusFilter}
+          onChange={(e) => setFilter(e.target.value)}
+        >
           <option value="">All Statuses</option>
           <option value="pending">Pending</option>
           <option value="approved">Approved</option>
@@ -197,11 +266,17 @@ export default function AssetTransfersPage() {
               {transfers.map((t) => (
                 <tr key={t.id} onClick={() => navigate(`/assets/transfers/${t.id}`)}>
                   <td>
-                    <Link to={`/assets/transfers/${t.id}`} className="am-link" onClick={(e) => e.stopPropagation()}>
+                    <Link
+                      to={`/assets/transfers/${t.id}`}
+                      className="am-link"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       {t.transferNumber}
                     </Link>
                   </td>
-                  <td>{t.propertyRecord.propertyNumber} — {t.propertyRecord.description}</td>
+                  <td>
+                    {t.propertyRecord.propertyNumber} — {t.propertyRecord.description}
+                  </td>
                   <td>{t.fromUser?.username ?? '—'}</td>
                   <td>{t.toUser.username}</td>
                   <td>{new Date(t.transferDate).toLocaleDateString()}</td>

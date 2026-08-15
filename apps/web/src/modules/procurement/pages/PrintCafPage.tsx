@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
+import { GovLetterhead } from '../../../app/GovLetterhead';
 import { formatPeso } from '../../budgeting/format-peso';
 import { getCaf } from '../api';
 import type { Caf } from '../types';
@@ -13,21 +14,30 @@ export function PrintCafPage() {
 
   useEffect(() => {
     if (!id) return;
-    getCaf(id).then(setCaf).catch((e) => setError(e.message));
+    getCaf(id)
+      .then(setCaf)
+      .catch((e) => setError(e.message));
   }, [id]);
 
   if (error) return <div style={{ padding: 32, color: '#b42318' }}>{error}</div>;
   if (!caf) return <div style={{ padding: 32, color: '#667085' }}>Loading...</div>;
 
   const certDate = caf.certificationDate
-    ? new Date(caf.certificationDate).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
-    : new Date(caf.createdAt).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
+    ? new Date(caf.certificationDate).toLocaleDateString('en-PH', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : new Date(caf.createdAt).toLocaleDateString('en-PH', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
 
   return (
     <div className="gov-print-page">
       <div className="gov-print-sheet">
-        <div className="gov-entity">METRO SIQUIJOR WATER DISTRICT</div>
-        <div className="gov-subtitle">Siquijor, Siquijor</div>
+        <GovLetterhead />
         <div className="gov-title">CERTIFICATION OF AVAILABILITY OF FUNDS</div>
 
         <div className="gov-info-grid">
@@ -55,11 +65,15 @@ export function PrintCafPage() {
           )}
           <div className="gov-info-row">
             <span className="gov-info-label">Fund Source:</span>
-            <span className="gov-info-value">{caf.fundSource.name} ({caf.fundSource.code})</span>
+            <span className="gov-info-value">
+              {caf.fundSource.name} ({caf.fundSource.code})
+            </span>
           </div>
           <div className="gov-info-row">
             <span className="gov-info-label">Responsibility Center:</span>
-            <span className="gov-info-value">{caf.responsibilityCenter.name} ({caf.responsibilityCenter.code})</span>
+            <span className="gov-info-value">
+              {caf.responsibilityCenter.name} ({caf.responsibilityCenter.code})
+            </span>
           </div>
           <div className="gov-info-row">
             <span className="gov-info-label">Fiscal Year:</span>
@@ -70,8 +84,9 @@ export function PrintCafPage() {
         <div className="gov-cert-box">
           <div className="gov-cert-box__title">CERTIFICATION</div>
           <div className="gov-cert-box__text">
-            This is to certify that funds in the amount of <strong>{formatPeso(caf.certifiedAmount)}</strong> are
-            available for the purpose stated in Purchase Request No. <strong>{caf.purchaseRequest.prNumber}</strong>
+            This is to certify that funds in the amount of{' '}
+            <strong>{formatPeso(caf.certifiedAmount)}</strong> are available for the purpose stated
+            in Purchase Request No. <strong>{caf.purchaseRequest.prNumber}</strong>
             {caf.purchaseOrder ? ` / Purchase Order No. ${caf.purchaseOrder.poNumber}` : ''},
             chargeable against the appropriation/allotment indicated below:
           </div>
@@ -88,7 +103,9 @@ export function PrintCafPage() {
             </thead>
             <tbody>
               <tr>
-                <td className="gov-center">{caf.accountCode ?? caf.budgetLine?.accountCode ?? '—'}</td>
+                <td className="gov-center">
+                  {caf.accountCode ?? caf.budgetLine?.accountCode ?? '—'}
+                </td>
                 <td>{caf.purchaseRequest.title}</td>
                 <td className="gov-right gov-mono">{formatPeso(caf.availableBefore)}</td>
                 <td className="gov-right gov-mono gov-bold">{formatPeso(caf.certifiedAmount)}</td>
@@ -105,7 +122,11 @@ export function PrintCafPage() {
               <div className="gov-sig-line"></div>
               <div className="gov-sig-name">{caf.certifier?.username?.toUpperCase() ?? ''}</div>
               <div className="gov-sig-title">Budget Officer</div>
-              {caf.certifiedAt && <div className="gov-sig-date">Date: {new Date(caf.certifiedAt).toLocaleDateString('en-PH')}</div>}
+              {caf.certifiedAt && (
+                <div className="gov-sig-date">
+                  Date: {new Date(caf.certifiedAt).toLocaleDateString('en-PH')}
+                </div>
+              )}
             </div>
           </div>
           <div className="gov-sig-col">

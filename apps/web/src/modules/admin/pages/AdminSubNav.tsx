@@ -4,6 +4,8 @@ import './admin.css';
 const LINKS = [
   { to: '/admin/users', label: 'Users' },
   { to: '/admin/roles', label: 'Roles' },
+  { to: '/admin/audit-trail', label: 'Audit Trail' },
+  { to: '/admin/district-profile', label: 'District Profile' },
 ];
 
 export function AdminSubNav() {

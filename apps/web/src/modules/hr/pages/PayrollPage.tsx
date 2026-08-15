@@ -2,12 +2,20 @@ import { useEffect, useState } from 'react';
 
 import { useAuth } from '../../../app/auth';
 import {
-  getPayrollPeriods, createPayrollPeriod, lockPayrollPeriod,
-  getPayrollRuns, createPayrollRun, getPayrollRun,
-  computePayroll, approvePayroll, payPayroll, voidPayroll,
+  getPayrollPeriods,
+  createPayrollPeriod,
+  lockPayrollPeriod,
+  getPayrollRuns,
+  createPayrollRun,
+  getPayrollRun,
+  computePayroll,
+  approvePayroll,
+  payPayroll,
+  voidPayroll,
   HrApiError,
 } from '../api';
 import type { PayrollPeriod, PayrollRun, PayrollStatus } from '../types';
+
 import HrSubNav from './HrSubNav';
 import './hr.css';
 
@@ -21,7 +29,11 @@ function formatPeso(val: string | number) {
 
 function fmtDate(d: string | null) {
   if (!d) return '--';
-  return new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+  return new Date(d).toLocaleDateString('en-PH', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 const STATUS_COLORS: Record<PayrollStatus, string> = {
@@ -90,7 +102,10 @@ export default function PayrollPage() {
   function loadRunDetail(id: string) {
     setLoading(true);
     getPayrollRun(id)
-      .then((r) => { setSelectedRun(r); setView('detail'); })
+      .then((r) => {
+        setSelectedRun(r);
+        setView('detail');
+      })
       .catch((e) => setError(e instanceof HrApiError ? e.message : 'Failed.'))
       .finally(() => setLoading(false));
   }
@@ -102,13 +117,23 @@ export default function PayrollPage() {
 
   async function handleCreatePeriod(ev: React.FormEvent) {
     ev.preventDefault();
-    setSaving(true); setActionError('');
+    setSaving(true);
+    setActionError('');
     try {
-      await createPayrollPeriod({ name: pName, periodType: pType, startDate: pStart, endDate: pEnd, payDate: pPayDate });
+      await createPayrollPeriod({
+        name: pName,
+        periodType: pType,
+        startDate: pStart,
+        endDate: pEnd,
+        payDate: pPayDate,
+      });
       setShowPeriodForm(false);
       loadPeriods();
-    } catch (e) { setActionError(e instanceof HrApiError ? e.message : 'Failed.'); }
-    finally { setSaving(false); }
+    } catch (e) {
+      setActionError(e instanceof HrApiError ? e.message : 'Failed.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleLock(period: PayrollPeriod) {
@@ -116,18 +141,27 @@ export default function PayrollPage() {
     try {
       await lockPayrollPeriod(period.id, period.version);
       loadPeriods();
-    } catch (e) { setActionError(e instanceof HrApiError ? e.message : 'Failed.'); }
+    } catch (e) {
+      setActionError(e instanceof HrApiError ? e.message : 'Failed.');
+    }
   }
 
   async function handleCreateRun(ev: React.FormEvent) {
     ev.preventDefault();
-    setSaving(true); setActionError('');
+    setSaving(true);
+    setActionError('');
     try {
-      await createPayrollRun({ payrollPeriodId: rPeriodId, ...(rRemarks ? { remarks: rRemarks } : {}) });
+      await createPayrollRun({
+        payrollPeriodId: rPeriodId,
+        ...(rRemarks ? { remarks: rRemarks } : {}),
+      });
       setShowRunForm(false);
       loadRuns();
-    } catch (e) { setActionError(e instanceof HrApiError ? e.message : 'Failed.'); }
-    finally { setSaving(false); }
+    } catch (e) {
+      setActionError(e instanceof HrApiError ? e.message : 'Failed.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleCompute(run: PayrollRun) {
@@ -135,8 +169,11 @@ export default function PayrollPage() {
     setActionError('');
     try {
       await computePayroll(run.id, run.version);
-      if (view === 'detail') loadRunDetail(run.id); else loadRuns();
-    } catch (e) { setActionError(e instanceof HrApiError ? e.message : 'Failed.'); }
+      if (view === 'detail') loadRunDetail(run.id);
+      else loadRuns();
+    } catch (e) {
+      setActionError(e instanceof HrApiError ? e.message : 'Failed.');
+    }
   }
 
   async function handleApprove(run: PayrollRun) {
@@ -144,8 +181,11 @@ export default function PayrollPage() {
     setActionError('');
     try {
       await approvePayroll(run.id, run.version);
-      if (view === 'detail') loadRunDetail(run.id); else loadRuns();
-    } catch (e) { setActionError(e instanceof HrApiError ? e.message : 'Failed.'); }
+      if (view === 'detail') loadRunDetail(run.id);
+      else loadRuns();
+    } catch (e) {
+      setActionError(e instanceof HrApiError ? e.message : 'Failed.');
+    }
   }
 
   async function handlePay(run: PayrollRun) {
@@ -153,38 +193,89 @@ export default function PayrollPage() {
     setActionError('');
     try {
       await payPayroll(run.id, run.version);
-      if (view === 'detail') loadRunDetail(run.id); else loadRuns();
-    } catch (e) { setActionError(e instanceof HrApiError ? e.message : 'Failed.'); }
+      if (view === 'detail') loadRunDetail(run.id);
+      else loadRuns();
+    } catch (e) {
+      setActionError(e instanceof HrApiError ? e.message : 'Failed.');
+    }
   }
 
   async function handleVoid() {
     if (!voidReason.trim()) return;
-    setSaving(true); setActionError('');
+    setSaving(true);
+    setActionError('');
     try {
       await voidPayroll(voidRunId, voidVersion, voidReason);
       setShowVoidModal(false);
-      if (view === 'detail') loadRunDetail(voidRunId); else loadRuns();
-    } catch (e) { setActionError(e instanceof HrApiError ? e.message : 'Failed.'); }
-    finally { setSaving(false); }
+      if (view === 'detail') loadRunDetail(voidRunId);
+      else loadRuns();
+    } catch (e) {
+      setActionError(e instanceof HrApiError ? e.message : 'Failed.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   function openVoidModal(run: PayrollRun) {
-    setVoidRunId(run.id); setVoidVersion(run.version); setVoidReason(''); setShowVoidModal(true);
+    setVoidRunId(run.id);
+    setVoidVersion(run.version);
+    setVoidReason('');
+    setShowVoidModal(true);
   }
 
   function renderActions(run: PayrollRun) {
     const btns: JSX.Element[] = [];
     if (canManage && (run.status === 'draft' || run.status === 'computed')) {
-      btns.push(<button key="compute" type="button" className="hr-btn hr-btn--primary" style={{ padding: '2px 8px', fontSize: '11px' }} onClick={() => handleCompute(run)}>{run.status === 'computed' ? 'Re-compute' : 'Compute'}</button>);
+      btns.push(
+        <button
+          key="compute"
+          type="button"
+          className="hr-btn hr-btn--primary"
+          style={{ padding: '2px 8px', fontSize: '11px' }}
+          onClick={() => handleCompute(run)}
+        >
+          {run.status === 'computed' ? 'Re-compute' : 'Compute'}
+        </button>,
+      );
     }
     if (canApprove && run.status === 'computed') {
-      btns.push(<button key="approve" type="button" className="hr-btn hr-btn--primary" style={{ padding: '2px 8px', fontSize: '11px' }} onClick={() => handleApprove(run)}>Approve</button>);
+      btns.push(
+        <button
+          key="approve"
+          type="button"
+          className="hr-btn hr-btn--primary"
+          style={{ padding: '2px 8px', fontSize: '11px' }}
+          onClick={() => handleApprove(run)}
+        >
+          Approve
+        </button>,
+      );
     }
     if (canManage && run.status === 'approved') {
-      btns.push(<button key="pay" type="button" className="hr-btn hr-btn--primary" style={{ padding: '2px 8px', fontSize: '11px' }} onClick={() => handlePay(run)}>Mark Paid</button>);
+      btns.push(
+        <button
+          key="pay"
+          type="button"
+          className="hr-btn hr-btn--primary"
+          style={{ padding: '2px 8px', fontSize: '11px' }}
+          onClick={() => handlePay(run)}
+        >
+          Mark Paid
+        </button>,
+      );
     }
     if (canManage && run.status !== 'voided' && run.status !== 'paid') {
-      btns.push(<button key="void" type="button" className="hr-btn hr-btn--danger" style={{ padding: '2px 8px', fontSize: '11px' }} onClick={() => openVoidModal(run)}>Void</button>);
+      btns.push(
+        <button
+          key="void"
+          type="button"
+          className="hr-btn hr-btn--danger"
+          style={{ padding: '2px 8px', fontSize: '11px' }}
+          onClick={() => openVoidModal(run)}
+        >
+          Void
+        </button>,
+      );
     }
     return <>{btns}</>;
   }
@@ -195,30 +286,69 @@ export default function PayrollPage() {
       <div className="hr-page">
         <HrSubNav />
         <div className="hr-toolbar">
-          <button type="button" className="hr-btn" onClick={() => { setView('runs'); setSelectedRun(null); }}>&larr; Back to Runs</button>
+          <button
+            type="button"
+            className="hr-btn"
+            onClick={() => {
+              setView('runs');
+              setSelectedRun(null);
+            }}
+          >
+            &larr; Back to Runs
+          </button>
           <div style={{ display: 'flex', gap: 8 }}>{renderActions(selectedRun)}</div>
         </div>
         {actionError && <div className="hr-error">{actionError}</div>}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
+        <div
+          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}
+        >
           <div className="hr-form" style={{ padding: 12 }}>
             <strong>{selectedRun.runNumber}</strong>
             <div>Period: {selectedRun.payrollPeriod.name}</div>
-            <div>Dates: {fmtDate(selectedRun.payrollPeriod.startDate)} – {fmtDate(selectedRun.payrollPeriod.endDate)}</div>
+            <div>
+              Dates: {fmtDate(selectedRun.payrollPeriod.startDate)} –{' '}
+              {fmtDate(selectedRun.payrollPeriod.endDate)}
+            </div>
             <div>Pay Date: {fmtDate(selectedRun.payrollPeriod.payDate)}</div>
-            <div>Status: <span className={`hr-badge hr-badge--${STATUS_COLORS[selectedRun.status]}`}>{selectedRun.status}</span></div>
+            <div>
+              Status:{' '}
+              <span className={`hr-badge hr-badge--${STATUS_COLORS[selectedRun.status]}`}>
+                {selectedRun.status}
+              </span>
+            </div>
           </div>
           <div className="hr-form" style={{ padding: 12 }}>
-            <div>Employees: <strong>{selectedRun.employeeCount}</strong></div>
-            <div>Total Gross: <strong>{formatPeso(selectedRun.totalGross)}</strong></div>
-            <div>Total Deductions: <strong>{formatPeso(selectedRun.totalDeductions)}</strong></div>
-            <div>Total Net: <strong style={{ color: 'var(--color-success, #16a34a)' }}>{formatPeso(selectedRun.totalNet)}</strong></div>
+            <div>
+              Employees: <strong>{selectedRun.employeeCount}</strong>
+            </div>
+            <div>
+              Total Gross: <strong>{formatPeso(selectedRun.totalGross)}</strong>
+            </div>
+            <div>
+              Total Deductions: <strong>{formatPeso(selectedRun.totalDeductions)}</strong>
+            </div>
+            <div>
+              Total Net:{' '}
+              <strong style={{ color: 'var(--color-success, #16a34a)' }}>
+                {formatPeso(selectedRun.totalNet)}
+              </strong>
+            </div>
           </div>
           <div className="hr-form" style={{ padding: 12 }}>
-            <div>Created: {fmtDate(selectedRun.createdAt)} by {selectedRun.creator?.username ?? '--'}</div>
+            <div>
+              Created: {fmtDate(selectedRun.createdAt)} by {selectedRun.creator?.username ?? '--'}
+            </div>
             {selectedRun.computedAt && <div>Computed: {fmtDate(selectedRun.computedAt)}</div>}
-            {selectedRun.approvedAt && <div>Approved: {fmtDate(selectedRun.approvedAt)} by {selectedRun.approver?.username ?? '--'}</div>}
+            {selectedRun.approvedAt && (
+              <div>
+                Approved: {fmtDate(selectedRun.approvedAt)} by{' '}
+                {selectedRun.approver?.username ?? '--'}
+              </div>
+            )}
             {selectedRun.paidAt && <div>Paid: {fmtDate(selectedRun.paidAt)}</div>}
-            {selectedRun.voidReason && <div style={{ color: '#dc2626' }}>Voided: {selectedRun.voidReason}</div>}
+            {selectedRun.voidReason && (
+              <div style={{ color: '#dc2626' }}>Voided: {selectedRun.voidReason}</div>
+            )}
             {selectedRun.remarks && <div>Remarks: {selectedRun.remarks}</div>}
           </div>
         </div>
@@ -246,14 +376,30 @@ export default function PayrollPage() {
                       <span className="hr-text-mono">{item.employee.employeeNumber}</span>{' '}
                       {item.employee.lastName}, {item.employee.firstName}
                     </td>
-                    <td className="hr-text-mono" style={{ textAlign: 'right' }}>{formatPeso(item.basicPay)}</td>
-                    <td className="hr-text-mono" style={{ textAlign: 'right' }}>{formatPeso(item.totalAllowances)}</td>
-                    <td className="hr-text-mono" style={{ textAlign: 'right' }}>{formatPeso(item.overtimePay)}</td>
-                    <td className="hr-text-mono" style={{ textAlign: 'right' }}>{formatPeso(item.grossPay)}</td>
-                    <td className="hr-text-mono" style={{ textAlign: 'right' }}>{formatPeso(item.totalDeductions)}</td>
-                    <td className="hr-text-mono" style={{ textAlign: 'right', fontWeight: 600 }}>{formatPeso(item.netPay)}</td>
-                    <td style={{ textAlign: 'center' }}>{Number(item.daysWorked)}/{Number(item.daysAbsent)}a</td>
-                    <td style={{ textAlign: 'center' }}>{Number(item.hoursLate) > 0 ? `${Number(item.hoursLate)}h` : '--'}</td>
+                    <td className="hr-text-mono" style={{ textAlign: 'right' }}>
+                      {formatPeso(item.basicPay)}
+                    </td>
+                    <td className="hr-text-mono" style={{ textAlign: 'right' }}>
+                      {formatPeso(item.totalAllowances)}
+                    </td>
+                    <td className="hr-text-mono" style={{ textAlign: 'right' }}>
+                      {formatPeso(item.overtimePay)}
+                    </td>
+                    <td className="hr-text-mono" style={{ textAlign: 'right' }}>
+                      {formatPeso(item.grossPay)}
+                    </td>
+                    <td className="hr-text-mono" style={{ textAlign: 'right' }}>
+                      {formatPeso(item.totalDeductions)}
+                    </td>
+                    <td className="hr-text-mono" style={{ textAlign: 'right', fontWeight: 600 }}>
+                      {formatPeso(item.netPay)}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      {Number(item.daysWorked)}/{Number(item.daysAbsent)}a
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      {Number(item.hoursLate) > 0 ? `${Number(item.hoursLate)}h` : '--'}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -263,9 +409,15 @@ export default function PayrollPage() {
                   <td style={{ textAlign: 'right' }}></td>
                   <td style={{ textAlign: 'right' }}></td>
                   <td style={{ textAlign: 'right' }}></td>
-                  <td className="hr-text-mono" style={{ textAlign: 'right' }}>{formatPeso(selectedRun.totalGross)}</td>
-                  <td className="hr-text-mono" style={{ textAlign: 'right' }}>{formatPeso(selectedRun.totalDeductions)}</td>
-                  <td className="hr-text-mono" style={{ textAlign: 'right' }}>{formatPeso(selectedRun.totalNet)}</td>
+                  <td className="hr-text-mono" style={{ textAlign: 'right' }}>
+                    {formatPeso(selectedRun.totalGross)}
+                  </td>
+                  <td className="hr-text-mono" style={{ textAlign: 'right' }}>
+                    {formatPeso(selectedRun.totalDeductions)}
+                  </td>
+                  <td className="hr-text-mono" style={{ textAlign: 'right' }}>
+                    {formatPeso(selectedRun.totalNet)}
+                  </td>
                   <td></td>
                   <td></td>
                 </tr>
@@ -275,7 +427,9 @@ export default function PayrollPage() {
         )}
 
         {selectedRun.items && selectedRun.items.length === 0 && selectedRun.status === 'draft' && (
-          <div className="hr-empty">No items yet. Click &quot;Compute&quot; to generate payroll for all active employees.</div>
+          <div className="hr-empty">
+            No items yet. Click &quot;Compute&quot; to generate payroll for all active employees.
+          </div>
         )}
 
         {/* Void modal */}
@@ -285,11 +439,25 @@ export default function PayrollPage() {
               <h3>Void Payroll Run</h3>
               <div className="hr-field">
                 <label>Reason *</label>
-                <textarea value={voidReason} onChange={(e) => setVoidReason(e.target.value)} rows={3} required />
+                <textarea
+                  value={voidReason}
+                  onChange={(e) => setVoidReason(e.target.value)}
+                  rows={3}
+                  required
+                />
               </div>
               <div className="hr-form-actions">
-                <button type="button" className="hr-btn" onClick={() => setShowVoidModal(false)}>Cancel</button>
-                <button type="button" className="hr-btn hr-btn--danger" disabled={saving || !voidReason.trim()} onClick={handleVoid}>{saving ? 'Voiding...' : 'Void Run'}</button>
+                <button type="button" className="hr-btn" onClick={() => setShowVoidModal(false)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="hr-btn hr-btn--danger"
+                  disabled={saving || !voidReason.trim()}
+                  onClick={handleVoid}
+                >
+                  {saving ? 'Voiding...' : 'Void Run'}
+                </button>
               </div>
             </div>
           </div>
@@ -304,14 +472,52 @@ export default function PayrollPage() {
       <HrSubNav />
       <div className="hr-toolbar">
         <div className="hr-toolbar__filters">
-          <button type="button" className={`hr-btn${view === 'runs' ? ' hr-btn--primary' : ''}`} onClick={() => setView('runs')}>Payroll Runs</button>
-          <button type="button" className={`hr-btn${view === 'periods' ? ' hr-btn--primary' : ''}`} onClick={() => setView('periods')}>Pay Periods</button>
+          <button
+            type="button"
+            className={`hr-btn${view === 'runs' ? ' hr-btn--primary' : ''}`}
+            onClick={() => setView('runs')}
+          >
+            Payroll Runs
+          </button>
+          <button
+            type="button"
+            className={`hr-btn${view === 'periods' ? ' hr-btn--primary' : ''}`}
+            onClick={() => setView('periods')}
+          >
+            Pay Periods
+          </button>
         </div>
         {canManage && view === 'periods' && (
-          <button type="button" className="hr-btn hr-btn--primary" onClick={() => { setPName(''); setPType('semi_monthly'); setPStart(''); setPEnd(''); setPPayDate(''); setActionError(''); setShowPeriodForm(true); }}>+ New Period</button>
+          <button
+            type="button"
+            className="hr-btn hr-btn--primary"
+            onClick={() => {
+              setPName('');
+              setPType('semi_monthly');
+              setPStart('');
+              setPEnd('');
+              setPPayDate('');
+              setActionError('');
+              setShowPeriodForm(true);
+            }}
+          >
+            + New Period
+          </button>
         )}
         {canManage && view === 'runs' && (
-          <button type="button" className="hr-btn hr-btn--primary" onClick={() => { setRPeriodId(periods[0]?.id ?? ''); setRRemarks(''); setActionError(''); loadPeriods(); setShowRunForm(true); }}>+ New Run</button>
+          <button
+            type="button"
+            className="hr-btn hr-btn--primary"
+            onClick={() => {
+              setRPeriodId(periods[0]?.id ?? '');
+              setRRemarks('');
+              setActionError('');
+              loadPeriods();
+              setShowRunForm(true);
+            }}
+          >
+            + New Run
+          </button>
         )}
       </div>
 
@@ -321,8 +527,23 @@ export default function PayrollPage() {
       {/* Period form */}
       {showPeriodForm && (
         <form className="hr-form" onSubmit={handleCreatePeriod} style={{ marginBottom: 16 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 140px 140px 140px', gap: 12, alignItems: 'end' }}>
-            <div className="hr-field"><label>Name *</label><input required value={pName} onChange={(e) => setPName(e.target.value)} placeholder="e.g. July 2026 1st Half" /></div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 140px 140px 140px 140px',
+              gap: 12,
+              alignItems: 'end',
+            }}
+          >
+            <div className="hr-field">
+              <label>Name *</label>
+              <input
+                required
+                value={pName}
+                onChange={(e) => setPName(e.target.value)}
+                placeholder="e.g. July 2026 1st Half"
+              />
+            </div>
             <div className="hr-field">
               <label>Type</label>
               <select value={pType} onChange={(e) => setPType(e.target.value)}>
@@ -330,13 +551,36 @@ export default function PayrollPage() {
                 <option value="monthly">Monthly</option>
               </select>
             </div>
-            <div className="hr-field"><label>Start Date *</label><input type="date" required value={pStart} onChange={(e) => setPStart(e.target.value)} /></div>
-            <div className="hr-field"><label>End Date *</label><input type="date" required value={pEnd} onChange={(e) => setPEnd(e.target.value)} /></div>
-            <div className="hr-field"><label>Pay Date *</label><input type="date" required value={pPayDate} onChange={(e) => setPPayDate(e.target.value)} /></div>
+            <div className="hr-field">
+              <label>Start Date *</label>
+              <input
+                type="date"
+                required
+                value={pStart}
+                onChange={(e) => setPStart(e.target.value)}
+              />
+            </div>
+            <div className="hr-field">
+              <label>End Date *</label>
+              <input type="date" required value={pEnd} onChange={(e) => setPEnd(e.target.value)} />
+            </div>
+            <div className="hr-field">
+              <label>Pay Date *</label>
+              <input
+                type="date"
+                required
+                value={pPayDate}
+                onChange={(e) => setPPayDate(e.target.value)}
+              />
+            </div>
           </div>
           <div className="hr-form-actions">
-            <button type="button" className="hr-btn" onClick={() => setShowPeriodForm(false)}>Cancel</button>
-            <button type="submit" className="hr-btn hr-btn--primary" disabled={saving}>{saving ? 'Saving...' : 'Create Period'}</button>
+            <button type="button" className="hr-btn" onClick={() => setShowPeriodForm(false)}>
+              Cancel
+            </button>
+            <button type="submit" className="hr-btn hr-btn--primary" disabled={saving}>
+              {saving ? 'Saving...' : 'Create Period'}
+            </button>
           </div>
         </form>
       )}
@@ -344,21 +588,43 @@ export default function PayrollPage() {
       {/* Run form */}
       {showRunForm && (
         <form className="hr-form" onSubmit={handleCreateRun} style={{ marginBottom: 16 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignItems: 'end' }}>
+          <div
+            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignItems: 'end' }}
+          >
             <div className="hr-field">
               <label>Pay Period *</label>
-              <select required value={rPeriodId} onChange={(e) => setRPeriodId(e.target.value)}>
+              <select
+                required
+                value={rPeriodId}
+                onChange={(e) => setRPeriodId(e.target.value)}
+                style={{ width: '100%', maxWidth: 360, boxSizing: 'border-box' }}
+              >
                 <option value="">Select period...</option>
-                {periods.filter((p) => !p.isLocked).map((p) => (
-                  <option key={p.id} value={p.id}>{p.name} ({fmtDate(p.startDate)} – {fmtDate(p.endDate)})</option>
-                ))}
+                {periods
+                  .filter((p) => !p.isLocked)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({fmtDate(p.startDate)} – {fmtDate(p.endDate)})
+                    </option>
+                  ))}
               </select>
             </div>
-            <div className="hr-field"><label>Remarks</label><input value={rRemarks} onChange={(e) => setRRemarks(e.target.value)} /></div>
+            <div className="hr-field">
+              <label>Remarks</label>
+              <input value={rRemarks} onChange={(e) => setRRemarks(e.target.value)} />
+            </div>
           </div>
           <div className="hr-form-actions">
-            <button type="button" className="hr-btn" onClick={() => setShowRunForm(false)}>Cancel</button>
-            <button type="submit" className="hr-btn hr-btn--primary" disabled={saving || !rPeriodId}>{saving ? 'Saving...' : 'Create Run'}</button>
+            <button type="button" className="hr-btn" onClick={() => setShowRunForm(false)}>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="hr-btn hr-btn--primary"
+              disabled={saving || !rPeriodId}
+            >
+              {saving ? 'Saving...' : 'Create Run'}
+            </button>
           </div>
         </form>
       )}
@@ -370,36 +636,53 @@ export default function PayrollPage() {
         <>
           {periods.length === 0 && <div className="hr-empty">No pay periods configured.</div>}
           {periods.length > 0 && (
-            <table className="hr-table">
-              <thead>
-                <tr>
-                  <th>Name</th><th>Type</th><th>Start</th><th>End</th><th>Pay Date</th><th>Runs</th><th>Status</th>
-                  {canManage && <th>Actions</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {periods.map((p) => (
-                  <tr key={p.id}>
-                    <td>{p.name}</td>
-                    <td>{p.periodType.replace('_', '-')}</td>
-                    <td>{fmtDate(p.startDate)}</td>
-                    <td>{fmtDate(p.endDate)}</td>
-                    <td>{fmtDate(p.payDate)}</td>
-                    <td style={{ textAlign: 'center' }}>{p._count.payrollRuns}</td>
-                    <td>
-                      <span className={`hr-badge hr-badge--${p.isLocked ? 'resigned' : 'active'}`}>{p.isLocked ? 'Locked' : 'Open'}</span>
-                    </td>
-                    {canManage && (
-                      <td>
-                        <button type="button" className="hr-btn" style={{ padding: '2px 8px', fontSize: '11px' }} onClick={() => handleLock(p)}>
-                          {p.isLocked ? 'Unlock' : 'Lock'}
-                        </button>
-                      </td>
-                    )}
+            <div style={{ overflowX: 'auto' }}>
+              <table className="hr-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Start</th>
+                    <th>End</th>
+                    <th>Pay Date</th>
+                    <th>Runs</th>
+                    <th>Status</th>
+                    {canManage && <th>Actions</th>}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {periods.map((p) => (
+                    <tr key={p.id}>
+                      <td>{p.name}</td>
+                      <td>{p.periodType.replace('_', '-')}</td>
+                      <td>{fmtDate(p.startDate)}</td>
+                      <td>{fmtDate(p.endDate)}</td>
+                      <td>{fmtDate(p.payDate)}</td>
+                      <td style={{ textAlign: 'center' }}>{p._count.payrollRuns}</td>
+                      <td>
+                        <span
+                          className={`hr-badge hr-badge--${p.isLocked ? 'resigned' : 'active'}`}
+                        >
+                          {p.isLocked ? 'Locked' : 'Open'}
+                        </span>
+                      </td>
+                      {canManage && (
+                        <td>
+                          <button
+                            type="button"
+                            className="hr-btn"
+                            style={{ padding: '2px 8px', fontSize: '11px' }}
+                            onClick={() => handleLock(p)}
+                          >
+                            {p.isLocked ? 'Unlock' : 'Lock'}
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </>
       )}
@@ -408,41 +691,76 @@ export default function PayrollPage() {
       {view === 'runs' && !loading && (
         <>
           <div style={{ marginBottom: 12 }}>
-            <select value={filterPeriodId} onChange={(e) => setFilterPeriodId(e.target.value)} style={{ padding: '4px 8px' }}>
+            <select
+              value={filterPeriodId}
+              onChange={(e) => setFilterPeriodId(e.target.value)}
+              style={{ padding: '4px 8px', width: '100%', maxWidth: 240, boxSizing: 'border-box' }}
+            >
               <option value="">All Periods</option>
               {periods.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
               ))}
             </select>
           </div>
           {runs.length === 0 && <div className="hr-empty">No payroll runs yet.</div>}
           {runs.length > 0 && (
-            <table className="hr-table">
-              <thead>
-                <tr>
-                  <th>Run #</th><th>Period</th><th>Status</th><th style={{ textAlign: 'right' }}>Employees</th>
-                  <th style={{ textAlign: 'right' }}>Gross</th><th style={{ textAlign: 'right' }}>Deductions</th>
-                  <th style={{ textAlign: 'right' }}>Net</th><th>Created</th><th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {runs.map((r) => (
-                  <tr key={r.id}>
-                    <td>
-                      <button type="button" className="hr-btn" style={{ padding: '2px 8px', fontSize: '11px', textDecoration: 'underline' }} onClick={() => loadRunDetail(r.id)}>{r.runNumber}</button>
-                    </td>
-                    <td>{r.payrollPeriod.name}</td>
-                    <td><span className={`hr-badge hr-badge--${STATUS_COLORS[r.status]}`}>{r.status}</span></td>
-                    <td style={{ textAlign: 'right' }}>{r.employeeCount}</td>
-                    <td className="hr-text-mono" style={{ textAlign: 'right' }}>{formatPeso(r.totalGross)}</td>
-                    <td className="hr-text-mono" style={{ textAlign: 'right' }}>{formatPeso(r.totalDeductions)}</td>
-                    <td className="hr-text-mono" style={{ textAlign: 'right', fontWeight: 600 }}>{formatPeso(r.totalNet)}</td>
-                    <td>{fmtDate(r.createdAt)}</td>
-                    <td style={{ display: 'flex', gap: 4 }}>{renderActions(r)}</td>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="hr-table">
+                <thead>
+                  <tr>
+                    <th>Run #</th>
+                    <th>Period</th>
+                    <th>Status</th>
+                    <th style={{ textAlign: 'right' }}>Employees</th>
+                    <th style={{ textAlign: 'right' }}>Gross</th>
+                    <th style={{ textAlign: 'right' }}>Deductions</th>
+                    <th style={{ textAlign: 'right' }}>Net</th>
+                    <th>Created</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {runs.map((r) => (
+                    <tr key={r.id}>
+                      <td>
+                        <button
+                          type="button"
+                          className="hr-btn"
+                          style={{
+                            padding: '2px 8px',
+                            fontSize: '11px',
+                            textDecoration: 'underline',
+                          }}
+                          onClick={() => loadRunDetail(r.id)}
+                        >
+                          {r.runNumber}
+                        </button>
+                      </td>
+                      <td>{r.payrollPeriod.name}</td>
+                      <td>
+                        <span className={`hr-badge hr-badge--${STATUS_COLORS[r.status]}`}>
+                          {r.status}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>{r.employeeCount}</td>
+                      <td className="hr-text-mono" style={{ textAlign: 'right' }}>
+                        {formatPeso(r.totalGross)}
+                      </td>
+                      <td className="hr-text-mono" style={{ textAlign: 'right' }}>
+                        {formatPeso(r.totalDeductions)}
+                      </td>
+                      <td className="hr-text-mono" style={{ textAlign: 'right', fontWeight: 600 }}>
+                        {formatPeso(r.totalNet)}
+                      </td>
+                      <td>{fmtDate(r.createdAt)}</td>
+                      <td style={{ display: 'flex', gap: 4 }}>{renderActions(r)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </>
       )}
@@ -454,11 +772,25 @@ export default function PayrollPage() {
             <h3>Void Payroll Run</h3>
             <div className="hr-field">
               <label>Reason *</label>
-              <textarea value={voidReason} onChange={(e) => setVoidReason(e.target.value)} rows={3} required />
+              <textarea
+                value={voidReason}
+                onChange={(e) => setVoidReason(e.target.value)}
+                rows={3}
+                required
+              />
             </div>
             <div className="hr-form-actions">
-              <button type="button" className="hr-btn" onClick={() => setShowVoidModal(false)}>Cancel</button>
-              <button type="button" className="hr-btn hr-btn--danger" disabled={saving || !voidReason.trim()} onClick={handleVoid}>{saving ? 'Voiding...' : 'Void Run'}</button>
+              <button type="button" className="hr-btn" onClick={() => setShowVoidModal(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="hr-btn hr-btn--danger"
+                disabled={saving || !voidReason.trim()}
+                onClick={handleVoid}
+              >
+                {saving ? 'Voiding...' : 'Void Run'}
+              </button>
             </div>
           </div>
         </div>

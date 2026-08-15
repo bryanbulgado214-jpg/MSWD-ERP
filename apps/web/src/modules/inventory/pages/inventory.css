@@ -262,3 +262,47 @@
 .inv-text-mono {
   font-variant-numeric: tabular-nums;
 }
+
+/* ── Vertical left-sidebar sub-nav (matches Accounting; no horizontal scroll) ── */
+.inv-subnav {
+  position: absolute;
+  left: 24px;
+  top: 28px;
+  width: 178px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  border-bottom: none;
+  overflow: visible;
+}
+.inv-subnav__link {
+  display: block;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border-left: 3px solid transparent;
+  border-bottom: none;
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+.inv-subnav__link:hover { background: #f2f4f7; }
+.inv-subnav__link--active {
+  border-left-color: #175cd3;
+  background: #eff4ff;
+  border-bottom-color: transparent;
+}
+.inv-page {
+  position: relative;
+  padding-left: 224px;
+  min-height: 460px;
+}
+@media (max-width: 860px) {
+  .inv-page { padding-left: 24px; min-height: 0; }
+  .inv-subnav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    width: auto;
+  }
+}

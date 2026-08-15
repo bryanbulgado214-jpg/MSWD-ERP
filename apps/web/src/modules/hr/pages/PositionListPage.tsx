@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../../../app/auth';
 import { getPositions, createPosition, updatePosition, HrApiError } from '../api';
 import type { Position } from '../types';
+
 import HrSubNav from './HrSubNav';
 import './hr.css';
 
@@ -27,10 +28,14 @@ export default function PositionListPage() {
     setState({ status: 'loading' });
     getPositions()
       .then((data) => setState({ status: 'loaded', data }))
-      .catch((err) => setState({ status: 'error', message: err instanceof HrApiError ? err.message : 'Failed.' }));
+      .catch((err) =>
+        setState({ status: 'error', message: err instanceof HrApiError ? err.message : 'Failed.' }),
+      );
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   function startNew() {
     setEditingId(null);
@@ -65,7 +70,8 @@ export default function PositionListPage() {
         });
       } else {
         await createPosition({
-          code, title,
+          code,
+          title,
           ...(sg ? { salaryGrade: Number(sg) } : {}),
           ...(step ? { salaryStep: Number(step) } : {}),
         });
@@ -85,17 +91,31 @@ export default function PositionListPage() {
       <div className="hr-toolbar">
         <h2 style={{ margin: 0 }}>Positions</h2>
         {hasPermission('hr.employee.manage') && (
-          <button type="button" className="hr-btn hr-btn--primary" onClick={startNew}>+ New Position</button>
+          <button type="button" className="hr-btn hr-btn--primary" onClick={startNew}>
+            + New Position
+          </button>
         )}
       </div>
 
       {showForm && (
         <form className="hr-form" onSubmit={handleSubmit} style={{ marginBottom: 20 }}>
           {formError && <div className="hr-error">{formError}</div>}
-          <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 100px 100px', gap: '12px', alignItems: 'end' }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '120px 1fr 100px 100px',
+              gap: '12px',
+              alignItems: 'end',
+            }}
+          >
             <div className="hr-field">
               <label>Code *</label>
-              <input required value={code} onChange={(ev) => setCode(ev.target.value)} disabled={!!editingId} />
+              <input
+                required
+                value={code}
+                onChange={(ev) => setCode(ev.target.value)}
+                disabled={!!editingId}
+              />
             </div>
             <div className="hr-field">
               <label>Title *</label>
@@ -111,46 +131,65 @@ export default function PositionListPage() {
             </div>
           </div>
           <div className="hr-form-actions">
-            <button type="button" className="hr-btn" onClick={() => setShowForm(false)}>Cancel</button>
-            <button type="submit" className="hr-btn hr-btn--primary" disabled={saving}>{saving ? 'Saving...' : (editingId ? 'Update' : 'Create')}</button>
+            <button type="button" className="hr-btn" onClick={() => setShowForm(false)}>
+              Cancel
+            </button>
+            <button type="submit" className="hr-btn hr-btn--primary" disabled={saving}>
+              {saving ? 'Saving...' : editingId ? 'Update' : 'Create'}
+            </button>
           </div>
         </form>
       )}
 
       {state.status === 'loading' && <p>Loading...</p>}
       {state.status === 'error' && <div className="hr-error">{state.message}</div>}
-      {state.status === 'loaded' && state.data.length === 0 && <div className="hr-empty">No positions found.</div>}
+      {state.status === 'loaded' && state.data.length === 0 && (
+        <div className="hr-empty">No positions found.</div>
+      )}
       {state.status === 'loaded' && state.data.length > 0 && (
-        <table className="hr-table">
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th>Title</th>
-              <th>SG</th>
-              <th>Step</th>
-              <th>Employees</th>
-              <th>Status</th>
-              {hasPermission('hr.employee.manage') && <th>Actions</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {state.data.map((p) => (
-              <tr key={p.id}>
-                <td className="hr-text-mono">{p.code}</td>
-                <td>{p.title}</td>
-                <td>{p.salaryGrade ?? '--'}</td>
-                <td>{p.salaryStep ?? '--'}</td>
-                <td>{p._count.employees}</td>
-                <td><span className={`hr-badge hr-badge--${p.isActive ? 'active' : 'resigned'}`}>{p.isActive ? 'Active' : 'Inactive'}</span></td>
-                {hasPermission('hr.employee.manage') && (
-                  <td>
-                    <button type="button" className="hr-btn" style={{ padding: '2px 8px', fontSize: '11px' }} onClick={() => startEdit(p)}>Edit</button>
-                  </td>
-                )}
+        <div style={{ overflowX: 'auto' }}>
+          <table className="hr-table">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Title</th>
+                <th>SG</th>
+                <th>Step</th>
+                <th>Employees</th>
+                <th>Status</th>
+                {hasPermission('hr.employee.manage') && <th>Actions</th>}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {state.data.map((p) => (
+                <tr key={p.id}>
+                  <td className="hr-text-mono">{p.code}</td>
+                  <td>{p.title}</td>
+                  <td>{p.salaryGrade ?? '--'}</td>
+                  <td>{p.salaryStep ?? '--'}</td>
+                  <td>{p._count.employees}</td>
+                  <td>
+                    <span className={`hr-badge hr-badge--${p.isActive ? 'active' : 'resigned'}`}>
+                      {p.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  {hasPermission('hr.employee.manage') && (
+                    <td>
+                      <button
+                        type="button"
+                        className="hr-btn"
+                        style={{ padding: '2px 8px', fontSize: '11px' }}
+                        onClick={() => startEdit(p)}
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

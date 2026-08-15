@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../../app/auth';
 import { BillingApiError, createConsumer, getBarangays, getConsumers } from '../api';
 import type { ConsumerListItem, ConsumerType } from '../types';
+
 import BillingSubNav from './BillingSubNav';
 import './billing.css';
 
@@ -12,7 +13,13 @@ type LoadState =
   | { status: 'error'; message: string }
   | { status: 'loaded'; data: ConsumerListItem[] };
 
-const CONSUMER_TYPES: ConsumerType[] = ['residential', 'commercial', 'industrial', 'government', 'institutional'];
+const CONSUMER_TYPES: ConsumerType[] = [
+  'residential',
+  'commercial',
+  'industrial',
+  'government',
+  'institutional',
+];
 
 export default function ConsumerListPage() {
   const { hasPermission } = useAuth();
@@ -45,12 +52,24 @@ export default function ConsumerListPage() {
   const [notes, setNotes] = useState('');
 
   function resetForm() {
-    setAccountNumber(''); setFirstName(''); setMiddleName(''); setLastName('');
-    setBusinessName(''); setConsumerType('residential'); setAddress('');
-    setBarangay(''); setMunicipality('Siquijor'); setProvince('Siquijor');
-    setContactNumber(''); setEmail(''); setIsSeniorCitizen(false);
-    setIsPwd(false); setConnectionDate(''); setNotes('');
-    setFormError(''); setShowForm(false);
+    setAccountNumber('');
+    setFirstName('');
+    setMiddleName('');
+    setLastName('');
+    setBusinessName('');
+    setConsumerType('residential');
+    setAddress('');
+    setBarangay('');
+    setMunicipality('Siquijor');
+    setProvince('Siquijor');
+    setContactNumber('');
+    setEmail('');
+    setIsSeniorCitizen(false);
+    setIsPwd(false);
+    setConnectionDate('');
+    setNotes('');
+    setFormError('');
+    setShowForm(false);
   }
 
   async function load() {
@@ -64,14 +83,21 @@ export default function ConsumerListPage() {
       const data = await getConsumers(qs || undefined);
       setState({ status: 'loaded', data });
     } catch (err) {
-      setState({ status: 'error', message: err instanceof BillingApiError ? err.message : 'Failed to load consumers.' });
+      setState({
+        status: 'error',
+        message: err instanceof BillingApiError ? err.message : 'Failed to load consumers.',
+      });
     }
   }
 
-  useEffect(() => { load(); }, [statusFilter, typeFilter, barangayFilter, search]);
+  useEffect(() => {
+    load();
+  }, [statusFilter, typeFilter, barangayFilter, search]);
 
   useEffect(() => {
-    getBarangays().then(setBarangays).catch(() => {});
+    getBarangays()
+      .then(setBarangays)
+      .catch(() => {});
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -80,7 +106,10 @@ export default function ConsumerListPage() {
     setFormError('');
     try {
       await createConsumer({
-        accountNumber, firstName, lastName, address,
+        accountNumber,
+        firstName,
+        lastName,
+        address,
         ...(middleName ? { middleName } : {}),
         ...(businessName ? { businessName } : {}),
         ...(consumerType ? { consumerType } : {}),
@@ -89,7 +118,8 @@ export default function ConsumerListPage() {
         ...(province ? { province } : {}),
         ...(contactNumber ? { contactNumber } : {}),
         ...(email ? { email } : {}),
-        isSeniorCitizen, isPwd,
+        isSeniorCitizen,
+        isPwd,
         ...(connectionDate ? { connectionDate } : {}),
         ...(notes ? { notes } : {}),
       });
@@ -123,12 +153,18 @@ export default function ConsumerListPage() {
         <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
           <option value="">All Types</option>
           {CONSUMER_TYPES.map((t) => (
-            <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+            <option key={t} value={t}>
+              {t.charAt(0).toUpperCase() + t.slice(1)}
+            </option>
           ))}
         </select>
         <select value={barangayFilter} onChange={(e) => setBarangayFilter(e.target.value)}>
           <option value="">All Barangays</option>
-          {barangays.map((b) => <option key={b} value={b}>{b}</option>)}
+          {barangays.map((b) => (
+            <option key={b} value={b}>
+              {b}
+            </option>
+          ))}
         </select>
         <input
           type="text"
@@ -153,19 +189,29 @@ export default function ConsumerListPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
             <div className="bill-field">
               <label>Account Number *</label>
-              <input required value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} />
+              <input
+                required
+                value={accountNumber}
+                onChange={(e) => setAccountNumber(e.target.value)}
+              />
             </div>
             <div className="bill-field">
               <label>Consumer Type</label>
               <select value={consumerType} onChange={(e) => setConsumerType(e.target.value)}>
                 {CONSUMER_TYPES.map((t) => (
-                  <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                  <option key={t} value={t}>
+                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                  </option>
                 ))}
               </select>
             </div>
             <div className="bill-field">
               <label>Connection Date</label>
-              <input type="date" value={connectionDate} onChange={(e) => setConnectionDate(e.target.value)} />
+              <input
+                type="date"
+                value={connectionDate}
+                onChange={(e) => setConnectionDate(e.target.value)}
+              />
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
@@ -218,11 +264,21 @@ export default function ConsumerListPage() {
           </div>
           <div style={{ display: 'flex', gap: '24px', marginBottom: '8px' }}>
             <div className="bill-checkbox-row">
-              <input type="checkbox" id="isSenior" checked={isSeniorCitizen} onChange={(e) => setIsSeniorCitizen(e.target.checked)} />
+              <input
+                type="checkbox"
+                id="isSenior"
+                checked={isSeniorCitizen}
+                onChange={(e) => setIsSeniorCitizen(e.target.checked)}
+              />
               <label htmlFor="isSenior">Senior Citizen</label>
             </div>
             <div className="bill-checkbox-row">
-              <input type="checkbox" id="isPwd" checked={isPwd} onChange={(e) => setIsPwd(e.target.checked)} />
+              <input
+                type="checkbox"
+                id="isPwd"
+                checked={isPwd}
+                onChange={(e) => setIsPwd(e.target.checked)}
+              />
               <label htmlFor="isPwd">Person with Disability (PWD)</label>
             </div>
           </div>
@@ -231,7 +287,9 @@ export default function ConsumerListPage() {
             <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
           <div className="bill-form-actions">
-            <button type="button" className="bill-btn" onClick={resetForm}>Cancel</button>
+            <button type="button" className="bill-btn" onClick={resetForm}>
+              Cancel
+            </button>
             <button type="submit" className="bill-btn bill-btn--primary" disabled={saving}>
               {saving ? 'Saving...' : 'Create Consumer'}
             </button>
@@ -245,34 +303,45 @@ export default function ConsumerListPage() {
         <div className="bill-empty">No consumers found.</div>
       )}
       {state.status === 'loaded' && state.data.length > 0 && (
-        <table className="bill-table">
-          <thead>
-            <tr>
-              <th>Account #</th>
-              <th>Name</th>
-              <th>Type</th>
-              <th>Barangay</th>
-              <th>Meter</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {state.data.map((c) => (
-              <tr key={c.id}>
-                <td>
-                  <Link to={`/billing/consumers/${c.id}`} className="bill-table__link">
-                    {c.accountNumber}
-                  </Link>
-                </td>
-                <td>{c.lastName}, {c.firstName}{c.middleName ? ` ${c.middleName.charAt(0)}.` : ''}</td>
-                <td><span className={`bill-badge bill-badge--${c.consumerType}`}>{c.consumerType}</span></td>
-                <td>{c.barangay || '--'}</td>
-                <td className="bill-text-mono">{currentMeter(c)}</td>
-                <td><span className={`bill-badge bill-badge--${c.status}`}>{c.status}</span></td>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="bill-table">
+            <thead>
+              <tr>
+                <th>Account #</th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Barangay</th>
+                <th>Meter</th>
+                <th>Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {state.data.map((c) => (
+                <tr key={c.id}>
+                  <td>
+                    <Link to={`/billing/consumers/${c.id}`} className="bill-table__link">
+                      {c.accountNumber}
+                    </Link>
+                  </td>
+                  <td>
+                    {c.lastName}, {c.firstName}
+                    {c.middleName ? ` ${c.middleName.charAt(0)}.` : ''}
+                  </td>
+                  <td>
+                    <span className={`bill-badge bill-badge--${c.consumerType}`}>
+                      {c.consumerType}
+                    </span>
+                  </td>
+                  <td>{c.barangay || '--'}</td>
+                  <td className="bill-text-mono">{currentMeter(c)}</td>
+                  <td>
+                    <span className={`bill-badge bill-badge--${c.status}`}>{c.status}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

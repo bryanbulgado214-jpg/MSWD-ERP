@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { AccountingSubNav } from './AccountingSubNav';
 import './accounting.css';
 import { getTrialBalance, getGlFiscalYears, getGlPeriods } from '../api';
 import type { TrialBalanceRow, FiscalYearOption, PeriodOption } from '../types';
@@ -57,21 +56,24 @@ export default function TrialBalancePage() {
   const totalCredit = rows.reduce((s, r) => s + parseFloat(r.totalCredit), 0);
 
   return (
-    <div className="acct-page">
-      <AccountingSubNav />
+    <div className="acct-page acct-page--embedded">
       <h1>Trial Balance</h1>
 
       <div className="acct-toolbar">
         <select value={selectedFY} onChange={(e) => setSelectedFY(e.target.value)}>
           {fiscalYears.map((fy) => (
-            <option key={fy.id} value={fy.id}>FY {fy.year} — {fy.name}</option>
+            <option key={fy.id} value={fy.id}>
+              FY {fy.year} — {fy.name}
+            </option>
           ))}
         </select>
 
         <select value={selectedPeriod} onChange={(e) => setSelectedPeriod(e.target.value)}>
           <option value="">All Periods</option>
           {periods.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
           ))}
         </select>
       </div>
@@ -84,49 +86,61 @@ export default function TrialBalancePage() {
       )}
 
       {state.status === 'loaded' && rows.length > 0 && (
-        <table className="acct-table">
-          <thead>
-            <tr>
-              <th>Account Code</th>
-              <th>Account Name</th>
-              <th>Type</th>
-              <th className="acct-text-right">Debit</th>
-              <th className="acct-text-right">Credit</th>
-              <th className="acct-text-right">Balance</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.accountId}>
-                <td>
-                  <Link to={`/accounting/gl/subsidiary/${row.accountId}`} className="acct-table__link">
-                    {row.accountCode}
-                  </Link>
-                </td>
-                <td>{row.accountName}</td>
-                <td><span className={`acct-badge acct-badge--${row.accountType}`}>{row.accountType}</span></td>
-                <td className="acct-text-right acct-text-mono">{formatPeso(row.totalDebit)}</td>
-                <td className="acct-text-right acct-text-mono">{formatPeso(row.totalCredit)}</td>
-                <td className="acct-text-right acct-text-mono" style={{ fontWeight: 600 }}>
-                  {formatPeso(row.balance)}
+        <div style={{ overflowX: 'auto' }}>
+          <table className="acct-table">
+            <thead>
+              <tr>
+                <th>Account Code</th>
+                <th>Account Name</th>
+                <th>Type</th>
+                <th className="acct-text-right">Debit</th>
+                <th className="acct-text-right">Credit</th>
+                <th className="acct-text-right">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.accountId}>
+                  <td>
+                    <Link
+                      to={`/reports/subsidiary-ledgers/${row.accountId}`}
+                      className="acct-table__link"
+                    >
+                      {row.accountCode}
+                    </Link>
+                  </td>
+                  <td>{row.accountName}</td>
+                  <td>
+                    <span className={`acct-badge acct-badge--${row.accountType}`}>
+                      {row.accountType}
+                    </span>
+                  </td>
+                  <td className="acct-text-right acct-text-mono">{formatPeso(row.totalDebit)}</td>
+                  <td className="acct-text-right acct-text-mono">{formatPeso(row.totalCredit)}</td>
+                  <td className="acct-text-right acct-text-mono" style={{ fontWeight: 600 }}>
+                    {formatPeso(row.balance)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ fontWeight: 700, borderTop: '2px solid var(--mswd-navy)' }}>
+                <td colSpan={3}>Total</td>
+                <td className="acct-text-right acct-text-mono">{formatPeso(totalDebit)}</td>
+                <td className="acct-text-right acct-text-mono">{formatPeso(totalCredit)}</td>
+                <td className="acct-text-right acct-text-mono">
+                  {Math.abs(totalDebit - totalCredit) < 0.01 ? (
+                    <span style={{ color: '#067647' }}>Balanced</span>
+                  ) : (
+                    <span style={{ color: '#b42318' }}>
+                      Off by {formatPeso(Math.abs(totalDebit - totalCredit))}
+                    </span>
+                  )}
                 </td>
               </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr style={{ fontWeight: 700, borderTop: '2px solid var(--mswd-navy)' }}>
-              <td colSpan={3}>Total</td>
-              <td className="acct-text-right acct-text-mono">{formatPeso(totalDebit)}</td>
-              <td className="acct-text-right acct-text-mono">{formatPeso(totalCredit)}</td>
-              <td className="acct-text-right acct-text-mono">
-                {Math.abs(totalDebit - totalCredit) < 0.01
-                  ? <span style={{ color: '#067647' }}>Balanced</span>
-                  : <span style={{ color: '#b42318' }}>Off by {formatPeso(Math.abs(totalDebit - totalCredit))}</span>
-                }
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+            </tfoot>
+          </table>
+        </div>
       )}
     </div>
   );

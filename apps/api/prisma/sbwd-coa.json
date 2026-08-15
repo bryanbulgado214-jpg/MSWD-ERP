@@ -1,0 +1,3962 @@
+[
+  {
+    "code": "1",
+    "name": "Assets",
+    "type": "asset",
+    "balance": "debit",
+    "level": 1,
+    "parentCode": null,
+    "isHeader": true,
+    "uacs": "1"
+  },
+  {
+    "code": "2",
+    "name": "Liabilities",
+    "type": "liability",
+    "balance": "credit",
+    "level": 1,
+    "parentCode": null,
+    "isHeader": true,
+    "uacs": "2"
+  },
+  {
+    "code": "3",
+    "name": "Equity",
+    "type": "equity",
+    "balance": "credit",
+    "level": 1,
+    "parentCode": null,
+    "isHeader": true,
+    "uacs": "3"
+  },
+  {
+    "code": "4",
+    "name": "Revenue",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 1,
+    "parentCode": null,
+    "isHeader": true,
+    "uacs": "4"
+  },
+  {
+    "code": "5",
+    "name": "Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 1,
+    "parentCode": null,
+    "isHeader": true,
+    "uacs": "5"
+  },
+  {
+    "code": "1-01",
+    "name": "Cash and Cash Equivalents",
+    "type": "asset",
+    "balance": "debit",
+    "level": 2,
+    "parentCode": "1",
+    "isHeader": true,
+    "uacs": "1-01"
+  },
+  {
+    "code": "1-01-01",
+    "name": "Cash on Hand",
+    "type": "asset",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "1-01",
+    "isHeader": true,
+    "uacs": "1-01-01"
+  },
+  {
+    "code": "1-01-01-010",
+    "name": "Cash - Collecting Officer",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-01-01",
+    "isHeader": false,
+    "uacs": "1-01-01-010"
+  },
+  {
+    "code": "1-01-01-020",
+    "name": "Petty Cash Fund",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-01-01",
+    "isHeader": false,
+    "uacs": "1-01-01-020"
+  },
+  {
+    "code": "1-01-01-030",
+    "name": "Local Currency On Hand",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-01-01",
+    "isHeader": false,
+    "uacs": "1-01-01-030"
+  },
+  {
+    "code": "1-01-02",
+    "name": "Cash In Bank - Local Currency",
+    "type": "asset",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "1-01",
+    "isHeader": true,
+    "uacs": "1-01-02"
+  },
+  {
+    "code": "1-01-02-020",
+    "name": "Cash in Bank - Local Currency, Current Account",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-01-02",
+    "isHeader": true,
+    "uacs": "1-01-02-020"
+  },
+  {
+    "code": "1-01-02-020-01",
+    "name": "Cash in Bank - Local Currency - LBP Current Acct.# 1912-1016-70",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-01-02-020",
+    "isHeader": false,
+    "uacs": "1-01-02-020-01"
+  },
+  {
+    "code": "1-01-02-020-02",
+    "name": "Cash in Bank - Local Currency - DBP Current Account no. 0712-0397-8N030",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-01-02-020",
+    "isHeader": false,
+    "uacs": "1-01-02-020-02"
+  },
+  {
+    "code": "1-01-02-020-03",
+    "name": "Cash in Bank - Local Currency - LBP Current Acct. #1912-105-420",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-01-02-020",
+    "isHeader": false,
+    "uacs": "1-01-02-020-03"
+  },
+  {
+    "code": "1-01-02-030",
+    "name": "Cash in Bank - Local Currency, Savings Account",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-01-02",
+    "isHeader": true,
+    "uacs": "1-01-02-030"
+  },
+  {
+    "code": "1-01-02-030-01",
+    "name": "Cash in Bank - Local Currency - LBP Customers Deposit Acct.# 1911-06002-01",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-01-02-030",
+    "isHeader": false,
+    "uacs": "1-01-02-030-01"
+  },
+  {
+    "code": "1-01-02-030-02",
+    "name": "Cash in Bank - Local Currency - LBP Reserve Fund Acct.# 1911-0579-52",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-01-02-030",
+    "isHeader": false,
+    "uacs": "1-01-02-030-02"
+  },
+  {
+    "code": "1-01-02-030-03",
+    "name": "Cash in Bank - Local Currency - DBP Savings Account no.005023717126",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-01-02-030",
+    "isHeader": false,
+    "uacs": "1-01-02-030-03"
+  },
+  {
+    "code": "1-03",
+    "name": "Receivables",
+    "type": "asset",
+    "balance": "debit",
+    "level": 2,
+    "parentCode": "1",
+    "isHeader": true,
+    "uacs": "1-03"
+  },
+  {
+    "code": "1-03-01",
+    "name": "Loans and Receivable Accounts",
+    "type": "asset",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "1-03",
+    "isHeader": true,
+    "uacs": "1-03-01"
+  },
+  {
+    "code": "1-03-01-010",
+    "name": "Accounts Receivable",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-03-01",
+    "isHeader": false,
+    "uacs": "1-03-01-010"
+  },
+  {
+    "code": "1-03-01-011",
+    "name": "Allowance for Impairment - Accounts Receivable",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-03-01",
+    "isHeader": false,
+    "uacs": "1-03-01-011"
+  },
+  {
+    "code": "1-03-05",
+    "name": "Other Receivables",
+    "type": "asset",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "1-03",
+    "isHeader": true,
+    "uacs": "1-03-05"
+  },
+  {
+    "code": "1-03-05-010",
+    "name": "Receivable - Disallowances / Charges",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-03-05",
+    "isHeader": false,
+    "uacs": "1-03-05-010"
+  },
+  {
+    "code": "1-03-05-020",
+    "name": "Due from Officers and Employees",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-03-05",
+    "isHeader": false,
+    "uacs": "1-03-05-020"
+  },
+  {
+    "code": "1-03-05-990",
+    "name": "Other Receivables",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-03-05",
+    "isHeader": false,
+    "uacs": "1-03-05-990"
+  },
+  {
+    "code": "1-03-05-991",
+    "name": "Allowance for Impairment - Other Receivables",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-03-05",
+    "isHeader": false,
+    "uacs": "1-03-05-991"
+  },
+  {
+    "code": "1-04",
+    "name": "Inventories",
+    "type": "asset",
+    "balance": "debit",
+    "level": 2,
+    "parentCode": "1",
+    "isHeader": true,
+    "uacs": "1-04"
+  },
+  {
+    "code": "1-04-04",
+    "name": "Inventory Held for Consumption",
+    "type": "asset",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "1-04",
+    "isHeader": true,
+    "uacs": "1-04-04"
+  },
+  {
+    "code": "1-04-04-010",
+    "name": "Office Supplies Inventory",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-04-04",
+    "isHeader": false,
+    "uacs": "1-04-04-010"
+  },
+  {
+    "code": "1-04-04-011",
+    "name": "Allowance for Impairment - Office Supplies Inventory",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-04-04",
+    "isHeader": false,
+    "uacs": "1-04-04-011"
+  },
+  {
+    "code": "1-04-04-020",
+    "name": "Accountable Forms, Plates and Stickers Inventory",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-04-04",
+    "isHeader": false,
+    "uacs": "1-04-04-020"
+  },
+  {
+    "code": "1-04-04-021",
+    "name": "Allowance for Impairment - Accountable Forms, Plates and Stickers Inventory",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-04-04",
+    "isHeader": false,
+    "uacs": "1-04-04-021"
+  },
+  {
+    "code": "1-04-04-080",
+    "name": "Fuel, Oil and Lubricants Inventory",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-04-04",
+    "isHeader": false,
+    "uacs": "1-04-04-080"
+  },
+  {
+    "code": "1-04-04-081",
+    "name": "Allowance for Impairment - Fuel, Oil and Lubricants Inventory",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-04-04",
+    "isHeader": false,
+    "uacs": "1-04-04-081"
+  },
+  {
+    "code": "1-04-04-120",
+    "name": "Chemicals and Filtering Supplies Inventory",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-04-04",
+    "isHeader": false,
+    "uacs": "1-04-04-120"
+  },
+  {
+    "code": "1-04-04-121",
+    "name": "Allowance for Impairment - Chemicals and Filtering Supplies Inventory",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-04-04",
+    "isHeader": false,
+    "uacs": "1-04-04-121"
+  },
+  {
+    "code": "1-04-04-990",
+    "name": "Other Supplies and Materials Inventory",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-04-04",
+    "isHeader": false,
+    "uacs": "1-04-04-990"
+  },
+  {
+    "code": "1-04-04-991",
+    "name": "Allowance for Impairment - Other Supplies and Materials Inventory",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-04-04",
+    "isHeader": false,
+    "uacs": "1-04-04-991"
+  },
+  {
+    "code": "1-06",
+    "name": "Property, Plant and Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 2,
+    "parentCode": "1",
+    "isHeader": true,
+    "uacs": "1-06"
+  },
+  {
+    "code": "1-06-01",
+    "name": "Land",
+    "type": "asset",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "1-06",
+    "isHeader": true,
+    "uacs": "1-06-01"
+  },
+  {
+    "code": "1-06-01-010",
+    "name": "Land",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-01",
+    "isHeader": false,
+    "uacs": "1-06-01-010"
+  },
+  {
+    "code": "1-06-01-011",
+    "name": "Accumulated Impairment Losses - Land",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-01",
+    "isHeader": false,
+    "uacs": "1-06-01-011"
+  },
+  {
+    "code": "1-06-03",
+    "name": "Infrastructure Assets",
+    "type": "asset",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "1-06",
+    "isHeader": true,
+    "uacs": "1-06-03"
+  },
+  {
+    "code": "1-06-03-030",
+    "name": "Sewer Systems",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-03",
+    "isHeader": false,
+    "uacs": "1-06-03-030"
+  },
+  {
+    "code": "1-06-03-031",
+    "name": "Accumulated Depreciation - Sewer Systems",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-03",
+    "isHeader": false,
+    "uacs": "1-06-03-031"
+  },
+  {
+    "code": "1-06-03-032",
+    "name": "Accumulated Impairment Losses - Sewer Systems",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-03",
+    "isHeader": false,
+    "uacs": "1-06-03-032"
+  },
+  {
+    "code": "1-06-03-040",
+    "name": "Water Supply Systems",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-03",
+    "isHeader": false,
+    "uacs": "1-06-03-040"
+  },
+  {
+    "code": "1-06-03-041",
+    "name": "Accumulated Depreciation - Water Supply Systems",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-03",
+    "isHeader": false,
+    "uacs": "1-06-03-041"
+  },
+  {
+    "code": "1-06-03-042",
+    "name": "Accumulated Impairment Losses - Water Supply Systems",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-03",
+    "isHeader": false,
+    "uacs": "1-06-03-042"
+  },
+  {
+    "code": "1-06-03-110",
+    "name": "Plant - Utility Plant in Service",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-03",
+    "isHeader": true,
+    "uacs": "1-06-03-110"
+  },
+  {
+    "code": "1-06-03-110-01",
+    "name": "Plant (UPIS) - Collecting and Impounding Reservoirs",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-03-110",
+    "isHeader": false,
+    "uacs": "1-06-03-110-01"
+  },
+  {
+    "code": "1-06-03-110-02",
+    "name": "Plant (UPIS) - Lake River and Other Channels",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-03-110",
+    "isHeader": false,
+    "uacs": "1-06-03-110-02"
+  },
+  {
+    "code": "1-06-03-110-03",
+    "name": "Plant (UPIS) - Springs and Tunnels",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-03-110",
+    "isHeader": false,
+    "uacs": "1-06-03-110-03"
+  },
+  {
+    "code": "1-06-03-110-04",
+    "name": "Plant (UPIS) - Wells",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-03-110",
+    "isHeader": false,
+    "uacs": "1-06-03-110-04"
+  },
+  {
+    "code": "1-06-03-110-05",
+    "name": "Plant (UPIS) - Supply Mains",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-03-110",
+    "isHeader": false,
+    "uacs": "1-06-03-110-05"
+  },
+  {
+    "code": "1-06-03-110-06",
+    "name": "Plant (UPIS) - Other Source of Supply Plant",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-03-110",
+    "isHeader": false,
+    "uacs": "1-06-03-110-06"
+  },
+  {
+    "code": "1-06-03-110-07",
+    "name": "Plant (UPIS) - Other Pumping Plant",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-03-110",
+    "isHeader": false,
+    "uacs": "1-06-03-110-07"
+  },
+  {
+    "code": "1-06-03-110-08",
+    "name": "Plant (UPIS) - Reservoirs and Tanks",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-03-110",
+    "isHeader": false,
+    "uacs": "1-06-03-110-08"
+  },
+  {
+    "code": "1-06-03-110-09",
+    "name": "Plant (UPIS) - Transmission and Distribution Mains",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-03-110",
+    "isHeader": false,
+    "uacs": "1-06-03-110-09"
+  },
+  {
+    "code": "1-06-03-110-10",
+    "name": "Plant (UPIS) - Fire Mains",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-03-110",
+    "isHeader": false,
+    "uacs": "1-06-03-110-10"
+  },
+  {
+    "code": "1-06-03-110-11",
+    "name": "Plant (UPIS) - Services",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-03-110",
+    "isHeader": false,
+    "uacs": "1-06-03-110-11"
+  },
+  {
+    "code": "1-06-03-110-12",
+    "name": "Plant (UPIS) - Meters",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-03-110",
+    "isHeader": false,
+    "uacs": "1-06-03-110-12"
+  },
+  {
+    "code": "1-06-03-110-13",
+    "name": "Plant (UPIS) - Meter Installation",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-03-110",
+    "isHeader": false,
+    "uacs": "1-06-03-110-13"
+  },
+  {
+    "code": "1-06-03-110-14",
+    "name": "Plant (UPIS) - Hydrants",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-03-110",
+    "isHeader": false,
+    "uacs": "1-06-03-110-14"
+  },
+  {
+    "code": "1-06-03-110-15",
+    "name": "Plant (UPIS) - Other Transmission and Distribution Mains",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-03-110",
+    "isHeader": false,
+    "uacs": "1-06-03-110-15"
+  },
+  {
+    "code": "1-06-03-110-16",
+    "name": "Plant (UPIS) - Other Plants",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-03-110",
+    "isHeader": false,
+    "uacs": "1-06-03-110-16"
+  },
+  {
+    "code": "1-06-03-110-17",
+    "name": "Plant (UPIS) - Utility Plant Held for future use",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-03-110",
+    "isHeader": false,
+    "uacs": "1-06-03-110-17"
+  },
+  {
+    "code": "1-06-03-110-18",
+    "name": "Plant (UPIS) - Unclassified Utility Plant",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-03-110",
+    "isHeader": false,
+    "uacs": "1-06-03-110-18"
+  },
+  {
+    "code": "1-06-03-111",
+    "name": "Accumulated Depreciation - Plant (UPIS)",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-03",
+    "isHeader": false,
+    "uacs": "1-06-03-111"
+  },
+  {
+    "code": "1-06-03-112",
+    "name": "Accumulated Impairment Losses - Plant (UPIS)",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-03",
+    "isHeader": false,
+    "uacs": "1-06-03-112"
+  },
+  {
+    "code": "1-06-04",
+    "name": "Buildings and Other Structures",
+    "type": "asset",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "1-06",
+    "isHeader": true,
+    "uacs": "1-06-04"
+  },
+  {
+    "code": "1-06-04-010",
+    "name": "Buildings",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-04",
+    "isHeader": true,
+    "uacs": "1-06-04-010"
+  },
+  {
+    "code": "1-06-04-010-1",
+    "name": "Administrative Structure and Improvement",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-04-010",
+    "isHeader": false,
+    "uacs": "1-06-04-010-1"
+  },
+  {
+    "code": "1-06-04-011",
+    "name": "Accumulated Depreciation - Buildings",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-04",
+    "isHeader": false,
+    "uacs": "1-06-04-011"
+  },
+  {
+    "code": "1-06-04-012",
+    "name": "Accumulated Impairment Losses - Buildings",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-04",
+    "isHeader": false,
+    "uacs": "1-06-04-012"
+  },
+  {
+    "code": "1-06-04-070",
+    "name": "Water Plant, Structures and Improvements",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-04",
+    "isHeader": true,
+    "uacs": "1-06-04-070"
+  },
+  {
+    "code": "1-06-04-070-1",
+    "name": "Soure of Supply Plant Structures and Improvements",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-04-070",
+    "isHeader": false,
+    "uacs": "1-06-04-070-1"
+  },
+  {
+    "code": "1-06-04-070-2",
+    "name": "Pumping Plant Structures and Improvements",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-04-070",
+    "isHeader": false,
+    "uacs": "1-06-04-070-2"
+  },
+  {
+    "code": "1-06-04-070-3",
+    "name": "Water Treatment Structures and Improvements",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-04-070",
+    "isHeader": false,
+    "uacs": "1-06-04-070-3"
+  },
+  {
+    "code": "1-06-04-070-4",
+    "name": "Transmission and Distribution Structures and Improvements",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-04-070",
+    "isHeader": false,
+    "uacs": "1-06-04-070-4"
+  },
+  {
+    "code": "1-06-04-071",
+    "name": "Accumulated Depreciation - Water Plant, Structures and Improvements",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-04",
+    "isHeader": false,
+    "uacs": "1-06-04-071"
+  },
+  {
+    "code": "1-06-04-072",
+    "name": "Accumulated Impairment Losses - Water Plant, Structures and Improvements",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-04",
+    "isHeader": false,
+    "uacs": "1-06-04-072"
+  },
+  {
+    "code": "1-06-04-990",
+    "name": "Other Structures",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-04",
+    "isHeader": false,
+    "uacs": "1-06-04-990"
+  },
+  {
+    "code": "1-06-04-991",
+    "name": "Accumulated Depreciation - Other Structures",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-04",
+    "isHeader": false,
+    "uacs": "1-06-04-991"
+  },
+  {
+    "code": "1-06-04-992",
+    "name": "Accumulated Impairment Losses - Other Structures",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-04",
+    "isHeader": false,
+    "uacs": "1-06-04-992"
+  },
+  {
+    "code": "1-06-05",
+    "name": "Machinery and Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "1-06",
+    "isHeader": true,
+    "uacs": "1-06-05"
+  },
+  {
+    "code": "1-06-05-010",
+    "name": "Machinery",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-05",
+    "isHeader": false,
+    "uacs": "1-06-05-010"
+  },
+  {
+    "code": "1-06-05-011",
+    "name": "Accumulated Depreciation - Machinery",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-05",
+    "isHeader": false,
+    "uacs": "1-06-05-011"
+  },
+  {
+    "code": "1-06-05-012",
+    "name": "Accumulated Impairment Losses - Machinery",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-05",
+    "isHeader": false,
+    "uacs": "1-06-05-012"
+  },
+  {
+    "code": "1-06-05-020",
+    "name": "Office Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-05",
+    "isHeader": false,
+    "uacs": "1-06-05-020"
+  },
+  {
+    "code": "1-06-05-021",
+    "name": "Accumulated Depreciation - Office Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-05",
+    "isHeader": false,
+    "uacs": "1-06-05-021"
+  },
+  {
+    "code": "1-06-05-022",
+    "name": "Accumulated Impairment Losses - Office Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-05",
+    "isHeader": false,
+    "uacs": "1-06-05-022"
+  },
+  {
+    "code": "1-06-05-030",
+    "name": "Information and Communication Technology Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-05",
+    "isHeader": false,
+    "uacs": "1-06-05-030"
+  },
+  {
+    "code": "1-06-05-031",
+    "name": "Accumulated Depreciation - Information and Communication Technology Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-05",
+    "isHeader": false,
+    "uacs": "1-06-05-031"
+  },
+  {
+    "code": "1-06-05-032",
+    "name": "Accumulated Impairment Losses - Information and Communication Technology Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-05",
+    "isHeader": false,
+    "uacs": "1-06-05-032"
+  },
+  {
+    "code": "1-06-05-070",
+    "name": "Communication Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-05",
+    "isHeader": false,
+    "uacs": "1-06-05-070"
+  },
+  {
+    "code": "1-06-05-071",
+    "name": "Accumulated Depreciation - Communication Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-05",
+    "isHeader": false,
+    "uacs": "1-06-05-071"
+  },
+  {
+    "code": "1-06-05-072",
+    "name": "Accumulated Impairment Losses - Communication Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-05",
+    "isHeader": false,
+    "uacs": "1-06-05-072"
+  },
+  {
+    "code": "1-06-05-120",
+    "name": "Printing Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-05",
+    "isHeader": false,
+    "uacs": "1-06-05-120"
+  },
+  {
+    "code": "1-06-05-121",
+    "name": "Accumulated Depreciation - Printing Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-05",
+    "isHeader": false,
+    "uacs": "1-06-05-121"
+  },
+  {
+    "code": "1-06-05-122",
+    "name": "Accumulated Impairment Losses - Printing Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-05",
+    "isHeader": false,
+    "uacs": "1-06-05-122"
+  },
+  {
+    "code": "1-06-05-990",
+    "name": "Other Machinery and Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-05",
+    "isHeader": false,
+    "uacs": "1-06-05-990"
+  },
+  {
+    "code": "1-06-05-991",
+    "name": "Accumulated Depreciation - Other Machinery and Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-05",
+    "isHeader": false,
+    "uacs": "1-06-05-991"
+  },
+  {
+    "code": "1-06-05-992",
+    "name": "Accumulated Impairment Losses - Other Machinery and Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-05",
+    "isHeader": false,
+    "uacs": "1-06-05-992"
+  },
+  {
+    "code": "1-06-06",
+    "name": "Transportation Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "1-06",
+    "isHeader": true,
+    "uacs": "1-06-06"
+  },
+  {
+    "code": "1-06-06-010",
+    "name": "Motor Vehicles",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-06",
+    "isHeader": false,
+    "uacs": "1-06-06-010"
+  },
+  {
+    "code": "1-06-06-011",
+    "name": "Accumulated Depreciation - Motor Vehicles",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-06",
+    "isHeader": false,
+    "uacs": "1-06-06-011"
+  },
+  {
+    "code": "1-06-06-012",
+    "name": "Accumulated Impairment Losses - Motor Vehicles",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-06",
+    "isHeader": false,
+    "uacs": "1-06-06-012"
+  },
+  {
+    "code": "1-06-06-990",
+    "name": "Other Transportation Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-06",
+    "isHeader": false,
+    "uacs": "1-06-06-990"
+  },
+  {
+    "code": "1-06-06-991",
+    "name": "Accumulated Depreciation - Other Transportation Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-06",
+    "isHeader": false,
+    "uacs": "1-06-06-991"
+  },
+  {
+    "code": "1-06-06-992",
+    "name": "Accumulated Impairment Losses - Other Transportation Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-06",
+    "isHeader": false,
+    "uacs": "1-06-06-992"
+  },
+  {
+    "code": "1-06-07",
+    "name": "Furniture and Fixtures",
+    "type": "asset",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "1-06",
+    "isHeader": true,
+    "uacs": "1-06-07"
+  },
+  {
+    "code": "1-06-07-010",
+    "name": "Furniture and Fixtures",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-07",
+    "isHeader": false,
+    "uacs": "1-06-07-010"
+  },
+  {
+    "code": "1-06-07-011",
+    "name": "Accumulated Depreciation - Furniture and Fixtures",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-07",
+    "isHeader": false,
+    "uacs": "1-06-07-011"
+  },
+  {
+    "code": "1-06-07-012",
+    "name": "Accumulated Impairment Losses - Furniture and Fixtures",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-07",
+    "isHeader": false,
+    "uacs": "1-06-07-012"
+  },
+  {
+    "code": "1-06-11",
+    "name": "Service Concession-Tangeble Assets",
+    "type": "asset",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "1-06",
+    "isHeader": true,
+    "uacs": "1-06-11"
+  },
+  {
+    "code": "1-06-11-030",
+    "name": "Service Concession-Sewer Systems",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-11",
+    "isHeader": false,
+    "uacs": "1-06-11-030"
+  },
+  {
+    "code": "1-06-11-031",
+    "name": "Accumulated Depreciation-Service Concession-Sewer Systems",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-11",
+    "isHeader": false,
+    "uacs": "1-06-11-031"
+  },
+  {
+    "code": "1-06-11-032",
+    "name": "Accumulated Impairment Losses - Service Concession-Sewer Systems",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-11",
+    "isHeader": false,
+    "uacs": "1-06-11-032"
+  },
+  {
+    "code": "1-06-11-040",
+    "name": "Service Concession-Water Supply Systems",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-11",
+    "isHeader": false,
+    "uacs": "1-06-11-040"
+  },
+  {
+    "code": "1-06-11-041",
+    "name": "Accumulated Depreciation-Service Concession-Water Supply Systems",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-11",
+    "isHeader": false,
+    "uacs": "1-06-11-041"
+  },
+  {
+    "code": "1-06-98",
+    "name": "Other Property, Plant and Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "1-06",
+    "isHeader": true,
+    "uacs": "1-06-98"
+  },
+  {
+    "code": "1-06-98-990",
+    "name": "Other Property, Plant and Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-98",
+    "isHeader": true,
+    "uacs": "1-06-98-990"
+  },
+  {
+    "code": "1-06-98-990-01",
+    "name": "Laboratory Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-98-990",
+    "isHeader": false,
+    "uacs": "1-06-98-990-01"
+  },
+  {
+    "code": "1-06-98-990-02",
+    "name": "Power Production Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-98-990",
+    "isHeader": false,
+    "uacs": "1-06-98-990-02"
+  },
+  {
+    "code": "1-06-98-990-03",
+    "name": "Pumping Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-98-990",
+    "isHeader": false,
+    "uacs": "1-06-98-990-03"
+  },
+  {
+    "code": "1-06-98-990-04",
+    "name": "Water Treatment Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-98-990",
+    "isHeader": false,
+    "uacs": "1-06-98-990-04"
+  },
+  {
+    "code": "1-06-98-990-05",
+    "name": "Stores Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-98-990",
+    "isHeader": false,
+    "uacs": "1-06-98-990-05"
+  },
+  {
+    "code": "1-06-98-990-06",
+    "name": "Communications Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-98-990",
+    "isHeader": false,
+    "uacs": "1-06-98-990-06"
+  },
+  {
+    "code": "1-06-98-990-07",
+    "name": "Power Operated Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-98-990",
+    "isHeader": false,
+    "uacs": "1-06-98-990-07"
+  },
+  {
+    "code": "1-06-98-990-08",
+    "name": "Tools, Shop and Garage Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "1-06-98-990",
+    "isHeader": false,
+    "uacs": "1-06-98-990-08"
+  },
+  {
+    "code": "1-06-98-991",
+    "name": "Accumulated Depreciation - Other Property, Plant and Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-98",
+    "isHeader": false,
+    "uacs": "1-06-98-991"
+  },
+  {
+    "code": "1-06-98-992",
+    "name": "Accumulated Impairment Losses - Other Property, Plant and Equipment",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-98",
+    "isHeader": false,
+    "uacs": "1-06-98-992"
+  },
+  {
+    "code": "1-06-99",
+    "name": "Construction in Progress",
+    "type": "asset",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "1-06",
+    "isHeader": true,
+    "uacs": "1-06-99"
+  },
+  {
+    "code": "1-06-99-020",
+    "name": "Construction in Progress - Infrastructure Assets",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-99",
+    "isHeader": false,
+    "uacs": "1-06-99-020"
+  },
+  {
+    "code": "1-06-99-030",
+    "name": "Construction in Progress - Buildings and Other Structures",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-99",
+    "isHeader": false,
+    "uacs": "1-06-99-030"
+  },
+  {
+    "code": "1-06-99-060",
+    "name": "Construction in Progress - Furniture and Fixtures",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-06-99",
+    "isHeader": false,
+    "uacs": "1-06-99-060"
+  },
+  {
+    "code": "1-99",
+    "name": "Other Assets",
+    "type": "asset",
+    "balance": "debit",
+    "level": 2,
+    "parentCode": "1",
+    "isHeader": true,
+    "uacs": "1-99"
+  },
+  {
+    "code": "1-99-01",
+    "name": "Advances",
+    "type": "asset",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "1-99",
+    "isHeader": true,
+    "uacs": "1-99-01"
+  },
+  {
+    "code": "1-99-01-010",
+    "name": "Advances for Operating Expenses",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-99-01",
+    "isHeader": false,
+    "uacs": "1-99-01-010"
+  },
+  {
+    "code": "1-99-01-020",
+    "name": "Advances for Payroll",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-99-01",
+    "isHeader": false,
+    "uacs": "1-99-01-020"
+  },
+  {
+    "code": "1-99-01-030",
+    "name": "Advances to Special Disbursing Officer",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-99-01",
+    "isHeader": false,
+    "uacs": "1-99-01-030"
+  },
+  {
+    "code": "1-99-01-040",
+    "name": "Advances to Officers and Employees",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-99-01",
+    "isHeader": false,
+    "uacs": "1-99-01-040"
+  },
+  {
+    "code": "1-99-02",
+    "name": "Prepayments",
+    "type": "asset",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "1-99",
+    "isHeader": true,
+    "uacs": "1-99-02"
+  },
+  {
+    "code": "1-99-02-010",
+    "name": "Advances to Contractors",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-99-02",
+    "isHeader": false,
+    "uacs": "1-99-02-010"
+  },
+  {
+    "code": "1-99-02-020",
+    "name": "Prepaid Rent",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-99-02",
+    "isHeader": false,
+    "uacs": "1-99-02-020"
+  },
+  {
+    "code": "1-99-02-050",
+    "name": "Prepaid Insurance",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-99-02",
+    "isHeader": false,
+    "uacs": "1-99-02-050"
+  },
+  {
+    "code": "1-99-02-990",
+    "name": "Other Prepayments",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-99-02",
+    "isHeader": false,
+    "uacs": "1-99-02-990"
+  },
+  {
+    "code": "1-99-99",
+    "name": "Other Assets",
+    "type": "asset",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "1-99",
+    "isHeader": true,
+    "uacs": "1-99-99"
+  },
+  {
+    "code": "1-99-99-080",
+    "name": "Deferred Charges/Losses",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-99-99",
+    "isHeader": false,
+    "uacs": "1-99-99-080"
+  },
+  {
+    "code": "1-99-99-990",
+    "name": "Other Assets",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-99-99",
+    "isHeader": false,
+    "uacs": "1-99-99-990"
+  },
+  {
+    "code": "1-99-99-991",
+    "name": "Accumulated Impairment Losses - Other Assets",
+    "type": "asset",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "1-99-99",
+    "isHeader": false,
+    "uacs": "1-99-99-991"
+  },
+  {
+    "code": "2-01",
+    "name": "Financial Liabilities",
+    "type": "liability",
+    "balance": "credit",
+    "level": 2,
+    "parentCode": "2",
+    "isHeader": true,
+    "uacs": "2-01"
+  },
+  {
+    "code": "2-01-01",
+    "name": "Payables",
+    "type": "liability",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "2-01",
+    "isHeader": true,
+    "uacs": "2-01-01"
+  },
+  {
+    "code": "2-01-01-010",
+    "name": "Accounts Payable",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-01-01",
+    "isHeader": false,
+    "uacs": "2-01-01-010"
+  },
+  {
+    "code": "2-01-01-020",
+    "name": "Due to Officers and Employees",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-01-01",
+    "isHeader": false,
+    "uacs": "2-01-01-020"
+  },
+  {
+    "code": "2-01-01-040",
+    "name": "Notes Payable",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-01-01",
+    "isHeader": false,
+    "uacs": "2-01-01-040"
+  },
+  {
+    "code": "2-01-01-050",
+    "name": "Interest Payable",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-01-01",
+    "isHeader": false,
+    "uacs": "2-01-01-050"
+  },
+  {
+    "code": "2-01-01-070",
+    "name": "Finance Lease Payable",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-01-01",
+    "isHeader": false,
+    "uacs": "2-01-01-070"
+  },
+  {
+    "code": "2-01-01-080",
+    "name": "Awards and Rewards Payable",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-01-01",
+    "isHeader": false,
+    "uacs": "2-01-01-080"
+  },
+  {
+    "code": "2-01-01-090",
+    "name": "Service Concession Arrangement Payable",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-01-01",
+    "isHeader": false,
+    "uacs": "2-01-01-090"
+  },
+  {
+    "code": "2-01-01-100",
+    "name": "Accrued Benefits Payable",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-01-01",
+    "isHeader": false,
+    "uacs": "2-01-01-100"
+  },
+  {
+    "code": "2-01-02",
+    "name": "Bills/Bonds/Loans Payable",
+    "type": "liability",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "2-01",
+    "isHeader": true,
+    "uacs": "2-01-02"
+  },
+  {
+    "code": "2-01-02-040",
+    "name": "Loans Payable - Domestic",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-01-02",
+    "isHeader": true,
+    "uacs": "2-01-02-040"
+  },
+  {
+    "code": "2-01-02-040-01",
+    "name": "Loans Payable - Current Portion of Long Term Debt",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-01-02-040",
+    "isHeader": false,
+    "uacs": "2-01-02-040-01"
+  },
+  {
+    "code": "2-01-02-040-02",
+    "name": "Loans Payable - (Long Term Debt)",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-01-02-040",
+    "isHeader": false,
+    "uacs": "2-01-02-040-02"
+  },
+  {
+    "code": "2-01-02-050",
+    "name": "Penalty on Loans Payable",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-01-02",
+    "isHeader": false,
+    "uacs": "2-01-02-050"
+  },
+  {
+    "code": "2-01-02-990",
+    "name": "Other Bills/Bonds/Loans Payable",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-01-02",
+    "isHeader": false,
+    "uacs": "2-01-02-990"
+  },
+  {
+    "code": "2-01-99",
+    "name": "Other Financial Liabilities",
+    "type": "liability",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "2-01",
+    "isHeader": true,
+    "uacs": "2-01-99"
+  },
+  {
+    "code": "2-01-99-990",
+    "name": "Other Financial Liabilities",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-01-99",
+    "isHeader": false,
+    "uacs": "2-01-99-990"
+  },
+  {
+    "code": "2-02",
+    "name": "Inter-Agency Payables",
+    "type": "liability",
+    "balance": "credit",
+    "level": 2,
+    "parentCode": "2",
+    "isHeader": true,
+    "uacs": "2-02"
+  },
+  {
+    "code": "2-02-01",
+    "name": "Inter-Agency Payables",
+    "type": "liability",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "2-02",
+    "isHeader": true,
+    "uacs": "2-02-01"
+  },
+  {
+    "code": "2-02-01-010",
+    "name": "Due to BIR",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-02-01",
+    "isHeader": true,
+    "uacs": "2-02-01-010"
+  },
+  {
+    "code": "2-02-01-010-01",
+    "name": "Due to BIR - Withholding Tax on Compensation",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-010",
+    "isHeader": false,
+    "uacs": "2-02-01-010-01"
+  },
+  {
+    "code": "2-02-01-010-02",
+    "name": "Due to BIR - Expanded Withholding Tax",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-010",
+    "isHeader": false,
+    "uacs": "2-02-01-010-02"
+  },
+  {
+    "code": "2-02-01-010-03",
+    "name": "Due to BIR - Withholding Tax on Government Money Payments (GMP) - Percentage Taxes",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-010",
+    "isHeader": false,
+    "uacs": "2-02-01-010-03"
+  },
+  {
+    "code": "2-02-01-010-04",
+    "name": "Due to BIR - Withholding Tax on Government Money Payments (GMP) - VAT",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-010",
+    "isHeader": false,
+    "uacs": "2-02-01-010-04"
+  },
+  {
+    "code": "2-02-01-010-05",
+    "name": "Due to BIR - Franchise Tax",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-010",
+    "isHeader": false,
+    "uacs": "2-02-01-010-05"
+  },
+  {
+    "code": "2-02-01-020",
+    "name": "Due to GSIS",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-02-01",
+    "isHeader": true,
+    "uacs": "2-02-01-020"
+  },
+  {
+    "code": "2-02-01-020-01",
+    "name": "Due to GSIS - Life and Retirement Premium",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-020",
+    "isHeader": false,
+    "uacs": "2-02-01-020-01"
+  },
+  {
+    "code": "2-02-01-020-02",
+    "name": "Due to GSIS - ECC",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-020",
+    "isHeader": false,
+    "uacs": "2-02-01-020-02"
+  },
+  {
+    "code": "2-02-01-020-03",
+    "name": "Due to GSIS - Salary Loan",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-020",
+    "isHeader": false,
+    "uacs": "2-02-01-020-03"
+  },
+  {
+    "code": "2-02-01-020-04",
+    "name": "Due to GSIS - Policy Loan",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-020",
+    "isHeader": false,
+    "uacs": "2-02-01-020-04"
+  },
+  {
+    "code": "2-02-01-020-05",
+    "name": "Due to GSIS - GFAL",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-020",
+    "isHeader": false,
+    "uacs": "2-02-01-020-05"
+  },
+  {
+    "code": "2-02-01-020-06",
+    "name": "Due to GSIS - Consol",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-020",
+    "isHeader": false,
+    "uacs": "2-02-01-020-06"
+  },
+  {
+    "code": "2-02-01-020-07",
+    "name": "Due to GSIS - Educational Assistance",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-020",
+    "isHeader": false,
+    "uacs": "2-02-01-020-07"
+  },
+  {
+    "code": "2-02-01-020-08",
+    "name": "Due to GSIS - Emergency Loan",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-020",
+    "isHeader": false,
+    "uacs": "2-02-01-020-08"
+  },
+  {
+    "code": "2-02-01-020-09",
+    "name": "Due to GSIS - MPL",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-020",
+    "isHeader": false,
+    "uacs": "2-02-01-020-09"
+  },
+  {
+    "code": "2-02-01-020-10",
+    "name": "Due to GSIS - Computer Loan",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-020",
+    "isHeader": false,
+    "uacs": "2-02-01-020-10"
+  },
+  {
+    "code": "2-02-01-020-11",
+    "name": "Due to GSIS - Multi-purpose Lite",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-020",
+    "isHeader": false,
+    "uacs": "2-02-01-020-11"
+  },
+  {
+    "code": "2-02-01-030",
+    "name": "Due to Pag-IBIG",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-02-01",
+    "isHeader": true,
+    "uacs": "2-02-01-030"
+  },
+  {
+    "code": "2-02-01-030-01",
+    "name": "Due to Pag-IBIG - Premium",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-030",
+    "isHeader": false,
+    "uacs": "2-02-01-030-01"
+  },
+  {
+    "code": "2-02-01-030-02",
+    "name": "Due to Pag-IBIG - Multi-Purpose Loan",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-030",
+    "isHeader": false,
+    "uacs": "2-02-01-030-02"
+  },
+  {
+    "code": "2-02-01-030-03",
+    "name": "Due to Pag-IBIG - Multi-Housing Loan",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-030",
+    "isHeader": false,
+    "uacs": "2-02-01-030-03"
+  },
+  {
+    "code": "2-02-01-040",
+    "name": "Due to PhilHealth",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-02-01",
+    "isHeader": false,
+    "uacs": "2-02-01-040"
+  },
+  {
+    "code": "2-02-01-050",
+    "name": "Due to NGAs",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-02-01",
+    "isHeader": false,
+    "uacs": "2-02-01-050"
+  },
+  {
+    "code": "2-02-01-060",
+    "name": "Due to Government Corporations",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-02-01",
+    "isHeader": false,
+    "uacs": "2-02-01-060"
+  },
+  {
+    "code": "2-02-01-070",
+    "name": "Due to LGUs",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-02-01",
+    "isHeader": false,
+    "uacs": "2-02-01-070"
+  },
+  {
+    "code": "2-02-01-110",
+    "name": "Due to SSS",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-02-01",
+    "isHeader": true,
+    "uacs": "2-02-01-110"
+  },
+  {
+    "code": "2-02-01-110-01",
+    "name": "Due to SSS - Life and Retirement Premium",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-110",
+    "isHeader": false,
+    "uacs": "2-02-01-110-01"
+  },
+  {
+    "code": "2-02-01-110-02",
+    "name": "Due to SSS - ECC",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-110",
+    "isHeader": false,
+    "uacs": "2-02-01-110-02"
+  },
+  {
+    "code": "2-02-01-110-03",
+    "name": "Due to SSS - Salary Loan",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-110",
+    "isHeader": false,
+    "uacs": "2-02-01-110-03"
+  },
+  {
+    "code": "2-02-01-110-04",
+    "name": "Due to SSS - Policy Loan",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-01-110",
+    "isHeader": false,
+    "uacs": "2-02-01-110-04"
+  },
+  {
+    "code": "2-02-02",
+    "name": "Due to Other Agencies",
+    "type": "liability",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "2-02",
+    "isHeader": true,
+    "uacs": "2-02-02"
+  },
+  {
+    "code": "2-02-02-020",
+    "name": "Due to Resident Banks",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-02-02",
+    "isHeader": true,
+    "uacs": "2-02-02-020"
+  },
+  {
+    "code": "2-02-02-020-01",
+    "name": "Due to LBP - Employees' Loan",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-02-020",
+    "isHeader": false,
+    "uacs": "2-02-02-020-01"
+  },
+  {
+    "code": "2-02-02-020-02",
+    "name": "Due to DBP - Employees' Loan",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-02-020",
+    "isHeader": false,
+    "uacs": "2-02-02-020-02"
+  },
+  {
+    "code": "2-02-02-020-03",
+    "name": "Due to FCB - Employees' Loan",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-02-020",
+    "isHeader": false,
+    "uacs": "2-02-02-020-03"
+  },
+  {
+    "code": "2-02-02-020-04",
+    "name": "Due to CFI - Employees' Loan",
+    "type": "liability",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "2-02-02-020",
+    "isHeader": false,
+    "uacs": "2-02-02-020-04"
+  },
+  {
+    "code": "2-02-03",
+    "name": "Tax Refunds Payable",
+    "type": "liability",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "2-02",
+    "isHeader": true,
+    "uacs": "2-02-03"
+  },
+  {
+    "code": "2-02-03-010",
+    "name": "Tax Refunds Payable",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-02-03",
+    "isHeader": false,
+    "uacs": "2-02-03-010"
+  },
+  {
+    "code": "2-04",
+    "name": "Trust Liabilities",
+    "type": "liability",
+    "balance": "credit",
+    "level": 2,
+    "parentCode": "2",
+    "isHeader": true,
+    "uacs": "2-04"
+  },
+  {
+    "code": "2-04-01",
+    "name": "Trust Liabilities",
+    "type": "liability",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "2-04",
+    "isHeader": true,
+    "uacs": "2-04-01"
+  },
+  {
+    "code": "2-04-01-040",
+    "name": "Guaranty/Security Deposits Payable",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-04-01",
+    "isHeader": false,
+    "uacs": "2-04-01-040"
+  },
+  {
+    "code": "2-04-01-050",
+    "name": "Customers' Deposit Payable",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-04-01",
+    "isHeader": false,
+    "uacs": "2-04-01-050"
+  },
+  {
+    "code": "2-05",
+    "name": "Deferred Credits / Unearned Revenue",
+    "type": "liability",
+    "balance": "credit",
+    "level": 2,
+    "parentCode": "2",
+    "isHeader": true,
+    "uacs": "2-05"
+  },
+  {
+    "code": "2-05-01",
+    "name": "Deferred Credits",
+    "type": "liability",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "2-05",
+    "isHeader": true,
+    "uacs": "2-05-01"
+  },
+  {
+    "code": "2-05-01-990",
+    "name": "Other Deferred Credits",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-05-01",
+    "isHeader": false,
+    "uacs": "2-05-01-990"
+  },
+  {
+    "code": "2-05-02",
+    "name": "Unearned Revenue",
+    "type": "liability",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "2-05",
+    "isHeader": true,
+    "uacs": "2-05-02"
+  },
+  {
+    "code": "2-05-02-990",
+    "name": "Other Unearned Revenue",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-05-02",
+    "isHeader": false,
+    "uacs": "2-05-02-990"
+  },
+  {
+    "code": "2-06",
+    "name": "Provisions",
+    "type": "liability",
+    "balance": "credit",
+    "level": 2,
+    "parentCode": "2",
+    "isHeader": true,
+    "uacs": "2-06"
+  },
+  {
+    "code": "2-06-01",
+    "name": "Provisions",
+    "type": "liability",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "2-06",
+    "isHeader": true,
+    "uacs": "2-06-01"
+  },
+  {
+    "code": "2-06-01-050",
+    "name": "Provision for Environmental Damages",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-06-01",
+    "isHeader": false,
+    "uacs": "2-06-01-050"
+  },
+  {
+    "code": "2-06-01-020",
+    "name": "Leave Benefits Payable",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-06-01",
+    "isHeader": false,
+    "uacs": "2-06-01-020"
+  },
+  {
+    "code": "2-06-01-990",
+    "name": "Other Provisions",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-06-01",
+    "isHeader": false,
+    "uacs": "2-06-01-990"
+  },
+  {
+    "code": "2-99",
+    "name": "Other Payables",
+    "type": "liability",
+    "balance": "credit",
+    "level": 2,
+    "parentCode": "2",
+    "isHeader": true,
+    "uacs": "2-99"
+  },
+  {
+    "code": "2-99-99",
+    "name": "Other Payables",
+    "type": "liability",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "2-99",
+    "isHeader": true,
+    "uacs": "2-99-99"
+  },
+  {
+    "code": "2-99-99-990",
+    "name": "Other Payables",
+    "type": "liability",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "2-99-99",
+    "isHeader": false,
+    "uacs": "2-99-99-990"
+  },
+  {
+    "code": "3-01",
+    "name": "Government Equity",
+    "type": "equity",
+    "balance": "credit",
+    "level": 2,
+    "parentCode": "3",
+    "isHeader": true,
+    "uacs": "3-01"
+  },
+  {
+    "code": "3-01-01",
+    "name": "Government Equity",
+    "type": "equity",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "3-01",
+    "isHeader": true,
+    "uacs": "3-01-01"
+  },
+  {
+    "code": "3-01-01-010",
+    "name": "Accumulated Surplus / (Deficit)",
+    "type": "equity",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "3-01-01",
+    "isHeader": false,
+    "uacs": "3-01-01-010"
+  },
+  {
+    "code": "3-01-01-020",
+    "name": "Government Equity",
+    "type": "equity",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "3-01-01",
+    "isHeader": false,
+    "uacs": "3-01-01-020"
+  },
+  {
+    "code": "3-01-01-030",
+    "name": "Contributed Capital",
+    "type": "equity",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "3-01-01",
+    "isHeader": false,
+    "uacs": "3-01-01-030"
+  },
+  {
+    "code": "3-03",
+    "name": "Intermediate Accounts",
+    "type": "equity",
+    "balance": "credit",
+    "level": 2,
+    "parentCode": "3",
+    "isHeader": true,
+    "uacs": "3-03"
+  },
+  {
+    "code": "3-03-01",
+    "name": "Intermediate Accounts",
+    "type": "equity",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "3-03",
+    "isHeader": true,
+    "uacs": "3-03-01"
+  },
+  {
+    "code": "3-03-01-020",
+    "name": "Revenue/Income and Expense Summary",
+    "type": "equity",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "3-03-01",
+    "isHeader": false,
+    "uacs": "3-03-01-020"
+  },
+  {
+    "code": "3-07",
+    "name": "Retained Earnings / (Deficit)",
+    "type": "equity",
+    "balance": "credit",
+    "level": 2,
+    "parentCode": "3",
+    "isHeader": true,
+    "uacs": "3-07"
+  },
+  {
+    "code": "3-07-01",
+    "name": "Retained Earnings / (Deficit)",
+    "type": "equity",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "3-07",
+    "isHeader": true,
+    "uacs": "3-07-01"
+  },
+  {
+    "code": "3-07-01-010",
+    "name": "Retained Earnings / (Deficit)",
+    "type": "equity",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "3-07-01",
+    "isHeader": false,
+    "uacs": "3-07-01-010"
+  },
+  {
+    "code": "3-02",
+    "name": "Revaluation Surplus",
+    "type": "equity",
+    "balance": "credit",
+    "level": 2,
+    "parentCode": "3",
+    "isHeader": true,
+    "uacs": "3-02"
+  },
+  {
+    "code": "3-02-01",
+    "name": "Revaluation Surplus",
+    "type": "equity",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "3-02",
+    "isHeader": true,
+    "uacs": "3-02-01"
+  },
+  {
+    "code": "3-02-01-010",
+    "name": "Revaluation Surplus",
+    "type": "equity",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "3-02-01",
+    "isHeader": false,
+    "uacs": "3-02-01-010"
+  },
+  {
+    "code": "4-02",
+    "name": "Service and Business Income",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 2,
+    "parentCode": "4",
+    "isHeader": true,
+    "uacs": "4-02"
+  },
+  {
+    "code": "4-02-02",
+    "name": "Business Income",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "4-02",
+    "isHeader": true,
+    "uacs": "4-02-02"
+  },
+  {
+    "code": "4-02-02-090",
+    "name": "Waterworks Systems Fees",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "4-02-02",
+    "isHeader": true,
+    "uacs": "4-02-02-090"
+  },
+  {
+    "code": "4-02-02-090-01",
+    "name": "Metered Sales",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "4-02-02-090",
+    "isHeader": false,
+    "uacs": "4-02-02-090-01"
+  },
+  {
+    "code": "4-02-02-090-02",
+    "name": "Unmetered Sales",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "4-02-02-090",
+    "isHeader": false,
+    "uacs": "4-02-02-090-02"
+  },
+  {
+    "code": "4-02-02-160",
+    "name": "Sales Revenue (Water Sales)",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "4-02-02",
+    "isHeader": false,
+    "uacs": "4-02-02-160"
+  },
+  {
+    "code": "4-02-02-161",
+    "name": "Sales Discount",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "4-02-02",
+    "isHeader": false,
+    "uacs": "4-02-02-161"
+  },
+  {
+    "code": "4-02-02-210",
+    "name": "Interest Income",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "4-02-02",
+    "isHeader": false,
+    "uacs": "4-02-02-210"
+  },
+  {
+    "code": "4-02-02-230",
+    "name": "Fines and Penalties-Business Income",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "4-02-02",
+    "isHeader": false,
+    "uacs": "4-02-02-230"
+  },
+  {
+    "code": "4-02-02-990",
+    "name": "Other Business Income",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "4-02-02",
+    "isHeader": true,
+    "uacs": "4-02-02-990"
+  },
+  {
+    "code": "4-02-02-990-01",
+    "name": "Other Business Income - Miscellaneous Service Revenue",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "4-02-02-990",
+    "isHeader": false,
+    "uacs": "4-02-02-990-01"
+  },
+  {
+    "code": "4-02-02-990-02",
+    "name": "Other Business Income - Rent of Water Property",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "4-02-02-990",
+    "isHeader": false,
+    "uacs": "4-02-02-990-02"
+  },
+  {
+    "code": "4-02-02-990-03",
+    "name": "Other Business Income - Meter Rental",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "4-02-02-990",
+    "isHeader": false,
+    "uacs": "4-02-02-990-03"
+  },
+  {
+    "code": "4-02-02-990-04",
+    "name": "Other Business Income - Other Water Revenue",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 5,
+    "parentCode": "4-02-02-990",
+    "isHeader": false,
+    "uacs": "4-02-02-990-04"
+  },
+  {
+    "code": "4-03",
+    "name": "Assistance and Subsidy",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 2,
+    "parentCode": "4",
+    "isHeader": true,
+    "uacs": "4-03"
+  },
+  {
+    "code": "4-03-01",
+    "name": "Assistance and Subsidy",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "4-03",
+    "isHeader": true,
+    "uacs": "4-03-01"
+  },
+  {
+    "code": "4-03-01-030",
+    "name": "Assistance from Local Government Units",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "4-03-01",
+    "isHeader": false,
+    "uacs": "4-03-01-030"
+  },
+  {
+    "code": "4-04",
+    "name": "Shares, Grants and Donations",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 2,
+    "parentCode": "4",
+    "isHeader": true,
+    "uacs": "4-04"
+  },
+  {
+    "code": "4-04-02",
+    "name": "Grants and Donations",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "4-04",
+    "isHeader": true,
+    "uacs": "4-04-02"
+  },
+  {
+    "code": "4-04-02-010",
+    "name": "Income from Grants and Donations in Cash",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "4-04-02",
+    "isHeader": false,
+    "uacs": "4-04-02-010"
+  },
+  {
+    "code": "4-04-02-020",
+    "name": "Income from Grants and Donations in Kind",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "4-04-02",
+    "isHeader": false,
+    "uacs": "4-04-02-020"
+  },
+  {
+    "code": "4-05",
+    "name": "Gains",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 2,
+    "parentCode": "4",
+    "isHeader": true,
+    "uacs": "4-05"
+  },
+  {
+    "code": "4-05-01",
+    "name": "Gains",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "4-05",
+    "isHeader": true,
+    "uacs": "4-05-01"
+  },
+  {
+    "code": "4-05-01-040",
+    "name": "Gain on Sale of Property, Plant and Equipment",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "4-05-01",
+    "isHeader": false,
+    "uacs": "4-05-01-040"
+  },
+  {
+    "code": "4-05-01-990",
+    "name": "Other Gains",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "4-05-01",
+    "isHeader": false,
+    "uacs": "4-05-01-990"
+  },
+  {
+    "code": "4-06",
+    "name": "Other Non-Operating Income",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 2,
+    "parentCode": "4",
+    "isHeader": true,
+    "uacs": "4-06"
+  },
+  {
+    "code": "4-06-01",
+    "name": "Sale of Assets",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "4-06",
+    "isHeader": true,
+    "uacs": "4-06-01"
+  },
+  {
+    "code": "4-06-01-020",
+    "name": "Sale of Unserviceable Property",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "4-06-01",
+    "isHeader": false,
+    "uacs": "4-06-01-020"
+  },
+  {
+    "code": "4-06-02",
+    "name": "Reversal of Impairment Loss",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "4-06",
+    "isHeader": true,
+    "uacs": "4-06-02"
+  },
+  {
+    "code": "4-06-02-010",
+    "name": "Reversal of Impairment Loss",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "4-06-02",
+    "isHeader": false,
+    "uacs": "4-06-02-010"
+  },
+  {
+    "code": "4-06-03",
+    "name": "Miscellaneous Income",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 3,
+    "parentCode": "4-06",
+    "isHeader": true,
+    "uacs": "4-06-03"
+  },
+  {
+    "code": "4-06-03-990",
+    "name": "Miscellaneous Income",
+    "type": "revenue",
+    "balance": "credit",
+    "level": 4,
+    "parentCode": "4-06-03",
+    "isHeader": false,
+    "uacs": "4-06-03-990"
+  },
+  {
+    "code": "5-01",
+    "name": "Personal Services",
+    "type": "expense",
+    "balance": "debit",
+    "level": 2,
+    "parentCode": "5",
+    "isHeader": true,
+    "uacs": "5-01"
+  },
+  {
+    "code": "5-01-01",
+    "name": "Salaries and Wages",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-01",
+    "isHeader": true,
+    "uacs": "5-01-01"
+  },
+  {
+    "code": "5-01-01-010",
+    "name": "Salaries and Wages - Regular",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-01-01",
+    "isHeader": false,
+    "uacs": "5-01-01-010"
+  },
+  {
+    "code": "5-01-01-020",
+    "name": "Salaries and Wages - Casual/Contractual",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-01-01",
+    "isHeader": false,
+    "uacs": "5-01-01-020"
+  },
+  {
+    "code": "5-01-02",
+    "name": "Other Compensation",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-01",
+    "isHeader": true,
+    "uacs": "5-01-02"
+  },
+  {
+    "code": "5-01-02-010",
+    "name": "Personnel Economic Relief Allowance (PERA)",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-01-02",
+    "isHeader": false,
+    "uacs": "5-01-02-010"
+  },
+  {
+    "code": "5-01-02-020",
+    "name": "Representation Allowance (RA)",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-01-02",
+    "isHeader": false,
+    "uacs": "5-01-02-020"
+  },
+  {
+    "code": "5-01-02-030",
+    "name": "Transportation Allowance (TA)",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-01-02",
+    "isHeader": false,
+    "uacs": "5-01-02-030"
+  },
+  {
+    "code": "5-01-02-040",
+    "name": "Clothing / Uniform Allowance",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-01-02",
+    "isHeader": false,
+    "uacs": "5-01-02-040"
+  },
+  {
+    "code": "5-01-02-080",
+    "name": "Productivity Incentive Allowance",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-01-02",
+    "isHeader": false,
+    "uacs": "5-01-02-080"
+  },
+  {
+    "code": "5-01-02-100",
+    "name": "Honoraria",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-01-02",
+    "isHeader": false,
+    "uacs": "5-01-02-100"
+  },
+  {
+    "code": "5-01-02-130",
+    "name": "Overtime and Night Pay",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-01-02",
+    "isHeader": false,
+    "uacs": "5-01-02-130"
+  },
+  {
+    "code": "5-01-02-140",
+    "name": "Year End Bonus",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-01-02",
+    "isHeader": false,
+    "uacs": "5-01-02-140"
+  },
+  {
+    "code": "5-01-02-150",
+    "name": "Cash Gift",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-01-02",
+    "isHeader": false,
+    "uacs": "5-01-02-150"
+  },
+  {
+    "code": "5-01-02-990",
+    "name": "Other Bonuses and Allowances",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-01-02",
+    "isHeader": false,
+    "uacs": "5-01-02-990"
+  },
+  {
+    "code": "5-01-03",
+    "name": "Personnel Benefit Contributions (Administrative Expenses)",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-01",
+    "isHeader": true,
+    "uacs": "5-01-03"
+  },
+  {
+    "code": "5-01-03-010",
+    "name": "Retirement and Life Insurance Premiums",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-01-03",
+    "isHeader": false,
+    "uacs": "5-01-03-010"
+  },
+  {
+    "code": "5-01-03-020",
+    "name": "Pag-IBIG Contributions",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-01-03",
+    "isHeader": false,
+    "uacs": "5-01-03-020"
+  },
+  {
+    "code": "5-01-03-030",
+    "name": "PhilHealth Contributions",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-01-03",
+    "isHeader": false,
+    "uacs": "5-01-03-030"
+  },
+  {
+    "code": "5-01-03-040",
+    "name": "Employees Compensation Insurance Premiums",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-01-03",
+    "isHeader": false,
+    "uacs": "5-01-03-040"
+  },
+  {
+    "code": "5-01-03-050",
+    "name": "Provident / Welfare Fund Contributions",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-01-03",
+    "isHeader": false,
+    "uacs": "5-01-03-050"
+  },
+  {
+    "code": "5-01-04",
+    "name": "Other Personnel Benefits (Administrative Expenses)",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-01",
+    "isHeader": true,
+    "uacs": "5-01-04"
+  },
+  {
+    "code": "5-01-04-010",
+    "name": "Pensions Benefits",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-01-04",
+    "isHeader": false,
+    "uacs": "5-01-04-010"
+  },
+  {
+    "code": "5-01-04-020",
+    "name": "Retirement Gratuity",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-01-04",
+    "isHeader": false,
+    "uacs": "5-01-04-020"
+  },
+  {
+    "code": "5-01-04-030",
+    "name": "Terminal Leave Benefits",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-01-04",
+    "isHeader": false,
+    "uacs": "5-01-04-030"
+  },
+  {
+    "code": "5-01-04-990",
+    "name": "Other Personnel Benefits",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-01-04",
+    "isHeader": false,
+    "uacs": "5-01-04-990"
+  },
+  {
+    "code": "5-02",
+    "name": "Maintenance and Other Operating Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 2,
+    "parentCode": "5",
+    "isHeader": true,
+    "uacs": "5-02"
+  },
+  {
+    "code": "5-02-01",
+    "name": "Traveling Expenses (Administrative Expenses)",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-02",
+    "isHeader": true,
+    "uacs": "5-02-01"
+  },
+  {
+    "code": "5-02-01-010",
+    "name": "Traveling Expenses - Local",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-01",
+    "isHeader": false,
+    "uacs": "5-02-01-010"
+  },
+  {
+    "code": "5-02-01-020",
+    "name": "Traveling Expenses - Foreign",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-01",
+    "isHeader": false,
+    "uacs": "5-02-01-020"
+  },
+  {
+    "code": "5-02-02",
+    "name": "Training and Scholarship Expenses (Administrative Expenses)",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-02",
+    "isHeader": true,
+    "uacs": "5-02-02"
+  },
+  {
+    "code": "5-02-02-010",
+    "name": "Training Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-02",
+    "isHeader": false,
+    "uacs": "5-02-02-010"
+  },
+  {
+    "code": "5-02-02-020",
+    "name": "Scholarship Grants / Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-02",
+    "isHeader": false,
+    "uacs": "5-02-02-020"
+  },
+  {
+    "code": "5-02-03",
+    "name": "Supplies and Materials Expenses (Administrative Expenses)",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-02",
+    "isHeader": true,
+    "uacs": "5-02-03"
+  },
+  {
+    "code": "5-02-03-010",
+    "name": "Office Supplies Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-03",
+    "isHeader": false,
+    "uacs": "5-02-03-010"
+  },
+  {
+    "code": "5-02-03-020",
+    "name": "Accountable Forms Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-03",
+    "isHeader": false,
+    "uacs": "5-02-03-020"
+  },
+  {
+    "code": "5-02-03-090",
+    "name": "Fuel, Oil and Lubricants Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-03",
+    "isHeader": false,
+    "uacs": "5-02-03-090"
+  },
+  {
+    "code": "5-02-03-130",
+    "name": "Chemical and Filtering Supplies Expense (Water Treatment Expense)",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-03",
+    "isHeader": false,
+    "uacs": "5-02-03-130"
+  },
+  {
+    "code": "5-02-03-210",
+    "name": "Semi-Expendable Machinery and Equipment Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-03",
+    "isHeader": false,
+    "uacs": "5-02-03-210"
+  },
+  {
+    "code": "5-02-03-220",
+    "name": "Semi-Expendable Furniture, Fixture and Books Expense",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-03",
+    "isHeader": false,
+    "uacs": "5-02-03-220"
+  },
+  {
+    "code": "5-02-03-990",
+    "name": "Other Supplies and Materials Expense",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-03",
+    "isHeader": false,
+    "uacs": "5-02-03-990"
+  },
+  {
+    "code": "5-02-04",
+    "name": "Utility Expenses (Administrative Expenses)",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-02",
+    "isHeader": true,
+    "uacs": "5-02-04"
+  },
+  {
+    "code": "5-02-04-010",
+    "name": "Water Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-04",
+    "isHeader": false,
+    "uacs": "5-02-04-010"
+  },
+  {
+    "code": "5-02-04-020",
+    "name": "Electricity Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-04",
+    "isHeader": false,
+    "uacs": "5-02-04-020"
+  },
+  {
+    "code": "5-02-04-990",
+    "name": "Other Utility Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-04",
+    "isHeader": false,
+    "uacs": "5-02-04-990"
+  },
+  {
+    "code": "5-02-05",
+    "name": "Communication Expenses (Administrative Expenses)",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-02",
+    "isHeader": true,
+    "uacs": "5-02-05"
+  },
+  {
+    "code": "5-02-05-010",
+    "name": "Postage and Courier Services",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-05",
+    "isHeader": false,
+    "uacs": "5-02-05-010"
+  },
+  {
+    "code": "5-02-05-020",
+    "name": "Telephone Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-05",
+    "isHeader": false,
+    "uacs": "5-02-05-020"
+  },
+  {
+    "code": "5-02-05-030",
+    "name": "Internet Subscription Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-05",
+    "isHeader": false,
+    "uacs": "5-02-05-030"
+  },
+  {
+    "code": "5-02-05-040",
+    "name": "Cable, Satellite, Telegraph and Radio Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-05",
+    "isHeader": false,
+    "uacs": "5-02-05-040"
+  },
+  {
+    "code": "5-02-06",
+    "name": "Awards/Rewards, Prizes and Indemnities (Administrative Expenses)",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-02",
+    "isHeader": true,
+    "uacs": "5-02-06"
+  },
+  {
+    "code": "5-02-06-010",
+    "name": "Awards/Rewards Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-06",
+    "isHeader": false,
+    "uacs": "5-02-06-010"
+  },
+  {
+    "code": "5-02-06-020",
+    "name": "Prizes",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-06",
+    "isHeader": false,
+    "uacs": "5-02-06-020"
+  },
+  {
+    "code": "5-02-06-030",
+    "name": "Indemnities",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-06",
+    "isHeader": false,
+    "uacs": "5-02-06-030"
+  },
+  {
+    "code": "5-02-09",
+    "name": "Generation, Transmission and Distribution Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-02",
+    "isHeader": true,
+    "uacs": "5-02-09"
+  },
+  {
+    "code": "5-02-09-010",
+    "name": "Generation, Transmission and Distribution Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-09",
+    "isHeader": false,
+    "uacs": "5-02-09-010"
+  },
+  {
+    "code": "5-02-10",
+    "name": "Confidential, Intelligence and Extraordinary Expenses (Administrative Expenses)",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-02",
+    "isHeader": true,
+    "uacs": "5-02-10"
+  },
+  {
+    "code": "5-02-10-030",
+    "name": "Extraordinary and Miscellaneous Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-10",
+    "isHeader": false,
+    "uacs": "5-02-10-030"
+  },
+  {
+    "code": "5-02-11",
+    "name": "Professional Services (Administrative Expenses)",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-02",
+    "isHeader": true,
+    "uacs": "5-02-11"
+  },
+  {
+    "code": "5-02-11-010",
+    "name": "Legal Services",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-11",
+    "isHeader": false,
+    "uacs": "5-02-11-010"
+  },
+  {
+    "code": "5-02-11-020",
+    "name": "Auditing Services",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-11",
+    "isHeader": false,
+    "uacs": "5-02-11-020"
+  },
+  {
+    "code": "5-02-11-030",
+    "name": "Consultancy Services",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-11",
+    "isHeader": false,
+    "uacs": "5-02-11-030"
+  },
+  {
+    "code": "5-02-11-990",
+    "name": "Other Professional Services",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-11",
+    "isHeader": false,
+    "uacs": "5-02-11-990"
+  },
+  {
+    "code": "5-02-12",
+    "name": "General Services (Administrative Expenses)",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-02",
+    "isHeader": true,
+    "uacs": "5-02-12"
+  },
+  {
+    "code": "5-02-12-020",
+    "name": "Janitorial Services",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-12",
+    "isHeader": false,
+    "uacs": "5-02-12-020"
+  },
+  {
+    "code": "5-02-12-030",
+    "name": "Security Services",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-12",
+    "isHeader": false,
+    "uacs": "5-02-12-030"
+  },
+  {
+    "code": "5-02-12-990",
+    "name": "Other General Services",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-12",
+    "isHeader": false,
+    "uacs": "5-02-12-990"
+  },
+  {
+    "code": "5-02-13",
+    "name": "Repairs and Maintenance",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-02",
+    "isHeader": true,
+    "uacs": "5-02-13"
+  },
+  {
+    "code": "5-02-13-030",
+    "name": "Repairs and Maintenance - Infrastructure Assets",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-13",
+    "isHeader": false,
+    "uacs": "5-02-13-030"
+  },
+  {
+    "code": "5-02-13-040",
+    "name": "Repairs and Maintenance - Buildings and Other Structures",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-13",
+    "isHeader": false,
+    "uacs": "5-02-13-040"
+  },
+  {
+    "code": "5-02-13-050",
+    "name": "Repairs and Maintenance - Machinery and Equipment",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-13",
+    "isHeader": false,
+    "uacs": "5-02-13-050"
+  },
+  {
+    "code": "5-02-13-060",
+    "name": "Repairs and Maintenance - Transportation Equipment",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-13",
+    "isHeader": false,
+    "uacs": "5-02-13-060"
+  },
+  {
+    "code": "5-02-13-070",
+    "name": "Repairs and Maintenance - Furniture and Fixtures",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-13",
+    "isHeader": false,
+    "uacs": "5-02-13-070"
+  },
+  {
+    "code": "5-02-13-210",
+    "name": "Repairs and Maintenance - Semi-Expendable Machinery & Equipment",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-13",
+    "isHeader": false,
+    "uacs": "5-02-13-210"
+  },
+  {
+    "code": "5-02-13-990",
+    "name": "Repairs and Maintenance - Other Property, Plant and Equipment",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-13",
+    "isHeader": false,
+    "uacs": "5-02-13-990"
+  },
+  {
+    "code": "5-02-14",
+    "name": "Assistance/Subsidy to",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-02",
+    "isHeader": true,
+    "uacs": "5-02-14"
+  },
+  {
+    "code": "5-02-14-040",
+    "name": "Budgetary Support to Government-Owned or Controlled Corporations",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-14",
+    "isHeader": true,
+    "uacs": "5-02-14-040"
+  },
+  {
+    "code": "5-02-14-040-01",
+    "name": "Subsidy Support to Operations of GOCCs",
+    "type": "expense",
+    "balance": "debit",
+    "level": 5,
+    "parentCode": "5-02-14-040",
+    "isHeader": false,
+    "uacs": "5-02-14-040-01"
+  },
+  {
+    "code": "5-02-15",
+    "name": "Taxes, Insurance Premiums and Other Fees (Administrative Expenses)",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-02",
+    "isHeader": true,
+    "uacs": "5-02-15"
+  },
+  {
+    "code": "5-02-15-010",
+    "name": "Taxes, Duties and Licenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-15",
+    "isHeader": false,
+    "uacs": "5-02-15-010"
+  },
+  {
+    "code": "5-02-15-030",
+    "name": "Insurance Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-15",
+    "isHeader": false,
+    "uacs": "5-02-15-030"
+  },
+  {
+    "code": "5-02-16",
+    "name": "Labor and Wages",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-02",
+    "isHeader": true,
+    "uacs": "5-02-16"
+  },
+  {
+    "code": "5-02-16-010",
+    "name": "Labor and Wages",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-16",
+    "isHeader": false,
+    "uacs": "5-02-16-010"
+  },
+  {
+    "code": "5-02-99",
+    "name": "Other Maintenance and Operating Expenses (Administrative Expenses)",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-02",
+    "isHeader": true,
+    "uacs": "5-02-99"
+  },
+  {
+    "code": "5-02-99-010",
+    "name": "Advertising, Promotional and Marketing Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-99",
+    "isHeader": false,
+    "uacs": "5-02-99-010"
+  },
+  {
+    "code": "5-02-99-020",
+    "name": "Printing and Publication Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-99",
+    "isHeader": false,
+    "uacs": "5-02-99-020"
+  },
+  {
+    "code": "5-02-99-030",
+    "name": "Representation Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-99",
+    "isHeader": false,
+    "uacs": "5-02-99-030"
+  },
+  {
+    "code": "5-02-99-040",
+    "name": "Transportation and Delivery Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-99",
+    "isHeader": false,
+    "uacs": "5-02-99-040"
+  },
+  {
+    "code": "5-02-99-050",
+    "name": "Rent/Lease Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-99",
+    "isHeader": false,
+    "uacs": "5-02-99-050"
+  },
+  {
+    "code": "5-02-99-060",
+    "name": "Membership Dues and Contributions to Organizations",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-99",
+    "isHeader": false,
+    "uacs": "5-02-99-060"
+  },
+  {
+    "code": "5-02-99-070",
+    "name": "Subscription Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-99",
+    "isHeader": false,
+    "uacs": "5-02-99-070"
+  },
+  {
+    "code": "5-02-99-080",
+    "name": "Donations",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-99",
+    "isHeader": false,
+    "uacs": "5-02-99-080"
+  },
+  {
+    "code": "5-02-99-120",
+    "name": "Directors and Committee Members' Fees",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-99",
+    "isHeader": false,
+    "uacs": "5-02-99-120"
+  },
+  {
+    "code": "5-02-99-990",
+    "name": "Other Maintenance and Operating Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-02-99",
+    "isHeader": false,
+    "uacs": "5-02-99-990"
+  },
+  {
+    "code": "5-03",
+    "name": "Financial Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 2,
+    "parentCode": "5",
+    "isHeader": true,
+    "uacs": "5-03"
+  },
+  {
+    "code": "5-03-01",
+    "name": "Financial Expenses (Administrative Expenses)",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-03",
+    "isHeader": true,
+    "uacs": "5-03-01"
+  },
+  {
+    "code": "5-03-01-020",
+    "name": "Interest Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-03-01",
+    "isHeader": false,
+    "uacs": "5-03-01-020"
+  },
+  {
+    "code": "5-03-01-040",
+    "name": "Bank Charges",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-03-01",
+    "isHeader": false,
+    "uacs": "5-03-01-040"
+  },
+  {
+    "code": "5-03-01-990",
+    "name": "Other Financial Charges",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-03-01",
+    "isHeader": false,
+    "uacs": "5-03-01-990"
+  },
+  {
+    "code": "5-05",
+    "name": "Non-Cash Expenses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 2,
+    "parentCode": "5",
+    "isHeader": true,
+    "uacs": "5-05"
+  },
+  {
+    "code": "5-05-01",
+    "name": "Depreciation",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-05",
+    "isHeader": true,
+    "uacs": "5-05-01"
+  },
+  {
+    "code": "5-05-01-030",
+    "name": "Depreciation - Infrastructure Assets",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-05-01",
+    "isHeader": false,
+    "uacs": "5-05-01-030"
+  },
+  {
+    "code": "5-05-01-040",
+    "name": "Depreciation - Buildings and Other Structures",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-05-01",
+    "isHeader": false,
+    "uacs": "5-05-01-040"
+  },
+  {
+    "code": "5-05-01-050",
+    "name": "Depreciation - Machinery and Equipment",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-05-01",
+    "isHeader": false,
+    "uacs": "5-05-01-050"
+  },
+  {
+    "code": "5-05-01-060",
+    "name": "Depreciation - Transportation Equipment",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-05-01",
+    "isHeader": false,
+    "uacs": "5-05-01-060"
+  },
+  {
+    "code": "5-05-01-070",
+    "name": "Depreciation - Furniture and Fixtures",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-05-01",
+    "isHeader": false,
+    "uacs": "5-05-01-070"
+  },
+  {
+    "code": "5-05-01-990",
+    "name": "Depreciation - Other Property, Plant and Equipment",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-05-01",
+    "isHeader": false,
+    "uacs": "5-05-01-990"
+  },
+  {
+    "code": "5-05-03",
+    "name": "Impairment Loss",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-05",
+    "isHeader": true,
+    "uacs": "5-05-03"
+  },
+  {
+    "code": "5-05-03-020",
+    "name": "Impairment Loss - Loans and Receivables",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-05-03",
+    "isHeader": false,
+    "uacs": "5-05-03-020"
+  },
+  {
+    "code": "5-05-03-060",
+    "name": "Impairment Loss - Other Receivables",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-05-03",
+    "isHeader": false,
+    "uacs": "5-05-03-060"
+  },
+  {
+    "code": "5-05-03-070",
+    "name": "Impairment Loss - Inventories",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-05-03",
+    "isHeader": false,
+    "uacs": "5-05-03-070"
+  },
+  {
+    "code": "5-05-03-090",
+    "name": "Impairment Loss - Property, Plant and Equipment",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-05-03",
+    "isHeader": false,
+    "uacs": "5-05-03-090"
+  },
+  {
+    "code": "5-05-03-990",
+    "name": "Impairment Loss - Other Assets",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-05-03",
+    "isHeader": false,
+    "uacs": "5-05-03-990"
+  },
+  {
+    "code": "5-05-04",
+    "name": "Losses",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-05",
+    "isHeader": true,
+    "uacs": "5-05-04"
+  },
+  {
+    "code": "5-05-04-040",
+    "name": "Loss on Sale of Property, Plant and Equipment",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-05-04",
+    "isHeader": false,
+    "uacs": "5-05-04-040"
+  },
+  {
+    "code": "5-05-04-080",
+    "name": "Loss on Sale of Other Assets",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-05-04",
+    "isHeader": false,
+    "uacs": "5-05-04-080"
+  },
+  {
+    "code": "5-05-04-090",
+    "name": "Loss of Assets",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-05-04",
+    "isHeader": false,
+    "uacs": "5-05-04-090"
+  },
+  {
+    "code": "5-05-05",
+    "name": "Discounts and Rebates",
+    "type": "expense",
+    "balance": "debit",
+    "level": 3,
+    "parentCode": "5-05",
+    "isHeader": true,
+    "uacs": "5-05-05"
+  },
+  {
+    "code": "5-05-05-010",
+    "name": "Other Discounts",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-05-05",
+    "isHeader": false,
+    "uacs": "5-05-05-010"
+  },
+  {
+    "code": "5-05-05-020",
+    "name": "Rebates",
+    "type": "expense",
+    "balance": "debit",
+    "level": 4,
+    "parentCode": "5-05-05",
+    "isHeader": false,
+    "uacs": "5-05-05-020"
+  }
+]

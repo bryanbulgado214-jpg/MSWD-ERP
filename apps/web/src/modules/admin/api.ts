@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
 
 function getAccessToken(): string | null {
   return localStorage.getItem('mswd_access_token');
@@ -16,7 +16,11 @@ async function authFetch(path: string): Promise<Response> {
   return response;
 }
 
-async function authFetchMutate(path: string, method: 'POST' | 'PATCH' | 'DELETE', body?: unknown): Promise<Response> {
+async function authFetchMutate(
+  path: string,
+  method: 'POST' | 'PATCH' | 'DELETE',
+  body?: unknown,
+): Promise<Response> {
   const token = getAccessToken();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
@@ -81,12 +85,19 @@ export async function getUser(id: string): Promise<UserSummary> {
   return res.json();
 }
 
-export async function createUser(data: { username: string; email: string; password: string }): Promise<unknown> {
+export async function createUser(data: {
+  username: string;
+  email: string;
+  password: string;
+}): Promise<unknown> {
   const res = await authFetchMutate('/admin/users', 'POST', data);
   return res.json();
 }
 
-export async function updateUser(id: string, data: { email?: string; password?: string; isActive?: boolean }): Promise<unknown> {
+export async function updateUser(
+  id: string,
+  data: { email?: string; password?: string; isActive?: boolean },
+): Promise<unknown> {
   const res = await authFetchMutate(`/admin/users/${id}`, 'PATCH', data);
   return res.json();
 }
@@ -120,6 +131,72 @@ export async function addPermissionToRole(roleId: string, permissionId: string):
   return res.json();
 }
 
-export async function removePermissionFromRole(roleId: string, assignmentId: string): Promise<void> {
+export async function removePermissionFromRole(
+  roleId: string,
+  assignmentId: string,
+): Promise<void> {
   await authFetchMutate(`/admin/roles/${roleId}/permissions/${assignmentId}`, 'DELETE');
+}
+
+// ── Audit Trail ──
+
+export interface AuditLogRow {
+  id: string;
+  tableName: string;
+  tableLabel: string;
+  module: string;
+  recordId: string;
+  action: string;
+  changedFields: unknown;
+  performedBy: { id: string; username: string } | null;
+  performedAt: string;
+}
+
+export interface AuditLogResult {
+  total: number;
+  limit: number;
+  rows: AuditLogRow[];
+}
+
+export async function getAuditLogs(params: string): Promise<AuditLogResult> {
+  const qs = params ? `?${params}` : '';
+  const res = await authFetch(`/admin/audit-logs${qs}`);
+  return res.json();
+}
+
+export async function getAuditModules(): Promise<string[]> {
+  const res = await authFetch('/admin/audit-logs/modules');
+  return res.json();
+}
+
+export async function getAuditActors(): Promise<{ id: string; username: string }[]> {
+  const res = await authFetch('/admin/audit-logs/actors');
+  return res.json();
+}
+
+// ── District (Organization) Profile ──
+
+export interface OrganizationProfile {
+  id: string;
+  name: string;
+  legalName: string;
+  address: string | null;
+  contact: string | null;
+  logoUrl: string | null;
+}
+
+export async function getOrganizationProfile(): Promise<OrganizationProfile> {
+  const res = await authFetch('/admin/organization-profile');
+  return res.json();
+}
+
+export async function updateOrganizationProfile(data: {
+  name?: string;
+  legalName?: string;
+  address?: string;
+  contact?: string;
+  logoUrl?: string;
+}): Promise<OrganizationProfile> {
+  const res = await authFetchMutate('/admin/organization-profile', 'PATCH', data);
+  return res.json();
 }

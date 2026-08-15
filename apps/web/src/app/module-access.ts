@@ -1,9 +1,7 @@
 export const MODULE_GATES = {
-  admin: [
-    'core.user.manage',
-    'core.role.manage',
-  ],
+  admin: ['core.user.manage', 'core.role.manage', 'core.audit.read'],
   budgeting: [
+    'budgeting.read',
     'budgeting.cycle.manage',
     'budgeting.header.manage',
     'budgeting.header.approve',
@@ -54,7 +52,9 @@ export const MODULE_GATES = {
     'billing.payment.collect',
     'billing.payment.void',
     'billing.disconnect.manage',
-    'billing.reports',
+    // billing.reports intentionally omitted — a report-only grant (e.g. the
+    // accountant's AR-aging access) should surface under Reports, not open the
+    // whole Billing module.
   ],
   hr: [
     'hr.read',
@@ -90,22 +90,32 @@ export const MODULE_GATES = {
     'asset.depreciation.post',
     'asset.transfer.manage',
     'asset.transfer.approve',
-    'asset.reports',
+    // asset.reports intentionally omitted — a report-only grant (the accountant's
+    // fixed-asset lapsing schedule) surfaces under Reports, not the Asset module.
   ],
   accounting: [
     'accounting.read',
+    'accounting.check.read',
     'accounting.coa.manage',
     'accounting.bank.manage',
     'accounting.jev.create',
+    'accounting.jev.approve',
     'accounting.jev.post',
     'accounting.jev.void',
+    'accounting.jev.reverse',
     'accounting.period.manage',
     'accounting.reports',
     'accounting.reconcile',
   ],
   reports: [
+    // Accounting reporting outputs (GL / Trial Balance / Financial Statements /
+    // ledgers / registers) live under Reports; accounting.read grants them.
+    'accounting.read',
+    'accounting.reports',
     'procurement.read',
     'budgeting.read',
+    'billing.reports',
+    'asset.reports',
   ],
 } as const;
 
