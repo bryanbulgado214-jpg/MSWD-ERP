@@ -1136,9 +1136,9 @@ async function main() {
         check: 'DBP-0004840',
         lines: [
           {
-            code: '2-01-01-020',
+            code: '5-01-01-010',
             debit: 285000,
-            desc: 'Settlement of net salaries payable to personnel',
+            desc: 'Net salaries and wages of regular personnel, June 16–30, 2026',
           },
           { code: '1-01-02-020-02', credit: 285000, desc: 'Cash in bank — DBP check DBP-0004840' },
         ],
