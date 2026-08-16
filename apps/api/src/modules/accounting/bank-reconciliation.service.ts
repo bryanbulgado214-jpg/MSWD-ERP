@@ -345,11 +345,12 @@ export class BankReconciliationService {
             bank: { select: { code: true, name: true } },
           },
         },
-        accountingPeriod: { select: { name: true } },
+        accountingPeriod: { select: { name: true, fiscalYearId: true } },
       },
     });
     if (!recon) throw new NotFoundException('Reconciliation not found.');
     const cashCoaId = recon.bankAccount.chartOfAccountId;
+    const fiscalYearId = recon.accountingPeriod.fiscalYearId;
 
     const lines = await this.prisma.bankStatementLine.findMany({
       where: { bankReconciliationId: id },
@@ -372,7 +373,12 @@ export class BankReconciliationService {
           where: {
             chartOfAccountId: cashCoaId,
             bankLineMatches: { none: {} },
-            jev: { organizationId, status: 'posted', jevDate: { lte: recon.reconciliationDate } },
+            jev: {
+              organizationId,
+              status: 'posted',
+              jevDate: { lte: recon.reconciliationDate },
+              accountingPeriod: { fiscalYearId },
+            },
           },
           select: {
             id: true,
@@ -406,6 +412,11 @@ export class BankReconciliationService {
 
     const unmatchedBank = bank.filter((b) => !b.matched).length;
     const unmatchedBook = book.length;
+    // Peso value still unreconciled on each side — both reach 0 when matched.
+    const unmatchedBankAmount = round2(
+      bank.filter((b) => !b.matched).reduce((s, b) => s + b.amount, 0),
+    );
+    const unmatchedBookAmount = round2(book.reduce((s, b) => s + b.amount, 0));
 
     return {
       recon: {
@@ -426,6 +437,8 @@ export class BankReconciliationService {
         unmatchedBank,
         unmatchedBook,
         matched: bank.length - unmatchedBank,
+        unmatchedBankAmount,
+        unmatchedBookAmount,
         reconciled: unmatchedBank === 0 && unmatchedBook === 0 && bank.length > 0,
       },
     };
@@ -523,6 +536,7 @@ export class BankReconciliationService {
         status: true,
         reconciliationDate: true,
         bankAccount: { select: { chartOfAccountId: true } },
+        accountingPeriod: { select: { fiscalYearId: true } },
       },
     });
     if (!recon) throw new NotFoundException('Reconciliation not found.');
@@ -545,6 +559,7 @@ export class BankReconciliationService {
           organizationId,
           status: 'posted',
           jevDate: { lte: recon.reconciliationDate },
+          accountingPeriod: { fiscalYearId: recon.accountingPeriod.fiscalYearId },
         },
       },
       orderBy: { jev: { jevDate: 'asc' } },

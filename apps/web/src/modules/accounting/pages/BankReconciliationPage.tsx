@@ -569,6 +569,18 @@ function ReconciliationDetail({ id }: { id: string }) {
             {summary.unmatchedBank}
           </div>
           <div style={{ fontSize: 12, color: '#667085' }}>Bank — unmatched</div>
+          <div
+            style={{
+              fontSize: 14,
+              fontWeight: 600,
+              marginTop: 4,
+              color: summary.unmatchedBankAmount ? '#b42318' : '#067647',
+            }}
+          >
+            {new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(
+              summary.unmatchedBankAmount,
+            )}
+          </div>
         </div>
         <div
           className="acct-form"
@@ -584,6 +596,18 @@ function ReconciliationDetail({ id }: { id: string }) {
             {summary.unmatchedBook}
           </div>
           <div style={{ fontSize: 12, color: '#667085' }}>Books — unmatched</div>
+          <div
+            style={{
+              fontSize: 14,
+              fontWeight: 600,
+              marginTop: 4,
+              color: summary.unmatchedBookAmount ? '#b42318' : '#067647',
+            }}
+          >
+            {new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(
+              summary.unmatchedBookAmount,
+            )}
+          </div>
         </div>
         <div
           className="acct-form"

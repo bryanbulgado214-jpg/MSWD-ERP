@@ -530,7 +530,14 @@ export interface MatchView {
     description: string;
     amount: number;
   }>;
-  summary: { unmatchedBank: number; unmatchedBook: number; matched: number; reconciled: boolean };
+  summary: {
+    unmatchedBank: number;
+    unmatchedBook: number;
+    matched: number;
+    unmatchedBankAmount: number;
+    unmatchedBookAmount: number;
+    reconciled: boolean;
+  };
 }
 
 export async function getMatchView(reconId: string): Promise<MatchView> {
