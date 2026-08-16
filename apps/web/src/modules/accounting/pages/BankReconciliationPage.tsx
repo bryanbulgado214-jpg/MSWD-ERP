@@ -344,7 +344,7 @@ function ReconciliationDetail({ id }: { id: string }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [selBank, setSelBank] = useState<string | null>(null); // statementLineId
-  const [selBook, setSelBook] = useState<string | null>(null); // jevLineId
+  const [selBooks, setSelBooks] = useState<string[]>([]); // jevLineIds (one-to-many)
   const [showMatched, setShowMatched] = useState(false);
 
   // CSV import
@@ -398,6 +398,17 @@ function ReconciliationDetail({ id }: { id: string }) {
   const unmatchedBank = bank.filter((b) => !b.matched);
   const matchedBank = bank.filter((b) => b.matched);
   const selectedBankLine = unmatchedBank.find((b) => b.id === selBank) ?? null;
+  const selBookTotal =
+    Math.round(
+      book.filter((bk) => selBooks.includes(bk.jevLineId)).reduce((s, bk) => s + bk.amount, 0) *
+        100,
+    ) / 100;
+  const matchDiff =
+    selectedBankLine !== null
+      ? Math.round((selectedBankLine.amount - selBookTotal) * 100) / 100
+      : null;
+  const canMatch =
+    !!selBank && selBooks.length > 0 && matchDiff !== null && Math.abs(matchDiff) < 0.01;
 
   async function run(fn: () => Promise<MatchView>) {
     setBusy(true);
@@ -406,7 +417,7 @@ function ReconciliationDetail({ id }: { id: string }) {
       const next = await fn();
       setView(next);
       setSelBank(null);
-      setSelBook(null);
+      setSelBooks([]);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -415,8 +426,8 @@ function ReconciliationDetail({ id }: { id: string }) {
   }
 
   const doMatch = () => {
-    if (selBank && selBook)
-      run(() => matchBankLine(id, { statementLineId: selBank, jevLineId: selBook }));
+    if (canMatch && selBank)
+      run(() => matchBankLine(id, { statementLineId: selBank, jevLineIds: selBooks }));
   };
 
   async function doReconcile() {
@@ -702,15 +713,29 @@ function ReconciliationDetail({ id }: { id: string }) {
           </button>
           <button
             className="acct-btn acct-btn--primary acct-btn--sm"
-            disabled={!selBank || !selBook || busy}
+            disabled={!canMatch || busy}
             onClick={doMatch}
           >
-            Match selected
+            Match selected{selBooks.length > 1 ? ` (${selBooks.length})` : ''}
           </button>
-          <span style={{ fontSize: 12.5, color: '#667085' }}>
-            Auto-match clears every equal-amount pair; or pick one from each side and Match. For a
-            bank-only line, use “Add to books”.
-          </span>
+          {selectedBankLine ? (
+            <span style={{ fontSize: 12.5, color: '#667085' }}>
+              Bank line <strong>{formatPeso(selectedBankLine.amount)}</strong> · selected books{' '}
+              <strong>{formatPeso(selBookTotal)}</strong> ·{' '}
+              {matchDiff !== null && Math.abs(matchDiff) < 0.01 ? (
+                <span style={{ color: '#067647' }}>balanced ✓</span>
+              ) : (
+                <span style={{ color: '#b42318' }}>
+                  {formatPeso(Math.abs(matchDiff ?? 0))} to go
+                </span>
+              )}
+            </span>
+          ) : (
+            <span style={{ fontSize: 12.5, color: '#667085' }}>
+              Auto-match clears every equal-amount pair; or select one bank line, then pick one or
+              more book entries that sum to it and Match. For a bank-only line, use “Add to books”.
+            </span>
+          )}
         </div>
       )}
 
@@ -803,11 +828,19 @@ function ReconciliationDetail({ id }: { id: string }) {
                 key={bk.jevLineId}
                 style={{
                   ...rowSel,
-                  background:
-                    selBook === bk.jevLineId ? '#eff8ff' : suggested ? '#f0fdf4' : 'transparent',
+                  background: selBooks.includes(bk.jevLineId)
+                    ? '#eff8ff'
+                    : suggested
+                      ? '#f0fdf4'
+                      : 'transparent',
                 }}
                 onClick={() =>
-                  editable && setSelBook(selBook === bk.jevLineId ? null : bk.jevLineId)
+                  editable &&
+                  setSelBooks((prev) =>
+                    prev.includes(bk.jevLineId)
+                      ? prev.filter((x) => x !== bk.jevLineId)
+                      : [...prev, bk.jevLineId],
+                  )
                 }
               >
                 <span>
@@ -845,7 +878,7 @@ function ReconciliationDetail({ id }: { id: string }) {
                     <span style={{ color: '#667085' }}>{fmtDate(b.transactionDate)}</span>{' '}
                     {b.description} →{' '}
                     <span className="acct-text-mono" style={{ color: '#067647' }}>
-                      {b.matchedJevNumber}
+                      {b.matchedJevNumbers.join(', ')}
                     </span>
                   </span>
                   <span style={{ display: 'flex', gap: 10, alignItems: 'center' }}>

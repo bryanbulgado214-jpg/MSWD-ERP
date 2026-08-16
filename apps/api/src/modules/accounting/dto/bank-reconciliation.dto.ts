@@ -96,8 +96,10 @@ export class MatchLineDto {
   @IsUUID()
   statementLineId!: string;
 
-  @IsUUID()
-  jevLineId!: string;
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsUUID('4', { each: true })
+  jevLineIds!: string[];
 }
 
 export class UnmatchLineDto {

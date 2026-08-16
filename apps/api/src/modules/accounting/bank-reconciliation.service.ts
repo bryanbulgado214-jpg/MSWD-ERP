@@ -361,8 +361,7 @@ export class BankReconciliationService {
         description: true,
         referenceNumber: true,
         amount: true,
-        matchedJevLineId: true,
-        matchedJevLine: { select: { jev: { select: { jevNumber: true } } } },
+        matchedJevLines: { select: { jev: { select: { jevNumber: true } } } },
       },
     });
 
@@ -372,7 +371,7 @@ export class BankReconciliationService {
       ? await this.prisma.jevLine.findMany({
           where: {
             chartOfAccountId: cashCoaId,
-            bankLineMatches: { none: {} },
+            matchedStatementLineId: null,
             jev: {
               organizationId,
               status: 'posted',
@@ -406,8 +405,8 @@ export class BankReconciliationService {
       description: l.description,
       referenceNumber: l.referenceNumber,
       amount: Number(l.amount),
-      matched: !!l.matchedJevLineId,
-      matchedJevNumber: l.matchedJevLine?.jev.jevNumber ?? null,
+      matched: l.matchedJevLines.length > 0,
+      matchedJevNumbers: l.matchedJevLines.map((m) => m.jev.jevNumber),
     }));
 
     const unmatchedBank = bank.filter((b) => !b.matched).length;
@@ -457,11 +456,12 @@ export class BankReconciliationService {
   }
 
   /** Match a bank statement line to a book (GL cash) entry — clears both. */
+  /** Match one bank line to one or MORE book (GL cash) lines that sum to it. */
   async match(
     organizationId: string,
     id: string,
     userId: string,
-    data: { statementLineId: string; jevLineId: string },
+    data: { statementLineId: string; jevLineIds: string[] },
   ) {
     const recon = await this.requireEditable(organizationId, id);
     const cashCoaId = recon.bankAccount.chartOfAccountId;
@@ -472,32 +472,44 @@ export class BankReconciliationService {
     }
     const line = await this.prisma.bankStatementLine.findFirst({
       where: { id: data.statementLineId, bankReconciliationId: id },
+      select: { id: true, amount: true, matchedJevLines: { select: { id: true } } },
     });
     if (!line) throw new NotFoundException('Statement line not found.');
-    if (line.matchedJevLineId) throw new BadRequestException('That bank line is already matched.');
+    if (line.matchedJevLines.length) {
+      throw new BadRequestException('That bank line is already matched — unmatch it first.');
+    }
+    const jevLineIds = [...new Set(data.jevLineIds)];
+    if (!jevLineIds.length) throw new BadRequestException('Select at least one book entry.');
 
-    const jevLine = await this.prisma.jevLine.findFirst({
+    const jevLines = await this.prisma.jevLine.findMany({
       where: {
-        id: data.jevLineId,
+        id: { in: jevLineIds },
         chartOfAccountId: cashCoaId,
-        bankLineMatches: { none: {} },
+        matchedStatementLineId: null,
         jev: { organizationId, status: 'posted' },
       },
       select: { id: true, debitAmount: true, creditAmount: true },
     });
-    if (!jevLine) throw new BadRequestException('That book entry is not available to match.');
-
-    const bookAmt = round2(Number(jevLine.debitAmount) - Number(jevLine.creditAmount));
-    if (Math.abs(bookAmt - Number(line.amount)) > 0.01) {
+    if (jevLines.length !== jevLineIds.length) {
+      throw new BadRequestException('One or more book entries are not available to match.');
+    }
+    const bookTotal = round2(
+      jevLines.reduce((s, l) => s + Number(l.debitAmount) - Number(l.creditAmount), 0),
+    );
+    if (Math.abs(bookTotal - Number(line.amount)) > 0.01) {
       throw new BadRequestException(
-        `Amounts do not match: bank ${Number(line.amount).toFixed(2)} vs book ${bookAmt.toFixed(2)}.`,
+        `Selected book entries total ${bookTotal.toFixed(2)}, but the bank line is ${Number(line.amount).toFixed(2)}. They must be equal.`,
       );
     }
 
     await runAudited(this.prisma, userId, (tx) =>
-      tx.bankStatementLine.update({
-        where: { id: data.statementLineId },
-        data: { matchedJevLineId: data.jevLineId, matchedBy: userId, matchedAt: new Date() },
+      tx.jevLine.updateMany({
+        where: { id: { in: jevLineIds } },
+        data: {
+          matchedStatementLineId: data.statementLineId,
+          matchedBy: userId,
+          matchedAt: new Date(),
+        },
       }),
     );
     return this.getMatchView(organizationId, id);
@@ -512,12 +524,13 @@ export class BankReconciliationService {
     await this.requireEditable(organizationId, id);
     const line = await this.prisma.bankStatementLine.findFirst({
       where: { id: data.statementLineId, bankReconciliationId: id },
+      select: { id: true },
     });
     if (!line) throw new NotFoundException('Statement line not found.');
     await runAudited(this.prisma, userId, (tx) =>
-      tx.bankStatementLine.update({
-        where: { id: data.statementLineId },
-        data: { matchedJevLineId: null, matchedBy: null, matchedAt: null },
+      tx.jevLine.updateMany({
+        where: { matchedStatementLineId: data.statementLineId },
+        data: { matchedStatementLineId: null, matchedBy: null, matchedAt: null },
       }),
     );
     return this.getMatchView(organizationId, id);
@@ -547,14 +560,14 @@ export class BankReconciliationService {
     if (!cashCoaId) return this.getMatchView(organizationId, id);
 
     const bankLines = await this.prisma.bankStatementLine.findMany({
-      where: { bankReconciliationId: id, matchedJevLineId: null },
+      where: { bankReconciliationId: id, matchedJevLines: { none: {} } },
       orderBy: { transactionDate: 'asc' },
       select: { id: true, amount: true },
     });
     const bookLines = await this.prisma.jevLine.findMany({
       where: {
         chartOfAccountId: cashCoaId,
-        bankLineMatches: { none: {} },
+        matchedStatementLineId: null,
         jev: {
           organizationId,
           status: 'posted',
@@ -584,9 +597,13 @@ export class BankReconciliationService {
     if (pairs.length) {
       await runAudited(this.prisma, userId, async (tx) => {
         for (const p of pairs) {
-          await tx.bankStatementLine.update({
-            where: { id: p.statementLineId },
-            data: { matchedJevLineId: p.jevLineId, matchedBy: userId, matchedAt: new Date() },
+          await tx.jevLine.update({
+            where: { id: p.jevLineId },
+            data: {
+              matchedStatementLineId: p.statementLineId,
+              matchedBy: userId,
+              matchedAt: new Date(),
+            },
           });
         }
       });
@@ -615,9 +632,12 @@ export class BankReconciliationService {
     }
     const line = await this.prisma.bankStatementLine.findFirst({
       where: { id: data.statementLineId, bankReconciliationId: id },
+      include: { _count: { select: { matchedJevLines: true } } },
     });
     if (!line) throw new NotFoundException('Statement line not found.');
-    if (line.matchedJevLineId) throw new BadRequestException('That bank line is already matched.');
+    if (line._count.matchedJevLines > 0) {
+      throw new BadRequestException('That bank line is already matched.');
+    }
     if (data.accountId === cashCoaId) {
       throw new BadRequestException('Choose the income/expense account, not the cash account.');
     }
@@ -673,9 +693,9 @@ export class BankReconciliationService {
         select: { id: true },
       });
       if (cashLine) {
-        await tx.bankStatementLine.update({
-          where: { id: line.id },
-          data: { matchedJevLineId: cashLine.id, matchedBy: userId, matchedAt: new Date() },
+        await tx.jevLine.update({
+          where: { id: cashLine.id },
+          data: { matchedStatementLineId: line.id, matchedBy: userId, matchedAt: new Date() },
         });
       }
     });

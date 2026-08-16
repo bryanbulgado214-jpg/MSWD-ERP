@@ -521,7 +521,7 @@ export interface MatchView {
     referenceNumber: string | null;
     amount: number;
     matched: boolean;
-    matchedJevNumber: string | null;
+    matchedJevNumbers: string[];
   }>;
   book: Array<{
     jevLineId: string;
@@ -573,7 +573,7 @@ export async function importBankStatement(
 
 export async function matchBankLine(
   reconId: string,
-  data: { statementLineId: string; jevLineId: string },
+  data: { statementLineId: string; jevLineIds: string[] },
 ): Promise<MatchView> {
   const res = await authFetchMutate(`/accounting/reconciliations/${reconId}/match`, 'POST', data);
   return res.json();
