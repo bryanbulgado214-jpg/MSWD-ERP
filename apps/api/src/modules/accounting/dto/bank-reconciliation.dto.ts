@@ -93,8 +93,10 @@ export class ImportStatementLinesDto {
 }
 
 export class MatchLineDto {
-  @IsUUID()
-  statementLineId!: string;
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsUUID('4', { each: true })
+  statementLineIds!: string[];
 
   @IsArray()
   @ArrayMinSize(1)
@@ -104,7 +106,7 @@ export class MatchLineDto {
 
 export class UnmatchLineDto {
   @IsUUID()
-  statementLineId!: string;
+  matchGroupId!: string;
 }
 
 export class CreateEntryFromLineDto {

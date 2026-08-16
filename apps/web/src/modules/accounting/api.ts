@@ -528,7 +528,7 @@ export interface MatchView {
     referenceNumber: string | null;
     amount: number;
     matched: boolean;
-    matchedJevNumbers: string[];
+    matchGroupId: string | null;
   }>;
   book: Array<{
     jevLineId: string;
@@ -536,6 +536,8 @@ export interface MatchView {
     jevDate: string;
     description: string;
     amount: number;
+    matched: boolean;
+    matchGroupId: string | null;
   }>;
   summary: {
     unmatchedBank: number;
@@ -578,9 +580,9 @@ export async function importBankStatement(
   return res.json();
 }
 
-export async function matchBankLine(
+export async function matchLines(
   reconId: string,
-  data: { statementLineId: string; jevLineIds: string[] },
+  data: { statementLineIds: string[]; jevLineIds: string[] },
 ): Promise<MatchView> {
   const res = await authFetchMutate(`/accounting/reconciliations/${reconId}/match`, 'POST', data);
   return res.json();
@@ -591,12 +593,9 @@ export async function autoMatchBankLines(reconId: string): Promise<MatchView> {
   return res.json();
 }
 
-export async function unmatchBankLine(
-  reconId: string,
-  statementLineId: string,
-): Promise<MatchView> {
+export async function unmatchGroup(reconId: string, matchGroupId: string): Promise<MatchView> {
   const res = await authFetchMutate(`/accounting/reconciliations/${reconId}/unmatch`, 'POST', {
-    statementLineId,
+    matchGroupId,
   });
   return res.json();
 }

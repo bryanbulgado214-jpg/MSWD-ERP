@@ -361,17 +361,29 @@ export class BankReconciliationService {
         description: true,
         referenceNumber: true,
         amount: true,
-        matchedJevLines: { select: { jev: { select: { jevNumber: true } } } },
+        matchGroupId: true,
       },
     });
 
-    // Book side = posted GL lines on this bank's Cash-in-Bank account, dated on
-    // or before the reconciliation date, not yet cleared by any statement line.
-    const bookRaw = cashCoaId
+    // Book side = posted GL lines on this bank's Cash-in-Bank account. Two sets:
+    //  • unmatched candidates — dated on/before the recon date, in this fiscal
+    //    year, not yet in any match group;
+    //  • already-matched — the lines cleared by THIS reconciliation's groups
+    //    (kept in the view so the Reconciled tab can show them).
+    const bookSelect = {
+      id: true,
+      debitAmount: true,
+      creditAmount: true,
+      description: true,
+      matchGroupId: true,
+      jev: { select: { jevNumber: true, jevDate: true, particulars: true } },
+    } as const;
+
+    const bookUnmatchedRaw = cashCoaId
       ? await this.prisma.jevLine.findMany({
           where: {
             chartOfAccountId: cashCoaId,
-            matchedStatementLineId: null,
+            matchGroupId: null,
             jev: {
               organizationId,
               status: 'posted',
@@ -379,23 +391,26 @@ export class BankReconciliationService {
               accountingPeriod: { fiscalYearId },
             },
           },
-          select: {
-            id: true,
-            debitAmount: true,
-            creditAmount: true,
-            description: true,
-            jev: { select: { jevNumber: true, jevDate: true, particulars: true } },
-          },
+          select: bookSelect,
         })
       : [];
 
-    const book = bookRaw
+    const bookMatchedRaw = cashCoaId
+      ? await this.prisma.jevLine.findMany({
+          where: { chartOfAccountId: cashCoaId, matchGroup: { bankReconciliationId: id } },
+          select: bookSelect,
+        })
+      : [];
+
+    const book = [...bookUnmatchedRaw, ...bookMatchedRaw]
       .map((l) => ({
         jevLineId: l.id,
         jevNumber: l.jev.jevNumber,
         jevDate: l.jev.jevDate,
         description: l.description ?? l.jev.particulars,
         amount: round2(Number(l.debitAmount) - Number(l.creditAmount)),
+        matched: l.matchGroupId !== null,
+        matchGroupId: l.matchGroupId,
       }))
       .sort((a, b) => a.jevDate.getTime() - b.jevDate.getTime());
 
@@ -405,17 +420,17 @@ export class BankReconciliationService {
       description: l.description,
       referenceNumber: l.referenceNumber,
       amount: Number(l.amount),
-      matched: l.matchedJevLines.length > 0,
-      matchedJevNumbers: l.matchedJevLines.map((m) => m.jev.jevNumber),
+      matched: l.matchGroupId !== null,
+      matchGroupId: l.matchGroupId,
     }));
 
-    const unmatchedBank = bank.filter((b) => !b.matched).length;
-    const unmatchedBook = book.length;
+    const unmatchedBankLines = bank.filter((b) => !b.matched);
+    const unmatchedBookLines = book.filter((b) => !b.matched);
+    const unmatchedBank = unmatchedBankLines.length;
+    const unmatchedBook = unmatchedBookLines.length;
     // Peso value still unreconciled on each side — both reach 0 when matched.
-    const unmatchedBankAmount = round2(
-      bank.filter((b) => !b.matched).reduce((s, b) => s + b.amount, 0),
-    );
-    const unmatchedBookAmount = round2(book.reduce((s, b) => s + b.amount, 0));
+    const unmatchedBankAmount = round2(unmatchedBankLines.reduce((s, b) => s + b.amount, 0));
+    const unmatchedBookAmount = round2(unmatchedBookLines.reduce((s, b) => s + b.amount, 0));
 
     return {
       recon: {
@@ -455,13 +470,16 @@ export class BankReconciliationService {
     return recon;
   }
 
-  /** Match a bank statement line to a book (GL cash) entry — clears both. */
-  /** Match one bank line to one or MORE book (GL cash) lines that sum to it. */
+  /**
+   * Match a SET of bank statement lines to a SET of book (GL cash) lines whose
+   * signed totals are equal — many-to-many. Creates one match group and puts
+   * every selected line (both sides) into it, clearing them all together.
+   */
   async match(
     organizationId: string,
     id: string,
     userId: string,
-    data: { statementLineId: string; jevLineIds: string[] },
+    data: { statementLineIds: string[]; jevLineIds: string[] },
   ) {
     const recon = await this.requireEditable(organizationId, id);
     const cashCoaId = recon.bankAccount.chartOfAccountId;
@@ -470,22 +488,24 @@ export class BankReconciliationService {
         'This bank account is not linked to a Cash-in-Bank ledger account.',
       );
     }
-    const line = await this.prisma.bankStatementLine.findFirst({
-      where: { id: data.statementLineId, bankReconciliationId: id },
-      select: { id: true, amount: true, matchedJevLines: { select: { id: true } } },
-    });
-    if (!line) throw new NotFoundException('Statement line not found.');
-    if (line.matchedJevLines.length) {
-      throw new BadRequestException('That bank line is already matched — unmatch it first.');
-    }
+    const statementLineIds = [...new Set(data.statementLineIds)];
     const jevLineIds = [...new Set(data.jevLineIds)];
+    if (!statementLineIds.length) throw new BadRequestException('Select at least one bank line.');
     if (!jevLineIds.length) throw new BadRequestException('Select at least one book entry.');
+
+    const statementLines = await this.prisma.bankStatementLine.findMany({
+      where: { id: { in: statementLineIds }, bankReconciliationId: id, matchGroupId: null },
+      select: { id: true, amount: true },
+    });
+    if (statementLines.length !== statementLineIds.length) {
+      throw new BadRequestException('One or more bank lines are not available to match.');
+    }
 
     const jevLines = await this.prisma.jevLine.findMany({
       where: {
         id: { in: jevLineIds },
         chartOfAccountId: cashCoaId,
-        matchedStatementLineId: null,
+        matchGroupId: null,
         jev: { organizationId, status: 'posted' },
       },
       select: { id: true, debitAmount: true, creditAmount: true },
@@ -493,45 +513,50 @@ export class BankReconciliationService {
     if (jevLines.length !== jevLineIds.length) {
       throw new BadRequestException('One or more book entries are not available to match.');
     }
+
+    const bankTotal = round2(statementLines.reduce((s, l) => s + Number(l.amount), 0));
     const bookTotal = round2(
       jevLines.reduce((s, l) => s + Number(l.debitAmount) - Number(l.creditAmount), 0),
     );
-    if (Math.abs(bookTotal - Number(line.amount)) > 0.01) {
+    if (Math.abs(bookTotal - bankTotal) > 0.01) {
       throw new BadRequestException(
-        `Selected book entries total ${bookTotal.toFixed(2)}, but the bank line is ${Number(line.amount).toFixed(2)}. They must be equal.`,
+        `Selected bank lines total ${bankTotal.toFixed(2)}, but the book entries total ${bookTotal.toFixed(2)}. They must be equal.`,
       );
     }
 
-    await runAudited(this.prisma, userId, (tx) =>
-      tx.jevLine.updateMany({
+    await runAudited(this.prisma, userId, async (tx) => {
+      const group = await tx.bankMatchGroup.create({
+        data: { bankReconciliationId: id, matchedBy: userId, matchedAt: new Date() },
+        select: { id: true },
+      });
+      await tx.bankStatementLine.updateMany({
+        where: { id: { in: statementLineIds } },
+        data: { matchGroupId: group.id },
+      });
+      await tx.jevLine.updateMany({
         where: { id: { in: jevLineIds } },
-        data: {
-          matchedStatementLineId: data.statementLineId,
-          matchedBy: userId,
-          matchedAt: new Date(),
-        },
-      }),
-    );
+        data: { matchGroupId: group.id },
+      });
+    });
     return this.getMatchView(organizationId, id);
   }
 
+  /** Unmatch a whole match group — every line in it returns to unreconciled. */
   async unmatch(
     organizationId: string,
     id: string,
     userId: string,
-    data: { statementLineId: string },
+    data: { matchGroupId: string },
   ) {
     await this.requireEditable(organizationId, id);
-    const line = await this.prisma.bankStatementLine.findFirst({
-      where: { id: data.statementLineId, bankReconciliationId: id },
+    const group = await this.prisma.bankMatchGroup.findFirst({
+      where: { id: data.matchGroupId, bankReconciliationId: id },
       select: { id: true },
     });
-    if (!line) throw new NotFoundException('Statement line not found.');
+    if (!group) throw new NotFoundException('Match group not found.');
+    // Deleting the group SetNulls both link columns, freeing every line in it.
     await runAudited(this.prisma, userId, (tx) =>
-      tx.jevLine.updateMany({
-        where: { matchedStatementLineId: data.statementLineId },
-        data: { matchedStatementLineId: null, matchedBy: null, matchedAt: null },
-      }),
+      tx.bankMatchGroup.delete({ where: { id: group.id } }),
     );
     return this.getMatchView(organizationId, id);
   }
@@ -560,14 +585,14 @@ export class BankReconciliationService {
     if (!cashCoaId) return this.getMatchView(organizationId, id);
 
     const bankLines = await this.prisma.bankStatementLine.findMany({
-      where: { bankReconciliationId: id, matchedJevLines: { none: {} } },
+      where: { bankReconciliationId: id, matchGroupId: null },
       orderBy: { transactionDate: 'asc' },
       select: { id: true, amount: true },
     });
     const bookLines = await this.prisma.jevLine.findMany({
       where: {
         chartOfAccountId: cashCoaId,
-        matchedStatementLineId: null,
+        matchGroupId: null,
         jev: {
           organizationId,
           status: 'posted',
@@ -596,14 +621,19 @@ export class BankReconciliationService {
 
     if (pairs.length) {
       await runAudited(this.prisma, userId, async (tx) => {
+        // Each auto-matched pair is its own 1:1 group.
         for (const p of pairs) {
+          const group = await tx.bankMatchGroup.create({
+            data: { bankReconciliationId: id, matchedBy: userId, matchedAt: new Date() },
+            select: { id: true },
+          });
+          await tx.bankStatementLine.update({
+            where: { id: p.statementLineId },
+            data: { matchGroupId: group.id },
+          });
           await tx.jevLine.update({
             where: { id: p.jevLineId },
-            data: {
-              matchedStatementLineId: p.statementLineId,
-              matchedBy: userId,
-              matchedAt: new Date(),
-            },
+            data: { matchGroupId: group.id },
           });
         }
       });
@@ -632,12 +662,16 @@ export class BankReconciliationService {
     }
     const line = await this.prisma.bankStatementLine.findFirst({
       where: { id: data.statementLineId, bankReconciliationId: id },
-      include: { _count: { select: { matchedJevLines: true } } },
+      select: {
+        id: true,
+        amount: true,
+        description: true,
+        transactionDate: true,
+        matchGroupId: true,
+      },
     });
     if (!line) throw new NotFoundException('Statement line not found.');
-    if (line._count.matchedJevLines > 0) {
-      throw new BadRequestException('That bank line is already matched.');
-    }
+    if (line.matchGroupId) throw new BadRequestException('That bank line is already matched.');
     if (data.accountId === cashCoaId) {
       throw new BadRequestException('Choose the income/expense account, not the cash account.');
     }
@@ -693,9 +727,18 @@ export class BankReconciliationService {
         select: { id: true },
       });
       if (cashLine) {
+        // A 1:1 match group linking the bank line to its new cash line.
+        const group = await tx.bankMatchGroup.create({
+          data: { bankReconciliationId: id, matchedBy: userId, matchedAt: new Date() },
+          select: { id: true },
+        });
+        await tx.bankStatementLine.update({
+          where: { id: line.id },
+          data: { matchGroupId: group.id },
+        });
         await tx.jevLine.update({
           where: { id: cashLine.id },
-          data: { matchedStatementLineId: line.id, matchedBy: userId, matchedAt: new Date() },
+          data: { matchGroupId: group.id },
         });
       }
     });
@@ -830,10 +873,14 @@ export class BankReconciliationService {
   async remove(organizationId: string, userId: string, id: string) {
     const recon = await this.prisma.bankReconciliation.findFirst({
       where: { id, organizationId },
-      select: { id: true, statementLines: { select: { id: true } } },
+      select: { id: true },
     });
     if (!recon) throw new NotFoundException('Reconciliation not found.');
-    const statementLineIds = recon.statementLines.map((l) => l.id);
+
+    // How many book lines this recon had cleared (for the response message).
+    const unmatchedBookLines = await this.prisma.jevLine.count({
+      where: { matchGroup: { bankReconciliationId: id } },
+    });
 
     // Grab attachment file paths up front for best-effort disk cleanup.
     const atts = await this.prisma.attachment.findMany({
@@ -841,21 +888,14 @@ export class BankReconciliationService {
       select: { filePath: true },
     });
 
-    const unmatchedBookLines = await runAudited(this.prisma, userId, async (tx) => {
-      let count = 0;
-      if (statementLineIds.length) {
-        const res = await tx.jevLine.updateMany({
-          where: { matchedStatementLineId: { in: statementLineIds } },
-          data: { matchedStatementLineId: null, matchedBy: null, matchedAt: null },
-        });
-        count = res.count;
-      }
+    await runAudited(this.prisma, userId, async (tx) => {
       await tx.attachment.deleteMany({
         where: { organizationId, attachableTable: 'bank_reconciliations', attachableId: id },
       });
-      // Cascades reconciling items + imported statement lines.
+      // Cascades reconciling items, imported statement lines, and match groups.
+      // Deleting the groups SetNulls jev_lines.match_group_id, so every book
+      // line cleared by this recon returns to the uncleared pool automatically.
       await tx.bankReconciliation.delete({ where: { id } });
-      return count;
     });
 
     for (const a of atts) {

@@ -13,9 +13,9 @@ import {
   getGlCashBalance,
   getMatchView,
   importBankStatement,
-  matchBankLine,
+  matchLines,
   autoMatchBankLines,
-  unmatchBankLine,
+  unmatchGroup,
   createEntryFromBankLine,
   completeReconciliation,
   getBankAccounts,
@@ -40,6 +40,26 @@ function formatPeso(value: string | number): string {
   const num = typeof value === 'string' ? parseFloat(value) : value;
   if (isNaN(num) || num === 0) return '—';
   return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(num);
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// Distinct colours for match groups on the Reconciled tab (cycled).
+const GROUP_COLORS = ['#175cd3', '#067647', '#b54708', '#6941c6', '#c11574', '#0e7490', '#a15c07'];
+
+// Case-insensitive substring match; empty query matches everything. Callers
+// build a "haystack" that includes the raw amount, the grouped amount
+// (e.g. "3,500,000"), the date and any references, so users can search by
+// keyword OR by amount.
+function matchesQuery(hay: string, q: string): boolean {
+  const needle = q.trim().toLowerCase();
+  return !needle || hay.toLowerCase().includes(needle);
+}
+function amountHay(amount: number): string {
+  return `${amount} ${Math.abs(amount).toLocaleString('en-US')} ${Math.abs(amount).toLocaleString(
+    'en-US',
+    { minimumFractionDigits: 2 },
+  )}`;
 }
 
 // ── List View ──
@@ -385,9 +405,11 @@ function ReconciliationDetail({ id }: { id: string }) {
   const [view, setView] = useState<MatchView | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [selBank, setSelBank] = useState<string | null>(null); // statementLineId
-  const [selBooks, setSelBooks] = useState<string[]>([]); // jevLineIds (one-to-many)
-  const [showMatched, setShowMatched] = useState(false);
+  const [tab, setTab] = useState<'unreconciled' | 'reconciled'>('unreconciled');
+  const [selBank, setSelBank] = useState<Set<string>>(new Set()); // statementLineIds
+  const [selBook, setSelBook] = useState<Set<string>>(new Set()); // jevLineIds
+  const [bankSearch, setBankSearch] = useState('');
+  const [bookSearch, setBookSearch] = useState('');
 
   // CSV import
   const [showImport, setShowImport] = useState(false);
@@ -437,20 +459,29 @@ function ReconciliationDetail({ id }: { id: string }) {
 
   const { recon, bank, book, summary } = view;
   const editable = recon.status === 'in_progress' || recon.status === 'draft';
-  const unmatchedBank = bank.filter((b) => !b.matched);
-  const matchedBank = bank.filter((b) => b.matched);
-  const selectedBankLine = unmatchedBank.find((b) => b.id === selBank) ?? null;
-  const selBookTotal =
-    Math.round(
-      book.filter((bk) => selBooks.includes(bk.jevLineId)).reduce((s, bk) => s + bk.amount, 0) *
-        100,
-    ) / 100;
-  const matchDiff =
-    selectedBankLine !== null
-      ? Math.round((selectedBankLine.amount - selBookTotal) * 100) / 100
-      : null;
-  const canMatch =
-    !!selBank && selBooks.length > 0 && matchDiff !== null && Math.abs(matchDiff) < 0.01;
+
+  const bankUnmatched = bank.filter((b) => !b.matched);
+  const bankMatched = bank.filter((b) => b.matched);
+  const bookUnmatched = book.filter((b) => !b.matched);
+  const bookMatched = book.filter((b) => b.matched);
+
+  // Selected (checked) lines — restricted to the unmatched pool.
+  const selBankLines = bankUnmatched.filter((b) => selBank.has(b.id));
+  const selBookLines = bookUnmatched.filter((b) => selBook.has(b.jevLineId));
+  const selBankTotal = round2(selBankLines.reduce((s, b) => s + b.amount, 0));
+  const selBookTotal = round2(selBookLines.reduce((s, b) => s + b.amount, 0));
+  const matchDiff = round2(selBankTotal - selBookTotal);
+  const canMatch = selBankLines.length > 0 && selBookLines.length > 0 && Math.abs(matchDiff) < 0.01;
+
+  // Stable 1-based numbering + colour per match group, for the Reconciled tab.
+  const groupOrder = Array.from(
+    new Set(
+      [...bankMatched, ...bookMatched]
+        .map((x) => x.matchGroupId)
+        .filter((g): g is string => g !== null),
+    ),
+  );
+  const groupNo = new Map(groupOrder.map((g, i) => [g, i + 1]));
 
   async function run(fn: () => Promise<MatchView>) {
     setBusy(true);
@@ -458,8 +489,8 @@ function ReconciliationDetail({ id }: { id: string }) {
     try {
       const next = await fn();
       setView(next);
-      setSelBank(null);
-      setSelBooks([]);
+      setSelBank(new Set());
+      setSelBook(new Set());
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -467,9 +498,70 @@ function ReconciliationDetail({ id }: { id: string }) {
     }
   }
 
+  const toggleBank = (lineId: string) =>
+    setSelBank((prev) => {
+      const n = new Set(prev);
+      if (n.has(lineId)) n.delete(lineId);
+      else n.add(lineId);
+      return n;
+    });
+  const toggleBook = (lineId: string) =>
+    setSelBook((prev) => {
+      const n = new Set(prev);
+      if (n.has(lineId)) n.delete(lineId);
+      else n.add(lineId);
+      return n;
+    });
+
   const doMatch = () => {
-    if (canMatch && selBank)
-      run(() => matchBankLine(id, { statementLineId: selBank, jevLineIds: selBooks }));
+    if (!canMatch) return;
+    run(() =>
+      matchLines(id, {
+        statementLineIds: selBankLines.map((b) => b.id),
+        jevLineIds: selBookLines.map((b) => b.jevLineId),
+      }),
+    );
+  };
+
+  const switchTab = (t: 'unreconciled' | 'reconciled') => {
+    setTab(t);
+    setSelBank(new Set());
+    setSelBook(new Set());
+  };
+
+  // Rows shown in each column: the tab's set, filtered by that side's search box.
+  const bankRows = (tab === 'unreconciled' ? bankUnmatched : bankMatched).filter((b) =>
+    matchesQuery(
+      `${b.description} ${b.referenceNumber ?? ''} ${fmtDate(b.transactionDate)} ${amountHay(b.amount)}`,
+      bankSearch,
+    ),
+  );
+  const bookRows = (tab === 'unreconciled' ? bookUnmatched : bookMatched).filter((b) =>
+    matchesQuery(
+      `${b.jevNumber} ${b.description} ${fmtDate(b.jevDate)} ${amountHay(b.amount)}`,
+      bookSearch,
+    ),
+  );
+
+  const groupChip = (gid: string | null) => {
+    if (!gid) return null;
+    const n = groupNo.get(gid) ?? 0;
+    return (
+      <span
+        style={{
+          display: 'inline-block',
+          fontSize: 10.5,
+          fontWeight: 700,
+          color: '#fff',
+          background: GROUP_COLORS[(n - 1) % GROUP_COLORS.length],
+          borderRadius: 4,
+          padding: '1px 6px',
+          marginRight: 6,
+        }}
+      >
+        #{n}
+      </span>
+    );
   };
 
   async function doReconcile() {
@@ -598,16 +690,6 @@ function ReconciliationDetail({ id }: { id: string }) {
     } finally {
       setUploading(false);
     }
-  };
-
-  const rowSel: React.CSSProperties = {
-    padding: '8px 10px',
-    borderBottom: '1px solid #eaecf0',
-    cursor: editable ? 'pointer' : 'default',
-    display: 'flex',
-    justifyContent: 'space-between',
-    gap: 10,
-    fontSize: 13,
   };
 
   return (
@@ -771,7 +853,37 @@ function ReconciliationDetail({ id }: { id: string }) {
         </div>
       )}
 
-      {editable && (
+      {/* Tabs: Unreconciled | Reconciled */}
+      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid #eaecf0', marginBottom: 12 }}>
+        {(['unreconciled', 'reconciled'] as const).map((t) => {
+          const active = tab === t;
+          const count =
+            t === 'unreconciled' ? bankUnmatched.length + bookUnmatched.length : groupOrder.length;
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => switchTab(t)}
+              style={{
+                padding: '8px 16px',
+                border: 'none',
+                background: 'none',
+                cursor: 'pointer',
+                fontSize: 14,
+                fontWeight: active ? 700 : 500,
+                color: active ? 'var(--mswd-navy)' : '#667085',
+                borderBottom: active ? '2px solid var(--mswd-navy)' : '2px solid transparent',
+                marginBottom: -1,
+              }}
+            >
+              {t === 'unreconciled' ? 'Unreconciled' : 'Reconciled'} ({count})
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Toolbar */}
+      {tab === 'unreconciled' && editable && (
         <div
           style={{
             display: 'flex',
@@ -783,7 +895,7 @@ function ReconciliationDetail({ id }: { id: string }) {
         >
           <button
             className="acct-btn acct-btn--sm"
-            disabled={busy || unmatchedBank.length === 0}
+            disabled={busy || bankUnmatched.length === 0}
             onClick={() => run(() => autoMatchBankLines(id))}
           >
             ⚡ Auto-match
@@ -793,177 +905,147 @@ function ReconciliationDetail({ id }: { id: string }) {
             disabled={!canMatch || busy}
             onClick={doMatch}
           >
-            Match selected{selBooks.length > 1 ? ` (${selBooks.length})` : ''}
+            Match
           </button>
-          {selectedBankLine ? (
+          {selBank.size > 0 || selBook.size > 0 ? (
             <span style={{ fontSize: 12.5, color: '#667085' }}>
-              Bank line <strong>{formatPeso(selectedBankLine.amount)}</strong> · selected books{' '}
-              <strong>{formatPeso(selBookTotal)}</strong> ·{' '}
-              {matchDiff !== null && Math.abs(matchDiff) < 0.01 ? (
-                <span style={{ color: '#067647' }}>balanced ✓</span>
+              Bank <strong>{formatPeso(selBankTotal)}</strong> ({selBank.size}) · Books{' '}
+              <strong>{formatPeso(selBookTotal)}</strong> ({selBook.size}) ·{' '}
+              {canMatch ? (
+                <span style={{ color: '#067647', fontWeight: 600 }}>
+                  Difference ₱0.00 — balanced ✓
+                </span>
               ) : (
-                <span style={{ color: '#b42318' }}>
-                  {formatPeso(Math.abs(matchDiff ?? 0))} to go
+                <span style={{ color: '#b42318', fontWeight: 600 }}>
+                  Difference {formatPeso(Math.abs(matchDiff))}
                 </span>
               )}
             </span>
           ) : (
             <span style={{ fontSize: 12.5, color: '#667085' }}>
-              Auto-match clears every equal-amount pair; or select one bank line, then pick one or
-              more book entries that sum to it and Match. For a bank-only line, use “Add to books”.
+              Tick amounts on each side (bank ↔ book, any number per side) until the difference is
+              zero, then click Match. Auto-match pairs equal amounts for you.
             </span>
           )}
         </div>
       )}
-
-      {/* Two-column match board */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <div className="acct-form" style={{ padding: 0, overflow: 'hidden' }}>
-          <div
-            style={{
-              padding: '10px 12px',
-              fontWeight: 700,
-              background: '#f9fafb',
-              borderBottom: '1px solid #eaecf0',
-            }}
-          >
-            Bank Transactions ({unmatchedBank.length})
-          </div>
-          {unmatchedBank.length === 0 && (
-            <div className="acct-empty" style={{ padding: 16 }}>
-              Nothing to match. Import a bank CSV to begin.
-            </div>
-          )}
-          {unmatchedBank.map((b) => (
-            <div
-              key={b.id}
-              style={{
-                ...rowSel,
-                background: selBank === b.id ? '#eff8ff' : 'transparent',
-              }}
-              onClick={() => editable && setSelBank(selBank === b.id ? null : b.id)}
-            >
-              <span>
-                <span style={{ color: '#667085' }}>{fmtDate(b.transactionDate)}</span>{' '}
-                {b.description}
-                {b.referenceNumber && (
-                  <span style={{ color: '#667085' }}> ({b.referenceNumber})</span>
-                )}
-                {editable && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openEntry(b);
-                    }}
-                    style={{
-                      marginLeft: 8,
-                      background: 'none',
-                      border: 'none',
-                      color: 'var(--mswd-navy)',
-                      textDecoration: 'underline',
-                      cursor: 'pointer',
-                      font: 'inherit',
-                      padding: 0,
-                    }}
-                  >
-                    Add to books
-                  </button>
-                )}
-              </span>
-              <span
-                className="acct-text-mono"
-                style={{ color: b.amount < 0 ? '#b42318' : '#067647', whiteSpace: 'nowrap' }}
-              >
-                {formatPeso(b.amount)}
-              </span>
-            </div>
-          ))}
+      {tab === 'reconciled' && (
+        <div style={{ fontSize: 12.5, color: '#667085', marginBottom: 10 }}>
+          Matched sets — each bank line and the book entries it clears share a coloured tag. Click
+          <strong> Unmatch</strong> to send a whole set back to Unreconciled.
         </div>
+      )}
 
-        <div className="acct-form" style={{ padding: 0, overflow: 'hidden' }}>
+      {/* Two-column match board — independent search + scroll per side */}
+      <div
+        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}
+      >
+        {/* Bank column */}
+        <div
+          className="acct-form"
+          style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+        >
           <div
             style={{
-              padding: '10px 12px',
-              fontWeight: 700,
+              padding: '8px 10px',
               background: '#f9fafb',
               borderBottom: '1px solid #eaecf0',
+              display: 'flex',
+              gap: 8,
+              alignItems: 'center',
+              flexWrap: 'wrap',
             }}
           >
-            Book Entries — GL cash ({book.length})
+            <strong style={{ whiteSpace: 'nowrap' }}>Bank Transactions ({bankRows.length})</strong>
+            <input
+              value={bankSearch}
+              onChange={(e) => setBankSearch(e.target.value)}
+              placeholder="Search amount or keyword…"
+              style={{
+                flex: 1,
+                minWidth: 120,
+                padding: '4px 8px',
+                border: '1px solid #d0d5dd',
+                borderRadius: 6,
+                fontSize: 12.5,
+              }}
+            />
           </div>
-          {book.length === 0 && (
-            <div className="acct-empty" style={{ padding: 16 }}>
-              No uncleared book entries.
-            </div>
-          )}
-          {book.map((bk) => {
-            const suggested =
-              selectedBankLine && Math.abs(bk.amount - selectedBankLine.amount) < 0.01;
-            return (
+          <div style={{ maxHeight: 460, overflowY: 'auto' }}>
+            {bankRows.length === 0 && (
+              <div className="acct-empty" style={{ padding: 16 }}>
+                {bankSearch
+                  ? 'No bank lines match your search.'
+                  : tab === 'unreconciled'
+                    ? 'Nothing to match. Import a bank CSV to begin.'
+                    : 'No matched bank lines yet.'}
+              </div>
+            )}
+            {bankRows.map((b) => (
               <div
-                key={bk.jevLineId}
+                key={b.id}
+                onClick={() => editable && tab === 'unreconciled' && toggleBank(b.id)}
                 style={{
-                  ...rowSel,
-                  background: selBooks.includes(bk.jevLineId)
-                    ? '#eff8ff'
-                    : suggested
-                      ? '#f0fdf4'
-                      : 'transparent',
+                  padding: '8px 10px',
+                  borderBottom: '1px solid #eaecf0',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                  fontSize: 13,
+                  cursor: editable && tab === 'unreconciled' ? 'pointer' : 'default',
+                  background: selBank.has(b.id) ? '#eff8ff' : 'transparent',
                 }}
-                onClick={() =>
-                  editable &&
-                  setSelBooks((prev) =>
-                    prev.includes(bk.jevLineId)
-                      ? prev.filter((x) => x !== bk.jevLineId)
-                      : [...prev, bk.jevLineId],
-                  )
-                }
               >
                 <span>
-                  <span className="acct-text-mono" style={{ color: '#667085' }}>
-                    {bk.jevNumber}
-                  </span>{' '}
-                  <span style={{ color: '#667085' }}>{fmtDate(bk.jevDate)}</span> {bk.description}
-                  {suggested && (
-                    <span style={{ color: '#067647', fontSize: 11, marginLeft: 6 }}>● match</span>
+                  {tab === 'reconciled' && groupChip(b.matchGroupId)}
+                  <span style={{ color: '#667085' }}>{fmtDate(b.transactionDate)}</span>{' '}
+                  {b.description}
+                  {b.referenceNumber && (
+                    <span style={{ color: '#667085' }}> ({b.referenceNumber})</span>
+                  )}
+                  {editable && tab === 'unreconciled' && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEntry(b);
+                      }}
+                      style={{
+                        marginLeft: 8,
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--mswd-navy)',
+                        textDecoration: 'underline',
+                        cursor: 'pointer',
+                        font: 'inherit',
+                        padding: 0,
+                      }}
+                    >
+                      Add to books
+                    </button>
                   )}
                 </span>
                 <span
-                  className="acct-text-mono"
-                  style={{ color: bk.amount < 0 ? '#b42318' : '#067647', whiteSpace: 'nowrap' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}
                 >
-                  {formatPeso(bk.amount)}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Matched pairs */}
-      {matchedBank.length > 0 && (
-        <div style={{ marginTop: 18 }}>
-          <button className="acct-btn acct-btn--sm" onClick={() => setShowMatched(!showMatched)}>
-            {showMatched ? '▾' : '▸'} Matched ({matchedBank.length})
-          </button>
-          {showMatched && (
-            <div className="acct-form" style={{ padding: 0, overflow: 'hidden', marginTop: 8 }}>
-              {matchedBank.map((b) => (
-                <div key={b.id} style={{ ...rowSel, cursor: 'default' }}>
-                  <span>
-                    <span style={{ color: '#667085' }}>{fmtDate(b.transactionDate)}</span>{' '}
-                    {b.description} →{' '}
-                    <span className="acct-text-mono" style={{ color: '#067647' }}>
-                      {b.matchedJevNumbers.join(', ')}
-                    </span>
+                  <span
+                    className="acct-text-mono"
+                    style={{ color: b.amount < 0 ? '#b42318' : '#067647' }}
+                  >
+                    {formatPeso(b.amount)}
                   </span>
-                  <span style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                    <span className="acct-text-mono">{formatPeso(b.amount)}</span>
-                    {editable && (
+                  {tab === 'unreconciled' ? (
+                    <input
+                      type="checkbox"
+                      readOnly
+                      checked={selBank.has(b.id)}
+                      style={{ pointerEvents: 'none', width: 16, height: 16 }}
+                    />
+                  ) : (
+                    editable && (
                       <button
                         type="button"
-                        onClick={() => run(() => unmatchBankLine(id, b.id))}
+                        onClick={() => run(() => unmatchGroup(id, b.matchGroupId!))}
                         disabled={busy}
                         style={{
                           background: 'none',
@@ -977,14 +1059,121 @@ function ReconciliationDetail({ id }: { id: string }) {
                       >
                         Unmatch
                       </button>
-                    )}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+                    )
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
-      )}
+
+        {/* Book column */}
+        <div
+          className="acct-form"
+          style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+        >
+          <div
+            style={{
+              padding: '8px 10px',
+              background: '#f9fafb',
+              borderBottom: '1px solid #eaecf0',
+              display: 'flex',
+              gap: 8,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+            }}
+          >
+            <strong style={{ whiteSpace: 'nowrap' }}>
+              Book Entries — GL cash ({bookRows.length})
+            </strong>
+            <input
+              value={bookSearch}
+              onChange={(e) => setBookSearch(e.target.value)}
+              placeholder="Search amount or keyword…"
+              style={{
+                flex: 1,
+                minWidth: 120,
+                padding: '4px 8px',
+                border: '1px solid #d0d5dd',
+                borderRadius: 6,
+                fontSize: 12.5,
+              }}
+            />
+          </div>
+          <div style={{ maxHeight: 460, overflowY: 'auto' }}>
+            {bookRows.length === 0 && (
+              <div className="acct-empty" style={{ padding: 16 }}>
+                {bookSearch
+                  ? 'No book entries match your search.'
+                  : tab === 'unreconciled'
+                    ? 'No uncleared book entries.'
+                    : 'No matched book entries yet.'}
+              </div>
+            )}
+            {bookRows.map((bk) => (
+              <div
+                key={bk.jevLineId}
+                onClick={() => editable && tab === 'unreconciled' && toggleBook(bk.jevLineId)}
+                style={{
+                  padding: '8px 10px',
+                  borderBottom: '1px solid #eaecf0',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                  fontSize: 13,
+                  cursor: editable && tab === 'unreconciled' ? 'pointer' : 'default',
+                  background: selBook.has(bk.jevLineId) ? '#eff8ff' : 'transparent',
+                }}
+              >
+                <span>
+                  {tab === 'reconciled' && groupChip(bk.matchGroupId)}
+                  <span className="acct-text-mono" style={{ color: '#667085' }}>
+                    {bk.jevNumber}
+                  </span>{' '}
+                  <span style={{ color: '#667085' }}>{fmtDate(bk.jevDate)}</span> {bk.description}
+                </span>
+                <span
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}
+                >
+                  <span
+                    className="acct-text-mono"
+                    style={{ color: bk.amount < 0 ? '#b42318' : '#067647' }}
+                  >
+                    {formatPeso(bk.amount)}
+                  </span>
+                  {tab === 'unreconciled' ? (
+                    <input
+                      type="checkbox"
+                      readOnly
+                      checked={selBook.has(bk.jevLineId)}
+                      style={{ pointerEvents: 'none', width: 16, height: 16 }}
+                    />
+                  ) : (
+                    editable && (
+                      <button
+                        type="button"
+                        onClick={() => run(() => unmatchGroup(id, bk.matchGroupId!))}
+                        disabled={busy}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#b42318',
+                          textDecoration: 'underline',
+                          cursor: 'pointer',
+                          font: 'inherit',
+                          padding: 0,
+                        }}
+                      >
+                        Unmatch
+                      </button>
+                    )
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
 
       {/* Attachments */}
       <div style={{ marginTop: 28 }}>
