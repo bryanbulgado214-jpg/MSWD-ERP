@@ -12,15 +12,6 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-const RECON_ITEM_TYPES = [
-  'deposit_in_transit',
-  'outstanding_check',
-  'bank_charge',
-  'bank_credit',
-  'book_error',
-  'bank_error',
-];
-
 export class CreateBankReconciliationDto {
   @IsUUID()
   bankAccountId!: string;
@@ -72,35 +63,58 @@ export class AddReconItemDto {
   checkId?: string;
 }
 
-export class BulkReconItemDto {
-  @IsString()
-  @IsIn(RECON_ITEM_TYPES)
-  itemType!: string;
+// ── Match-and-clear reconciliation (QuickBooks/Intacct style) ──
 
-  @IsString()
-  @IsOptional()
-  referenceNumber?: string;
-
+export class ImportStatementLineDto {
   @IsDateString()
-  referenceDate!: string;
+  transactionDate!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  description!: string;
 
   @IsNumber()
   amount!: number;
 
   @IsString()
-  @IsNotEmpty()
-  description!: string;
+  @IsOptional()
+  referenceNumber?: string;
 }
 
-export class BulkReconItemsDto {
+export class ImportStatementLinesDto {
   @IsNumber()
   expectedVersion!: number;
 
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
-  @Type(() => BulkReconItemDto)
-  items!: BulkReconItemDto[];
+  @Type(() => ImportStatementLineDto)
+  lines!: ImportStatementLineDto[];
+}
+
+export class MatchLineDto {
+  @IsUUID()
+  statementLineId!: string;
+
+  @IsUUID()
+  jevLineId!: string;
+}
+
+export class UnmatchLineDto {
+  @IsUUID()
+  statementLineId!: string;
+}
+
+export class CreateEntryFromLineDto {
+  @IsUUID()
+  statementLineId!: string;
+
+  @IsUUID()
+  accountId!: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
 }
 
 export class RemoveReconItemDto {

@@ -420,7 +420,7 @@ export class AutoJevService {
     return mapping?.chartOfAccount ?? null;
   }
 
-  private async createAutoJev(
+  async createAutoJev(
     tx: Prisma.TransactionClient,
     data: {
       organizationId: string;

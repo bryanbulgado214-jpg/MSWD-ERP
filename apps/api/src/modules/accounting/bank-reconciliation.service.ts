@@ -12,10 +12,14 @@ import {
 import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
 
+import { AutoJevService } from './auto-jev.service';
+
 // Uploaded bank-statement files live on disk under the API working dir; the
 // Attachment row keeps the relative path. (uploads/ is gitignored.)
 const UPLOAD_SUBDIR = path.join('uploads', 'reconciliations');
 const ALLOWED_MIME = ['application/pdf', 'image/png', 'image/jpeg'];
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 const RECON_SELECT = {
   id: true,
@@ -63,7 +67,10 @@ const RECON_DETAIL_SELECT = {
 
 @Injectable()
 export class BankReconciliationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly autoJev: AutoJevService,
+  ) {}
 
   async findAll(organizationId: string, filters?: { bankAccountId?: string; status?: string }) {
     return this.prisma.bankReconciliation.findMany({
@@ -191,18 +198,18 @@ export class BankReconciliationService {
   }
 
   /** Bulk-add reconciling items — used by the CSV bank-transaction import. */
-  async addItemsBulk(
+  /** Import bank-statement transactions (from CSV) as statement lines to match. */
+  async importStatementLines(
     organizationId: string,
     id: string,
     userId: string,
     data: {
       expectedVersion: number;
-      items: Array<{
-        itemType: string;
-        referenceNumber?: string;
-        referenceDate: string;
-        amount: number;
+      lines: Array<{
+        transactionDate: string;
         description: string;
+        amount: number;
+        referenceNumber?: string;
       }>;
     },
   ) {
@@ -214,21 +221,295 @@ export class BankReconciliationService {
     if (recon.version !== data.expectedVersion) {
       throw new ConflictException('Reconciliation was modified. Please refresh.');
     }
-    if (!data.items?.length) throw new BadRequestException('No transactions to import.');
+    if (!data.lines?.length) throw new BadRequestException('No transactions to import.');
 
-    return runAudited(this.prisma, userId, async (tx) => {
-      await tx.bankReconciliationItem.createMany({
-        data: data.items.map((it) => ({
+    await runAudited(this.prisma, userId, (tx) =>
+      tx.bankStatementLine.createMany({
+        data: data.lines.map((l) => ({
           bankReconciliationId: id,
-          itemType: it.itemType as any,
-          referenceNumber: it.referenceNumber ?? null,
-          referenceDate: new Date(it.referenceDate),
-          amount: it.amount,
-          description: it.description,
+          transactionDate: new Date(l.transactionDate),
+          description: l.description,
+          referenceNumber: l.referenceNumber ?? null,
+          amount: l.amount,
         })),
-      });
-      return this.recalculate(tx, id, userId);
+      }),
+    );
+    return this.getMatchView(organizationId, id);
+  }
+
+  /**
+   * The QuickBooks-style match board: imported bank statement lines vs. the bank
+   * account's still-uncleared book (GL cash) entries, with an unmatched counter
+   * on each side. Reconciled when both counters hit zero.
+   */
+  async getMatchView(organizationId: string, id: string) {
+    const recon = await this.prisma.bankReconciliation.findFirst({
+      where: { id, organizationId },
+      select: {
+        id: true,
+        status: true,
+        version: true,
+        reconciliationDate: true,
+        bankAccount: {
+          select: {
+            id: true,
+            accountName: true,
+            accountNumber: true,
+            chartOfAccountId: true,
+            bank: { select: { code: true, name: true } },
+          },
+        },
+        accountingPeriod: { select: { name: true } },
+      },
     });
+    if (!recon) throw new NotFoundException('Reconciliation not found.');
+    const cashCoaId = recon.bankAccount.chartOfAccountId;
+
+    const lines = await this.prisma.bankStatementLine.findMany({
+      where: { bankReconciliationId: id },
+      orderBy: { transactionDate: 'asc' },
+      select: {
+        id: true,
+        transactionDate: true,
+        description: true,
+        referenceNumber: true,
+        amount: true,
+        matchedJevLineId: true,
+        matchedJevLine: { select: { jev: { select: { jevNumber: true } } } },
+      },
+    });
+
+    // Book side = posted GL lines on this bank's Cash-in-Bank account, dated on
+    // or before the reconciliation date, not yet cleared by any statement line.
+    const bookRaw = cashCoaId
+      ? await this.prisma.jevLine.findMany({
+          where: {
+            chartOfAccountId: cashCoaId,
+            bankLineMatches: { none: {} },
+            jev: { organizationId, status: 'posted', jevDate: { lte: recon.reconciliationDate } },
+          },
+          select: {
+            id: true,
+            debitAmount: true,
+            creditAmount: true,
+            description: true,
+            jev: { select: { jevNumber: true, jevDate: true, particulars: true } },
+          },
+        })
+      : [];
+
+    const book = bookRaw
+      .map((l) => ({
+        jevLineId: l.id,
+        jevNumber: l.jev.jevNumber,
+        jevDate: l.jev.jevDate,
+        description: l.description ?? l.jev.particulars,
+        amount: round2(Number(l.debitAmount) - Number(l.creditAmount)),
+      }))
+      .sort((a, b) => a.jevDate.getTime() - b.jevDate.getTime());
+
+    const bank = lines.map((l) => ({
+      id: l.id,
+      transactionDate: l.transactionDate,
+      description: l.description,
+      referenceNumber: l.referenceNumber,
+      amount: Number(l.amount),
+      matched: !!l.matchedJevLineId,
+      matchedJevNumber: l.matchedJevLine?.jev.jevNumber ?? null,
+    }));
+
+    const unmatchedBank = bank.filter((b) => !b.matched).length;
+    const unmatchedBook = book.length;
+
+    return {
+      recon: {
+        id: recon.id,
+        status: recon.status,
+        version: recon.version,
+        reconciliationDate: recon.reconciliationDate,
+        bankAccount: {
+          id: recon.bankAccount.id,
+          label: `${recon.bankAccount.bank.code} — ${recon.bankAccount.accountName} (${recon.bankAccount.accountNumber})`,
+          hasCashAccount: !!cashCoaId,
+        },
+        periodName: recon.accountingPeriod.name,
+      },
+      bank,
+      book,
+      summary: {
+        unmatchedBank,
+        unmatchedBook,
+        matched: bank.length - unmatchedBank,
+        reconciled: unmatchedBank === 0 && unmatchedBook === 0 && bank.length > 0,
+      },
+    };
+  }
+
+  private async requireEditable(organizationId: string, id: string) {
+    const recon = await this.prisma.bankReconciliation.findFirst({
+      where: { id, organizationId },
+      select: { id: true, status: true, bankAccount: { select: { chartOfAccountId: true } } },
+    });
+    if (!recon) throw new NotFoundException('Reconciliation not found.');
+    if (recon.status === 'approved') {
+      throw new BadRequestException('Cannot modify an approved reconciliation.');
+    }
+    return recon;
+  }
+
+  /** Match a bank statement line to a book (GL cash) entry — clears both. */
+  async match(
+    organizationId: string,
+    id: string,
+    userId: string,
+    data: { statementLineId: string; jevLineId: string },
+  ) {
+    const recon = await this.requireEditable(organizationId, id);
+    const cashCoaId = recon.bankAccount.chartOfAccountId;
+    if (!cashCoaId) {
+      throw new BadRequestException(
+        'This bank account is not linked to a Cash-in-Bank ledger account.',
+      );
+    }
+    const line = await this.prisma.bankStatementLine.findFirst({
+      where: { id: data.statementLineId, bankReconciliationId: id },
+    });
+    if (!line) throw new NotFoundException('Statement line not found.');
+    if (line.matchedJevLineId) throw new BadRequestException('That bank line is already matched.');
+
+    const jevLine = await this.prisma.jevLine.findFirst({
+      where: {
+        id: data.jevLineId,
+        chartOfAccountId: cashCoaId,
+        bankLineMatches: { none: {} },
+        jev: { organizationId, status: 'posted' },
+      },
+      select: { id: true, debitAmount: true, creditAmount: true },
+    });
+    if (!jevLine) throw new BadRequestException('That book entry is not available to match.');
+
+    const bookAmt = round2(Number(jevLine.debitAmount) - Number(jevLine.creditAmount));
+    if (Math.abs(bookAmt - Number(line.amount)) > 0.01) {
+      throw new BadRequestException(
+        `Amounts do not match: bank ${Number(line.amount).toFixed(2)} vs book ${bookAmt.toFixed(2)}.`,
+      );
+    }
+
+    await runAudited(this.prisma, userId, (tx) =>
+      tx.bankStatementLine.update({
+        where: { id: data.statementLineId },
+        data: { matchedJevLineId: data.jevLineId, matchedBy: userId, matchedAt: new Date() },
+      }),
+    );
+    return this.getMatchView(organizationId, id);
+  }
+
+  async unmatch(
+    organizationId: string,
+    id: string,
+    userId: string,
+    data: { statementLineId: string },
+  ) {
+    await this.requireEditable(organizationId, id);
+    const line = await this.prisma.bankStatementLine.findFirst({
+      where: { id: data.statementLineId, bankReconciliationId: id },
+    });
+    if (!line) throw new NotFoundException('Statement line not found.');
+    await runAudited(this.prisma, userId, (tx) =>
+      tx.bankStatementLine.update({
+        where: { id: data.statementLineId },
+        data: { matchedJevLineId: null, matchedBy: null, matchedAt: null },
+      }),
+    );
+    return this.getMatchView(organizationId, id);
+  }
+
+  /**
+   * Record a bank-only line (e.g. a service charge) directly to the books: post
+   * a JEV against the chosen account and the bank's cash account, then match the
+   * statement line to the newly-created cash line. Money-out debits the account
+   * / credits cash; money-in debits cash / credits the account.
+   */
+  async createEntryFromLine(
+    organizationId: string,
+    id: string,
+    userId: string,
+    data: { statementLineId: string; accountId: string; description?: string },
+  ) {
+    const recon = await this.requireEditable(organizationId, id);
+    const cashCoaId = recon.bankAccount.chartOfAccountId;
+    if (!cashCoaId) {
+      throw new BadRequestException(
+        'This bank account is not linked to a Cash-in-Bank ledger account.',
+      );
+    }
+    const line = await this.prisma.bankStatementLine.findFirst({
+      where: { id: data.statementLineId, bankReconciliationId: id },
+    });
+    if (!line) throw new NotFoundException('Statement line not found.');
+    if (line.matchedJevLineId) throw new BadRequestException('That bank line is already matched.');
+    if (data.accountId === cashCoaId) {
+      throw new BadRequestException('Choose the income/expense account, not the cash account.');
+    }
+    const account = await this.prisma.chartOfAccount.findFirst({
+      where: { id: data.accountId, organizationId, isHeader: false, isActive: true },
+      select: { id: true },
+    });
+    if (!account) throw new BadRequestException('Invalid or inactive account.');
+
+    const amt = Number(line.amount);
+    const abs = round2(Math.abs(amt));
+    const desc = (data.description?.trim() || line.description).slice(0, 500);
+    const jevLines =
+      amt >= 0
+        ? [
+            { chartOfAccountId: cashCoaId, debitAmount: abs, creditAmount: 0, description: desc },
+            {
+              chartOfAccountId: data.accountId,
+              debitAmount: 0,
+              creditAmount: abs,
+              description: desc,
+            },
+          ]
+        : [
+            {
+              chartOfAccountId: data.accountId,
+              debitAmount: abs,
+              creditAmount: 0,
+              description: desc,
+            },
+            { chartOfAccountId: cashCoaId, debitAmount: 0, creditAmount: abs, description: desc },
+          ];
+
+    await runAudited(this.prisma, userId, async (tx) => {
+      const jev = await this.autoJev.createAutoJev(tx, {
+        organizationId,
+        userId,
+        jevDate: line.transactionDate,
+        sourceType: 'manual',
+        sourceTable: 'bank_statement_lines',
+        sourceId: line.id,
+        particulars: `Bank reconciliation — ${desc}`,
+        status: 'posted',
+        lines: jevLines,
+      });
+      if (!jev) {
+        throw new BadRequestException(
+          'Could not post the entry — ensure an accounting period is open for the transaction date.',
+        );
+      }
+      const cashLine = await tx.jevLine.findFirst({
+        where: { jevId: jev.id, chartOfAccountId: cashCoaId },
+        select: { id: true },
+      });
+      if (cashLine) {
+        await tx.bankStatementLine.update({
+          where: { id: line.id },
+          data: { matchedJevLineId: cashLine.id, matchedBy: userId, matchedAt: new Date() },
+        });
+      }
+    });
+    return this.getMatchView(organizationId, id);
   }
 
   /** Store an uploaded bank-statement file (PDF/PNG/JPEG) against the recon. */

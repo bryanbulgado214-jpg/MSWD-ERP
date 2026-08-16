@@ -460,6 +460,7 @@ model User {
   checkStatusChanges                            CheckStatusHistory[]   @relation("CheckStatusChangedBy")
   preparedBankReconciliations                   BankReconciliation[]   @relation("BankReconciliationsPreparedBy")
   approvedBankReconciliations                   BankReconciliation[]   @relation("BankReconciliationsApprovedBy")
+  matchedBankStatementLines                     BankStatementLine[]    @relation("BankLinesMatchedBy")
   createdBankReconciliations                    BankReconciliation[]   @relation("BankReconciliationsCreatedBy")
   updatedBankReconciliations                    BankReconciliation[]   @relation("BankReconciliationsUpdatedBy")
   lockedAccountingPeriods                       AccountingPeriod[]     @relation("AccountingPeriodsLockedBy")
@@ -2957,8 +2958,9 @@ model JevLine {
   subsidiaryRefId  String?  @map("subsidiary_ref_id") @db.Uuid
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  jev            JournalEntryVoucher @relation(fields: [jevId], references: [id], onDelete: Cascade)
-  chartOfAccount ChartOfAccount      @relation(fields: [chartOfAccountId], references: [id], onDelete: Restrict)
+  jev             JournalEntryVoucher @relation(fields: [jevId], references: [id], onDelete: Cascade)
+  chartOfAccount  ChartOfAccount      @relation(fields: [chartOfAccountId], references: [id], onDelete: Restrict)
+  bankLineMatches BankStatementLine[] @relation("BankLineMatch")
 
   @@index([jevId])
   @@index([chartOfAccountId])
@@ -3062,7 +3064,8 @@ model BankReconciliation {
   creator          User?            @relation("BankReconciliationsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
   updater          User?            @relation("BankReconciliationsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
 
-  items BankReconciliationItem[]
+  items          BankReconciliationItem[]
+  statementLines BankStatementLine[]
 
   @@unique([organizationId, bankAccountId, accountingPeriodId])
   @@index([organizationId])
@@ -3091,6 +3094,32 @@ model BankReconciliationItem {
   @@index([bankReconciliationId])
   @@index([checkId])
   @@map("bank_reconciliation_items")
+}
+
+/// A single transaction imported from the bank's CSV statement, for the
+/// QuickBooks/Intacct-style match-and-clear reconciliation. `amount` is
+/// signed from the bank's perspective (+ money in / deposit, − money out /
+/// withdrawal). When matched to a book entry, `matchedJevLineId` points at the
+/// GL cash line it clears against; unmatched lines are the reconciling gap.
+model BankStatementLine {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bankReconciliationId String    @map("bank_reconciliation_id") @db.Uuid
+  transactionDate      DateTime  @map("transaction_date") @db.Date
+  description          String
+  referenceNumber      String?   @map("reference_number") @db.VarChar(100)
+  amount               Decimal   @db.Decimal(18, 2)
+  matchedJevLineId     String?   @map("matched_jev_line_id") @db.Uuid
+  matchedBy            String?   @map("matched_by") @db.Uuid
+  matchedAt            DateTime? @map("matched_at") @db.Timestamptz(6)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  bankReconciliation BankReconciliation @relation(fields: [bankReconciliationId], references: [id], onDelete: Cascade)
+  matchedJevLine     JevLine?           @relation("BankLineMatch", fields: [matchedJevLineId], references: [id], onDelete: SetNull)
+  matcher            User?              @relation("BankLinesMatchedBy", fields: [matchedBy], references: [id], onDelete: SetNull)
+
+  @@index([bankReconciliationId])
+  @@index([matchedJevLineId])
+  @@map("bank_statement_lines")
 }
 
 // ════════════════════════════════════════════════════════════════════

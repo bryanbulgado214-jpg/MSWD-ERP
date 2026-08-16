@@ -24,10 +24,13 @@ import type { AuthenticatedUser } from '../auth/jwt.strategy';
 import { BankReconciliationService } from './bank-reconciliation.service';
 import {
   AddReconItemDto,
-  BulkReconItemsDto,
   CreateBankReconciliationDto,
+  CreateEntryFromLineDto,
+  ImportStatementLinesDto,
+  MatchLineDto,
   ReconActionDto,
   RemoveReconItemDto,
+  UnmatchLineDto,
 } from './dto/bank-reconciliation.dto';
 
 @Controller('accounting/reconciliations')
@@ -70,14 +73,50 @@ export class BankReconciliationController {
     return this.reconService.addItem(user.organizationId, id, user.userId, dto);
   }
 
-  @Post(':id/items/bulk')
+  @Get(':id/match')
+  @RequirePermissions('accounting.read')
+  getMatchView(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.reconService.getMatchView(user.organizationId, id);
+  }
+
+  @Post(':id/import')
   @RequirePermissions('accounting.bank.manage')
-  addItemsBulk(
+  importStatementLines(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: BulkReconItemsDto,
+    @Body() dto: ImportStatementLinesDto,
   ) {
-    return this.reconService.addItemsBulk(user.organizationId, id, user.userId, dto);
+    return this.reconService.importStatementLines(user.organizationId, id, user.userId, dto);
+  }
+
+  @Post(':id/match')
+  @RequirePermissions('accounting.bank.manage')
+  match(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: MatchLineDto,
+  ) {
+    return this.reconService.match(user.organizationId, id, user.userId, dto);
+  }
+
+  @Post(':id/unmatch')
+  @RequirePermissions('accounting.bank.manage')
+  unmatch(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UnmatchLineDto,
+  ) {
+    return this.reconService.unmatch(user.organizationId, id, user.userId, dto);
+  }
+
+  @Post(':id/create-entry')
+  @RequirePermissions('accounting.bank.manage')
+  createEntryFromLine(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateEntryFromLineDto,
+  ) {
+    return this.reconService.createEntryFromLine(user.organizationId, id, user.userId, dto);
   }
 
   @Post(':id/attachments')
