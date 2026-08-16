@@ -187,6 +187,12 @@ export class BankReconciliationController {
     );
   }
 
+  @Delete(':id')
+  @RequirePermissions('accounting.bank.manage')
+  remove(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.reconService.remove(user.organizationId, user.userId, id);
+  }
+
   @Post(':id/complete')
   @RequirePermissions('accounting.bank.manage')
   complete(

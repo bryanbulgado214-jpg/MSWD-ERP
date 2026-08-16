@@ -818,6 +818,57 @@ export class BankReconciliationService {
     );
   }
 
+  /**
+   * Delete / undo a reconciliation (any status, including approved).
+   * Every book line this reconciliation had cleared is returned to the
+   * uncleared pool (match link + matcher + timestamp cleared). Reconciling
+   * items and imported statement lines cascade away with the record;
+   * attachment rows (polymorphic — no cascade FK) and their files are
+   * removed too. Posted "Add to books" journal entries are NOT deleted —
+   * they are real GL transactions and simply become unmatched again.
+   */
+  async remove(organizationId: string, userId: string, id: string) {
+    const recon = await this.prisma.bankReconciliation.findFirst({
+      where: { id, organizationId },
+      select: { id: true, statementLines: { select: { id: true } } },
+    });
+    if (!recon) throw new NotFoundException('Reconciliation not found.');
+    const statementLineIds = recon.statementLines.map((l) => l.id);
+
+    // Grab attachment file paths up front for best-effort disk cleanup.
+    const atts = await this.prisma.attachment.findMany({
+      where: { organizationId, attachableTable: 'bank_reconciliations', attachableId: id },
+      select: { filePath: true },
+    });
+
+    const unmatchedBookLines = await runAudited(this.prisma, userId, async (tx) => {
+      let count = 0;
+      if (statementLineIds.length) {
+        const res = await tx.jevLine.updateMany({
+          where: { matchedStatementLineId: { in: statementLineIds } },
+          data: { matchedStatementLineId: null, matchedBy: null, matchedAt: null },
+        });
+        count = res.count;
+      }
+      await tx.attachment.deleteMany({
+        where: { organizationId, attachableTable: 'bank_reconciliations', attachableId: id },
+      });
+      // Cascades reconciling items + imported statement lines.
+      await tx.bankReconciliation.delete({ where: { id } });
+      return count;
+    });
+
+    for (const a of atts) {
+      try {
+        fs.unlinkSync(path.join(process.cwd(), a.filePath));
+      } catch {
+        /* file already gone — ignore */
+      }
+    }
+
+    return { deleted: true, unmatchedBookLines };
+  }
+
   private async recalculate(tx: any, reconId: string, userId: string) {
     const recon = await tx.bankReconciliation.findUnique({
       where: { id: reconId },

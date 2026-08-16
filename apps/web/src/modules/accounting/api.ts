@@ -483,6 +483,13 @@ export async function addReconItem(
   return res.json();
 }
 
+export async function deleteReconciliation(
+  id: string,
+): Promise<{ deleted: boolean; unmatchedBookLines: number }> {
+  const res = await authFetchMutate(`/accounting/reconciliations/${id}`, 'DELETE');
+  return res.json();
+}
+
 export async function completeReconciliation(
   id: string,
   expectedVersion: number,

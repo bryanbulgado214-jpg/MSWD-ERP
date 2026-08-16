@@ -8,6 +8,7 @@ import './accounting.css';
 import {
   getReconciliations,
   createReconciliation,
+  deleteReconciliation,
   getChartOfAccounts,
   getGlCashBalance,
   getMatchView,
@@ -63,6 +64,7 @@ function ReconciliationList() {
   const [formError, setFormError] = useState('');
   const [bookLoading, setBookLoading] = useState(false);
   const [lastReconciled, setLastReconciled] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     getBankAccounts().then(setBankAccounts);
@@ -141,6 +143,32 @@ function ReconciliationList() {
       navigate(`/accounting/reconciliations/${result.id}`);
     } catch (err: any) {
       setFormError(err.message);
+    }
+  };
+
+  const handleDelete = async (r: BankReconciliationListItem) => {
+    if (
+      !window.confirm(
+        `Delete the ${r.accountingPeriod.name} reconciliation for ${r.bankAccount.bank.code} — ${r.bankAccount.accountName}?\n\n` +
+          `Every book entry it cleared will be UNMATCHED and returned to the uncleared list. ` +
+          `Imported bank lines are removed. Posted journal entries you added via “Add to books” stay in the GL.\n\n` +
+          `This cannot be undone.`,
+      )
+    )
+      return;
+    setDeletingId(r.id);
+    try {
+      const res = await deleteReconciliation(r.id);
+      setList((prev) => prev.filter((x) => x.id !== r.id));
+      window.alert(
+        res.unmatchedBookLines > 0
+          ? `Reconciliation deleted. ${res.unmatchedBookLines} book entr${res.unmatchedBookLines === 1 ? 'y was' : 'ies were'} unmatched.`
+          : 'Reconciliation deleted.',
+      );
+    } catch (err: any) {
+      window.alert(err.message);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -285,6 +313,7 @@ function ReconciliationList() {
                 <th className="acct-text-right">Bank Bal.</th>
                 <th className="acct-text-right">Difference</th>
                 <th>Status</th>
+                <th className="acct-text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -323,6 +352,18 @@ function ReconciliationList() {
                       {r.status.replace(/_/g, ' ')}
                     </span>
                   </td>
+                  <td className="acct-text-right">
+                    <button
+                      type="button"
+                      className="acct-btn acct-btn--sm"
+                      disabled={deletingId === r.id}
+                      onClick={() => handleDelete(r)}
+                      style={{ color: '#b42318' }}
+                      title="Delete / undo this reconciliation and unmatch its entries"
+                    >
+                      {deletingId === r.id ? 'Deleting…' : 'Delete'}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -340,6 +381,7 @@ function fmtDate(d: string) {
 }
 
 function ReconciliationDetail({ id }: { id: string }) {
+  const navigate = useNavigate();
   const [view, setView] = useState<MatchView | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -448,6 +490,32 @@ function ReconciliationDetail({ id }: { id: string }) {
     } catch (e: any) {
       setError(e.message);
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function doDelete() {
+    if (
+      !window.confirm(
+        `Delete this reconciliation?\n\n` +
+          `Every book entry it cleared will be UNMATCHED and returned to the uncleared list. ` +
+          `Imported bank lines are removed. Posted journal entries you added via “Add to books” stay in the GL.\n\n` +
+          `This cannot be undone.`,
+      )
+    )
+      return;
+    setBusy(true);
+    setError('');
+    try {
+      const res = await deleteReconciliation(id);
+      window.alert(
+        res.unmatchedBookLines > 0
+          ? `Reconciliation deleted. ${res.unmatchedBookLines} book entr${res.unmatchedBookLines === 1 ? 'y was' : 'ies were'} unmatched.`
+          : 'Reconciliation deleted.',
+      );
+      navigate('/accounting/reconciliations');
+    } catch (e: any) {
+      setError(e.message);
       setBusy(false);
     }
   }
@@ -590,6 +658,15 @@ function ReconciliationDetail({ id }: { id: string }) {
             ✓ Reconcile
           </button>
         )}
+        <button
+          className="acct-btn acct-btn--sm"
+          disabled={busy}
+          onClick={doDelete}
+          style={{ color: '#b42318', marginLeft: 'auto' }}
+          title="Delete / undo this reconciliation and unmatch its entries"
+        >
+          🗑 Delete / Undo
+        </button>
       </div>
 
       {error && (
