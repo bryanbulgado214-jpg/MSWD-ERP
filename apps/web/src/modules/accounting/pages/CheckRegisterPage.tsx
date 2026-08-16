@@ -53,6 +53,12 @@ export default function CheckRegisterPage() {
   const [printError, setPrintError] = useState('');
   const [printing, setPrinting] = useState(false);
 
+  // Cleared-date modal (date picker, min = DV date)
+  const [clearTarget, setClearTarget] = useState<CheckListItem | null>(null);
+  const [clearDate, setClearDate] = useState(new Date().toISOString().slice(0, 10));
+  const [clearError, setClearError] = useState('');
+  const [clearing, setClearing] = useState(false);
+
   const loadChecks = () => {
     setState({ status: 'loading' });
     const params = new URLSearchParams();
@@ -110,23 +116,48 @@ export default function CheckRegisterPage() {
 
   async function handleRelease(check: CheckListItem, toStatus: 'released' | 'cleared') {
     setActionError('');
-    let clearedDate: string | undefined;
     if (toStatus === 'cleared') {
-      clearedDate = prompt('Cleared date (YYYY-MM-DD):') ?? undefined;
-      if (!clearedDate) return;
+      // Clearing needs a bank-clearing date — open the date-picker modal
+      // (defaults to today; the modal enforces "not before the DV date").
+      setClearError('');
+      const dvDay = check.disbursementVoucher?.dvDate?.slice(0, 10);
+      const today = new Date().toISOString().slice(0, 10);
+      setClearDate(dvDay && dvDay > today ? dvDay : today);
+      setClearTarget(check);
+      return;
     }
     setBusy(check.id);
     try {
-      await transitionCheck(check.id, {
-        expectedVersion: check.version,
-        toStatus,
-        ...(clearedDate ? { clearedDate } : {}),
-      });
+      await transitionCheck(check.id, { expectedVersion: check.version, toStatus });
       loadChecks();
     } catch (err: any) {
       setActionError(err.message);
     } finally {
       setBusy(null);
+    }
+  }
+
+  async function confirmClear() {
+    if (!clearTarget) return;
+    const dvDay = clearTarget.disbursementVoucher?.dvDate?.slice(0, 10);
+    if (dvDay && clearDate < dvDay) {
+      setClearError(`Clearing date cannot be before the DV date (${dvDay}).`);
+      return;
+    }
+    setClearing(true);
+    setClearError('');
+    try {
+      await transitionCheck(clearTarget.id, {
+        expectedVersion: clearTarget.version,
+        toStatus: 'cleared',
+        clearedDate: clearDate,
+      });
+      setClearTarget(null);
+      loadChecks();
+    } catch (err: any) {
+      setClearError(err.message);
+    } finally {
+      setClearing(false);
     }
   }
 
@@ -195,6 +226,95 @@ export default function CheckRegisterPage() {
       </div>
 
       {actionError && <div className="acct-error">{actionError}</div>}
+
+      {clearTarget && (
+        <div
+          onClick={() => setClearTarget(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(16,24,40,0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 50,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#fff',
+              borderRadius: 10,
+              padding: 24,
+              width: 420,
+              maxWidth: '92vw',
+              boxShadow: '0 10px 40px rgba(16,24,40,0.2)',
+            }}
+          >
+            <h2 style={{ margin: '0 0 4px', fontSize: 17 }}>Mark Check Cleared</h2>
+            <p style={{ fontSize: 12.5, color: '#667085', margin: '0 0 16px' }}>
+              {clearTarget.disbursementVoucher?.dvNumber} · {clearTarget.checkNumber} ·{' '}
+              {formatPeso(clearTarget.amount)}
+            </p>
+            {clearError && (
+              <div className="acct-error" style={{ marginBottom: 12 }}>
+                {clearError}
+              </div>
+            )}
+            <label
+              style={{
+                display: 'block',
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#344054',
+                marginBottom: 4,
+              }}
+            >
+              Clearing Date *
+            </label>
+            <input
+              type="date"
+              autoFocus
+              value={clearDate}
+              min={clearTarget.disbursementVoucher?.dvDate?.slice(0, 10)}
+              onChange={(e) => setClearDate(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                border: '1px solid #d0d5dd',
+                borderRadius: 6,
+                fontSize: 13,
+                boxSizing: 'border-box',
+                marginBottom: 6,
+              }}
+            />
+            {clearTarget.disbursementVoucher?.dvDate && (
+              <p style={{ fontSize: 11.5, color: '#667085', margin: '0 0 16px' }}>
+                Cannot be before the DV date ({clearTarget.disbursementVoucher.dvDate.slice(0, 10)}
+                ).
+              </p>
+            )}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="acct-btn"
+                onClick={() => setClearTarget(null)}
+                disabled={clearing}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="acct-btn acct-btn--primary"
+                onClick={confirmClear}
+                disabled={clearing || !clearDate}
+              >
+                {clearing ? 'Saving…' : 'Mark Cleared'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {printTarget && (
         <div

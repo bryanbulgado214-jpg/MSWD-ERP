@@ -222,7 +222,7 @@ export interface CheckListItem {
     accountName: string;
     bank: { code: string; name: string };
   };
-  disbursementVoucher: { id: string; dvNumber: string; status: string } | null;
+  disbursementVoucher: { id: string; dvNumber: string; status: string; dvDate: string } | null;
   releaser: { username: string } | null;
   voider: { username: string } | null;
   creator: { username: string } | null;

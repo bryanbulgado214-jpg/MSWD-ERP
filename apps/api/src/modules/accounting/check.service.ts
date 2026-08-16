@@ -29,7 +29,7 @@ const CHECK_SELECT = {
       bank: { select: { code: true, name: true } },
     },
   },
-  disbursementVoucher: { select: { id: true, dvNumber: true, status: true } },
+  disbursementVoucher: { select: { id: true, dvNumber: true, status: true, dvDate: true } },
   releaser: { select: { username: true } },
   voider: { select: { username: true } },
   creator: { select: { username: true } },
@@ -156,6 +156,7 @@ export class CheckService {
   ) {
     const check = await this.prisma.check.findFirst({
       where: { id, organizationId },
+      include: { disbursementVoucher: { select: { dvDate: true } } },
     });
     if (!check) throw new NotFoundException('Check not found.');
     if (check.version !== data.expectedVersion) {
@@ -180,6 +181,13 @@ export class CheckService {
 
     if (isCleared && !data.clearedDate) {
       throw new BadRequestException('Cleared date is required.');
+    }
+    // A check cannot clear before the voucher it pays was even dated.
+    if (isCleared && data.clearedDate && check.disbursementVoucher) {
+      const dvDay = check.disbursementVoucher.dvDate.toISOString().slice(0, 10);
+      if (data.clearedDate < dvDay) {
+        throw new BadRequestException(`Clearing date cannot be before the DV date (${dvDay}).`);
+      }
     }
 
     return runAudited(this.prisma, userId, async (tx) => {
