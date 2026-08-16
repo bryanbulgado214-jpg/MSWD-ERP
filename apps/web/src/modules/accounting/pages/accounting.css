@@ -225,13 +225,21 @@
 .acct-badge--default { background: #dbeafe; color: #1e40af; font-size: 10px; margin-left: 6px; }
 
 .acct-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 8px 16px;
   border-radius: 6px;
   border: 1.5px solid #d0d5dd;
   background: #fff;
+  color: #344054;
   font-family: inherit;
   font-size: 13px;
   font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-decoration: none;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
