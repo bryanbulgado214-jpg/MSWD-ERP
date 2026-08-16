@@ -199,43 +199,6 @@ export default function AccountingDashboardPage() {
                   sub="Corrections →"
                 />
               </div>
-
-              <h3 className="acct-kpi-group">Coming in Phase 2</h3>
-              <div className="acct-kpi-grid">
-                {[
-                  'Accounts Receivable Subledger',
-                  'Disbursement Vouchers / AP Register',
-                  'Cashiering & Report of Collections (RCD)',
-                  'Loans & Amortization Schedules',
-                  'PPE Depreciation → GL Integration',
-                  'Period-End Closing Engine',
-                ].map((label) => (
-                  <div
-                    key={label}
-                    style={{
-                      background: '#f9fafb',
-                      border: '1px dashed #d0d5dd',
-                      borderRadius: 10,
-                      padding: 16,
-                      color: '#98a2b3',
-                    }}
-                  >
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{label}</div>
-                    <div
-                      style={{
-                        fontSize: 11,
-                        marginTop: 8,
-                        color: '#b54708',
-                        fontWeight: 700,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.03em',
-                      }}
-                    >
-                      Available in Phase 2
-                    </div>
-                  </div>
-                ))}
-              </div>
             </>
           );
         })()}
