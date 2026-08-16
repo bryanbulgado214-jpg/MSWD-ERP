@@ -774,6 +774,33 @@ export async function getDisbursement(id: string): Promise<DisbursementDetail> {
   return res.json();
 }
 
+export interface Bir2307Line {
+  accountCode: string;
+  accountName: string;
+  description: string;
+  amount: number;
+}
+
+export interface Bir2307Data {
+  dvNumber: string;
+  dvDate: string;
+  particulars: string;
+  incomePayment: number;
+  taxWithheld: number;
+  net: number;
+  jevNumber: string | null;
+  payee: { name: string; tin: string; address: string };
+  payor: { name: string; tin: string; address: string };
+  incomeLines: Bir2307Line[];
+  withholdingLines: Bir2307Line[];
+}
+
+/** Prefill data for BIR Form 2307 assembled from a disbursement voucher. */
+export async function getBir2307(id: string): Promise<Bir2307Data> {
+  const res = await authFetch(`/accounting/disbursements/${id}/bir-2307`);
+  return res.json();
+}
+
 export async function createDisbursement(
   input: CreateDisbursementInput,
 ): Promise<DisbursementDetail> {

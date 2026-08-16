@@ -156,6 +156,14 @@ export default function DisbursementListPage() {
           <option value="utility">Utility</option>
           <option value="other">Other</option>
         </select>
+        <button
+          type="button"
+          className="acct-btn"
+          onClick={() => navigate('/accounting/disbursements/bir-2307')}
+          title="Disbursement vouchers with withholding tax — view & print BIR Form 2307"
+        >
+          📄 BIR Form 2307
+        </button>
         {canCreate && (
           <button
             type="button"
@@ -248,6 +256,15 @@ export default function DisbursementListPage() {
                         >
                           Print
                         </Link>
+                        {parseFloat(dv.taxAmount) > 0 && (
+                          <Link
+                            to={`/accounting/disbursements/${dv.id}/bir-2307`}
+                            className="acct-table__link"
+                            title="Certificate of Creditable Tax Withheld at Source"
+                          >
+                            2307
+                          </Link>
+                        )}
                         {dv.status === 'draft' && canCreate && (
                           <button
                             type="button"

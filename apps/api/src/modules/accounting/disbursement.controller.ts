@@ -31,11 +31,19 @@ export class DisbursementController {
     @CurrentUser() user: AuthenticatedUser,
     @Query('status') status?: string,
     @Query('dvType') dvType?: string,
+    @Query('withholding') withholding?: string,
   ) {
     return this.disbursementService.list(user.organizationId, {
       ...(status ? { status } : {}),
       ...(dvType ? { dvType } : {}),
+      ...(withholding === 'true' ? { withholding: true } : {}),
     });
+  }
+
+  @Get(':id/bir-2307')
+  @RequirePermissions('accounting.dv.read')
+  bir2307(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.disbursementService.getBir2307(user.organizationId, id);
   }
 
   @Get(':id')

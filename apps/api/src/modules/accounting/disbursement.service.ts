@@ -67,10 +67,12 @@ export class DisbursementService {
   ) {}
 
   /** Register of ALL disbursement vouchers in the org (procurement + non-procurement). */
-  async list(orgId: string, filters?: { status?: string; dvType?: string }) {
+  async list(orgId: string, filters?: { status?: string; dvType?: string; withholding?: boolean }) {
     const where: Prisma.DisbursementVoucherWhereInput = { organizationId: orgId };
     if (filters?.status) where.status = filters.status as never;
     if (filters?.dvType) where.dvType = filters.dvType as never;
+    // BIR Form 2307 register: only DVs that withheld a tax.
+    if (filters?.withholding) where.taxAmount = { gt: 0 };
 
     const dvs = await this.prisma.disbursementVoucher.findMany({
       where,
@@ -82,6 +84,7 @@ export class DisbursementService {
         dvType: true,
         particulars: true,
         grossAmount: true,
+        taxAmount: true,
         netAmount: true,
         status: true,
         payeeName: true,
@@ -170,6 +173,104 @@ export class DisbursementService {
     });
 
     return { ...dv, journalEntry, bankAccountId: check?.bankAccountId ?? null };
+  }
+
+  /**
+   * Assemble the data for BIR Form 2307 (Certificate of Creditable Tax Withheld
+   * at Source) from a disbursement voucher. The payee is the DV payee, the payor
+   * (withholding agent) is the district itself; the income payment is the gross
+   * charge and the tax withheld is the sum of the non-cash credit lines. The
+   * withholding-account lines are returned so the certificate can list each one.
+   * All figures are prefills — the certificate's fields are editable in the UI.
+   */
+  async getBir2307(orgId: string, id: string) {
+    const dv = await this.prisma.disbursementVoucher.findFirst({
+      where: { id, organizationId: orgId },
+      select: {
+        dvNumber: true,
+        dvDate: true,
+        particulars: true,
+        grossAmount: true,
+        taxAmount: true,
+        netAmount: true,
+        payeeName: true,
+        payeeTin: true,
+        payeeAddress: true,
+        supplier: { select: { name: true, tin: true, address: true } },
+        organization: {
+          select: { name: true, settings: { select: { legalName: true, address: true } } },
+        },
+      },
+    });
+    if (!dv) throw new NotFoundException('Disbursement voucher not found.');
+
+    const jev = await this.prisma.journalEntryVoucher.findFirst({
+      where: {
+        organizationId: orgId,
+        sourceType: 'disbursement',
+        sourceId: id,
+        status: { in: ['posted', 'reversed', 'draft'] },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        jevNumber: true,
+        lines: {
+          orderBy: { debitAmount: 'desc' },
+          select: {
+            debitAmount: true,
+            creditAmount: true,
+            description: true,
+            chartOfAccount: { select: { accountCode: true, name: true } },
+          },
+        },
+      },
+    });
+    const lines = jev?.lines ?? [];
+
+    // Income-payment (base) lines = the debit charges; withholding lines = the
+    // non-cash credits (everything but the auto "Cash disbursement —" credit).
+    const incomeLines = lines
+      .filter((l) => Number(l.debitAmount) > 0)
+      .map((l) => ({
+        accountCode: l.chartOfAccount.accountCode,
+        accountName: l.chartOfAccount.name,
+        description: l.description ?? '',
+        amount: Number(l.debitAmount),
+      }));
+    // Withholding lines = the credit lines that are NOT the cash disbursement.
+    // The cash side always credits a Cash-in-Bank account, so exclude any credit
+    // to a "Cash …" account (robust across accounting and procurement DVs).
+    const withholdingLines = lines
+      .filter((l) => Number(l.creditAmount) > 0 && !/cash/i.test(l.chartOfAccount.name))
+      .map((l) => ({
+        accountCode: l.chartOfAccount.accountCode,
+        accountName: l.chartOfAccount.name,
+        description: l.description ?? '',
+        amount: Number(l.creditAmount),
+      }));
+
+    const settings = dv.organization.settings;
+    return {
+      dvNumber: dv.dvNumber,
+      dvDate: dv.dvDate,
+      particulars: dv.particulars,
+      incomePayment: Number(dv.grossAmount),
+      taxWithheld: Number(dv.taxAmount),
+      net: Number(dv.netAmount),
+      jevNumber: jev?.jevNumber ?? null,
+      payee: {
+        name: dv.supplier?.name ?? dv.payeeName ?? '',
+        tin: dv.supplier?.tin ?? dv.payeeTin ?? '',
+        address: dv.supplier?.address ?? dv.payeeAddress ?? '',
+      },
+      payor: {
+        name: settings?.legalName ?? dv.organization.name,
+        tin: '',
+        address: settings?.address ?? '',
+      },
+      incomeLines,
+      withholdingLines,
+    };
   }
 
   /**

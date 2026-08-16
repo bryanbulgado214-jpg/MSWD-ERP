@@ -429,6 +429,7 @@ export interface DisbursementSummary {
   dvType: string;
   particulars: string;
   grossAmount: string;
+  taxAmount: string;
   netAmount: string;
   status: string;
   /** Latest issued check's status (cashier's payment lifecycle), or null if no check yet. */
