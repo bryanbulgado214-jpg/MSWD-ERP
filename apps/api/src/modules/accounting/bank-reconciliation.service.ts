@@ -309,8 +309,8 @@ export class BankReconciliationService {
     }
     if (!data.lines?.length) throw new BadRequestException('No transactions to import.');
 
-    await runAudited(this.prisma, userId, (tx) =>
-      tx.bankStatementLine.createMany({
+    await runAudited(this.prisma, userId, async (tx) => {
+      await tx.bankStatementLine.createMany({
         data: data.lines.map((l) => ({
           bankReconciliationId: id,
           transactionDate: new Date(l.transactionDate),
@@ -318,8 +318,9 @@ export class BankReconciliationService {
           referenceNumber: l.referenceNumber ?? null,
           amount: l.amount,
         })),
-      }),
-    );
+      });
+      await this.refreshBalances(tx, id);
+    });
     return this.getMatchView(organizationId, id);
   }
 
@@ -336,6 +337,9 @@ export class BankReconciliationService {
         status: true,
         version: true,
         reconciliationDate: true,
+        bookBalance: true,
+        bankBalance: true,
+        organization: { select: { name: true } },
         bankAccount: {
           select: {
             id: true,
@@ -432,12 +436,24 @@ export class BankReconciliationService {
     const unmatchedBankAmount = round2(unmatchedBankLines.reduce((s, b) => s + b.amount, 0));
     const unmatchedBookAmount = round2(unmatchedBookLines.reduce((s, b) => s + b.amount, 0));
 
+    // Adjusted-balance reconciliation (the figure that must be 0 to complete):
+    //   adjusted book = book balance + bank items not yet booked (unmatched bank)
+    //   adjusted bank = bank balance + book items not yet on the bank (unmatched book)
+    const bookBalance = Number(recon.bookBalance);
+    const bankBalance = Number(recon.bankBalance);
+    const adjustedBook = round2(bookBalance + unmatchedBankAmount);
+    const adjustedBank = round2(bankBalance + unmatchedBookAmount);
+    const difference = round2(adjustedBook - adjustedBank);
+
     return {
       recon: {
         id: recon.id,
         status: recon.status,
         version: recon.version,
         reconciliationDate: recon.reconciliationDate,
+        organizationName: recon.organization.name,
+        bookBalance,
+        bankBalance,
         bankAccount: {
           id: recon.bankAccount.id,
           label: `${recon.bankAccount.bank.code} — ${recon.bankAccount.accountName} (${recon.bankAccount.accountNumber})`,
@@ -453,7 +469,11 @@ export class BankReconciliationService {
         matched: bank.length - unmatchedBank,
         unmatchedBankAmount,
         unmatchedBookAmount,
-        reconciled: unmatchedBank === 0 && unmatchedBook === 0 && bank.length > 0,
+        adjustedBook,
+        adjustedBank,
+        difference,
+        // A reconciliation ties out only when adjusted book = adjusted bank.
+        reconciled: Math.abs(difference) < 0.005 && bank.length > 0,
       },
     };
   }
@@ -537,6 +557,7 @@ export class BankReconciliationService {
         where: { id: { in: jevLineIds } },
         data: { matchGroupId: group.id },
       });
+      await this.refreshBalances(tx, id);
     });
     return this.getMatchView(organizationId, id);
   }
@@ -555,9 +576,10 @@ export class BankReconciliationService {
     });
     if (!group) throw new NotFoundException('Match group not found.');
     // Deleting the group SetNulls both link columns, freeing every line in it.
-    await runAudited(this.prisma, userId, (tx) =>
-      tx.bankMatchGroup.delete({ where: { id: group.id } }),
-    );
+    await runAudited(this.prisma, userId, async (tx) => {
+      await tx.bankMatchGroup.delete({ where: { id: group.id } });
+      await this.refreshBalances(tx, id);
+    });
     return this.getMatchView(organizationId, id);
   }
 
@@ -636,6 +658,7 @@ export class BankReconciliationService {
             data: { matchGroupId: group.id },
           });
         }
+        await this.refreshBalances(tx, id);
       });
     }
     return this.getMatchView(organizationId, id);
@@ -741,6 +764,7 @@ export class BankReconciliationService {
           data: { matchGroupId: group.id },
         });
       }
+      await this.refreshBalances(tx, id);
     });
     return this.getMatchView(organizationId, id);
   }
@@ -826,13 +850,28 @@ export class BankReconciliationService {
       throw new ConflictException('Reconciliation was modified. Please refresh.');
     }
 
-    return runAudited(this.prisma, userId, (tx) =>
-      tx.bankReconciliation.update({
+    // A reconciliation can only be completed when it ties out — adjusted book
+    // must equal adjusted bank. Any remaining gap has to be matched or booked.
+    const { difference } = await this.computeBalances(this.prisma, id);
+    if (Math.abs(difference) >= 0.005) {
+      const money = new Intl.NumberFormat('en-PH', {
+        style: 'currency',
+        currency: 'PHP',
+      }).format(Math.abs(difference));
+      throw new BadRequestException(
+        `Cannot complete — the adjusted book and bank balances still differ by ${money}. ` +
+          `Match or book the remaining items until the difference is zero.`,
+      );
+    }
+
+    return runAudited(this.prisma, userId, async (tx) => {
+      await this.refreshBalances(tx, id);
+      return tx.bankReconciliation.update({
         where: { id },
         data: { status: 'completed', updatedBy: userId, version: { increment: 1 } },
         select: RECON_DETAIL_SELECT,
-      }),
-    );
+      });
+    });
   }
 
   async approve(organizationId: string, id: string, userId: string, expectedVersion: number) {
@@ -907,6 +946,78 @@ export class BankReconciliationService {
     }
 
     return { deleted: true, unmatchedBookLines };
+  }
+
+  /**
+   * Adjusted-balance reconciliation computed from the match state. The
+   * reconciling items are the still-unmatched lines:
+   *   • unmatched BANK lines  → bank items not yet booked (charges / credits)
+   *     → adjust the BOOK balance
+   *   • unmatched BOOK lines  → book items not yet on the bank (deposits in
+   *     transit / outstanding checks) → adjust the BANK balance
+   * Reconciled ⇔ adjusted book = adjusted bank (difference ≈ 0).
+   */
+  private async computeBalances(client: any, reconId: string) {
+    const recon = await client.bankReconciliation.findUnique({
+      where: { id: reconId },
+      select: {
+        organizationId: true,
+        bookBalance: true,
+        bankBalance: true,
+        reconciliationDate: true,
+        accountingPeriod: { select: { fiscalYearId: true } },
+        bankAccount: { select: { chartOfAccountId: true } },
+      },
+    });
+    if (!recon) throw new NotFoundException('Reconciliation not found.');
+    const cash = recon.bankAccount.chartOfAccountId;
+    let unmatchedBankSum = 0;
+    let unmatchedBookSum = 0;
+    if (cash) {
+      const ub = await client.bankStatementLine.aggregate({
+        _sum: { amount: true },
+        where: { bankReconciliationId: reconId, matchGroupId: null },
+      });
+      unmatchedBankSum = Number(ub._sum.amount ?? 0);
+      const bk = await client.jevLine.findMany({
+        where: {
+          chartOfAccountId: cash,
+          matchGroupId: null,
+          jev: {
+            organizationId: recon.organizationId,
+            status: 'posted',
+            jevDate: { lte: recon.reconciliationDate },
+            accountingPeriod: { fiscalYearId: recon.accountingPeriod.fiscalYearId },
+          },
+        },
+        select: { debitAmount: true, creditAmount: true },
+      });
+      unmatchedBookSum = bk.reduce(
+        (s: number, l: { debitAmount: unknown; creditAmount: unknown }) =>
+          s + Number(l.debitAmount) - Number(l.creditAmount),
+        0,
+      );
+    }
+    const bookBalance = Number(recon.bookBalance);
+    const bankBalance = Number(recon.bankBalance);
+    const adjustedBook = round2(bookBalance + unmatchedBankSum);
+    const adjustedBank = round2(bankBalance + unmatchedBookSum);
+    const difference = round2(adjustedBook - adjustedBank);
+    return { bookBalance, bankBalance, adjustedBook, adjustedBank, difference };
+  }
+
+  /** Recompute and persist the adjusted balances/difference after a match change. */
+  private async refreshBalances(tx: any, reconId: string) {
+    const b = await this.computeBalances(tx, reconId);
+    await tx.bankReconciliation.update({
+      where: { id: reconId },
+      data: {
+        adjustedBookBalance: b.adjustedBook,
+        adjustedBankBalance: b.adjustedBank,
+        difference: b.difference,
+      },
+    });
+    return b;
   }
 
   private async recalculate(tx: any, reconId: string, userId: string) {

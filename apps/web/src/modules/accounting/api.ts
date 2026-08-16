@@ -518,6 +518,9 @@ export interface MatchView {
     status: string;
     version: number;
     reconciliationDate: string;
+    organizationName: string;
+    bookBalance: number;
+    bankBalance: number;
     bankAccount: { id: string; label: string; hasCashAccount: boolean };
     periodName: string;
   };
@@ -545,6 +548,9 @@ export interface MatchView {
     matched: number;
     unmatchedBankAmount: number;
     unmatchedBookAmount: number;
+    adjustedBook: number;
+    adjustedBank: number;
+    difference: number;
     reconciled: boolean;
   };
 }

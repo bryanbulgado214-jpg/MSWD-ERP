@@ -28,6 +28,7 @@ import {
   type ReconAttachment,
 } from '../api';
 import { parseBankCsv, formatBytes, type ParsedTxn } from '../bank-csv';
+import { downloadBankReconPdf } from '../bank-recon-report';
 import type {
   BankReconciliationListItem,
   BankAccount,
@@ -624,15 +625,16 @@ function ReconciliationDetail({ id }: { id: string }) {
   };
 
   async function doReconcile() {
-    if (
-      !summary.reconciled &&
-      !window.confirm(
-        `There are still ${summary.unmatchedBank} bank and ${summary.unmatchedBook} book item(s) unmatched. ` +
-          `Mark this reconciliation as reconciled anyway?`,
-      )
-    ) {
+    // A reconciliation can only be finalized when it ties out (difference = 0).
+    if (!summary.reconciled) {
+      setError(
+        `Cannot reconcile — the adjusted book and bank balances still differ by ${formatPeso(
+          Math.abs(summary.difference),
+        )}. Match or book the remaining items until the difference is zero.`,
+      );
       return;
     }
+    if (!window.confirm('Mark this reconciliation as reconciled and lock it for review?')) return;
     setBusy(true);
     setError('');
     try {
@@ -792,13 +794,24 @@ function ReconciliationDetail({ id }: { id: string }) {
         {editable && (
           <button
             className="acct-btn acct-btn--primary acct-btn--sm"
-            disabled={busy}
+            disabled={busy || !summary.reconciled}
             onClick={doReconcile}
-            title="Finalize this reconciliation"
+            title={
+              summary.reconciled
+                ? 'Finalize this reconciliation'
+                : `Difference of ${formatPeso(Math.abs(summary.difference))} must be zero before reconciling`
+            }
           >
             ✓ Reconcile
           </button>
         )}
+        <button
+          className="acct-btn acct-btn--sm"
+          onClick={() => downloadBankReconPdf(view)}
+          title="Download the bank reconciliation statement (PDF)"
+        >
+          ⭳ Download PDF
+        </button>
         <button
           className="acct-btn acct-btn--sm"
           disabled={busy}
@@ -874,10 +887,34 @@ function ReconciliationDetail({ id }: { id: string }) {
         </div>
         <div
           className="acct-form"
-          style={{ flex: 1, minWidth: 150, textAlign: 'center', padding: 14 }}
+          style={{
+            flex: 1,
+            minWidth: 150,
+            textAlign: 'center',
+            padding: 14,
+            border: summary.reconciled ? '1px solid #abefc6' : '1px solid #fecdca',
+            background: summary.reconciled ? '#f6fef9' : '#fffbfa',
+          }}
         >
-          <div style={{ fontSize: 28, fontWeight: 700, color: '#175cd3' }}>{summary.matched}</div>
-          <div style={{ fontSize: 12, color: '#667085' }}>Matched</div>
+          <div
+            style={{
+              fontSize: 22,
+              fontWeight: 700,
+              color: summary.reconciled ? '#067647' : '#b42318',
+            }}
+          >
+            {summary.reconciled
+              ? '₱0.00'
+              : new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(
+                  summary.difference,
+                )}
+          </div>
+          <div style={{ fontSize: 12, color: '#667085' }}>
+            Difference {summary.reconciled ? '✓' : ''}
+          </div>
+          <div style={{ fontSize: 11, color: '#98a2b3', marginTop: 2 }}>
+            {summary.matched} matched · adj. book − adj. bank
+          </div>
         </div>
       </div>
 
@@ -908,7 +945,25 @@ function ReconciliationDetail({ id }: { id: string }) {
             marginBottom: 16,
           }}
         >
-          ✓ Everything is matched — click <strong>Reconcile</strong> to finalize.
+          ✓ Balanced — adjusted book equals adjusted bank. Click <strong>Reconcile</strong> to
+          finalize.
+        </div>
+      )}
+      {editable && !summary.reconciled && (
+        <div
+          style={{
+            background: '#fffbfa',
+            border: '1px solid #fecdca',
+            color: '#b42318',
+            borderRadius: 8,
+            padding: '10px 14px',
+            marginBottom: 16,
+          }}
+        >
+          <strong>Out of balance by {formatPeso(Math.abs(summary.difference))}.</strong> Adjusted
+          book {formatPeso(summary.adjustedBook)} vs adjusted bank{' '}
+          {formatPeso(summary.adjustedBank)}. Match or “Add to books” the remaining items until the
+          difference is zero — only then can this reconciliation be finalized.
         </div>
       )}
 
