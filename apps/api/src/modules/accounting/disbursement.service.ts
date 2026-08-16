@@ -91,17 +91,39 @@ export class DisbursementService {
         // cashier works through; surfacing it here lets the accountant's DV
         // register show the same state, instead of freezing at "released".
         checks: {
-          select: { status: true },
+          select: {
+            status: true,
+            printedAt: true,
+            releasedAt: true,
+            clearedDate: true,
+            voidedAt: true,
+          },
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
       },
     });
 
-    return dvs.map(({ checks, ...dv }) => ({
-      ...dv,
-      checkStatus: checks[0]?.status ?? null,
-    }));
+    return dvs.map(({ checks, ...dv }) => {
+      const c = checks[0];
+      // The timestamp of the action that put the check in its current state —
+      // shown next to the status ("Cleared on 8/24/2026").
+      const checkStatusDate =
+        c?.status === 'cleared'
+          ? c.clearedDate
+          : c?.status === 'released'
+            ? c.releasedAt
+            : c?.status === 'printed'
+              ? c.printedAt
+              : c?.status === 'voided' || c?.status === 'spoiled'
+                ? c.voidedAt
+                : null;
+      return {
+        ...dv,
+        checkStatus: c?.status ?? null,
+        checkStatusDate: checkStatusDate ?? null,
+      };
+    });
   }
 
   async findOne(orgId: string, id: string) {

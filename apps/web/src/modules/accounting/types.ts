@@ -433,6 +433,8 @@ export interface DisbursementSummary {
   status: string;
   /** Latest issued check's status (cashier's payment lifecycle), or null if no check yet. */
   checkStatus: string | null;
+  /** Timestamp of the action behind the current check status (printed/released/cleared/voided). */
+  checkStatusDate: string | null;
   payeeName: string | null;
   supplier: { name: string } | null;
 }

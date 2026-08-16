@@ -149,9 +149,10 @@ export default function NewDisbursementPage() {
           ...(l.description.trim() ? { description: l.description.trim() } : {}),
         })),
       };
-      const dv = await createDisbursement(payload);
-      if (asDraft) navigate('/accounting/disbursements');
-      else navigate(`/accounting/disbursements/${dv.id}/print`);
+      await createDisbursement(payload);
+      // Always return to the register; the row's own Print/View actions take it
+      // from there (previously a posted DV jumped straight to the printout).
+      navigate('/accounting/disbursements');
     } catch (e) {
       setError(
         e instanceof AccountingApiError ? e.message : 'Failed to save disbursement voucher.',

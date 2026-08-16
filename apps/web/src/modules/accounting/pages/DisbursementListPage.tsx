@@ -57,12 +57,23 @@ function effectiveStatus(dv: DisbursementSummary): string {
   return dv.checkStatus ?? dv.status;
 }
 
+function matchesSearch(dv: DisbursementSummary, q: string): boolean {
+  const s = q.trim().toLowerCase();
+  if (!s) return true;
+  return (
+    dv.dvNumber.toLowerCase().includes(s) ||
+    (dv.supplier?.name ?? dv.payeeName ?? '').toLowerCase().includes(s) ||
+    dv.particulars.toLowerCase().includes(s)
+  );
+}
+
 export default function DisbursementListPage() {
   const { permissions } = useAuth();
   const navigate = useNavigate();
   const canCreate = permissions.has('accounting.dv.create');
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [typeFilter, setTypeFilter] = useState('');
+  const [search, setSearch] = useState('');
   const [posting, setPosting] = useState<string | null>(null);
   const [error, setError] = useState('');
 
@@ -111,6 +122,14 @@ export default function DisbursementListPage() {
       </p>
 
       <div className="acct-toolbar">
+        <input
+          type="search"
+          placeholder="Search DV #, payee, or particulars…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ minWidth: 260, flex: '1 1 260px' }}
+          aria-label="Search disbursement vouchers"
+        />
         <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
           <option value="">All Types</option>
           <option value="procurement">Procurement</option>
@@ -159,50 +178,57 @@ export default function DisbursementListPage() {
               </tr>
             </thead>
             <tbody>
-              {state.data.map((dv) => (
-                <tr key={dv.id}>
-                  <td className="acct-text-mono">{dv.dvNumber}</td>
-                  <td>{new Date(dv.dvDate).toLocaleDateString('en-PH')}</td>
-                  <td>{DV_TYPE_LABELS[dv.dvType] ?? dv.dvType}</td>
-                  <td>{dv.supplier?.name ?? dv.payeeName ?? '—'}</td>
-                  <td
-                    style={{
-                      maxWidth: 280,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {dv.particulars}
-                  </td>
-                  <td className="acct-text-right acct-text-mono">{formatPeso(dv.netAmount)}</td>
-                  <td>
-                    <span className="acct-badge">
-                      {STATUS_LABELS[effectiveStatus(dv)] ?? effectiveStatus(dv)}
-                    </span>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                      {dv.status === 'draft' && canCreate && (
-                        <button
-                          type="button"
-                          className="acct-btn acct-btn--sm"
-                          disabled={posting === dv.id}
-                          onClick={() => handlePost(dv.id)}
-                        >
-                          {posting === dv.id ? 'Posting...' : 'Post'}
-                        </button>
+              {state.data
+                .filter((dv) => matchesSearch(dv, search))
+                .map((dv) => (
+                  <tr key={dv.id}>
+                    <td className="acct-text-mono">{dv.dvNumber}</td>
+                    <td>{new Date(dv.dvDate).toLocaleDateString('en-PH')}</td>
+                    <td>{DV_TYPE_LABELS[dv.dvType] ?? dv.dvType}</td>
+                    <td>{dv.supplier?.name ?? dv.payeeName ?? '—'}</td>
+                    <td
+                      style={{
+                        maxWidth: 280,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {dv.particulars}
+                    </td>
+                    <td className="acct-text-right acct-text-mono">{formatPeso(dv.netAmount)}</td>
+                    <td>
+                      <span className="acct-badge">
+                        {STATUS_LABELS[effectiveStatus(dv)] ?? effectiveStatus(dv)}
+                      </span>
+                      {dv.checkStatusDate && (
+                        <span style={{ color: '#667085', fontSize: 12, marginLeft: 6 }}>
+                          on {new Date(dv.checkStatusDate).toLocaleDateString('en-PH')}
+                        </span>
                       )}
-                      <Link
-                        to={`/accounting/disbursements/${dv.id}/print`}
-                        className="acct-table__link"
-                      >
-                        Print
-                      </Link>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                        {dv.status === 'draft' && canCreate && (
+                          <button
+                            type="button"
+                            className="acct-btn acct-btn--sm"
+                            disabled={posting === dv.id}
+                            onClick={() => handlePost(dv.id)}
+                          >
+                            {posting === dv.id ? 'Posting...' : 'Post'}
+                          </button>
+                        )}
+                        <Link
+                          to={`/accounting/disbursements/${dv.id}/print`}
+                          className="acct-table__link"
+                        >
+                          Print
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
