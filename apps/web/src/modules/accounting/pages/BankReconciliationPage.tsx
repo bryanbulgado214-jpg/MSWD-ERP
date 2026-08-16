@@ -59,6 +59,7 @@ function ReconciliationList() {
   });
   const [formError, setFormError] = useState('');
   const [bookLoading, setBookLoading] = useState(false);
+  const [lastReconciled, setLastReconciled] = useState<string | null>(null);
 
   useEffect(() => {
     getBankAccounts().then(setBankAccounts);
@@ -89,6 +90,26 @@ function ReconciliationList() {
       .catch(() => setFormData((f) => ({ ...f, bookBalance: '' })))
       .finally(() => setBookLoading(false));
   }, [formData.bankAccountId, formData.reconciliationDate, formData.accountingPeriodId]);
+
+  // "Last reconciled as of ..." — the reconciliation date of the most recent
+  // approved reconciliation for the chosen bank account.
+  useEffect(() => {
+    if (!formData.bankAccountId) {
+      setLastReconciled(null);
+      return;
+    }
+    getReconciliations(`bankAccountId=${formData.bankAccountId}`)
+      .then((recs) => {
+        const approved = recs
+          .filter((r) => r.status === 'approved')
+          .sort(
+            (a, b) =>
+              new Date(b.reconciliationDate).getTime() - new Date(a.reconciliationDate).getTime(),
+          );
+        setLastReconciled(approved[0]?.reconciliationDate ?? null);
+      })
+      .catch(() => setLastReconciled(null));
+  }, [formData.bankAccountId]);
 
   const load = () => {
     setLoading(true);
@@ -148,21 +169,30 @@ function ReconciliationList() {
           <div className="acct-form-row">
             <div className="acct-field">
               <label>Bank Account</label>
-              <select
-                value={formData.bankAccountId}
-                onChange={(e) => setFormData({ ...formData, bankAccountId: e.target.value })}
-                required
-                style={{ width: '100%', maxWidth: 360, boxSizing: 'border-box' }}
-              >
-                <option value="">Select...</option>
-                {bankAccounts
-                  .filter((ba) => ba.status === 'active')
-                  .map((ba) => (
-                    <option key={ba.id} value={ba.id}>
-                      {ba.bank.code} — {ba.accountName}
-                    </option>
-                  ))}
-              </select>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                <select
+                  value={formData.bankAccountId}
+                  onChange={(e) => setFormData({ ...formData, bankAccountId: e.target.value })}
+                  required
+                  style={{ maxWidth: 360, flex: '0 1 360px', boxSizing: 'border-box' }}
+                >
+                  <option value="">Select...</option>
+                  {bankAccounts
+                    .filter((ba) => ba.status === 'active')
+                    .map((ba) => (
+                      <option key={ba.id} value={ba.id}>
+                        {ba.bank.code} — {ba.accountName}
+                      </option>
+                    ))}
+                </select>
+                {formData.bankAccountId && (
+                  <span style={{ fontSize: 12.5, color: lastReconciled ? '#067647' : '#b54708' }}>
+                    {lastReconciled
+                      ? `Last reconciled as of ${new Date(lastReconciled).toLocaleDateString('en-PH')}`
+                      : 'No prior reconciliation'}
+                  </span>
+                )}
+              </div>
             </div>
             <div className="acct-field">
               <label>Accounting Period</label>
@@ -234,11 +264,13 @@ function ReconciliationList() {
         </form>
       )}
 
-      {loading && <div className="acct-empty">Loading...</div>}
+      {!showForm && loading && <div className="acct-empty">Loading...</div>}
 
-      {!loading && list.length === 0 && <div className="acct-empty">No reconciliations found.</div>}
+      {!showForm && !loading && list.length === 0 && (
+        <div className="acct-empty">No reconciliations found.</div>
+      )}
 
-      {!loading && list.length > 0 && (
+      {!showForm && !loading && list.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
           <table className="acct-table">
             <thead>
