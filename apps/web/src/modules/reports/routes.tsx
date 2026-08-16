@@ -18,6 +18,7 @@ import { DepreciationScheduleReportPage } from './pages/DepreciationScheduleRepo
 import { FixedAssetLapsingReportPage } from './pages/FixedAssetLapsingReportPage';
 import { FixedAssetRegisterPage } from './pages/FixedAssetRegisterPage';
 import { JournalEntryRegisterPage } from './pages/JournalEntryRegisterPage';
+import { LoanAmortizationPage } from './pages/LoanAmortizationPage';
 import { ProcurementReportPage } from './pages/ProcurementReportPage';
 import { ReportsLanding } from './pages/ReportsLanding';
 import { ReportsLayout } from './pages/ReportsLayout';
@@ -49,6 +50,7 @@ export const reportsRoutes = [
       { path: 'ap-register', element: <ApRegisterReportPage /> },
       { path: 'ap-aging', element: <ApAgingReportPage /> },
       { path: 'ap-subsidiary-ledger', element: <ApSubsidiaryLedgerPage /> },
+      { path: 'loan-amortization', element: <LoanAmortizationPage /> },
 
       // ── Cash & Banks ───────────────────────────────────────────────────
       { path: 'check-register', element: <CheckRegisterReportPage /> },

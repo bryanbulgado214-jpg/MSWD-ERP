@@ -109,6 +109,13 @@ export const REPORT_GROUPS: ReportGroup[] = [
         icon: '🏢',
         blurb: 'Per-payee payable ledger',
       },
+      {
+        to: '/reports/loan-amortization',
+        label: 'Loans & Amortization',
+        perm: 'accounting.read',
+        icon: '🏦',
+        blurb: 'Loan repayment schedules',
+      },
     ],
   },
   {
