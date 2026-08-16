@@ -62,6 +62,65 @@ function amountHay(amount: number): string {
   )}`;
 }
 
+// Search input with an inline clear (×) button, shown once there is text.
+function SearchBox({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div style={{ flex: 1, minWidth: 120, position: 'relative', display: 'flex' }}>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{
+          flex: 1,
+          padding: '4px 26px 4px 8px',
+          border: '1px solid #d0d5dd',
+          borderRadius: 6,
+          fontSize: 12.5,
+          width: '100%',
+          boxSizing: 'border-box',
+        }}
+      />
+      {value && (
+        <button
+          type="button"
+          onClick={() => onChange('')}
+          aria-label="Clear search"
+          title="Clear"
+          style={{
+            position: 'absolute',
+            right: 4,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: 18,
+            height: 18,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: 'none',
+            borderRadius: '50%',
+            background: '#e4e7ec',
+            color: '#475467',
+            fontSize: 13,
+            lineHeight: 1,
+            cursor: 'pointer',
+            padding: 0,
+          }}
+        >
+          ×
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ── List View ──
 
 function ReconciliationList() {
@@ -957,18 +1016,10 @@ function ReconciliationDetail({ id }: { id: string }) {
             }}
           >
             <strong style={{ whiteSpace: 'nowrap' }}>Bank Transactions ({bankRows.length})</strong>
-            <input
+            <SearchBox
               value={bankSearch}
-              onChange={(e) => setBankSearch(e.target.value)}
+              onChange={setBankSearch}
               placeholder="Search amount or keyword…"
-              style={{
-                flex: 1,
-                minWidth: 120,
-                padding: '4px 8px',
-                border: '1px solid #d0d5dd',
-                borderRadius: 6,
-                fontSize: 12.5,
-              }}
             />
           </div>
           <div style={{ maxHeight: 460, overflowY: 'auto' }}>
@@ -1086,18 +1137,10 @@ function ReconciliationDetail({ id }: { id: string }) {
             <strong style={{ whiteSpace: 'nowrap' }}>
               Book Entries — GL cash ({bookRows.length})
             </strong>
-            <input
+            <SearchBox
               value={bookSearch}
-              onChange={(e) => setBookSearch(e.target.value)}
+              onChange={setBookSearch}
               placeholder="Search amount or keyword…"
-              style={{
-                flex: 1,
-                minWidth: 120,
-                padding: '4px 8px',
-                border: '1px solid #d0d5dd',
-                borderRadius: 6,
-                fontSize: 12.5,
-              }}
             />
           </div>
           <div style={{ maxHeight: 460, overflowY: 'auto' }}>
