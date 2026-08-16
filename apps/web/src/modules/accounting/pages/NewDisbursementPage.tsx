@@ -239,158 +239,170 @@ export default function NewDisbursementPage() {
         </div>
       )}
 
-      <div style={{ maxWidth: 940 }}>
-        {/* Header */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginBottom: 14 }}>
-          <div style={cell('160px')}>
-            <label style={labelStyle}>Type</label>
-            <select style={inputStyle} value={dvType} onChange={(e) => setDvType(e.target.value)}>
-              {DV_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
+      <div style={{ maxWidth: 1240 }}>
+        {/* Compact header — kept narrow so the accounting entry gets the room */}
+        <div style={{ maxWidth: 920 }}>
+          {/* Header */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 10 }}>
+            <div style={cell('160px')}>
+              <label style={labelStyle}>Type</label>
+              <select style={inputStyle} value={dvType} onChange={(e) => setDvType(e.target.value)}>
+                {DV_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={cell('160px')}>
+              <label style={labelStyle}>DV Date</label>
+              <input
+                style={inputStyle}
+                type="date"
+                value={dvDate}
+                onChange={(e) => setDvDate(e.target.value)}
+              />
+            </div>
+            <div style={cell('220px')}>
+              <label style={labelStyle}>Fund Cluster</label>
+              <select
+                style={inputStyle}
+                value={fundSourceId}
+                onChange={(e) => setFundSourceId(e.target.value)}
+              >
+                <option value="">— None —</option>
+                {fundSources.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.code} — {f.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div style={cell('160px')}>
-            <label style={labelStyle}>DV Date</label>
-            <input
-              style={inputStyle}
-              type="date"
-              value={dvDate}
-              onChange={(e) => setDvDate(e.target.value)}
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 10 }}>
+            <div style={cell('280px')}>
+              <label style={labelStyle}>Payee *</label>
+              <input
+                style={inputStyle}
+                value={payeeName}
+                onChange={(e) => setPayeeName(e.target.value)}
+                placeholder="Name of person or entity paid"
+              />
+            </div>
+            <div style={cell('150px')}>
+              <label style={labelStyle}>Payee TIN / ID</label>
+              <input
+                style={inputStyle}
+                value={payeeTin}
+                onChange={(e) => setPayeeTin(e.target.value)}
+              />
+            </div>
+            <div style={cell('280px')}>
+              <label style={labelStyle}>Payee Address</label>
+              <input
+                style={inputStyle}
+                value={payeeAddress}
+                onChange={(e) => setPayeeAddress(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 10 }}>
+            <label style={labelStyle}>Particulars *</label>
+            <textarea
+              style={{ ...inputStyle, minHeight: 42, resize: 'vertical' }}
+              value={particulars}
+              onChange={(e) => setParticulars(e.target.value)}
+              placeholder="Nature of the disbursement"
             />
           </div>
-          <div style={cell('220px')}>
-            <label style={labelStyle}>Fund Cluster</label>
-            <select
-              style={inputStyle}
-              value={fundSourceId}
-              onChange={(e) => setFundSourceId(e.target.value)}
-            >
-              <option value="">— None —</option>
-              {fundSources.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.code} — {f.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginBottom: 14 }}>
-          <div style={cell('280px')}>
-            <label style={labelStyle}>Payee *</label>
-            <input
-              style={inputStyle}
-              value={payeeName}
-              onChange={(e) => setPayeeName(e.target.value)}
-              placeholder="Name of person or entity paid"
-            />
+          {/* Payment */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 10 }}>
+            <div style={cell('300px')}>
+              <label style={labelStyle}>
+                Bank Name &amp; Account *{' '}
+                <span style={{ fontWeight: 400, color: '#667085' }}>(account credited)</span>
+              </label>
+              <select
+                style={inputStyle}
+                value={bankAccountId}
+                onChange={(e) => setBankAccountId(e.target.value)}
+              >
+                <option value="">Select paying bank account...</option>
+                {bankAccounts.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.bank.name} — {b.accountName} ({b.accountNumber})
+                  </option>
+                ))}
+              </select>
+              {bank?.chartOfAccount && (
+                <div style={{ fontSize: 11, color: '#667085', marginTop: 4 }}>
+                  Credits{' '}
+                  <span style={{ fontFamily: 'monospace' }}>{bank.chartOfAccount.accountCode}</span>{' '}
+                  — {bank.chartOfAccount.name}
+                </div>
+              )}
+            </div>
+            <div style={cell('200px')}>
+              <label style={labelStyle}>Mode of Payment</label>
+              <select
+                style={inputStyle}
+                value={paymentMode}
+                onChange={(e) => setPaymentMode(e.target.value)}
+              >
+                <option value="check">MDS Check</option>
+                <option value="ada">Commercial Check / ADA</option>
+                <option value="others">Others</option>
+              </select>
+            </div>
           </div>
-          <div style={cell('150px')}>
-            <label style={labelStyle}>Payee TIN / ID</label>
-            <input
-              style={inputStyle}
-              value={payeeTin}
-              onChange={(e) => setPayeeTin(e.target.value)}
-            />
-          </div>
-          <div style={cell('280px')}>
-            <label style={labelStyle}>Payee Address</label>
-            <input
-              style={inputStyle}
-              value={payeeAddress}
-              onChange={(e) => setPayeeAddress(e.target.value)}
-            />
-          </div>
+          {paymentMode === 'check' && (
+            <p style={{ fontSize: 12, color: '#667085', marginTop: -4, marginBottom: 0 }}>
+              A check payment raises a <strong>pending check</strong> in the Check Register. The
+              cashier assigns the check number and prints it — the accountant does not enter a check
+              number here.
+            </p>
+          )}
         </div>
+        {/* End compact header */}
 
-        <div style={{ marginBottom: 14 }}>
-          <label style={labelStyle}>Particulars *</label>
-          <textarea
-            style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }}
-            value={particulars}
-            onChange={(e) => setParticulars(e.target.value)}
-            placeholder="Nature of the disbursement"
-          />
-        </div>
-
-        {/* Payment */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginBottom: 20 }}>
-          <div style={cell('300px')}>
-            <label style={labelStyle}>
-              Bank Name &amp; Account *{' '}
-              <span style={{ fontWeight: 400, color: '#667085' }}>(account credited)</span>
-            </label>
-            <select
-              style={inputStyle}
-              value={bankAccountId}
-              onChange={(e) => setBankAccountId(e.target.value)}
-            >
-              <option value="">Select paying bank account...</option>
-              {bankAccounts.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.bank.name} — {b.accountName} ({b.accountNumber})
-                </option>
-              ))}
-            </select>
-            {bank?.chartOfAccount && (
-              <div style={{ fontSize: 11, color: '#667085', marginTop: 4 }}>
-                Credits{' '}
-                <span style={{ fontFamily: 'monospace' }}>{bank.chartOfAccount.accountCode}</span> —{' '}
-                {bank.chartOfAccount.name}
-              </div>
-            )}
-          </div>
-          <div style={cell('200px')}>
-            <label style={labelStyle}>Mode of Payment</label>
-            <select
-              style={inputStyle}
-              value={paymentMode}
-              onChange={(e) => setPaymentMode(e.target.value)}
-            >
-              <option value="check">MDS Check</option>
-              <option value="ada">Commercial Check / ADA</option>
-              <option value="others">Others</option>
-            </select>
-          </div>
-        </div>
-        {paymentMode === 'check' && (
-          <p style={{ fontSize: 12, color: '#667085', marginTop: -8, marginBottom: 18 }}>
-            A check payment raises a <strong>pending check</strong> in the Check Register. The
-            cashier assigns the check number and prints it — the accountant does not enter a check
-            number here.
-          </p>
-        )}
-
-        {/* Accounting entry (charges + deductions) */}
+        {/* Accounting entry (charges + deductions) — the main working area */}
         <div
           style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 4,
+            marginTop: 16,
+            border: '1px solid #e4e7ec',
+            borderRadius: 10,
+            padding: '14px 16px',
+            background: '#fcfcfd',
           }}
         >
-          <h2 style={{ fontSize: 15, margin: 0 }}>Accounting Entry — charges &amp; deductions</h2>
-          <button type="button" className="acct-btn" onClick={addLine}>
-            + Add Line
-          </button>
-        </div>
-        <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>
-          Debit the accounts charged; credit any amounts withheld (e.g. tax). Do{' '}
-          <strong>not</strong> add the bank — its net credit is posted for you.
-        </p>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="acct-table" style={{ minWidth: 680 }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 4,
+            }}
+          >
+            <h2 style={{ fontSize: 15, margin: 0 }}>Accounting Entry — charges &amp; deductions</h2>
+            <button type="button" className="acct-btn acct-btn--primary" onClick={addLine}>
+              + Add Line
+            </button>
+          </div>
+          <p style={{ fontSize: 12, color: '#667085', margin: '0 0 10px' }}>
+            Debit the accounts charged; credit any amounts withheld (e.g. tax). Do{' '}
+            <strong>not</strong> add the bank — its net credit is posted for you.
+          </p>
+          <table className="acct-table" style={{ width: '100%', tableLayout: 'fixed' }}>
             <thead>
               <tr>
-                <th style={{ width: '40%' }}>Account</th>
-                <th style={{ width: '16%', textAlign: 'right' }}>Debit</th>
-                <th style={{ width: '16%', textAlign: 'right' }}>Credit</th>
-                <th>Description</th>
-                <th></th>
+                <th style={{ width: '34%' }}>Account</th>
+                <th style={{ width: '13%', textAlign: 'right' }}>Debit</th>
+                <th style={{ width: '13%', textAlign: 'right' }}>Credit</th>
+                <th style={{ width: '32%' }}>Description</th>
+                <th style={{ width: '8%' }}></th>
               </tr>
             </thead>
             <tbody>
@@ -460,30 +472,39 @@ export default function NewDisbursementPage() {
               )}
             </tbody>
           </table>
-        </div>
 
-        {/* Summary */}
-        <div
-          style={{ display: 'flex', gap: 24, flexWrap: 'wrap', margin: '14px 0 4px', fontSize: 13 }}
-        >
-          <div>
-            <span style={{ color: '#667085' }}>Total charges (Dr): </span>
-            <strong>{peso(totalDebit)}</strong>
+          <button
+            type="button"
+            className="acct-btn acct-btn--sm"
+            onClick={addLine}
+            style={{ marginTop: 8 }}
+          >
+            + Add Line
+          </button>
+
+          {/* Summary */}
+          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginTop: 14, fontSize: 13 }}>
+            <div>
+              <span style={{ color: '#667085' }}>Total charges (Dr): </span>
+              <strong>{peso(totalDebit)}</strong>
+            </div>
+            <div>
+              <span style={{ color: '#667085' }}>Less deductions (Cr): </span>
+              <strong>{peso(totalCredit)}</strong>
+            </div>
+            <div>
+              <span style={{ color: '#667085' }}>Net paid from bank: </span>
+              <strong style={{ color: net > 0 ? '#067647' : '#b42318' }}>{peso(net)}</strong>
+            </div>
           </div>
-          <div>
-            <span style={{ color: '#667085' }}>Less deductions (Cr): </span>
-            <strong>{peso(totalCredit)}</strong>
-          </div>
-          <div>
-            <span style={{ color: '#667085' }}>Net paid from bank: </span>
-            <strong style={{ color: net > 0 ? '#067647' : '#b42318' }}>{peso(net)}</strong>
-          </div>
+          {totalDebit > 0 && net <= 0 && (
+            <div style={{ color: '#b42318', fontSize: 12, marginTop: 6 }}>
+              The net payable must be greater than zero (deductions can’t meet or exceed the
+              charges).
+            </div>
+          )}
         </div>
-        {totalDebit > 0 && net <= 0 && (
-          <div style={{ color: '#b42318', fontSize: 12 }}>
-            The net payable must be greater than zero (deductions can’t meet or exceed the charges).
-          </div>
-        )}
+        {/* End accounting entry */}
 
         <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
           {isEdit ? (
