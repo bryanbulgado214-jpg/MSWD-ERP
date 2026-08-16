@@ -572,6 +572,11 @@ export async function matchBankLine(
   return res.json();
 }
 
+export async function autoMatchBankLines(reconId: string): Promise<MatchView> {
+  const res = await authFetchMutate(`/accounting/reconciliations/${reconId}/auto-match`, 'POST');
+  return res.json();
+}
+
 export async function unmatchBankLine(
   reconId: string,
   statementLineId: string,

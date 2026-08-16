@@ -511,6 +511,75 @@ export class BankReconciliationService {
   }
 
   /**
+   * Auto-match: pair every unmatched bank line with an unmatched book (GL cash)
+   * line of the same amount — one-to-one, nearest date first. Clears everything
+   * that lines up in a single pass; genuine bank-only lines (charges) remain for
+   * "Add to books".
+   */
+  async autoMatch(organizationId: string, id: string, userId: string) {
+    const recon = await this.prisma.bankReconciliation.findFirst({
+      where: { id, organizationId },
+      select: {
+        status: true,
+        reconciliationDate: true,
+        bankAccount: { select: { chartOfAccountId: true } },
+      },
+    });
+    if (!recon) throw new NotFoundException('Reconciliation not found.');
+    if (recon.status === 'approved') {
+      throw new BadRequestException('Cannot modify an approved reconciliation.');
+    }
+    const cashCoaId = recon.bankAccount.chartOfAccountId;
+    if (!cashCoaId) return this.getMatchView(organizationId, id);
+
+    const bankLines = await this.prisma.bankStatementLine.findMany({
+      where: { bankReconciliationId: id, matchedJevLineId: null },
+      orderBy: { transactionDate: 'asc' },
+      select: { id: true, amount: true },
+    });
+    const bookLines = await this.prisma.jevLine.findMany({
+      where: {
+        chartOfAccountId: cashCoaId,
+        bankLineMatches: { none: {} },
+        jev: {
+          organizationId,
+          status: 'posted',
+          jevDate: { lte: recon.reconciliationDate },
+        },
+      },
+      orderBy: { jev: { jevDate: 'asc' } },
+      select: { id: true, debitAmount: true, creditAmount: true },
+    });
+
+    // Pool book-line ids by signed amount (2dp key), consumed one per match.
+    const pool = new Map<string, string[]>();
+    for (const b of bookLines) {
+      const key = round2(Number(b.debitAmount) - Number(b.creditAmount)).toFixed(2);
+      const arr = pool.get(key);
+      if (arr) arr.push(b.id);
+      else pool.set(key, [b.id]);
+    }
+    const pairs: Array<{ statementLineId: string; jevLineId: string }> = [];
+    for (const bl of bankLines) {
+      const arr = pool.get(round2(Number(bl.amount)).toFixed(2));
+      const jevLineId = arr?.shift();
+      if (jevLineId) pairs.push({ statementLineId: bl.id, jevLineId });
+    }
+
+    if (pairs.length) {
+      await runAudited(this.prisma, userId, async (tx) => {
+        for (const p of pairs) {
+          await tx.bankStatementLine.update({
+            where: { id: p.statementLineId },
+            data: { matchedJevLineId: p.jevLineId, matchedBy: userId, matchedAt: new Date() },
+          });
+        }
+      });
+    }
+    return this.getMatchView(organizationId, id);
+  }
+
+  /**
    * Record a bank-only line (e.g. a service charge) directly to the books: post
    * a JEV against the chosen account and the bank's cash account, then match the
    * statement line to the newly-created cash line. Money-out debits the account

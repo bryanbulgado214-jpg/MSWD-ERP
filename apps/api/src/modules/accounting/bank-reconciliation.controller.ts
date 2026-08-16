@@ -125,6 +125,12 @@ export class BankReconciliationController {
     return this.reconService.unmatch(user.organizationId, id, user.userId, dto);
   }
 
+  @Post(':id/auto-match')
+  @RequirePermissions('accounting.bank.manage')
+  autoMatch(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.reconService.autoMatch(user.organizationId, id, user.userId);
+  }
+
   @Post(':id/create-entry')
   @RequirePermissions('accounting.bank.manage')
   createEntryFromLine(

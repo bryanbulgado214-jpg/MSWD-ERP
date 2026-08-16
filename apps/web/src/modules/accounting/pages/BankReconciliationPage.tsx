@@ -12,6 +12,7 @@ import {
   getMatchView,
   importBankStatement,
   matchBankLine,
+  autoMatchBankLines,
   unmatchBankLine,
   createEntryFromBankLine,
   getBankAccounts,
@@ -620,6 +621,13 @@ function ReconciliationDetail({ id }: { id: string }) {
           }}
         >
           <button
+            className="acct-btn acct-btn--sm"
+            disabled={busy || unmatchedBank.length === 0}
+            onClick={() => run(() => autoMatchBankLines(id))}
+          >
+            ⚡ Auto-match
+          </button>
+          <button
             className="acct-btn acct-btn--primary acct-btn--sm"
             disabled={!selBank || !selBook || busy}
             onClick={doMatch}
@@ -627,8 +635,8 @@ function ReconciliationDetail({ id }: { id: string }) {
             Match selected
           </button>
           <span style={{ fontSize: 12.5, color: '#667085' }}>
-            Pick one bank line and one book entry (same amount), then Match. For a bank-only line,
-            use “Add to books”.
+            Auto-match clears every equal-amount pair; or pick one from each side and Match. For a
+            bank-only line, use “Add to books”.
           </span>
         </div>
       )}
