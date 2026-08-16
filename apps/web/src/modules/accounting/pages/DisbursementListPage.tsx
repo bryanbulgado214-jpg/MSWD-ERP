@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
-import { AccountingApiError, getDisbursements, postDisbursement } from '../api';
+import { AccountingApiError, deleteDisbursement, getDisbursements, postDisbursement } from '../api';
 import type { DisbursementSummary } from '../types';
 
 import { AccountingSubNav } from './AccountingSubNav';
@@ -75,6 +75,7 @@ export default function DisbursementListPage() {
   const [typeFilter, setTypeFilter] = useState('');
   const [search, setSearch] = useState('');
   const [posting, setPosting] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -108,6 +109,22 @@ export default function DisbursementListPage() {
       );
     } finally {
       setPosting(null);
+    }
+  }
+
+  async function handleDelete(dv: DisbursementSummary) {
+    if (!window.confirm(`Delete draft ${dv.dvNumber}? This cannot be undone.`)) return;
+    setDeleting(dv.id);
+    setError('');
+    try {
+      await deleteDisbursement(dv.id);
+      await load();
+    } catch (e) {
+      setError(
+        e instanceof AccountingApiError ? e.message : 'Failed to delete the disbursement voucher.',
+      );
+    } finally {
+      setDeleting(null);
     }
   }
 
@@ -208,16 +225,22 @@ export default function DisbursementListPage() {
                       )}
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                      <div
+                        style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}
+                      >
+                        <Link
+                          to={`/accounting/disbursements/${dv.id}`}
+                          className="acct-table__link"
+                        >
+                          View
+                        </Link>
                         {dv.status === 'draft' && canCreate && (
-                          <button
-                            type="button"
-                            className="acct-btn acct-btn--sm"
-                            disabled={posting === dv.id}
-                            onClick={() => handlePost(dv.id)}
+                          <Link
+                            to={`/accounting/disbursements/${dv.id}/edit`}
+                            className="acct-table__link"
                           >
-                            {posting === dv.id ? 'Posting...' : 'Post'}
-                          </button>
+                            Edit
+                          </Link>
                         )}
                         <Link
                           to={`/accounting/disbursements/${dv.id}/print`}
@@ -225,6 +248,34 @@ export default function DisbursementListPage() {
                         >
                           Print
                         </Link>
+                        {dv.status === 'draft' && canCreate && (
+                          <button
+                            type="button"
+                            className="acct-btn acct-btn--sm"
+                            disabled={posting === dv.id}
+                            onClick={() => handlePost(dv.id)}
+                          >
+                            {posting === dv.id ? 'Posting…' : 'Post'}
+                          </button>
+                        )}
+                        {dv.status === 'draft' && canCreate && (
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(dv)}
+                            disabled={deleting === dv.id}
+                            style={{
+                              color: '#b42318',
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: 0,
+                              font: 'inherit',
+                              textDecoration: 'underline',
+                            }}
+                          >
+                            {deleting === dv.id ? 'Deleting…' : 'Delete'}
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

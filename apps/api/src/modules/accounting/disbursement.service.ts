@@ -151,6 +151,7 @@ export class DisbursementService {
         lines: {
           orderBy: { debitAmount: 'desc' },
           select: {
+            chartOfAccountId: true,
             debitAmount: true,
             creditAmount: true,
             description: true,
@@ -160,7 +161,15 @@ export class DisbursementService {
       },
     });
 
-    return { ...dv, journalEntry };
+    // The paying bank account lives on the raised check, not the DV row —
+    // surfaced so the edit form can prefill the bank dropdown.
+    const check = await this.prisma.check.findFirst({
+      where: { disbursementVoucherId: id },
+      orderBy: { createdAt: 'desc' },
+      select: { bankAccountId: true },
+    });
+
+    return { ...dv, journalEntry, bankAccountId: check?.bankAccountId ?? null };
   }
 
   /**
@@ -324,6 +333,195 @@ export class DisbursementService {
     });
 
     return this.findOne(orgId, id);
+  }
+
+  /**
+   * Edit a DRAFT disbursement voucher: re-validate the resubmitted form and
+   * rebuild its held draft entry + pending check. Posted/released DVs are
+   * immutable — they carry a posted JEV, an issued check, and a GL impact.
+   */
+  async update(orgId: string, userId: string, id: string, dto: CreateDisbursementDto) {
+    const existing = await this.prisma.disbursementVoucher.findFirst({
+      where: { id, organizationId: orgId },
+      select: { id: true, status: true },
+    });
+    if (!existing) throw new NotFoundException('Disbursement voucher not found.');
+    if (existing.status !== 'draft') {
+      throw new BadRequestException('Only draft disbursement vouchers can be edited.');
+    }
+
+    // Same validation + entry-building as create().
+    const bankAccount = await this.prisma.bankAccount.findFirst({
+      where: { id: dto.bankAccountId, organizationId: orgId },
+      select: {
+        id: true,
+        accountName: true,
+        accountNumber: true,
+        chartOfAccountId: true,
+        bank: { select: { name: true } },
+      },
+    });
+    if (!bankAccount) throw new BadRequestException('Bank account not found.');
+    if (!bankAccount.chartOfAccountId) {
+      throw new BadRequestException(
+        'The selected bank account is not linked to a Cash-in-Bank ledger account.',
+      );
+    }
+
+    const totalDebit = round2(dto.lines.reduce((s, l) => s + (l.debitAmount || 0), 0));
+    const totalCredit = round2(dto.lines.reduce((s, l) => s + (l.creditAmount || 0), 0));
+    if (totalDebit <= 0) {
+      throw new BadRequestException('The accounting entry must have at least one debit amount.');
+    }
+    const net = round2(totalDebit - totalCredit);
+    if (net <= 0) {
+      throw new BadRequestException(
+        'The net amount payable (charges minus deductions) must be greater than zero.',
+      );
+    }
+
+    const accountIds = [...new Set(dto.lines.map((l) => l.chartOfAccountId))];
+    const accounts = await this.prisma.chartOfAccount.findMany({
+      where: { id: { in: accountIds }, organizationId: orgId, isHeader: false, isActive: true },
+      select: { id: true },
+    });
+    if (accounts.length !== accountIds.length) {
+      throw new BadRequestException(
+        'One or more accounts are invalid, inactive, or a header account.',
+      );
+    }
+
+    const bankDisplay = `${bankAccount.bank.name} — ${bankAccount.accountName} (${bankAccount.accountNumber})`;
+    const dvDate = new Date(dto.dvDate);
+    const jevLines = [
+      ...dto.lines.map((l) => ({
+        chartOfAccountId: l.chartOfAccountId,
+        debitAmount: l.debitAmount || 0,
+        creditAmount: l.creditAmount || 0,
+        ...(l.description ? { description: l.description } : {}),
+      })),
+      {
+        chartOfAccountId: bankAccount.chartOfAccountId,
+        debitAmount: 0,
+        creditAmount: net,
+        description: `Cash disbursement — ${bankDisplay}`,
+      },
+    ];
+
+    await runAudited(this.prisma, userId, async (tx) => {
+      await this.deleteDraftArtifacts(tx, orgId, id);
+
+      const dv = await tx.disbursementVoucher.update({
+        where: { id },
+        data: {
+          dvDate,
+          dvType: dto.dvType as never,
+          payeeName: dto.payeeName,
+          payeeTin: dto.payeeTin ?? null,
+          payeeAddress: dto.payeeAddress ?? null,
+          particulars: dto.particulars,
+          paymentMode: (dto.paymentMode ?? 'check') as never,
+          grossAmount: totalDebit,
+          taxAmount: totalCredit,
+          otherDeductions: 0,
+          netAmount: net,
+          bankName: bankDisplay,
+          fundSourceId: dto.fundSourceId ?? null,
+          updatedBy: userId,
+          version: { increment: 1 },
+        },
+        select: {
+          id: true,
+          dvNumber: true,
+          dvDate: true,
+          particulars: true,
+          fundSourceId: true,
+          responsibilityCenterId: true,
+        },
+      });
+
+      const jev = await this.autoJev.postDisbursementEntry(
+        tx,
+        orgId,
+        userId,
+        dv,
+        jevLines,
+        'draft',
+      );
+      if (!jev) {
+        throw new BadRequestException(
+          'Could not record the accounting entry. Ensure an accounting period is open for the DV date.',
+        );
+      }
+
+      if ((dto.paymentMode ?? 'check') === 'check') {
+        const check = await tx.check.create({
+          data: {
+            organizationId: orgId,
+            disbursementVoucherId: id,
+            bankAccountId: dto.bankAccountId,
+            checkNumber: null,
+            amount: net,
+            checkDate: dvDate,
+            payeeName: dto.payeeName,
+            status: 'pending',
+            createdBy: userId,
+            updatedBy: userId,
+          },
+          select: { id: true },
+        });
+        await tx.checkStatusHistory.create({
+          data: {
+            checkId: check.id,
+            toStatus: 'pending',
+            changedBy: userId,
+            remarks: `Pending check re-raised from edited DV ${dv.dvNumber}`,
+          },
+        });
+      }
+    });
+
+    return this.findOne(orgId, id);
+  }
+
+  /**
+   * Delete a DRAFT disbursement voucher and its held artifacts (draft JEV +
+   * pending check). Posted/released DVs cannot be deleted.
+   */
+  async remove(orgId: string, userId: string, id: string) {
+    const dv = await this.prisma.disbursementVoucher.findFirst({
+      where: { id, organizationId: orgId },
+      select: { id: true, status: true },
+    });
+    if (!dv) throw new NotFoundException('Disbursement voucher not found.');
+    if (dv.status !== 'draft') {
+      throw new BadRequestException('Only draft disbursement vouchers can be deleted.');
+    }
+    await runAudited(this.prisma, userId, async (tx) => {
+      await this.deleteDraftArtifacts(tx, orgId, id);
+      await tx.disbursementVoucher.delete({ where: { id } });
+    });
+    return { deleted: true };
+  }
+
+  /**
+   * Remove a draft DV's held draft JEV (lines cascade) and its pending check(s)
+   * (+ status history). Shared by edit (rebuild) and delete.
+   */
+  private async deleteDraftArtifacts(tx: Prisma.TransactionClient, orgId: string, dvId: string) {
+    const checks = await tx.check.findMany({
+      where: { disbursementVoucherId: dvId },
+      select: { id: true },
+    });
+    const checkIds = checks.map((c) => c.id);
+    if (checkIds.length) {
+      await tx.checkStatusHistory.deleteMany({ where: { checkId: { in: checkIds } } });
+      await tx.bankReconciliationItem.deleteMany({ where: { checkId: { in: checkIds } } });
+      await tx.check.deleteMany({ where: { id: { in: checkIds } } });
+    }
+    await tx.journalEntryVoucher.deleteMany({
+      where: { organizationId: orgId, sourceType: 'disbursement', sourceId: dvId, status: 'draft' },
+    });
   }
 
   /**

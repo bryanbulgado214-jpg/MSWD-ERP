@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -52,5 +54,21 @@ export class DisbursementController {
   @RequirePermissions('accounting.dv.create')
   postDraft(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.disbursementService.postDraft(user.organizationId, user.userId, id);
+  }
+
+  @Patch(':id')
+  @RequirePermissions('accounting.dv.create')
+  update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateDisbursementDto,
+  ) {
+    return this.disbursementService.update(user.organizationId, user.userId, id, dto);
+  }
+
+  @Delete(':id')
+  @RequirePermissions('accounting.dv.create')
+  remove(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.disbursementService.remove(user.organizationId, user.userId, id);
   }
 }

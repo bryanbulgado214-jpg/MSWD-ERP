@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
 import { listFundSources } from '../../budgeting/api';
@@ -8,6 +8,8 @@ import {
   createDisbursement,
   getBankAccounts,
   getChartOfAccounts,
+  getDisbursement,
+  updateDisbursement,
 } from '../api';
 import type { BankAccount, ChartOfAccount, CreateDisbursementInput } from '../types';
 
@@ -46,6 +48,8 @@ const DV_TYPES = [
 
 export default function NewDisbursementPage() {
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const isEdit = Boolean(id);
   const { permissions } = useAuth();
   const canCreate = permissions.has('accounting.dv.create');
 
@@ -82,12 +86,41 @@ export default function NewDisbursementPage() {
       } catch {
         /* fund sources optional */
       }
+
+      // Edit mode — prefill from the existing draft DV.
+      if (id) {
+        const dv = await getDisbursement(id);
+        setDvType(dv.dvType);
+        setDvDate(dv.dvDate.slice(0, 10));
+        setPayeeName(dv.payeeName ?? '');
+        setPayeeTin(dv.payeeTin ?? '');
+        setPayeeAddress(dv.payeeAddress ?? '');
+        setParticulars(dv.particulars);
+        setPaymentMode(dv.paymentMode);
+        setFundSourceId(dv.fundSource?.id ?? '');
+        setBankAccountId(dv.bankAccountId ?? '');
+        // Show only the charge/deduction lines — the balancing cash credit is
+        // re-derived from the bank account on save (it carries that description).
+        const editable = (dv.journalEntry?.lines ?? []).filter(
+          (l) => !(l.description ?? '').startsWith('Cash disbursement —'),
+        );
+        setLines(
+          editable.length
+            ? editable.map((l) => ({
+                chartOfAccountId: l.chartOfAccountId,
+                debitAmount: Number(l.debitAmount) ? String(Number(l.debitAmount)) : '',
+                creditAmount: Number(l.creditAmount) ? String(Number(l.creditAmount)) : '',
+                description: l.description ?? '',
+              }))
+            : [emptyLine()],
+        );
+      }
     } catch (e) {
       setError(e instanceof AccountingApiError ? e.message : 'Failed to load form data.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [id]);
 
   useEffect(() => {
     load();
@@ -149,7 +182,11 @@ export default function NewDisbursementPage() {
           ...(l.description.trim() ? { description: l.description.trim() } : {}),
         })),
       };
-      await createDisbursement(payload);
+      if (isEdit && id) {
+        await updateDisbursement(id, payload);
+      } else {
+        await createDisbursement(payload);
+      }
       // Always return to the register; the row's own Print/View actions take it
       // from there (previously a posted DV jumped straight to the printout).
       navigate('/accounting/disbursements');
@@ -189,7 +226,7 @@ export default function NewDisbursementPage() {
   return (
     <div className="acct-page">
       <AccountingSubNav />
-      <h1>New Disbursement Voucher</h1>
+      <h1>{isEdit ? 'Edit Disbursement Voucher' : 'New Disbursement Voucher'}</h1>
       <p style={{ color: '#667085', fontSize: 13, marginTop: -6, marginBottom: 18, maxWidth: 760 }}>
         For non-procurement disbursements (travel, reimbursement, payroll, utilities, etc.). Enter
         the accounts charged and any deductions withheld — the net is credited automatically to the
@@ -449,22 +486,35 @@ export default function NewDisbursementPage() {
         )}
 
         <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
-          <button
-            type="button"
-            className="acct-btn acct-btn--primary"
-            disabled={!canSubmit || saving !== false}
-            onClick={() => submit(false)}
-          >
-            {saving === 'post' ? 'Posting...' : 'Create & Post DV'}
-          </button>
-          <button
-            type="button"
-            className="acct-btn"
-            disabled={!canSubmit || saving !== false}
-            onClick={() => submit(true)}
-          >
-            {saving === 'draft' ? 'Saving...' : 'Save as Draft'}
-          </button>
+          {isEdit ? (
+            <button
+              type="button"
+              className="acct-btn acct-btn--primary"
+              disabled={!canSubmit || saving !== false}
+              onClick={() => submit(true)}
+            >
+              {saving ? 'Saving…' : 'Save Changes'}
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="acct-btn acct-btn--primary"
+                disabled={!canSubmit || saving !== false}
+                onClick={() => submit(false)}
+              >
+                {saving === 'post' ? 'Posting...' : 'Create & Post DV'}
+              </button>
+              <button
+                type="button"
+                className="acct-btn"
+                disabled={!canSubmit || saving !== false}
+                onClick={() => submit(true)}
+              >
+                {saving === 'draft' ? 'Saving...' : 'Save as Draft'}
+              </button>
+            </>
+          )}
           <button
             type="button"
             className="acct-btn"

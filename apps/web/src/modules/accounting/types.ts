@@ -478,12 +478,14 @@ export interface DisbursementDetail {
   approver: { id: string; username: string } | null;
   releaser: { id: string; username: string } | null;
   creator: { id: string; username: string } | null;
+  bankAccountId: string | null;
   journalEntry: {
     id: string;
     jevNumber: string;
     jevDate: string;
     status: string;
     lines: Array<{
+      chartOfAccountId: string;
       debitAmount: string;
       creditAmount: string;
       description: string | null;

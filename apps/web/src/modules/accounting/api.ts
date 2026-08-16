@@ -74,7 +74,7 @@ async function authFetch(path: string): Promise<Response> {
 
 async function authFetchMutate(
   path: string,
-  method: 'POST' | 'PATCH',
+  method: 'POST' | 'PATCH' | 'DELETE',
   body?: unknown,
 ): Promise<Response> {
   const token = getAccessToken();
@@ -617,6 +617,19 @@ export async function createDisbursement(
 
 export async function postDisbursement(id: string): Promise<DisbursementDetail> {
   const res = await authFetchMutate(`/accounting/disbursements/${id}/post`, 'POST');
+  return res.json();
+}
+
+export async function updateDisbursement(
+  id: string,
+  input: CreateDisbursementInput,
+): Promise<DisbursementDetail> {
+  const res = await authFetchMutate(`/accounting/disbursements/${id}`, 'PATCH', input);
+  return res.json();
+}
+
+export async function deleteDisbursement(id: string): Promise<{ deleted: boolean }> {
+  const res = await authFetchMutate(`/accounting/disbursements/${id}`, 'DELETE');
   return res.json();
 }
 

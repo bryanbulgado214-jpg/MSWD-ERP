@@ -8,6 +8,7 @@ import BanksPage from './pages/BanksPage';
 import CashierDashboardPage from './pages/CashierDashboardPage';
 import ChartOfAccountsPage from './pages/ChartOfAccountsPage';
 import CheckRegisterPage from './pages/CheckRegisterPage';
+import DisbursementDetailPage from './pages/DisbursementDetailPage';
 import DisbursementListPage from './pages/DisbursementListPage';
 import JevDetailPage from './pages/JevDetailPage';
 import JevListPage from './pages/JevListPage';
@@ -37,6 +38,8 @@ export const accountingRoutes: RouteObject[] = [
   { path: '/accounting/disbursements', element: <DisbursementListPage /> },
   { path: '/accounting/disbursements/new', element: <NewDisbursementPage /> },
   { path: '/accounting/disbursements/:id/print', element: <PrintDisbursementPage /> },
+  { path: '/accounting/disbursements/:id/edit', element: <NewDisbursementPage /> },
+  { path: '/accounting/disbursements/:id', element: <DisbursementDetailPage /> },
   { path: '/accounting/checks', element: <CheckRegisterPage /> },
   { path: '/accounting/checks/:id/print', element: <PrintCheckPage /> },
   { path: '/accounting/reconciliations', element: <BankReconciliationPage /> },
