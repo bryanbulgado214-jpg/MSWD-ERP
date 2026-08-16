@@ -6,25 +6,27 @@ import { AccountingSubNav } from './AccountingSubNav';
 import './accounting.css';
 import {
   getReconciliations,
-  getReconciliation,
   createReconciliation,
-  addReconItem,
-  addReconItemsBulk,
-  completeReconciliation,
-  approveReconciliation,
+  getChartOfAccounts,
+  getMatchView,
+  importBankStatement,
+  matchBankLine,
+  unmatchBankLine,
+  createEntryFromBankLine,
   getBankAccounts,
   getGlFiscalYears,
   getGlPeriods,
   getReconAttachments,
   uploadReconAttachment,
   downloadReconAttachment,
+  type MatchView,
   type ReconAttachment,
 } from '../api';
 import { parseBankCsv, formatBytes, type ParsedTxn } from '../bank-csv';
 import type {
   BankReconciliationListItem,
-  BankReconciliationDetail,
   BankAccount,
+  ChartOfAccount,
   FiscalYearOption,
   PeriodOption,
 } from '../types';
@@ -34,15 +36,6 @@ function formatPeso(value: string | number): string {
   if (isNaN(num) || num === 0) return '—';
   return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(num);
 }
-
-const ITEM_TYPES = [
-  { value: 'deposit_in_transit', label: 'Deposit in Transit', side: 'bank' },
-  { value: 'outstanding_check', label: 'Outstanding Check', side: 'bank' },
-  { value: 'bank_charge', label: 'Bank Charge', side: 'book' },
-  { value: 'bank_credit', label: 'Bank Credit', side: 'book' },
-  { value: 'book_error', label: 'Book Error', side: 'book' },
-  { value: 'bank_error', label: 'Bank Error', side: 'bank' },
-];
 
 // ── List View ──
 
@@ -278,107 +271,97 @@ function ReconciliationList() {
 
 // ── Detail View ──
 
-function ReconciliationDetail({ id }: { id: string }) {
-  const [recon, setRecon] = useState<BankReconciliationDetail | null>(null);
-  const [error, setError] = useState('');
-  const [showItemForm, setShowItemForm] = useState(false);
-  const [itemData, setItemData] = useState({
-    itemType: 'outstanding_check',
-    referenceNumber: '',
-    referenceDate: '',
-    amount: '',
-    description: '',
-  });
-  const [itemError, setItemError] = useState('');
+function fmtDate(d: string) {
+  return new Date(d).toLocaleDateString('en-PH');
+}
 
-  // CSV import of bank transactions
+function ReconciliationDetail({ id }: { id: string }) {
+  const [view, setView] = useState<MatchView | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [selBank, setSelBank] = useState<string | null>(null); // statementLineId
+  const [selBook, setSelBook] = useState<string | null>(null); // jevLineId
+  const [showMatched, setShowMatched] = useState(false);
+
+  // CSV import
   const [showImport, setShowImport] = useState(false);
   const [csvRows, setCsvRows] = useState<ParsedTxn[]>([]);
   const [csvName, setCsvName] = useState('');
-  const [csvType, setCsvType] = useState('auto');
   const [importErr, setImportErr] = useState('');
   const [importing, setImporting] = useState(false);
 
-  // Bank-statement attachments
+  // Create-entry-from-line modal
+  const [entryLine, setEntryLine] = useState<MatchView['bank'][number] | null>(null);
+  const [accounts, setAccounts] = useState<ChartOfAccount[]>([]);
+  const [entryAccount, setEntryAccount] = useState('');
+  const [entryDesc, setEntryDesc] = useState('');
+  const [entryErr, setEntryErr] = useState('');
+  const [savingEntry, setSavingEntry] = useState(false);
+
+  // Attachments
   const [attachments, setAttachments] = useState<ReconAttachment[]>([]);
   const [uploadErr, setUploadErr] = useState('');
   const [uploading, setUploading] = useState(false);
 
   const load = () => {
-    getReconciliation(id)
-      .then(setRecon)
-      .catch((err) => setError(err.message));
+    getMatchView(id)
+      .then(setView)
+      .catch((e) => setError(e.message));
   };
-
   const loadAttachments = () => {
     getReconAttachments(id)
       .then(setAttachments)
       .catch(() => {
-        /* attachments are optional */
+        /* optional */
       });
   };
 
   useEffect(() => {
     load();
     loadAttachments();
+    getChartOfAccounts('includeInactive=false')
+      .then((a) => setAccounts(a.filter((x) => !x.isHeader)))
+      .catch(() => {
+        /* accounts optional until create-entry */
+      });
   }, [id]);
 
-  if (error) return <div className="acct-error">{error}</div>;
-  if (!recon) return <div className="acct-empty">Loading...</div>;
+  if (error && !view) return <div className="acct-error">{error}</div>;
+  if (!view) return <div className="acct-empty">Loading…</div>;
 
-  const isEditable = recon.status === 'in_progress' || recon.status === 'draft';
+  const { recon, bank, book, summary } = view;
+  const editable = recon.status === 'in_progress' || recon.status === 'draft';
+  const unmatchedBank = bank.filter((b) => !b.matched);
+  const matchedBank = bank.filter((b) => b.matched);
+  const selectedBankLine = unmatchedBank.find((b) => b.id === selBank) ?? null;
 
-  const handleAddItem = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setItemError('');
+  async function run(fn: () => Promise<MatchView>) {
+    setBusy(true);
+    setError('');
     try {
-      const result = await addReconItem(id, {
-        expectedVersion: recon.version,
-        itemType: itemData.itemType,
-        ...(itemData.referenceNumber ? { referenceNumber: itemData.referenceNumber } : {}),
-        referenceDate: itemData.referenceDate,
-        amount: parseFloat(itemData.amount),
-        description: itemData.description,
-      });
-      setRecon(result);
-      setShowItemForm(false);
-      setItemData({
-        itemType: 'outstanding_check',
-        referenceNumber: '',
-        referenceDate: '',
-        amount: '',
-        description: '',
-      });
-    } catch (err: any) {
-      setItemError(err.message);
+      const next = await fn();
+      setView(next);
+      setSelBank(null);
+      setSelBook(null);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
     }
-  };
+  }
 
-  const handleComplete = async () => {
-    try {
-      const result = await completeReconciliation(id, recon.version);
-      setRecon(result);
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
-
-  const handleApprove = async () => {
-    try {
-      const result = await approveReconciliation(id, recon.version);
-      setRecon(result);
-    } catch (err: any) {
-      setError(err.message);
-    }
+  const doMatch = () => {
+    if (selBank && selBook)
+      run(() => matchBankLine(id, { statementLineId: selBank, jevLineId: selBook }));
   };
 
   const handleCsvFile = (file: File) => {
     setImportErr('');
     const reader = new FileReader();
     reader.onload = () => {
-      const { rows, error: parseErr } = parseBankCsv(String(reader.result ?? ''));
-      if (parseErr) {
-        setImportErr(parseErr);
+      const { rows, error: perr } = parseBankCsv(String(reader.result ?? ''));
+      if (perr) {
+        setImportErr(perr);
         setCsvRows([]);
         return;
       }
@@ -388,32 +371,54 @@ function ReconciliationDetail({ id }: { id: string }) {
     reader.readAsText(file);
   };
 
-  const mapType = (amount: number): string =>
-    csvType !== 'auto' ? csvType : amount >= 0 ? 'bank_credit' : 'bank_charge';
-
   const handleImport = async () => {
     if (!csvRows.length) return;
     setImporting(true);
     setImportErr('');
     try {
-      const result = await addReconItemsBulk(id, {
+      const next = await importBankStatement(id, {
         expectedVersion: recon.version,
-        items: csvRows.map((r) => ({
-          itemType: mapType(r.amount),
-          ...(r.reference ? { referenceNumber: r.reference } : {}),
-          referenceDate: r.date,
-          amount: Math.abs(r.amount),
+        lines: csvRows.map((r) => ({
+          transactionDate: r.date,
           description: r.description,
+          amount: r.amount,
+          ...(r.reference ? { referenceNumber: r.reference } : {}),
         })),
       });
-      setRecon(result);
+      setView(next);
       setShowImport(false);
       setCsvRows([]);
       setCsvName('');
-    } catch (err: any) {
-      setImportErr(err.message);
+    } catch (e: any) {
+      setImportErr(e.message);
     } finally {
       setImporting(false);
+    }
+  };
+
+  const openEntry = (line: MatchView['bank'][number]) => {
+    setEntryLine(line);
+    setEntryAccount('');
+    setEntryDesc(line.description);
+    setEntryErr('');
+  };
+
+  const submitEntry = async () => {
+    if (!entryLine || !entryAccount) return;
+    setSavingEntry(true);
+    setEntryErr('');
+    try {
+      const next = await createEntryFromBankLine(id, {
+        statementLineId: entryLine.id,
+        accountId: entryAccount,
+        ...(entryDesc.trim() ? { description: entryDesc.trim() } : {}),
+      });
+      setView(next);
+      setEntryLine(null);
+    } catch (e: any) {
+      setEntryErr(e.message);
+    } finally {
+      setSavingEntry(false);
     }
   };
 
@@ -423,411 +428,313 @@ function ReconciliationDetail({ id }: { id: string }) {
     try {
       await uploadReconAttachment(id, file);
       loadAttachments();
-    } catch (err: any) {
-      setUploadErr(err.message);
+    } catch (e: any) {
+      setUploadErr(e.message);
     } finally {
       setUploading(false);
     }
   };
 
-  const bookItems = recon.items.filter(
-    (i) => ITEM_TYPES.find((t) => t.value === i.itemType)?.side === 'book',
-  );
-  const bankItems = recon.items.filter(
-    (i) => ITEM_TYPES.find((t) => t.value === i.itemType)?.side === 'bank',
-  );
+  const rowSel: React.CSSProperties = {
+    padding: '8px 10px',
+    borderBottom: '1px solid #eaecf0',
+    cursor: editable ? 'pointer' : 'default',
+    display: 'flex',
+    justifyContent: 'space-between',
+    gap: 10,
+    fontSize: 13,
+  };
 
   return (
     <>
       <Link
         to="/accounting/reconciliations"
         className="acct-btn acct-btn--sm"
-        style={{ marginBottom: 16, display: 'inline-block' }}
+        style={{ marginBottom: 12, display: 'inline-block' }}
       >
         &larr; All Reconciliations
       </Link>
 
-      <h1>
-        {recon.accountingPeriod.name} — {recon.bankAccount.bank.code}{' '}
-        {recon.bankAccount.accountName}
+      <h1 style={{ marginBottom: 4 }}>
+        {recon.periodName} — {recon.bankAccount.label}
       </h1>
-
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+      <div
+        style={{
+          display: 'flex',
+          gap: 10,
+          alignItems: 'center',
+          marginBottom: 14,
+          flexWrap: 'wrap',
+        }}
+      >
         <span className={`acct-badge acct-badge--${recon.status}`}>
           {recon.status.replace(/_/g, ' ')}
         </span>
-        {recon.preparer && (
-          <span style={{ fontSize: 13, color: '#667085' }}>
-            Prepared by: {recon.preparer.username}
-          </span>
-        )}
-        {recon.approver && (
-          <span style={{ fontSize: 13, color: '#667085' }}>
-            Approved by: {recon.approver.username}
-          </span>
-        )}
-      </div>
-
-      <div
-        className="acct-form"
-        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}
-      >
-        <div>
-          <h3 style={{ margin: '0 0 12px', color: 'var(--mswd-navy)' }}>Book Side</h3>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '6px 0',
-              borderBottom: '1px solid #eaecf0',
-            }}
-          >
-            <span>Book Balance (GL)</span>
-            <strong className="acct-text-mono">{formatPeso(recon.bookBalance)}</strong>
-          </div>
-          {bookItems.map((item) => (
-            <div
-              key={item.id}
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                padding: '6px 0',
-                borderBottom: '1px solid #eaecf0',
-                fontSize: 13,
-              }}
-            >
-              <span>
-                <span
-                  className={`acct-badge acct-badge--${item.itemType === 'bank_charge' ? 'voided' : 'posted'}`}
-                  style={{ marginRight: 6 }}
-                >
-                  {item.itemType.replace(/_/g, ' ')}
-                </span>
-                {item.description}
-              </span>
-              <span className="acct-text-mono">{formatPeso(item.amount)}</span>
-            </div>
-          ))}
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '8px 0',
-              fontWeight: 700,
-              borderTop: '2px solid var(--mswd-navy)',
-            }}
-          >
-            <span>Adjusted Book Balance</span>
-            <span className="acct-text-mono">{formatPeso(recon.adjustedBookBalance)}</span>
-          </div>
-        </div>
-
-        <div>
-          <h3 style={{ margin: '0 0 12px', color: 'var(--mswd-navy)' }}>Bank Side</h3>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '6px 0',
-              borderBottom: '1px solid #eaecf0',
-            }}
-          >
-            <span>Bank Statement Balance</span>
-            <strong className="acct-text-mono">{formatPeso(recon.bankBalance)}</strong>
-          </div>
-          {bankItems.map((item) => (
-            <div
-              key={item.id}
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                padding: '6px 0',
-                borderBottom: '1px solid #eaecf0',
-                fontSize: 13,
-              }}
-            >
-              <span>
-                <span
-                  className={`acct-badge acct-badge--${item.itemType === 'outstanding_check' ? 'for_review' : 'posted'}`}
-                  style={{ marginRight: 6 }}
-                >
-                  {item.itemType.replace(/_/g, ' ')}
-                </span>
-                {item.description}
-                {item.referenceNumber && (
-                  <span style={{ color: '#667085' }}> ({item.referenceNumber})</span>
-                )}
-              </span>
-              <span className="acct-text-mono">{formatPeso(item.amount)}</span>
-            </div>
-          ))}
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '8px 0',
-              fontWeight: 700,
-              borderTop: '2px solid var(--mswd-navy)',
-            }}
-          >
-            <span>Adjusted Bank Balance</span>
-            <span className="acct-text-mono">{formatPeso(recon.adjustedBankBalance)}</span>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ textAlign: 'center', padding: '12px 0', fontSize: 15, fontWeight: 700 }}>
-        Difference:{' '}
-        <span
-          style={{ color: Math.abs(parseFloat(recon.difference)) < 0.01 ? '#067647' : '#b42318' }}
-        >
-          {Math.abs(parseFloat(recon.difference)) < 0.01
-            ? 'Reconciled'
-            : formatPeso(recon.difference)}
-        </span>
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
-        {isEditable && (
+        {editable && (
           <button
-            className="acct-btn"
+            className="acct-btn acct-btn--sm"
             onClick={() => {
               setShowImport(true);
               setImportErr('');
               setCsvRows([]);
               setCsvName('');
-              setCsvType('auto');
             }}
           >
             ⭱ Import Bank CSV
           </button>
         )}
-        {isEditable && (
-          <button className="acct-btn" onClick={() => setShowItemForm(!showItemForm)}>
-            + Add Reconciling Item
-          </button>
-        )}
-        {recon.status === 'in_progress' && (
-          <button className="acct-btn acct-btn--primary" onClick={handleComplete}>
-            Mark Complete
-          </button>
-        )}
-        {recon.status === 'completed' && (
-          <button className="acct-btn acct-btn--primary" onClick={handleApprove}>
-            Approve
-          </button>
-        )}
       </div>
 
-      {showItemForm && (
-        <form className="acct-form" onSubmit={handleAddItem} style={{ marginTop: 16 }}>
-          {itemError && <div className="acct-error">{itemError}</div>}
-          <div className="acct-form-row">
-            <div className="acct-field">
-              <label>Item Type</label>
-              <select
-                value={itemData.itemType}
-                onChange={(e) => setItemData({ ...itemData, itemType: e.target.value })}
-                required
-              >
-                {ITEM_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label} ({t.side} side)
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="acct-field">
-              <label>Reference Number</label>
-              <input
-                type="text"
-                value={itemData.referenceNumber}
-                onChange={(e) => setItemData({ ...itemData, referenceNumber: e.target.value })}
-              />
-            </div>
-          </div>
-          <div className="acct-form-row">
-            <div className="acct-field">
-              <label>Reference Date</label>
-              <input
-                type="date"
-                value={itemData.referenceDate}
-                onChange={(e) => setItemData({ ...itemData, referenceDate: e.target.value })}
-                required
-              />
-            </div>
-            <div className="acct-field">
-              <label>Amount</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                value={itemData.amount}
-                onChange={(e) => setItemData({ ...itemData, amount: e.target.value })}
-                required
-              />
-            </div>
-          </div>
-          <div className="acct-field">
-            <label>Description</label>
-            <input
-              type="text"
-              value={itemData.description}
-              onChange={(e) => setItemData({ ...itemData, description: e.target.value })}
-              required
-            />
-          </div>
-          <div className="acct-form-actions">
-            <button type="button" className="acct-btn" onClick={() => setShowItemForm(false)}>
-              Cancel
-            </button>
-            <button type="submit" className="acct-btn acct-btn--primary">
-              Add Item
-            </button>
-          </div>
-        </form>
-      )}
-
-      {/* CSV import modal */}
-      {showImport && (
-        <div
-          onClick={() => setShowImport(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(16,24,40,0.45)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 50,
-            padding: 16,
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: '#fff',
-              borderRadius: 10,
-              padding: 24,
-              width: 660,
-              maxWidth: '95vw',
-              maxHeight: '88vh',
-              overflowY: 'auto',
-              boxShadow: '0 10px 40px rgba(16,24,40,0.2)',
-            }}
-          >
-            <h2 style={{ margin: '0 0 4px', fontSize: 17 }}>Import Bank Transactions (CSV)</h2>
-            <p style={{ fontSize: 12.5, color: '#667085', margin: '0 0 14px' }}>
-              Upload your bank statement's CSV export. The Date, Description, Amount (or
-              Debit/Credit), and Reference columns are detected automatically. Preview the rows,
-              then import them as reconciling items.
-            </p>
-            {importErr && (
-              <div className="acct-error" style={{ marginBottom: 12 }}>
-                {importErr}
-              </div>
-            )}
-            <div
-              style={{
-                display: 'flex',
-                gap: 14,
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                marginBottom: 14,
-              }}
-            >
-              <input
-                type="file"
-                accept=".csv,text/csv"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) handleCsvFile(f);
-                }}
-              />
-              <label style={{ fontSize: 12.5, color: '#344054' }}>
-                Classify as:{' '}
-                <select value={csvType} onChange={(e) => setCsvType(e.target.value)}>
-                  <option value="auto">Auto (by amount sign)</option>
-                  {ITEM_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            {csvRows.length > 0 && (
-              <>
-                <div style={{ fontSize: 12.5, color: '#344054', marginBottom: 6 }}>
-                  <strong>{csvName}</strong> — {csvRows.length} transaction
-                  {csvRows.length === 1 ? '' : 's'} detected
-                </div>
-                <div
-                  style={{
-                    overflow: 'auto',
-                    maxHeight: 300,
-                    border: '1px solid #eaecf0',
-                    borderRadius: 6,
-                  }}
-                >
-                  <table className="acct-table" style={{ margin: 0 }}>
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Description</th>
-                        <th>Ref</th>
-                        <th className="acct-text-right">Amount</th>
-                        <th>As</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {csvRows.slice(0, 100).map((r, i) => (
-                        <tr key={i}>
-                          <td style={{ whiteSpace: 'nowrap' }}>{r.date}</td>
-                          <td>{r.description}</td>
-                          <td>{r.reference ?? '—'}</td>
-                          <td
-                            className="acct-text-right acct-text-mono"
-                            style={{ color: r.amount < 0 ? '#b42318' : '#067647' }}
-                          >
-                            {formatPeso(r.amount)}
-                          </td>
-                          <td style={{ fontSize: 11 }}>{mapType(r.amount).replace(/_/g, ' ')}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {csvRows.length > 100 && (
-                  <div style={{ fontSize: 11.5, color: '#667085', marginTop: 4 }}>
-                    Showing first 100 of {csvRows.length}.
-                  </div>
-                )}
-              </>
-            )}
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
-              <button
-                type="button"
-                className="acct-btn"
-                onClick={() => setShowImport(false)}
-                disabled={importing}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="acct-btn acct-btn--primary"
-                onClick={handleImport}
-                disabled={importing || csvRows.length === 0}
-              >
-                {importing ? 'Importing…' : `Import ${csvRows.length || ''} item(s)`}
-              </button>
-            </div>
-          </div>
+      {error && (
+        <div className="acct-error" style={{ marginBottom: 12 }}>
+          {error}
         </div>
       )}
 
-      {/* Bank-statement attachments */}
+      {/* Summary counters */}
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div
+          className="acct-form"
+          style={{ flex: 1, minWidth: 150, textAlign: 'center', padding: 14 }}
+        >
+          <div
+            style={{
+              fontSize: 28,
+              fontWeight: 700,
+              color: summary.unmatchedBank ? '#b42318' : '#067647',
+            }}
+          >
+            {summary.unmatchedBank}
+          </div>
+          <div style={{ fontSize: 12, color: '#667085' }}>Bank — unmatched</div>
+        </div>
+        <div
+          className="acct-form"
+          style={{ flex: 1, minWidth: 150, textAlign: 'center', padding: 14 }}
+        >
+          <div
+            style={{
+              fontSize: 28,
+              fontWeight: 700,
+              color: summary.unmatchedBook ? '#b42318' : '#067647',
+            }}
+          >
+            {summary.unmatchedBook}
+          </div>
+          <div style={{ fontSize: 12, color: '#667085' }}>Books — unmatched</div>
+        </div>
+        <div
+          className="acct-form"
+          style={{ flex: 1, minWidth: 150, textAlign: 'center', padding: 14 }}
+        >
+          <div style={{ fontSize: 28, fontWeight: 700, color: '#175cd3' }}>{summary.matched}</div>
+          <div style={{ fontSize: 12, color: '#667085' }}>Matched</div>
+        </div>
+      </div>
+
+      {summary.reconciled && (
+        <div
+          style={{
+            background: '#ecfdf3',
+            border: '1px solid #abefc6',
+            color: '#067647',
+            borderRadius: 8,
+            padding: '10px 14px',
+            fontWeight: 600,
+            marginBottom: 16,
+          }}
+        >
+          ✓ Fully reconciled — every bank and book transaction is matched.
+        </div>
+      )}
+
+      {editable && (
+        <div
+          style={{
+            display: 'flex',
+            gap: 10,
+            alignItems: 'center',
+            marginBottom: 10,
+            flexWrap: 'wrap',
+          }}
+        >
+          <button
+            className="acct-btn acct-btn--primary acct-btn--sm"
+            disabled={!selBank || !selBook || busy}
+            onClick={doMatch}
+          >
+            Match selected
+          </button>
+          <span style={{ fontSize: 12.5, color: '#667085' }}>
+            Pick one bank line and one book entry (same amount), then Match. For a bank-only line,
+            use “Add to books”.
+          </span>
+        </div>
+      )}
+
+      {/* Two-column match board */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className="acct-form" style={{ padding: 0, overflow: 'hidden' }}>
+          <div
+            style={{
+              padding: '10px 12px',
+              fontWeight: 700,
+              background: '#f9fafb',
+              borderBottom: '1px solid #eaecf0',
+            }}
+          >
+            Bank Transactions ({unmatchedBank.length})
+          </div>
+          {unmatchedBank.length === 0 && (
+            <div className="acct-empty" style={{ padding: 16 }}>
+              Nothing to match. Import a bank CSV to begin.
+            </div>
+          )}
+          {unmatchedBank.map((b) => (
+            <div
+              key={b.id}
+              style={{
+                ...rowSel,
+                background: selBank === b.id ? '#eff8ff' : 'transparent',
+              }}
+              onClick={() => editable && setSelBank(selBank === b.id ? null : b.id)}
+            >
+              <span>
+                <span style={{ color: '#667085' }}>{fmtDate(b.transactionDate)}</span>{' '}
+                {b.description}
+                {b.referenceNumber && (
+                  <span style={{ color: '#667085' }}> ({b.referenceNumber})</span>
+                )}
+                {editable && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openEntry(b);
+                    }}
+                    style={{
+                      marginLeft: 8,
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--mswd-navy)',
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                      font: 'inherit',
+                      padding: 0,
+                    }}
+                  >
+                    Add to books
+                  </button>
+                )}
+              </span>
+              <span
+                className="acct-text-mono"
+                style={{ color: b.amount < 0 ? '#b42318' : '#067647', whiteSpace: 'nowrap' }}
+              >
+                {formatPeso(b.amount)}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div className="acct-form" style={{ padding: 0, overflow: 'hidden' }}>
+          <div
+            style={{
+              padding: '10px 12px',
+              fontWeight: 700,
+              background: '#f9fafb',
+              borderBottom: '1px solid #eaecf0',
+            }}
+          >
+            Book Entries — GL cash ({book.length})
+          </div>
+          {book.length === 0 && (
+            <div className="acct-empty" style={{ padding: 16 }}>
+              No uncleared book entries.
+            </div>
+          )}
+          {book.map((bk) => {
+            const suggested =
+              selectedBankLine && Math.abs(bk.amount - selectedBankLine.amount) < 0.01;
+            return (
+              <div
+                key={bk.jevLineId}
+                style={{
+                  ...rowSel,
+                  background:
+                    selBook === bk.jevLineId ? '#eff8ff' : suggested ? '#f0fdf4' : 'transparent',
+                }}
+                onClick={() =>
+                  editable && setSelBook(selBook === bk.jevLineId ? null : bk.jevLineId)
+                }
+              >
+                <span>
+                  <span className="acct-text-mono" style={{ color: '#667085' }}>
+                    {bk.jevNumber}
+                  </span>{' '}
+                  <span style={{ color: '#667085' }}>{fmtDate(bk.jevDate)}</span> {bk.description}
+                  {suggested && (
+                    <span style={{ color: '#067647', fontSize: 11, marginLeft: 6 }}>● match</span>
+                  )}
+                </span>
+                <span
+                  className="acct-text-mono"
+                  style={{ color: bk.amount < 0 ? '#b42318' : '#067647', whiteSpace: 'nowrap' }}
+                >
+                  {formatPeso(bk.amount)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Matched pairs */}
+      {matchedBank.length > 0 && (
+        <div style={{ marginTop: 18 }}>
+          <button className="acct-btn acct-btn--sm" onClick={() => setShowMatched(!showMatched)}>
+            {showMatched ? '▾' : '▸'} Matched ({matchedBank.length})
+          </button>
+          {showMatched && (
+            <div className="acct-form" style={{ padding: 0, overflow: 'hidden', marginTop: 8 }}>
+              {matchedBank.map((b) => (
+                <div key={b.id} style={{ ...rowSel, cursor: 'default' }}>
+                  <span>
+                    <span style={{ color: '#667085' }}>{fmtDate(b.transactionDate)}</span>{' '}
+                    {b.description} →{' '}
+                    <span className="acct-text-mono" style={{ color: '#067647' }}>
+                      {b.matchedJevNumber}
+                    </span>
+                  </span>
+                  <span style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <span className="acct-text-mono">{formatPeso(b.amount)}</span>
+                    {editable && (
+                      <button
+                        type="button"
+                        onClick={() => run(() => unmatchBankLine(id, b.id))}
+                        disabled={busy}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#b42318',
+                          textDecoration: 'underline',
+                          cursor: 'pointer',
+                          font: 'inherit',
+                          padding: 0,
+                        }}
+                      >
+                        Unmatch
+                      </button>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Attachments */}
       <div style={{ marginTop: 28 }}>
         <h3 style={{ margin: '0 0 8px', color: 'var(--mswd-navy)' }}>Bank Statement Attachments</h3>
         {uploadErr && (
@@ -860,7 +767,6 @@ function ReconciliationDetail({ id }: { id: string }) {
               <thead>
                 <tr>
                   <th>File</th>
-                  <th>Type</th>
                   <th className="acct-text-right">Size</th>
                   <th>Uploaded</th>
                   <th></th>
@@ -870,7 +776,6 @@ function ReconciliationDetail({ id }: { id: string }) {
                 {attachments.map((a) => (
                   <tr key={a.id}>
                     <td>{a.fileName}</td>
-                    <td style={{ fontSize: 12 }}>{a.mimeType}</td>
                     <td className="acct-text-right acct-text-mono">
                       {formatBytes(a.fileSizeBytes)}
                     </td>
@@ -902,6 +807,236 @@ function ReconciliationDetail({ id }: { id: string }) {
           </div>
         )}
       </div>
+
+      {/* CSV import modal */}
+      {showImport && (
+        <div
+          onClick={() => setShowImport(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(16,24,40,0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 50,
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#fff',
+              borderRadius: 10,
+              padding: 24,
+              width: 660,
+              maxWidth: '95vw',
+              maxHeight: '88vh',
+              overflowY: 'auto',
+              boxShadow: '0 10px 40px rgba(16,24,40,0.2)',
+            }}
+          >
+            <h2 style={{ margin: '0 0 4px', fontSize: 17 }}>Import Bank Transactions (CSV)</h2>
+            <p style={{ fontSize: 12.5, color: '#667085', margin: '0 0 14px' }}>
+              Upload the bank statement CSV. Date / Description / Amount (or Debit/Credit) /
+              Reference columns are detected automatically. Imported rows appear on the Bank side to
+              match.
+            </p>
+            {importErr && (
+              <div className="acct-error" style={{ marginBottom: 12 }}>
+                {importErr}
+              </div>
+            )}
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleCsvFile(f);
+              }}
+              style={{ marginBottom: 14 }}
+            />
+            {csvRows.length > 0 && (
+              <>
+                <div style={{ fontSize: 12.5, color: '#344054', marginBottom: 6 }}>
+                  <strong>{csvName}</strong> — {csvRows.length} transaction
+                  {csvRows.length === 1 ? '' : 's'}
+                </div>
+                <div
+                  style={{
+                    overflow: 'auto',
+                    maxHeight: 300,
+                    border: '1px solid #eaecf0',
+                    borderRadius: 6,
+                  }}
+                >
+                  <table className="acct-table" style={{ margin: 0 }}>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Ref</th>
+                        <th className="acct-text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {csvRows.slice(0, 100).map((r, i) => (
+                        <tr key={i}>
+                          <td style={{ whiteSpace: 'nowrap' }}>{r.date}</td>
+                          <td>{r.description}</td>
+                          <td>{r.reference ?? '—'}</td>
+                          <td
+                            className="acct-text-right acct-text-mono"
+                            style={{ color: r.amount < 0 ? '#b42318' : '#067647' }}
+                          >
+                            {formatPeso(r.amount)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button
+                type="button"
+                className="acct-btn"
+                onClick={() => setShowImport(false)}
+                disabled={importing}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="acct-btn acct-btn--primary"
+                onClick={handleImport}
+                disabled={importing || csvRows.length === 0}
+              >
+                {importing ? 'Importing…' : `Import ${csvRows.length || ''}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create-entry-from-line modal */}
+      {entryLine && (
+        <div
+          onClick={() => setEntryLine(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(16,24,40,0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 50,
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#fff',
+              borderRadius: 10,
+              padding: 24,
+              width: 520,
+              maxWidth: '95vw',
+              boxShadow: '0 10px 40px rgba(16,24,40,0.2)',
+            }}
+          >
+            <h2 style={{ margin: '0 0 4px', fontSize: 17 }}>Record to Books</h2>
+            <p style={{ fontSize: 12.5, color: '#667085', margin: '0 0 14px' }}>
+              {fmtDate(entryLine.transactionDate)} · {entryLine.description} ·{' '}
+              <span style={{ color: entryLine.amount < 0 ? '#b42318' : '#067647' }}>
+                {formatPeso(entryLine.amount)}
+              </span>
+              <br />
+              Posts {entryLine.amount < 0 ? 'Dr account / Cr cash' : 'Dr cash / Cr account'} and
+              matches this line.
+            </p>
+            {entryErr && (
+              <div className="acct-error" style={{ marginBottom: 12 }}>
+                {entryErr}
+              </div>
+            )}
+            <label
+              style={{
+                display: 'block',
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#344054',
+                marginBottom: 4,
+              }}
+            >
+              {entryLine.amount < 0 ? 'Expense account' : 'Income account'} *
+            </label>
+            <select
+              value={entryAccount}
+              onChange={(e) => setEntryAccount(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                border: '1px solid #d0d5dd',
+                borderRadius: 6,
+                fontSize: 13,
+                boxSizing: 'border-box',
+                marginBottom: 12,
+              }}
+            >
+              <option value="">Select account…</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.accountCode} — {a.name}
+                </option>
+              ))}
+            </select>
+            <label
+              style={{
+                display: 'block',
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#344054',
+                marginBottom: 4,
+              }}
+            >
+              Description
+            </label>
+            <input
+              value={entryDesc}
+              onChange={(e) => setEntryDesc(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                border: '1px solid #d0d5dd',
+                borderRadius: 6,
+                fontSize: 13,
+                boxSizing: 'border-box',
+                marginBottom: 16,
+              }}
+            />
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="acct-btn"
+                onClick={() => setEntryLine(null)}
+                disabled={savingEntry}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="acct-btn acct-btn--primary"
+                onClick={submitEntry}
+                disabled={savingEntry || !entryAccount}
+              >
+                {savingEntry ? 'Posting…' : 'Post & Match'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

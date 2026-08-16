@@ -197,7 +197,6 @@ export class BankReconciliationService {
     });
   }
 
-  /** Bulk-add reconciling items — used by the CSV bank-transaction import. */
   /** Import bank-statement transactions (from CSV) as statement lines to match. */
   async importStatementLines(
     organizationId: string,

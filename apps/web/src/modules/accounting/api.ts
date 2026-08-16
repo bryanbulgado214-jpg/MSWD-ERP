@@ -503,21 +503,81 @@ export async function approveReconciliation(
   return res.json();
 }
 
-export async function addReconItemsBulk(
+// ── Match-and-clear reconciliation ──
+
+export interface MatchView {
+  recon: {
+    id: string;
+    status: string;
+    version: number;
+    reconciliationDate: string;
+    bankAccount: { id: string; label: string; hasCashAccount: boolean };
+    periodName: string;
+  };
+  bank: Array<{
+    id: string;
+    transactionDate: string;
+    description: string;
+    referenceNumber: string | null;
+    amount: number;
+    matched: boolean;
+    matchedJevNumber: string | null;
+  }>;
+  book: Array<{
+    jevLineId: string;
+    jevNumber: string;
+    jevDate: string;
+    description: string;
+    amount: number;
+  }>;
+  summary: { unmatchedBank: number; unmatchedBook: number; matched: number; reconciled: boolean };
+}
+
+export async function getMatchView(reconId: string): Promise<MatchView> {
+  const res = await authFetch(`/accounting/reconciliations/${reconId}/match`);
+  return res.json();
+}
+
+export async function importBankStatement(
   reconId: string,
   data: {
     expectedVersion: number;
-    items: Array<{
-      itemType: string;
-      referenceNumber?: string;
-      referenceDate: string;
-      amount: number;
+    lines: Array<{
+      transactionDate: string;
       description: string;
+      amount: number;
+      referenceNumber?: string;
     }>;
   },
-): Promise<BankReconciliationDetail> {
+): Promise<MatchView> {
+  const res = await authFetchMutate(`/accounting/reconciliations/${reconId}/import`, 'POST', data);
+  return res.json();
+}
+
+export async function matchBankLine(
+  reconId: string,
+  data: { statementLineId: string; jevLineId: string },
+): Promise<MatchView> {
+  const res = await authFetchMutate(`/accounting/reconciliations/${reconId}/match`, 'POST', data);
+  return res.json();
+}
+
+export async function unmatchBankLine(
+  reconId: string,
+  statementLineId: string,
+): Promise<MatchView> {
+  const res = await authFetchMutate(`/accounting/reconciliations/${reconId}/unmatch`, 'POST', {
+    statementLineId,
+  });
+  return res.json();
+}
+
+export async function createEntryFromBankLine(
+  reconId: string,
+  data: { statementLineId: string; accountId: string; description?: string },
+): Promise<MatchView> {
   const res = await authFetchMutate(
-    `/accounting/reconciliations/${reconId}/items/bulk`,
+    `/accounting/reconciliations/${reconId}/create-entry`,
     'POST',
     data,
   );
