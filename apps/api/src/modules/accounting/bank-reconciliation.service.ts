@@ -117,6 +117,22 @@ export class BankReconciliationService {
     });
     if (!period) throw new BadRequestException('Accounting period not found.');
 
+    // One reconciliation per bank account per period (DB unique constraint) —
+    // surface it as a clear message rather than a 500.
+    const existing = await this.prisma.bankReconciliation.findFirst({
+      where: {
+        organizationId,
+        bankAccountId: data.bankAccountId,
+        accountingPeriodId: data.accountingPeriodId,
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new BadRequestException(
+        'A reconciliation already exists for this bank account and period. Open it from the list instead.',
+      );
+    }
+
     // The book balance is authoritative from the GL — the cash-in-bank account's
     // balance as at the reconciliation date, never a hand-typed figure.
     const bookBalance = await this.glCashBalance(
