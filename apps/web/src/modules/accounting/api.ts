@@ -503,6 +503,78 @@ export async function approveReconciliation(
   return res.json();
 }
 
+export async function addReconItemsBulk(
+  reconId: string,
+  data: {
+    expectedVersion: number;
+    items: Array<{
+      itemType: string;
+      referenceNumber?: string;
+      referenceDate: string;
+      amount: number;
+      description: string;
+    }>;
+  },
+): Promise<BankReconciliationDetail> {
+  const res = await authFetchMutate(
+    `/accounting/reconciliations/${reconId}/items/bulk`,
+    'POST',
+    data,
+  );
+  return res.json();
+}
+
+export interface ReconAttachment {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  createdAt: string;
+  uploader?: { username: string } | null;
+}
+
+export async function getReconAttachments(reconId: string): Promise<ReconAttachment[]> {
+  const res = await authFetch(`/accounting/reconciliations/${reconId}/attachments`);
+  return res.json();
+}
+
+export async function uploadReconAttachment(reconId: string, file: File): Promise<ReconAttachment> {
+  const token = getAccessToken();
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch(`${API_BASE_URL}/accounting/reconciliations/${reconId}/attachments`, {
+    method: 'POST',
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: fd,
+  });
+  if (!res.ok) {
+    throw new AccountingApiError(await extractErrorMessage(res, 'Upload failed.'), res.status);
+  }
+  return res.json();
+}
+
+export async function downloadReconAttachment(
+  reconId: string,
+  attId: string,
+  fileName: string,
+): Promise<void> {
+  const token = getAccessToken();
+  const res = await fetch(
+    `${API_BASE_URL}/accounting/reconciliations/${reconId}/attachments/${attId}/download`,
+    { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } },
+  );
+  if (!res.ok) throw new AccountingApiError('Download failed.', res.status);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // ── Period Management ──
 
 export async function getPeriodFiscalYears(): Promise<FiscalYearDetail[]> {

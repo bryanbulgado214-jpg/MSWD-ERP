@@ -32,3 +32,4 @@ apps/api/prisma/*.db
 
 # Claude Code local settings (contains session-specific tokens)
 .claude/settings.local.json
+uploads/

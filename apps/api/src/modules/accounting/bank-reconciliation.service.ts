@@ -1,7 +1,21 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
+
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
+
+// Uploaded bank-statement files live on disk under the API working dir; the
+// Attachment row keeps the relative path. (uploads/ is gitignored.)
+const UPLOAD_SUBDIR = path.join('uploads', 'reconciliations');
+const ALLOWED_MIME = ['application/pdf', 'image/png', 'image/jpeg'];
 
 const RECON_SELECT = {
   id: true,
@@ -51,10 +65,7 @@ const RECON_DETAIL_SELECT = {
 export class BankReconciliationService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(
-    organizationId: string,
-    filters?: { bankAccountId?: string; status?: string },
-  ) {
+  async findAll(organizationId: string, filters?: { bankAccountId?: string; status?: string }) {
     return this.prisma.bankReconciliation.findMany({
       where: {
         organizationId,
@@ -132,7 +143,8 @@ export class BankReconciliationService {
       where: { id, organizationId },
     });
     if (!recon) throw new NotFoundException('Reconciliation not found.');
-    if (recon.status === 'approved') throw new BadRequestException('Cannot modify an approved reconciliation.');
+    if (recon.status === 'approved')
+      throw new BadRequestException('Cannot modify an approved reconciliation.');
     if (recon.version !== data.expectedVersion) {
       throw new ConflictException('Reconciliation was modified. Please refresh.');
     }
@@ -166,7 +178,8 @@ export class BankReconciliationService {
       where: { id: reconId, organizationId },
     });
     if (!recon) throw new NotFoundException('Reconciliation not found.');
-    if (recon.status === 'approved') throw new BadRequestException('Cannot modify an approved reconciliation.');
+    if (recon.status === 'approved')
+      throw new BadRequestException('Cannot modify an approved reconciliation.');
     if (recon.version !== expectedVersion) {
       throw new ConflictException('Reconciliation was modified. Please refresh.');
     }
@@ -177,17 +190,124 @@ export class BankReconciliationService {
     });
   }
 
-  async complete(
+  /** Bulk-add reconciling items — used by the CSV bank-transaction import. */
+  async addItemsBulk(
     organizationId: string,
     id: string,
     userId: string,
-    expectedVersion: number,
+    data: {
+      expectedVersion: number;
+      items: Array<{
+        itemType: string;
+        referenceNumber?: string;
+        referenceDate: string;
+        amount: number;
+        description: string;
+      }>;
+    },
   ) {
+    const recon = await this.prisma.bankReconciliation.findFirst({ where: { id, organizationId } });
+    if (!recon) throw new NotFoundException('Reconciliation not found.');
+    if (recon.status === 'approved') {
+      throw new BadRequestException('Cannot modify an approved reconciliation.');
+    }
+    if (recon.version !== data.expectedVersion) {
+      throw new ConflictException('Reconciliation was modified. Please refresh.');
+    }
+    if (!data.items?.length) throw new BadRequestException('No transactions to import.');
+
+    return runAudited(this.prisma, userId, async (tx) => {
+      await tx.bankReconciliationItem.createMany({
+        data: data.items.map((it) => ({
+          bankReconciliationId: id,
+          itemType: it.itemType as any,
+          referenceNumber: it.referenceNumber ?? null,
+          referenceDate: new Date(it.referenceDate),
+          amount: it.amount,
+          description: it.description,
+        })),
+      });
+      return this.recalculate(tx, id, userId);
+    });
+  }
+
+  /** Store an uploaded bank-statement file (PDF/PNG/JPEG) against the recon. */
+  async addAttachment(
+    organizationId: string,
+    id: string,
+    userId: string,
+    file?: Express.Multer.File,
+  ) {
+    const recon = await this.prisma.bankReconciliation.findFirst({
+      where: { id, organizationId },
+      select: { id: true },
+    });
+    if (!recon) throw new NotFoundException('Reconciliation not found.');
+    if (!file) throw new BadRequestException('No file uploaded.');
+    if (!ALLOWED_MIME.includes(file.mimetype)) {
+      throw new BadRequestException('Only PDF, PNG, or JPEG files are allowed.');
+    }
+
+    const dir = path.join(process.cwd(), UPLOAD_SUBDIR);
+    fs.mkdirSync(dir, { recursive: true });
+    const stored = `${randomUUID()}${path.extname(file.originalname)}`;
+    fs.writeFileSync(path.join(dir, stored), file.buffer);
+
+    const att = await this.prisma.attachment.create({
+      data: {
+        organizationId,
+        attachableTable: 'bank_reconciliations',
+        attachableId: id,
+        fileName: file.originalname,
+        filePath: path.join(UPLOAD_SUBDIR, stored),
+        mimeType: file.mimetype,
+        fileSizeBytes: BigInt(file.size),
+        uploadedBy: userId,
+      },
+      select: { id: true, fileName: true, mimeType: true, fileSizeBytes: true, createdAt: true },
+    });
+    return { ...att, fileSizeBytes: Number(att.fileSizeBytes) };
+  }
+
+  async listAttachments(organizationId: string, id: string) {
+    const atts = await this.prisma.attachment.findMany({
+      where: { organizationId, attachableTable: 'bank_reconciliations', attachableId: id },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        fileName: true,
+        mimeType: true,
+        fileSizeBytes: true,
+        createdAt: true,
+        uploader: { select: { username: true } },
+      },
+    });
+    return atts.map((a) => ({ ...a, fileSizeBytes: Number(a.fileSizeBytes) }));
+  }
+
+  async getAttachmentFile(organizationId: string, id: string, attId: string) {
+    const att = await this.prisma.attachment.findFirst({
+      where: {
+        id: attId,
+        organizationId,
+        attachableTable: 'bank_reconciliations',
+        attachableId: id,
+      },
+      select: { fileName: true, filePath: true, mimeType: true },
+    });
+    if (!att) throw new NotFoundException('Attachment not found.');
+    const abs = path.join(process.cwd(), att.filePath);
+    if (!fs.existsSync(abs)) throw new NotFoundException('The file is missing on the server.');
+    return { abs, fileName: att.fileName, mimeType: att.mimeType };
+  }
+
+  async complete(organizationId: string, id: string, userId: string, expectedVersion: number) {
     const recon = await this.prisma.bankReconciliation.findFirst({
       where: { id, organizationId },
     });
     if (!recon) throw new NotFoundException('Reconciliation not found.');
-    if (recon.status !== 'in_progress') throw new BadRequestException('Only in-progress reconciliations can be completed.');
+    if (recon.status !== 'in_progress')
+      throw new BadRequestException('Only in-progress reconciliations can be completed.');
     if (recon.version !== expectedVersion) {
       throw new ConflictException('Reconciliation was modified. Please refresh.');
     }
@@ -201,17 +321,13 @@ export class BankReconciliationService {
     );
   }
 
-  async approve(
-    organizationId: string,
-    id: string,
-    userId: string,
-    expectedVersion: number,
-  ) {
+  async approve(organizationId: string, id: string, userId: string, expectedVersion: number) {
     const recon = await this.prisma.bankReconciliation.findFirst({
       where: { id, organizationId },
     });
     if (!recon) throw new NotFoundException('Reconciliation not found.');
-    if (recon.status !== 'completed') throw new BadRequestException('Only completed reconciliations can be approved.');
+    if (recon.status !== 'completed')
+      throw new BadRequestException('Only completed reconciliations can be approved.');
     if (recon.version !== expectedVersion) {
       throw new ConflictException('Reconciliation was modified. Please refresh.');
     }

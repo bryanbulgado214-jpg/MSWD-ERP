@@ -9,12 +9,18 @@ import {
   getReconciliation,
   createReconciliation,
   addReconItem,
+  addReconItemsBulk,
   completeReconciliation,
   approveReconciliation,
   getBankAccounts,
   getGlFiscalYears,
   getGlPeriods,
+  getReconAttachments,
+  uploadReconAttachment,
+  downloadReconAttachment,
+  type ReconAttachment,
 } from '../api';
+import { parseBankCsv, formatBytes, type ParsedTxn } from '../bank-csv';
 import type {
   BankReconciliationListItem,
   BankReconciliationDetail,
@@ -285,14 +291,36 @@ function ReconciliationDetail({ id }: { id: string }) {
   });
   const [itemError, setItemError] = useState('');
 
+  // CSV import of bank transactions
+  const [showImport, setShowImport] = useState(false);
+  const [csvRows, setCsvRows] = useState<ParsedTxn[]>([]);
+  const [csvName, setCsvName] = useState('');
+  const [csvType, setCsvType] = useState('auto');
+  const [importErr, setImportErr] = useState('');
+  const [importing, setImporting] = useState(false);
+
+  // Bank-statement attachments
+  const [attachments, setAttachments] = useState<ReconAttachment[]>([]);
+  const [uploadErr, setUploadErr] = useState('');
+  const [uploading, setUploading] = useState(false);
+
   const load = () => {
     getReconciliation(id)
       .then(setRecon)
       .catch((err) => setError(err.message));
   };
 
+  const loadAttachments = () => {
+    getReconAttachments(id)
+      .then(setAttachments)
+      .catch(() => {
+        /* attachments are optional */
+      });
+  };
+
   useEffect(() => {
     load();
+    loadAttachments();
   }, [id]);
 
   if (error) return <div className="acct-error">{error}</div>;
@@ -341,6 +369,64 @@ function ReconciliationDetail({ id }: { id: string }) {
       setRecon(result);
     } catch (err: any) {
       setError(err.message);
+    }
+  };
+
+  const handleCsvFile = (file: File) => {
+    setImportErr('');
+    const reader = new FileReader();
+    reader.onload = () => {
+      const { rows, error: parseErr } = parseBankCsv(String(reader.result ?? ''));
+      if (parseErr) {
+        setImportErr(parseErr);
+        setCsvRows([]);
+        return;
+      }
+      setCsvRows(rows);
+      setCsvName(file.name);
+    };
+    reader.readAsText(file);
+  };
+
+  const mapType = (amount: number): string =>
+    csvType !== 'auto' ? csvType : amount >= 0 ? 'bank_credit' : 'bank_charge';
+
+  const handleImport = async () => {
+    if (!csvRows.length) return;
+    setImporting(true);
+    setImportErr('');
+    try {
+      const result = await addReconItemsBulk(id, {
+        expectedVersion: recon.version,
+        items: csvRows.map((r) => ({
+          itemType: mapType(r.amount),
+          ...(r.reference ? { referenceNumber: r.reference } : {}),
+          referenceDate: r.date,
+          amount: Math.abs(r.amount),
+          description: r.description,
+        })),
+      });
+      setRecon(result);
+      setShowImport(false);
+      setCsvRows([]);
+      setCsvName('');
+    } catch (err: any) {
+      setImportErr(err.message);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleUpload = async (file: File) => {
+    setUploadErr('');
+    setUploading(true);
+    try {
+      await uploadReconAttachment(id, file);
+      loadAttachments();
+    } catch (err: any) {
+      setUploadErr(err.message);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -503,6 +589,20 @@ function ReconciliationDetail({ id }: { id: string }) {
 
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
         {isEditable && (
+          <button
+            className="acct-btn"
+            onClick={() => {
+              setShowImport(true);
+              setImportErr('');
+              setCsvRows([]);
+              setCsvName('');
+              setCsvType('auto');
+            }}
+          >
+            ⭱ Import Bank CSV
+          </button>
+        )}
+        {isEditable && (
           <button className="acct-btn" onClick={() => setShowItemForm(!showItemForm)}>
             + Add Reconciling Item
           </button>
@@ -587,6 +687,221 @@ function ReconciliationDetail({ id }: { id: string }) {
           </div>
         </form>
       )}
+
+      {/* CSV import modal */}
+      {showImport && (
+        <div
+          onClick={() => setShowImport(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(16,24,40,0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 50,
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#fff',
+              borderRadius: 10,
+              padding: 24,
+              width: 660,
+              maxWidth: '95vw',
+              maxHeight: '88vh',
+              overflowY: 'auto',
+              boxShadow: '0 10px 40px rgba(16,24,40,0.2)',
+            }}
+          >
+            <h2 style={{ margin: '0 0 4px', fontSize: 17 }}>Import Bank Transactions (CSV)</h2>
+            <p style={{ fontSize: 12.5, color: '#667085', margin: '0 0 14px' }}>
+              Upload your bank statement's CSV export. The Date, Description, Amount (or
+              Debit/Credit), and Reference columns are detected automatically. Preview the rows,
+              then import them as reconciling items.
+            </p>
+            {importErr && (
+              <div className="acct-error" style={{ marginBottom: 12 }}>
+                {importErr}
+              </div>
+            )}
+            <div
+              style={{
+                display: 'flex',
+                gap: 14,
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                marginBottom: 14,
+              }}
+            >
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleCsvFile(f);
+                }}
+              />
+              <label style={{ fontSize: 12.5, color: '#344054' }}>
+                Classify as:{' '}
+                <select value={csvType} onChange={(e) => setCsvType(e.target.value)}>
+                  <option value="auto">Auto (by amount sign)</option>
+                  {ITEM_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {csvRows.length > 0 && (
+              <>
+                <div style={{ fontSize: 12.5, color: '#344054', marginBottom: 6 }}>
+                  <strong>{csvName}</strong> — {csvRows.length} transaction
+                  {csvRows.length === 1 ? '' : 's'} detected
+                </div>
+                <div
+                  style={{
+                    overflow: 'auto',
+                    maxHeight: 300,
+                    border: '1px solid #eaecf0',
+                    borderRadius: 6,
+                  }}
+                >
+                  <table className="acct-table" style={{ margin: 0 }}>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Ref</th>
+                        <th className="acct-text-right">Amount</th>
+                        <th>As</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {csvRows.slice(0, 100).map((r, i) => (
+                        <tr key={i}>
+                          <td style={{ whiteSpace: 'nowrap' }}>{r.date}</td>
+                          <td>{r.description}</td>
+                          <td>{r.reference ?? '—'}</td>
+                          <td
+                            className="acct-text-right acct-text-mono"
+                            style={{ color: r.amount < 0 ? '#b42318' : '#067647' }}
+                          >
+                            {formatPeso(r.amount)}
+                          </td>
+                          <td style={{ fontSize: 11 }}>{mapType(r.amount).replace(/_/g, ' ')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {csvRows.length > 100 && (
+                  <div style={{ fontSize: 11.5, color: '#667085', marginTop: 4 }}>
+                    Showing first 100 of {csvRows.length}.
+                  </div>
+                )}
+              </>
+            )}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button
+                type="button"
+                className="acct-btn"
+                onClick={() => setShowImport(false)}
+                disabled={importing}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="acct-btn acct-btn--primary"
+                onClick={handleImport}
+                disabled={importing || csvRows.length === 0}
+              >
+                {importing ? 'Importing…' : `Import ${csvRows.length || ''} item(s)`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bank-statement attachments */}
+      <div style={{ marginTop: 28 }}>
+        <h3 style={{ margin: '0 0 8px', color: 'var(--mswd-navy)' }}>Bank Statement Attachments</h3>
+        {uploadErr && (
+          <div className="acct-error" style={{ marginBottom: 8 }}>
+            {uploadErr}
+          </div>
+        )}
+        <label
+          className="acct-btn acct-btn--sm"
+          style={{ cursor: 'pointer', display: 'inline-block', marginBottom: 10 }}
+        >
+          {uploading ? 'Uploading…' : '⭱ Attach PDF / PNG'}
+          <input
+            type="file"
+            accept="application/pdf,image/png,image/jpeg"
+            style={{ display: 'none' }}
+            disabled={uploading}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleUpload(f);
+              e.target.value = '';
+            }}
+          />
+        </label>
+        {attachments.length === 0 ? (
+          <div style={{ fontSize: 13, color: '#667085' }}>No statement files attached yet.</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="acct-table">
+              <thead>
+                <tr>
+                  <th>File</th>
+                  <th>Type</th>
+                  <th className="acct-text-right">Size</th>
+                  <th>Uploaded</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {attachments.map((a) => (
+                  <tr key={a.id}>
+                    <td>{a.fileName}</td>
+                    <td style={{ fontSize: 12 }}>{a.mimeType}</td>
+                    <td className="acct-text-right acct-text-mono">
+                      {formatBytes(a.fileSizeBytes)}
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
+                      {new Date(a.createdAt).toLocaleDateString('en-PH')}
+                      {a.uploader ? ` · ${a.uploader.username}` : ''}
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() => downloadReconAttachment(id, a.id, a.fileName)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: 0,
+                          font: 'inherit',
+                          textDecoration: 'underline',
+                          color: 'var(--mswd-navy)',
+                        }}
+                      >
+                        Download
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </>
   );
 }
