@@ -826,6 +826,124 @@ export async function deleteDisbursement(id: string): Promise<{ deleted: boolean
   return res.json();
 }
 
+// ── Loans & Amortization ──
+
+export interface LoanSummary {
+  id: string;
+  name: string;
+  loanType: string;
+  principal: number;
+  status: string;
+  annualRatePct: number | null;
+  termPeriods: number | null;
+  paid: number;
+  total: number;
+}
+
+export interface LoanAmortizationLine {
+  id: string;
+  seq: number;
+  dueDate: string;
+  beginningBalance: number;
+  payment: number;
+  interest: number;
+  principal: number;
+  endingBalance: number;
+  paidManual: boolean;
+  status: 'paid' | 'for_payment' | 'overdue' | 'upcoming';
+  dvId: string | null;
+  dvNumber: string | null;
+}
+
+export interface LoanDetail {
+  id: string;
+  name: string;
+  loanType: string;
+  principal: number;
+  annualRatePct: number | null;
+  termPeriods: number | null;
+  frequency: string | null;
+  method: string | null;
+  startDate: string | null;
+  firstPaymentDate: string | null;
+  status: string;
+  drawdownJevId: string | null;
+  remarks: string | null;
+  version: number;
+  accounts: { loansPayable: string; interestExpense: string; bank: string };
+  amortizations: LoanAmortizationLine[];
+}
+
+export interface CreateLoanInput {
+  loanType: 'new' | 'existing';
+  name: string;
+  principal: number;
+  loansPayableAccountId: string;
+  interestExpenseAccountId: string;
+  bankAccountId: string;
+  remarks?: string;
+  annualRatePct?: number;
+  termPeriods?: number;
+  frequency?: string;
+  method?: string;
+  startDate?: string;
+  firstPaymentDate?: string;
+  schedule?: Array<{
+    seq: number;
+    dueDate: string;
+    beginningBalance: number;
+    payment: number;
+    interest: number;
+    principal: number;
+    endingBalance: number;
+  }>;
+}
+
+export async function getLoans(): Promise<LoanSummary[]> {
+  const res = await authFetch('/accounting/loans');
+  return res.json();
+}
+export async function getLoan(id: string): Promise<LoanDetail> {
+  const res = await authFetch(`/accounting/loans/${id}`);
+  return res.json();
+}
+export async function createLoan(input: CreateLoanInput): Promise<LoanDetail> {
+  const res = await authFetchMutate('/accounting/loans', 'POST', input);
+  return res.json();
+}
+export async function postLoan(id: string): Promise<LoanDetail> {
+  const res = await authFetchMutate(`/accounting/loans/${id}/post`, 'POST');
+  return res.json();
+}
+export async function createLoanLineDv(
+  loanId: string,
+  amId: string,
+  dvDate?: string,
+): Promise<LoanDetail> {
+  const res = await authFetchMutate(
+    `/accounting/loans/${loanId}/amortizations/${amId}/dv`,
+    'POST',
+    dvDate ? { dvDate } : {},
+  );
+  return res.json();
+}
+export async function markLoanLinePaid(
+  loanId: string,
+  amId: string,
+  paid: boolean,
+): Promise<LoanDetail> {
+  const res = await authFetchMutate(
+    `/accounting/loans/${loanId}/amortizations/${amId}/mark-paid`,
+    'POST',
+    { paid },
+  );
+  return res.json();
+}
+export async function deleteLoan(id: string): Promise<{ deleted: boolean }> {
+  const res = await authFetchMutate(`/accounting/loans/${id}`, 'DELETE');
+  return res.json();
+}
+
 // ── Accounts-Payable Aging ──
 export async function getApAging(): Promise<ApAgingResult> {
   const res = await authFetch('/accounting/reports/ap-aging');

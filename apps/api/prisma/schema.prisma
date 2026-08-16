@@ -3145,6 +3145,68 @@ model BankMatchGroup {
   @@map("bank_match_groups")
 }
 
+/// A loan payable and its amortization schedule. "new" loans book a drawdown
+/// (Dr Cash-in-Bank / Cr Loans Payable) when posted and compute the schedule
+/// from the terms; "existing" loans carry an uploaded schedule and post no
+/// journal entry (they are already in the books). Each amortization line can be
+/// paid via a Disbursement Voucher; interest is expensed when paid.
+model Loan {
+  id                       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId           String    @map("organization_id") @db.Uuid
+  name                     String    @db.VarChar(200)
+  loanType                 String    @default("new") @map("loan_type") @db.VarChar(20)
+  principal                Decimal   @db.Decimal(18, 2)
+  annualRatePct            Decimal?  @map("annual_rate_pct") @db.Decimal(9, 4)
+  termPeriods              Int?      @map("term_periods")
+  frequency                String?   @db.VarChar(20)
+  method                   String?   @db.VarChar(20)
+  startDate                DateTime? @map("start_date") @db.Date
+  firstPaymentDate         DateTime? @map("first_payment_date") @db.Date
+  loansPayableAccountId    String    @map("loans_payable_account_id") @db.Uuid
+  interestExpenseAccountId String    @map("interest_expense_account_id") @db.Uuid
+  bankAccountId            String    @map("bank_account_id") @db.Uuid
+  status                   String    @default("draft") @db.VarChar(20)
+  drawdownJevId            String?   @map("drawdown_jev_id") @db.Uuid
+  remarks                  String?
+  createdBy                String    @map("created_by") @db.Uuid
+  updatedBy                String    @map("updated_by") @db.Uuid
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version                  Int       @default(1)
+
+  amortizations LoanAmortization[]
+
+  @@index([organizationId])
+  @@map("loans")
+}
+
+/// One period of a loan's amortization schedule. Linked to the DV that pays it
+/// (paid once that DV's check is released), or manually tagged as paid for
+/// historical lines already settled before go-live.
+model LoanAmortization {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  loanId                String    @map("loan_id") @db.Uuid
+  seq                   Int
+  dueDate               DateTime  @map("due_date") @db.Date
+  beginningBalance      Decimal   @map("beginning_balance") @db.Decimal(18, 2)
+  payment               Decimal   @db.Decimal(18, 2)
+  interest              Decimal   @db.Decimal(18, 2)
+  principal             Decimal   @db.Decimal(18, 2)
+  endingBalance         Decimal   @map("ending_balance") @db.Decimal(18, 2)
+  disbursementVoucherId String?   @map("disbursement_voucher_id") @db.Uuid
+  paidManual            Boolean   @default(false) @map("paid_manual")
+  paidManualAt          DateTime? @map("paid_manual_at") @db.Timestamptz(6)
+  paidManualBy          String?   @map("paid_manual_by") @db.Uuid
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  loan Loan @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@unique([loanId, seq])
+  @@index([loanId])
+  @@index([disbursementVoucherId])
+  @@map("loan_amortizations")
+}
+
 // ════════════════════════════════════════════════════════════════════
 // BILLING & COLLECTIONS MODULE
 // ════════════════════════════════════════════════════════════════════

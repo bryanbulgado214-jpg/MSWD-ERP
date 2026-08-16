@@ -22,6 +22,8 @@ import { GlController } from './gl.controller';
 import { GlService } from './gl.service';
 import { JevController } from './jev.controller';
 import { JevService } from './jev.service';
+import { LoanController } from './loan.controller';
+import { LoanService } from './loan.service';
 import { PeriodController } from './period.controller';
 import { PeriodService } from './period.service';
 import { AccountingReportsController } from './reports.controller';
@@ -41,6 +43,7 @@ import { AccountingReportsService } from './reports.service';
     AccountingDashboardController,
     DisbursementController,
     AccountingReportsController,
+    LoanController,
   ],
   providers: [
     ChartOfAccountService,
@@ -57,6 +60,7 @@ import { AccountingReportsService } from './reports.service';
     AccountingDashboardService,
     DisbursementService,
     AccountingReportsService,
+    LoanService,
   ],
   exports: [
     ChartOfAccountService,
