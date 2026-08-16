@@ -51,6 +51,22 @@ export class BankReconciliationController {
     });
   }
 
+  @Get('gl-balance')
+  @RequirePermissions('accounting.read')
+  glBalance(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('bankAccountId') bankAccountId: string,
+    @Query('asOfDate') asOfDate: string,
+    @Query('accountingPeriodId') accountingPeriodId: string,
+  ) {
+    return this.reconService.getGlCashBalance(
+      user.organizationId,
+      bankAccountId,
+      asOfDate,
+      accountingPeriodId,
+    );
+  }
+
   @Get(':id')
   @RequirePermissions('accounting.read')
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {

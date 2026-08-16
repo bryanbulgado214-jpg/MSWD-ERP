@@ -107,8 +107,24 @@ export class BankReconciliationService {
   ) {
     const bankAccount = await this.prisma.bankAccount.findFirst({
       where: { id: data.bankAccountId, organizationId },
+      select: { id: true, chartOfAccountId: true },
     });
     if (!bankAccount) throw new BadRequestException('Bank account not found.');
+
+    const period = await this.prisma.accountingPeriod.findFirst({
+      where: { id: data.accountingPeriodId, fiscalYear: { organizationId } },
+      select: { fiscalYearId: true },
+    });
+    if (!period) throw new BadRequestException('Accounting period not found.');
+
+    // The book balance is authoritative from the GL — the cash-in-bank account's
+    // balance as at the reconciliation date, never a hand-typed figure.
+    const bookBalance = await this.glCashBalance(
+      organizationId,
+      bankAccount.chartOfAccountId,
+      new Date(data.reconciliationDate),
+      period.fiscalYearId,
+    );
 
     return runAudited(this.prisma, userId, (tx) =>
       tx.bankReconciliation.create({
@@ -117,11 +133,11 @@ export class BankReconciliationService {
           bankAccountId: data.bankAccountId,
           accountingPeriodId: data.accountingPeriodId,
           reconciliationDate: new Date(data.reconciliationDate),
-          bookBalance: data.bookBalance,
+          bookBalance,
           bankBalance: data.bankBalance,
-          adjustedBookBalance: data.bookBalance,
+          adjustedBookBalance: bookBalance,
           adjustedBankBalance: data.bankBalance,
-          difference: data.bookBalance - data.bankBalance,
+          difference: round2(bookBalance - data.bankBalance),
           status: 'in_progress',
           preparedBy: userId,
           createdBy: userId,
@@ -130,6 +146,61 @@ export class BankReconciliationService {
         select: RECON_DETAIL_SELECT,
       }),
     );
+  }
+
+  /**
+   * GL balance of a bank account's Cash-in-Bank account as at a date, scoped to
+   * one fiscal year — matching how the GL/SFP present it (each FY carries its
+   * own opening-balance entry, so summing across years would double-count).
+   */
+  private async glCashBalance(
+    orgId: string,
+    cashCoaId: string | null,
+    asOf: Date,
+    fiscalYearId: string,
+  ): Promise<number> {
+    if (!cashCoaId) return 0;
+    const agg = await this.prisma.jevLine.aggregate({
+      where: {
+        chartOfAccountId: cashCoaId,
+        jev: {
+          organizationId: orgId,
+          status: 'posted',
+          jevDate: { lte: asOf },
+          accountingPeriod: { fiscalYearId },
+        },
+      },
+      _sum: { debitAmount: true, creditAmount: true },
+    });
+    return round2(Number(agg._sum.debitAmount ?? 0) - Number(agg._sum.creditAmount ?? 0));
+  }
+
+  /** Book-balance lookup for the create form's auto-fill. */
+  async getGlCashBalance(
+    orgId: string,
+    bankAccountId: string,
+    asOfDate: string,
+    accountingPeriodId: string,
+  ) {
+    const ba = await this.prisma.bankAccount.findFirst({
+      where: { id: bankAccountId, organizationId: orgId },
+      select: { chartOfAccountId: true },
+    });
+    if (!ba) throw new NotFoundException('Bank account not found.');
+    const period = await this.prisma.accountingPeriod.findFirst({
+      where: { id: accountingPeriodId, fiscalYear: { organizationId: orgId } },
+      select: { fiscalYearId: true },
+    });
+    if (!period) throw new BadRequestException('Accounting period not found.');
+    return {
+      bookBalance: await this.glCashBalance(
+        orgId,
+        ba.chartOfAccountId,
+        new Date(asOfDate),
+        period.fiscalYearId,
+      ),
+      hasCashAccount: !!ba.chartOfAccountId,
+    };
   }
 
   async addItem(

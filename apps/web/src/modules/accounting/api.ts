@@ -538,6 +538,16 @@ export async function getMatchView(reconId: string): Promise<MatchView> {
   return res.json();
 }
 
+export async function getGlCashBalance(
+  bankAccountId: string,
+  asOfDate: string,
+  accountingPeriodId: string,
+): Promise<{ bookBalance: number; hasCashAccount: boolean }> {
+  const qs = new URLSearchParams({ bankAccountId, asOfDate, accountingPeriodId }).toString();
+  const res = await authFetch(`/accounting/reconciliations/gl-balance?${qs}`);
+  return res.json();
+}
+
 export async function importBankStatement(
   reconId: string,
   data: {

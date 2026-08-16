@@ -8,6 +8,7 @@ import {
   getReconciliations,
   createReconciliation,
   getChartOfAccounts,
+  getGlCashBalance,
   getMatchView,
   importBankStatement,
   matchBankLine,
@@ -57,6 +58,7 @@ function ReconciliationList() {
     bankBalance: '',
   });
   const [formError, setFormError] = useState('');
+  const [bookLoading, setBookLoading] = useState(false);
 
   useEffect(() => {
     getBankAccounts().then(setBankAccounts);
@@ -69,6 +71,24 @@ function ReconciliationList() {
   useEffect(() => {
     if (selectedFY) getGlPeriods(selectedFY).then(setPeriods);
   }, [selectedFY]);
+
+  // Book balance is derived from the GL: the bank's cash-in-bank balance as at
+  // the reconciliation date. Fetched (not typed) whenever both are chosen.
+  useEffect(() => {
+    if (!formData.bankAccountId || !formData.reconciliationDate || !formData.accountingPeriodId) {
+      setFormData((f) => ({ ...f, bookBalance: '' }));
+      return;
+    }
+    setBookLoading(true);
+    getGlCashBalance(
+      formData.bankAccountId,
+      formData.reconciliationDate,
+      formData.accountingPeriodId,
+    )
+      .then((r) => setFormData((f) => ({ ...f, bookBalance: String(r.bookBalance) })))
+      .catch(() => setFormData((f) => ({ ...f, bookBalance: '' })))
+      .finally(() => setBookLoading(false));
+  }, [formData.bankAccountId, formData.reconciliationDate, formData.accountingPeriodId]);
 
   const load = () => {
     setLoading(true);
@@ -91,8 +111,8 @@ function ReconciliationList() {
         bankAccountId: formData.bankAccountId,
         accountingPeriodId: formData.accountingPeriodId,
         reconciliationDate: formData.reconciliationDate,
-        bookBalance: parseFloat(formData.bookBalance),
-        bankBalance: parseFloat(formData.bankBalance),
+        bookBalance: parseFloat(formData.bookBalance) || 0,
+        bankBalance: parseFloat(formData.bankBalance) || 0,
       });
       navigate(`/accounting/reconciliations/${result.id}`);
     } catch (err: any) {
@@ -171,14 +191,23 @@ function ReconciliationList() {
               />
             </div>
             <div className="acct-field">
-              <label>Book Balance (per GL)</label>
+              <label>Book Balance (per GL) — auto</label>
               <input
-                type="number"
-                step="0.01"
-                value={formData.bookBalance}
-                onChange={(e) => setFormData({ ...formData, bookBalance: e.target.value })}
-                required
+                type="text"
+                readOnly
+                value={
+                  bookLoading
+                    ? 'Computing…'
+                    : formData.bookBalance !== ''
+                      ? formatPeso(formData.bookBalance)
+                      : ''
+                }
+                placeholder="Select bank account & date"
+                style={{ background: '#f9fafb', color: '#344054' }}
               />
+              <span style={{ fontSize: 11, color: '#667085' }}>
+                From the GL cash account as at the reconciliation date.
+              </span>
             </div>
           </div>
           <div className="acct-form-row">
