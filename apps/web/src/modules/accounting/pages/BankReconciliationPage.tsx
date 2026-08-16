@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
+import { AccountCombobox } from './AccountCombobox';
 import { AccountingSubNav } from './AccountingSubNav';
 
 import './accounting.css';
@@ -15,6 +16,7 @@ import {
   autoMatchBankLines,
   unmatchBankLine,
   createEntryFromBankLine,
+  completeReconciliation,
   getBankAccounts,
   getGlFiscalYears,
   getGlPeriods,
@@ -417,6 +419,28 @@ function ReconciliationDetail({ id }: { id: string }) {
       run(() => matchBankLine(id, { statementLineId: selBank, jevLineId: selBook }));
   };
 
+  async function doReconcile() {
+    if (
+      !summary.reconciled &&
+      !window.confirm(
+        `There are still ${summary.unmatchedBank} bank and ${summary.unmatchedBook} book item(s) unmatched. ` +
+          `Mark this reconciliation as reconciled anyway?`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await completeReconciliation(id, recon.version);
+      setView(await getMatchView(id));
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const handleCsvFile = (file: File) => {
     setImportErr('');
     const reader = new FileReader();
@@ -545,6 +569,16 @@ function ReconciliationDetail({ id }: { id: string }) {
             ⭱ Import Bank CSV
           </button>
         )}
+        {editable && (
+          <button
+            className="acct-btn acct-btn--primary acct-btn--sm"
+            disabled={busy}
+            onClick={doReconcile}
+            title="Finalize this reconciliation"
+          >
+            ✓ Reconcile
+          </button>
+        )}
       </div>
 
       {error && (
@@ -618,7 +652,7 @@ function ReconciliationDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      {summary.reconciled && (
+      {!editable && (
         <div
           style={{
             background: '#ecfdf3',
@@ -630,7 +664,22 @@ function ReconciliationDetail({ id }: { id: string }) {
             marginBottom: 16,
           }}
         >
-          ✓ Fully reconciled — every bank and book transaction is matched.
+          ✓ This reconciliation is finalized ({recon.status.replace(/_/g, ' ')}).
+        </div>
+      )}
+      {editable && summary.reconciled && (
+        <div
+          style={{
+            background: '#ecfdf3',
+            border: '1px solid #abefc6',
+            color: '#067647',
+            borderRadius: 8,
+            padding: '10px 14px',
+            fontWeight: 600,
+            marginBottom: 16,
+          }}
+        >
+          ✓ Everything is matched — click <strong>Reconcile</strong> to finalize.
         </div>
       )}
 
@@ -1065,26 +1114,14 @@ function ReconciliationDetail({ id }: { id: string }) {
             >
               {entryLine.amount < 0 ? 'Expense account' : 'Income account'} *
             </label>
-            <select
-              value={entryAccount}
-              onChange={(e) => setEntryAccount(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 10px',
-                border: '1px solid #d0d5dd',
-                borderRadius: 6,
-                fontSize: 13,
-                boxSizing: 'border-box',
-                marginBottom: 12,
-              }}
-            >
-              <option value="">Select account…</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.accountCode} — {a.name}
-                </option>
-              ))}
-            </select>
+            <div style={{ marginBottom: 12 }}>
+              <AccountCombobox
+                accounts={accounts}
+                value={entryAccount}
+                onChange={setEntryAccount}
+                placeholder="Type account code or name…"
+              />
+            </div>
             <label
               style={{
                 display: 'block',
