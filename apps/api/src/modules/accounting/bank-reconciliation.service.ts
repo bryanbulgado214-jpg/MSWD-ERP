@@ -437,10 +437,14 @@ export class BankReconciliationService {
     const unmatchedBookAmount = round2(unmatchedBookLines.reduce((s, b) => s + b.amount, 0));
 
     // Adjusted-balance reconciliation (the figure that must be 0 to complete):
-    //   adjusted book = book balance + bank items not yet booked (unmatched bank)
+    //   adjusted book = live GL cash + bank items not yet booked (unmatched bank)
     //   adjusted bank = bank balance + book items not yet on the bank (unmatched book)
-    const bookBalance = Number(recon.bookBalance);
+    // Book balance is the LIVE GL cash (not the stored snapshot) so "Add to
+    // books" keeps the reconciliation stable.
     const bankBalance = Number(recon.bankBalance);
+    const bookBalance = cashCoaId
+      ? await this.glCashBalance(organizationId, cashCoaId, recon.reconciliationDate, fiscalYearId)
+      : Number(recon.bookBalance);
     const adjustedBook = round2(bookBalance + unmatchedBankAmount);
     const adjustedBank = round2(bankBalance + unmatchedBookAmount);
     const difference = round2(adjustedBook - adjustedBank);
@@ -956,6 +960,11 @@ export class BankReconciliationService {
    *   • unmatched BOOK lines  → book items not yet on the bank (deposits in
    *     transit / outstanding checks) → adjust the BANK balance
    * Reconciled ⇔ adjusted book = adjusted bank (difference ≈ 0).
+   *
+   * "Balance per books" is the LIVE GL cash balance (recomputed each time, not a
+   * snapshot) so that posting an adjusting entry via "Add to books" keeps the
+   * reconciliation stable: the entry raises the live GL by exactly the amount it
+   * removes from the unmatched-bank adjustment.
    */
   private async computeBalances(client: any, reconId: string) {
     const recon = await client.bankReconciliation.findUnique({
@@ -971,25 +980,30 @@ export class BankReconciliationService {
     });
     if (!recon) throw new NotFoundException('Reconciliation not found.');
     const cash = recon.bankAccount.chartOfAccountId;
+    let bookBalance = Number(recon.bookBalance);
     let unmatchedBankSum = 0;
     let unmatchedBookSum = 0;
     if (cash) {
+      const jevWhere = {
+        organizationId: recon.organizationId,
+        status: 'posted',
+        jevDate: { lte: recon.reconciliationDate },
+        accountingPeriod: { fiscalYearId: recon.accountingPeriod.fiscalYearId },
+      };
+      // Live GL cash balance (all posted cash lines up to the recon date).
+      const gl = await client.jevLine.aggregate({
+        _sum: { debitAmount: true, creditAmount: true },
+        where: { chartOfAccountId: cash, jev: jevWhere },
+      });
+      bookBalance = round2(Number(gl._sum.debitAmount ?? 0) - Number(gl._sum.creditAmount ?? 0));
+
       const ub = await client.bankStatementLine.aggregate({
         _sum: { amount: true },
         where: { bankReconciliationId: reconId, matchGroupId: null },
       });
       unmatchedBankSum = Number(ub._sum.amount ?? 0);
       const bk = await client.jevLine.findMany({
-        where: {
-          chartOfAccountId: cash,
-          matchGroupId: null,
-          jev: {
-            organizationId: recon.organizationId,
-            status: 'posted',
-            jevDate: { lte: recon.reconciliationDate },
-            accountingPeriod: { fiscalYearId: recon.accountingPeriod.fiscalYearId },
-          },
-        },
+        where: { chartOfAccountId: cash, matchGroupId: null, jev: jevWhere },
         select: { debitAmount: true, creditAmount: true },
       });
       unmatchedBookSum = bk.reduce(
@@ -998,7 +1012,6 @@ export class BankReconciliationService {
         0,
       );
     }
-    const bookBalance = Number(recon.bookBalance);
     const bankBalance = Number(recon.bankBalance);
     const adjustedBook = round2(bookBalance + unmatchedBankSum);
     const adjustedBank = round2(bankBalance + unmatchedBookSum);
@@ -1006,12 +1019,13 @@ export class BankReconciliationService {
     return { bookBalance, bankBalance, adjustedBook, adjustedBank, difference };
   }
 
-  /** Recompute and persist the adjusted balances/difference after a match change. */
+  /** Recompute and persist the (live) balances/difference after a match change. */
   private async refreshBalances(tx: any, reconId: string) {
     const b = await this.computeBalances(tx, reconId);
     await tx.bankReconciliation.update({
       where: { id: reconId },
       data: {
+        bookBalance: b.bookBalance,
         adjustedBookBalance: b.adjustedBook,
         adjustedBankBalance: b.adjustedBank,
         difference: b.difference,
