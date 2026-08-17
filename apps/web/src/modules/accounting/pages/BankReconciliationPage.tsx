@@ -34,7 +34,6 @@ import type {
   BankReconciliationListItem,
   BankAccount,
   ChartOfAccount,
-  FiscalYearOption,
   PeriodOption,
 } from '../types';
 
@@ -132,7 +131,6 @@ function ReconciliationList() {
   const [filterBank, setFilterBank] = useState('');
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [fiscalYears, setFiscalYears] = useState<FiscalYearOption[]>([]);
   const [periods, setPeriods] = useState<PeriodOption[]>([]);
   const [selectedFY, setSelectedFY] = useState('');
   const [formData, setFormData] = useState({
@@ -150,8 +148,8 @@ function ReconciliationList() {
   useEffect(() => {
     getBankAccounts().then(setBankAccounts);
     getGlFiscalYears().then((fy) => {
-      setFiscalYears(fy);
-      if (fy.length > 0) setSelectedFY(fy[0].id);
+      const first = fy[0];
+      if (first) setSelectedFY(first.id);
     });
   }, []);
 

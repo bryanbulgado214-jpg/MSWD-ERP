@@ -51,9 +51,11 @@ function toIso(s: string): string | null {
   if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10);
   const m = t.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
   if (m) {
-    let [, a, b, y] = m;
-    if (y.length === 2) y = `20${y}`;
-    return `${y}-${a.padStart(2, '0')}-${b.padStart(2, '0')}`;
+    const [, a, b, rawY] = m;
+    if (a !== undefined && b !== undefined && rawY !== undefined) {
+      const y = rawY.length === 2 ? `20${rawY}` : rawY;
+      return `${y}-${a.padStart(2, '0')}-${b.padStart(2, '0')}`;
+    }
   }
   const d = new Date(t);
   return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);

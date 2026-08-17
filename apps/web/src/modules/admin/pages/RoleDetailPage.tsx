@@ -176,7 +176,7 @@ export function RoleDetailPage() {
             <div key={mod} className="admin-perm-group">
               <h3 className="admin-perm-group__title">{mod}</h3>
               <div className="admin-perm-list">
-                {permsByModule[mod].map((p) => (
+                {permsByModule[mod]?.map((p) => (
                   <div key={p.assignmentId} className="admin-perm-item">
                     <div>
                       <span className="admin-perm-item__code">{p.code}</span>

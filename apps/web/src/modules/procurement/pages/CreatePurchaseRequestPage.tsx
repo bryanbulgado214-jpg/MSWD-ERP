@@ -64,7 +64,8 @@ export function CreatePurchaseRequestPage() {
         setReleases(relData);
         if (relData.length === 1) setBudgetReleaseId(relData[0]!.id);
         setFiscalYears(fyData);
-        if (fyData.length > 0) setSelectedFiscalYear(fyData[0].id);
+        const firstFy = fyData[0];
+        if (firstFy) setSelectedFiscalYear(firstFy.id);
         setDepartments(deptData);
       })
       .catch(() => setError('Failed to load form data.'))
@@ -86,8 +87,12 @@ export function CreatePurchaseRequestPage() {
         }
       })
       .catch(() => {})
-      .finally(() => { if (!cancelled) setLoadingPpmp(false); });
-    return () => { cancelled = true; };
+      .finally(() => {
+        if (!cancelled) setLoadingPpmp(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [selectedFiscalYear]);
 
   function selectPpmpItem(ppmpItemId: string) {
@@ -95,12 +100,14 @@ export function CreatePurchaseRequestPage() {
     const ppmp = myPpmpItems.find((p) => p.id === ppmpItemId);
     if (!ppmp) return;
     setTitle(ppmp.itemDescription);
-    setItems([{
-      description: ppmp.itemDescription,
-      quantity: parseFloat(ppmp.remainingQuantity),
-      unitOfMeasure: ppmp.unitOfMeasure,
-      estimatedUnitCost: parseFloat(ppmp.estimatedUnitCost),
-    }]);
+    setItems([
+      {
+        description: ppmp.itemDescription,
+        quantity: parseFloat(ppmp.remainingQuantity),
+        unitOfMeasure: ppmp.unitOfMeasure,
+        estimatedUnitCost: parseFloat(ppmp.estimatedUnitCost),
+      },
+    ]);
     const linkedApp = appItems.find((a) => a.ppmpItem.id === ppmpItemId);
     setAppItemId(linkedApp ? linkedApp.id : '');
   }
@@ -128,7 +135,13 @@ export function CreatePurchaseRequestPage() {
   const canSubmit =
     budgetReleaseId &&
     title.trim() &&
-    items.every((item) => item.description.trim() && item.quantity > 0 && item.estimatedUnitCost > 0 && item.unitOfMeasure.trim()) &&
+    items.every(
+      (item) =>
+        item.description.trim() &&
+        item.quantity > 0 &&
+        item.estimatedUnitCost > 0 &&
+        item.unitOfMeasure.trim(),
+    ) &&
     !submitting;
 
   async function handleSubmit(e: React.FormEvent) {
@@ -153,13 +166,17 @@ export function CreatePurchaseRequestPage() {
           unitOfMeasure: item.unitOfMeasure.trim(),
           estimatedUnitCost: item.estimatedUnitCost,
           ...(item.accountCode?.trim() ? { accountCode: item.accountCode.trim() } : {}),
-          ...(item.technicalSpecification?.trim() ? { technicalSpecification: item.technicalSpecification.trim() } : {}),
+          ...(item.technicalSpecification?.trim()
+            ? { technicalSpecification: item.technicalSpecification.trim() }
+            : {}),
           ...(item.classification ? { classification: item.classification } : {}),
         })),
       });
       navigate(`/procurement/purchase-requests/${pr.id}`);
     } catch (err) {
-      setError(err instanceof ProcurementApiError ? err.message : 'Failed to create purchase request.');
+      setError(
+        err instanceof ProcurementApiError ? err.message : 'Failed to create purchase request.',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -167,7 +184,14 @@ export function CreatePurchaseRequestPage() {
 
   return (
     <div className="pr-page">
-      <a href="/procurement" className="pr-back" onClick={(e) => { e.preventDefault(); navigate('/procurement'); }}>
+      <a
+        href="/procurement"
+        className="pr-back"
+        onClick={(e) => {
+          e.preventDefault();
+          navigate('/procurement');
+        }}
+      >
         &larr; Back to Purchase Requests
       </a>
       <h1>New Purchase Request</h1>
@@ -177,7 +201,14 @@ export function CreatePurchaseRequestPage() {
       {/* PPMP Allocations */}
       {!loadingPpmp && myPpmpItems.length > 0 && (
         <div style={{ marginBottom: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 8,
+            }}
+          >
             <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--mswd-navy)' }}>
               Your PPMP Allocations
             </h3>
@@ -185,10 +216,17 @@ export function CreatePurchaseRequestPage() {
               <select
                 value={selectedFiscalYear}
                 onChange={(e) => setSelectedFiscalYear(e.target.value)}
-                style={{ padding: '4px 8px', borderRadius: 4, border: '1.5px solid #d0d5dd', fontSize: 12 }}
+                style={{
+                  padding: '4px 8px',
+                  borderRadius: 4,
+                  border: '1.5px solid #d0d5dd',
+                  fontSize: 12,
+                }}
               >
                 {fiscalYears.map((fy) => (
-                  <option key={fy.id} value={fy.id}>{fy.name}</option>
+                  <option key={fy.id} value={fy.id}>
+                    {fy.name}
+                  </option>
                 ))}
               </select>
             )}
@@ -235,11 +273,21 @@ export function CreatePurchaseRequestPage() {
                           style={{ cursor: exhausted ? 'not-allowed' : 'pointer' }}
                         />
                       </td>
-                      <td><strong>{ppmp.code}</strong></td>
+                      <td>
+                        <strong>{ppmp.code}</strong>
+                      </td>
                       <td>{ppmp.itemDescription}</td>
                       <td>{ppmp.unitOfMeasure}</td>
-                      <td style={{ textAlign: 'right' }}>{parseFloat(ppmp.quantity).toLocaleString()}</td>
-                      <td style={{ textAlign: 'right', color: exhausted ? '#b42318' : '#067647', fontWeight: 600 }}>
+                      <td style={{ textAlign: 'right' }}>
+                        {parseFloat(ppmp.quantity).toLocaleString()}
+                      </td>
+                      <td
+                        style={{
+                          textAlign: 'right',
+                          color: exhausted ? '#b42318' : '#067647',
+                          fontWeight: 600,
+                        }}
+                      >
                         {remQty.toLocaleString()}
                       </td>
                       <td style={{ textAlign: 'right' }}>{formatPeso(ppmp.estimatedUnitCost)}</td>
@@ -253,18 +301,40 @@ export function CreatePurchaseRequestPage() {
             </table>
           </div>
           {selectedPpmpItem && (
-            <div style={{ background: '#eff8ff', borderRadius: 8, padding: '12px 16px', marginTop: 12, fontSize: 13 }}>
-              Selected: <strong>{selectedPpmpItem.code}</strong> — {selectedPpmpItem.itemDescription}
-              {' | '}Remaining: {parseFloat(selectedPpmpItem.remainingQuantity).toLocaleString()} {selectedPpmpItem.unitOfMeasure}
+            <div
+              style={{
+                background: '#eff8ff',
+                borderRadius: 8,
+                padding: '12px 16px',
+                marginTop: 12,
+                fontSize: 13,
+              }}
+            >
+              Selected: <strong>{selectedPpmpItem.code}</strong> —{' '}
+              {selectedPpmpItem.itemDescription}
+              {' | '}Remaining: {parseFloat(selectedPpmpItem.remainingQuantity).toLocaleString()}{' '}
+              {selectedPpmpItem.unitOfMeasure}
               {' | '}Budget: {formatPeso(selectedPpmpItem.remainingAmount)}
             </div>
           )}
         </div>
       )}
-      {loadingPpmp && <p style={{ color: '#667085', fontSize: 13 }}>Loading your PPMP allocations...</p>}
+      {loadingPpmp && (
+        <p style={{ color: '#667085', fontSize: 13 }}>Loading your PPMP allocations...</p>
+      )}
       {!loadingPpmp && myPpmpItems.length === 0 && (
-        <div style={{ background: '#f9fafb', borderRadius: 8, padding: '16px', marginBottom: 24, fontSize: 13, color: '#667085' }}>
-          No PPMP items are allocated to you for the current fiscal year. You can still create a PR manually below.
+        <div
+          style={{
+            background: '#f9fafb',
+            borderRadius: 8,
+            padding: '16px',
+            marginBottom: 24,
+            fontSize: 13,
+            color: '#667085',
+          }}
+        >
+          No PPMP items are allocated to you for the current fiscal year. You can still create a PR
+          manually below.
         </div>
       )}
 
@@ -277,18 +347,24 @@ export function CreatePurchaseRequestPage() {
             ) : releases.length === 0 ? (
               <p style={{ color: '#b42318', fontSize: 13 }}>No released budgets available.</p>
             ) : (
-              <select value={budgetReleaseId} onChange={(e) => setBudgetReleaseId(e.target.value)} required>
+              <select
+                value={budgetReleaseId}
+                onChange={(e) => setBudgetReleaseId(e.target.value)}
+                required
+              >
                 <option value="">Select a budget release...</option>
                 {releases.map((r) => (
                   <option key={r.id} value={r.id}>
-                    {r.releaseNumber} — {r.budgetHeader.responsibilityCenter.name} / {r.budgetHeader.fundSource.name} (Avail: {formatPeso(r.availableAmount)})
+                    {r.releaseNumber} — {r.budgetHeader.responsibilityCenter.name} /{' '}
+                    {r.budgetHeader.fundSource.name} (Avail: {formatPeso(r.availableAmount)})
                   </option>
                 ))}
               </select>
             )}
             {selectedRelease && (
               <p style={{ fontSize: 12, color: '#667085', marginTop: 4 }}>
-                Released: {formatPeso(selectedRelease.releasedAmount)} | Available: {formatPeso(selectedRelease.availableAmount)}
+                Released: {formatPeso(selectedRelease.releasedAmount)} | Available:{' '}
+                {formatPeso(selectedRelease.availableAmount)}
               </p>
             )}
           </div>
@@ -298,7 +374,9 @@ export function CreatePurchaseRequestPage() {
             <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
               <option value="">Select department...</option>
               {departments.map((d) => (
-                <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+                <option key={d.id} value={d.id}>
+                  {d.name} ({d.code})
+                </option>
               ))}
             </select>
           </div>
@@ -306,25 +384,46 @@ export function CreatePurchaseRequestPage() {
 
         <div className="pr-field">
           <label>Title *</label>
-          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Office Supplies Q3" required maxLength={255} />
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Office Supplies Q3"
+            required
+            maxLength={255}
+          />
         </div>
 
         <div className="pr-form-grid">
           <div className="pr-field">
             <label>Purpose / Justification</label>
-            <textarea value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="Why is this procurement needed?" rows={2} />
+            <textarea
+              value={purpose}
+              onChange={(e) => setPurpose(e.target.value)}
+              placeholder="Why is this procurement needed?"
+              rows={2}
+            />
           </div>
 
           <div className="pr-field">
             <label>Description (optional)</label>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Additional details..." rows={2} />
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Additional details..."
+              rows={2}
+            />
           </div>
         </div>
 
         <div className="pr-form-grid">
           <div className="pr-field">
             <label>Requested Delivery Date</label>
-            <input type="date" value={requestedDeliveryDate} onChange={(e) => setRequestedDeliveryDate(e.target.value)} />
+            <input
+              type="date"
+              value={requestedDeliveryDate}
+              onChange={(e) => setRequestedDeliveryDate(e.target.value)}
+            />
           </div>
 
           <div className="pr-field">
@@ -333,7 +432,8 @@ export function CreatePurchaseRequestPage() {
               <option value="">No APP item linked</option>
               {linkedAppItems.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.appNumber} — {a.procurementProjectTitle} (Budget: {formatPeso(a.approvedBudget)})
+                  {a.appNumber} — {a.procurementProjectTitle} (Budget:{' '}
+                  {formatPeso(a.approvedBudget)})
                 </option>
               ))}
             </select>
@@ -343,54 +443,145 @@ export function CreatePurchaseRequestPage() {
         <div>
           <div className="pr-items-header">
             <h3>Items</h3>
-            <button type="button" className="pr-btn" onClick={addItem}>+ Add Item</button>
+            <button type="button" className="pr-btn" onClick={addItem}>
+              + Add Item
+            </button>
           </div>
 
           {items.map((item, idx) => (
             <div key={idx} className="pr-item-card">
               {items.length > 1 && (
-                <button type="button" className="pr-item-card__remove" onClick={() => removeItem(idx)} title="Remove item">&times;</button>
+                <button
+                  type="button"
+                  className="pr-item-card__remove"
+                  onClick={() => removeItem(idx)}
+                  title="Remove item"
+                >
+                  &times;
+                </button>
               )}
               <div className="pr-item-grid">
                 <div>
                   <label>Description</label>
-                  <input type="text" value={item.description} onChange={(e) => updateItem(idx, { description: e.target.value })} required maxLength={500} />
-                </div>
-                <div>
-                  <label>Qty</label>
-                  <input type="number" value={item.quantity} onChange={(e) => updateItem(idx, { quantity: parseFloat(e.target.value) || 0 })} min={0.0001} step="any" required />
-                </div>
-                <div>
-                  <label>Unit</label>
-                  <input type="text" value={item.unitOfMeasure} onChange={(e) => updateItem(idx, { unitOfMeasure: e.target.value })} required maxLength={20} />
-                </div>
-                <div>
-                  <label>Unit Cost</label>
-                  <input type="number" value={item.estimatedUnitCost} onChange={(e) => updateItem(idx, { estimatedUnitCost: parseFloat(e.target.value) || 0 })} min={0.01} step="0.01" required />
-                </div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 12, marginTop: 8 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475467', marginBottom: 2 }}>Technical Specification</label>
                   <input
                     type="text"
-                    value={item.technicalSpecification ?? ''}
-                    onChange={(e) => updateItem(idx, { technicalSpecification: e.target.value || undefined })}
-                    placeholder="e.g. A4, 80gsm, 500 sheets/ream"
+                    value={item.description}
+                    onChange={(e) => updateItem(idx, { description: e.target.value })}
+                    required
                     maxLength={500}
-                    style={{ width: '100%', padding: '6px 8px', border: '1.5px solid #d0d5dd', borderRadius: 4, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }}
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475467', marginBottom: 2 }}>Classification</label>
+                  <label>Qty</label>
+                  <input
+                    type="number"
+                    value={item.quantity}
+                    onChange={(e) => updateItem(idx, { quantity: parseFloat(e.target.value) || 0 })}
+                    min={0.0001}
+                    step="any"
+                    required
+                  />
+                </div>
+                <div>
+                  <label>Unit</label>
+                  <input
+                    type="text"
+                    value={item.unitOfMeasure}
+                    onChange={(e) => updateItem(idx, { unitOfMeasure: e.target.value })}
+                    required
+                    maxLength={20}
+                  />
+                </div>
+                <div>
+                  <label>Unit Cost</label>
+                  <input
+                    type="number"
+                    value={item.estimatedUnitCost}
+                    onChange={(e) =>
+                      updateItem(idx, { estimatedUnitCost: parseFloat(e.target.value) || 0 })
+                    }
+                    min={0.01}
+                    step="0.01"
+                    required
+                  />
+                </div>
+              </div>
+              <div
+                style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 12, marginTop: 8 }}
+              >
+                <div>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: '#475467',
+                      marginBottom: 2,
+                    }}
+                  >
+                    Technical Specification
+                  </label>
+                  <input
+                    type="text"
+                    value={item.technicalSpecification ?? ''}
+                    onChange={(e) => updateItem(idx, { technicalSpecification: e.target.value })}
+                    placeholder="e.g. A4, 80gsm, 500 sheets/ream"
+                    maxLength={500}
+                    style={{
+                      width: '100%',
+                      padding: '6px 8px',
+                      border: '1.5px solid #d0d5dd',
+                      borderRadius: 4,
+                      fontSize: 13,
+                      fontFamily: 'inherit',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: '#475467',
+                      marginBottom: 2,
+                    }}
+                  >
+                    Classification
+                  </label>
                   <select
                     value={item.classification ?? ''}
-                    onChange={(e) => updateItem(idx, { classification: (e.target.value || undefined) as ItemClassification | undefined })}
-                    style={{ width: '100%', padding: '6px 8px', border: '1.5px solid #d0d5dd', borderRadius: 4, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value) {
+                        updateItem(idx, { classification: value as ItemClassification });
+                      } else {
+                        setItems((prev) =>
+                          prev.map((it, i) => {
+                            if (i !== idx) return it;
+                            const rest = { ...it };
+                            delete rest.classification;
+                            return rest;
+                          }),
+                        );
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '6px 8px',
+                      border: '1.5px solid #d0d5dd',
+                      borderRadius: 4,
+                      fontSize: 13,
+                      fontFamily: 'inherit',
+                      boxSizing: 'border-box',
+                    }}
                   >
                     <option value="">—</option>
                     {CLASSIFICATION_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -401,13 +592,17 @@ export function CreatePurchaseRequestPage() {
             </div>
           ))}
 
-          <p style={{ textAlign: 'right', fontSize: 15, fontWeight: 700, color: 'var(--mswd-navy)' }}>
+          <p
+            style={{ textAlign: 'right', fontSize: 15, fontWeight: 700, color: 'var(--mswd-navy)' }}
+          >
             Total: {formatPeso(totalAmount.toFixed(2))}
           </p>
         </div>
 
         <div className="pr-form-actions">
-          <button type="button" className="pr-btn" onClick={() => navigate('/procurement')}>Cancel</button>
+          <button type="button" className="pr-btn" onClick={() => navigate('/procurement')}>
+            Cancel
+          </button>
           <button type="submit" className="pr-btn pr-btn--primary" disabled={!canSubmit}>
             {submitting ? 'Creating...' : 'Create Purchase Request'}
           </button>

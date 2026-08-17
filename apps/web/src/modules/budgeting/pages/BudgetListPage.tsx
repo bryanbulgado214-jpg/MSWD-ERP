@@ -10,7 +10,13 @@ import {
   listBudgetVersionsForCycle,
 } from '../api';
 import { formatPeso } from '../format-peso';
-import type { BudgetCycleSummary, BudgetHeaderListItem, BudgetHeaderSortField, BudgetHeaderStatus, BudgetVersionSummary } from '../types';
+import type {
+  BudgetCycleSummary,
+  BudgetHeaderListItem,
+  BudgetHeaderSortField,
+  BudgetHeaderStatus,
+  BudgetVersionSummary,
+} from '../types';
 import './budget-dashboard.css'; // shares the same status-badge classes as the Dashboard, per design
 import './budget-list.css';
 
@@ -155,7 +161,9 @@ export function BudgetListPage() {
       .catch((error: unknown) => {
         if (cancelled) return;
         const message =
-          error instanceof BudgetSummaryApiError ? error.message : 'Something went wrong loading budgets.';
+          error instanceof BudgetSummaryApiError
+            ? error.message
+            : 'Something went wrong loading budgets.';
         setState({ status: 'error', message });
       });
 
@@ -196,7 +204,6 @@ export function BudgetListPage() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
   function toggleSort(field: BudgetHeaderSortField) {
@@ -234,7 +241,9 @@ export function BudgetListPage() {
       <div className="budget-list__header-row">
         <div>
           <h1 className="budget-list__heading">Annual Budgets</h1>
-          <p className="budget-list__subheading">Search, filter, and browse every budget in this organization.</p>
+          <p className="budget-list__subheading">
+            Search, filter, and browse every budget in this organization.
+          </p>
         </div>
         {/* A Create Budget route now exists (header-only, per its own
             task scope) — this links there instead of staying disabled. */}
@@ -287,7 +296,9 @@ export function BudgetListPage() {
       </div>
 
       {state.status === 'loading' && <p className="budget-list__status">Loading budgets…</p>}
-      {state.status === 'error' && <p className="budget-list__status budget-list__status--error">{state.message}</p>}
+      {state.status === 'error' && (
+        <p className="budget-list__status budget-list__status--error">{state.message}</p>
+      )}
 
       {state.status === 'loaded' && (
         <>
@@ -303,10 +314,12 @@ export function BudgetListPage() {
                     Prepared By
                   </th>
                   <th className="budget-list__sortable" onClick={() => toggleSort('createdAt')}>
-                    Date Prepared<span className="budget-list__sort-icon">{sortIcon('createdAt')}</span>
+                    Date Prepared
+                    <span className="budget-list__sort-icon">{sortIcon('createdAt')}</span>
                   </th>
                   <th className="budget-list__sortable" onClick={() => toggleSort('totalAmount')}>
-                    Total Approved Budget<span className="budget-list__sort-icon">{sortIcon('totalAmount')}</span>
+                    Total Approved Budget
+                    <span className="budget-list__sort-icon">{sortIcon('totalAmount')}</span>
                   </th>
                   <th>Actions</th>
                 </tr>
@@ -327,20 +340,31 @@ export function BudgetListPage() {
                       <td>{ctx ? ctx.cycle.name : '…'}</td>
                       <td>{ctx ? `${ctx.version.name} (v${ctx.version.versionNumber})` : '…'}</td>
                       <td>
-                        <span className={`budget-dashboard__badge budget-dashboard__badge--${header.status}`}>
+                        <span
+                          className={`budget-dashboard__badge budget-dashboard__badge--${header.status}`}
+                        >
                           {header.status}
                         </span>
                       </td>
-                      <td className="budget-list__muted" title="No user-lookup endpoint exists in the current system.">
+                      <td
+                        className="budget-list__muted"
+                        title="No user-lookup endpoint exists in the current system."
+                      >
                         —
                       </td>
                       <td>{new Date(header.createdAt).toLocaleDateString()}</td>
                       <td className="budget-list__amount">{formatPeso(header.totalAmount)}</td>
                       <td className="budget-list__actions">
-                        <Link className="budget-list__row-link" to={`/budgeting/dashboard/${header.id}`}>
+                        <Link
+                          className="budget-list__row-link"
+                          to={`/budgeting/dashboard/${header.id}`}
+                        >
                           Open Budget
                         </Link>
-                        <Link className="budget-list__row-link" to={`/budgeting/budget-headers/${header.id}`}>
+                        <Link
+                          className="budget-list__row-link"
+                          to={`/budgeting/budget-headers/${header.id}`}
+                        >
                           View Details
                         </Link>
                       </td>
@@ -352,7 +376,9 @@ export function BudgetListPage() {
           </div>
 
           <div className="budget-list__pagination">
-            <span>{total === 0 ? 'No results' : `Showing ${rangeStart}–${rangeEnd} of ${total}`}</span>
+            <span>
+              {total === 0 ? 'No results' : `Showing ${rangeStart}–${rangeEnd} of ${total}`}
+            </span>
             <div className="budget-list__pagination-buttons">
               <button
                 type="button"

@@ -15,7 +15,7 @@ import {
   submitJev,
   voidJev,
 } from '../api';
-import type { AccountingPeriod, ChartOfAccount, JevDetail } from '../types';
+import type { ChartOfAccount, JevDetail } from '../types';
 
 import { AccountCombobox } from './AccountCombobox';
 import { AccountingSubNav } from './AccountingSubNav';
@@ -63,7 +63,6 @@ export default function JevDetailPage() {
   const [accounts, setAccounts] = useState<ChartOfAccount[]>([]);
   // Journal lines post to real (postable) accounts, never summary/header accounts.
   const postableAccounts = useMemo(() => accounts.filter((a) => !a.isHeader), [accounts]);
-  const [periods, setPeriods] = useState<AccountingPeriod[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -81,12 +80,11 @@ export default function JevDetailPage() {
 
   const loadRef = useCallback(async () => {
     try {
-      const [accts, prds] = await Promise.all([
+      const [accts] = await Promise.all([
         getChartOfAccounts('includeInactive=false'),
         getOpenPeriods(),
       ]);
       setAccounts(accts.filter((a) => !a.isHeader));
-      setPeriods(prds);
 
       if (!isNew && id) {
         const data = await getJev(id);
@@ -132,9 +130,12 @@ export default function JevDetailPage() {
 
   function updateLine(idx: number, field: keyof LineDraft, value: string) {
     const next = [...lines];
-    next[idx] = { ...next[idx], [field]: value };
-    if (field === 'debitAmount' && value) next[idx].creditAmount = '';
-    if (field === 'creditAmount' && value) next[idx].debitAmount = '';
+    const current = next[idx];
+    if (!current) return;
+    const updated: LineDraft = { ...current, [field]: value };
+    if (field === 'debitAmount' && value) updated.creditAmount = '';
+    if (field === 'creditAmount' && value) updated.debitAmount = '';
+    next[idx] = updated;
     setLines(next);
   }
 

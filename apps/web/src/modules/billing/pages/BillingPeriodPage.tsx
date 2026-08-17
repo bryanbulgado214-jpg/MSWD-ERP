@@ -1,13 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { useAuth } from '../../../app/auth';
-import {
-  BillingApiError,
-  createBillingPeriod,
-  getBillingPeriods,
-  transitionPeriod,
-  updateBillingPeriod,
-} from '../api';
+import { BillingApiError, createBillingPeriod, getBillingPeriods, transitionPeriod } from '../api';
 import type { BillingPeriod, BillingPeriodStatus } from '../types';
 
 import BillingSubNav from './BillingSubNav';
@@ -41,7 +35,9 @@ const STATUS_LABELS: Record<BillingPeriodStatus, string> = {
   closed: 'Closed',
 };
 
-const NEXT_STATUS: Record<string, { label: string; value: BillingPeriodStatus }> = {
+type TransitionTarget = 'reading' | 'billing' | 'closed';
+
+const NEXT_STATUS: Record<string, { label: string; value: TransitionTarget }> = {
   open: { label: 'Start Reading', value: 'reading' },
   reading: { label: 'Start Billing', value: 'billing' },
   billing: { label: 'Close Period', value: 'closed' },
@@ -124,7 +120,7 @@ export default function BillingPeriodPage() {
     }
   }
 
-  async function handleTransition(period: BillingPeriod, nextStatus: BillingPeriodStatus) {
+  async function handleTransition(period: BillingPeriod, nextStatus: TransitionTarget) {
     if (!confirm(`Transition "${period.name}" to "${STATUS_LABELS[nextStatus]}"?`)) return;
     try {
       await transitionPeriod(period.id, { expectedVersion: period.version, status: nextStatus });
@@ -260,35 +256,38 @@ export default function BillingPeriodPage() {
               </tr>
             </thead>
             <tbody>
-              {state.data.map((p) => (
-                <tr key={p.id}>
-                  <td style={{ fontWeight: 600 }}>{p.name}</td>
-                  <td>
-                    {MONTH_NAMES[p.billingMonth]} {p.billingYear}
-                  </td>
-                  <td>{new Date(p.dueDate).toLocaleDateString()}</td>
-                  <td>{new Date(p.penaltyDate).toLocaleDateString()}</td>
-                  <td className="bill-text-mono">{p._count.meterReadings}</td>
-                  <td className="bill-text-mono">{p._count.bills}</td>
-                  <td>
-                    <span className={`bill-badge bill-badge--${p.status}`}>
-                      {STATUS_LABELS[p.status]}
-                    </span>
-                  </td>
-                  <td>
-                    {hasPermission('billing.period.manage') && NEXT_STATUS[p.status] && (
-                      <button
-                        type="button"
-                        className="bill-btn bill-btn--primary"
-                        style={{ padding: '4px 10px', fontSize: '12px' }}
-                        onClick={() => handleTransition(p, NEXT_STATUS[p.status].value)}
-                      >
-                        {NEXT_STATUS[p.status].label}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {state.data.map((p) => {
+                const next = NEXT_STATUS[p.status];
+                return (
+                  <tr key={p.id}>
+                    <td style={{ fontWeight: 600 }}>{p.name}</td>
+                    <td>
+                      {MONTH_NAMES[p.billingMonth]} {p.billingYear}
+                    </td>
+                    <td>{new Date(p.dueDate).toLocaleDateString()}</td>
+                    <td>{new Date(p.penaltyDate).toLocaleDateString()}</td>
+                    <td className="bill-text-mono">{p._count.meterReadings}</td>
+                    <td className="bill-text-mono">{p._count.bills}</td>
+                    <td>
+                      <span className={`bill-badge bill-badge--${p.status}`}>
+                        {STATUS_LABELS[p.status]}
+                      </span>
+                    </td>
+                    <td>
+                      {hasPermission('billing.period.manage') && next && (
+                        <button
+                          type="button"
+                          className="bill-btn bill-btn--primary"
+                          style={{ padding: '4px 10px', fontSize: '12px' }}
+                          onClick={() => handleTransition(p, next.value)}
+                        >
+                          {next.label}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -37,7 +37,7 @@ export default function EmployeeNewPage() {
   const [dateHired, setDateHired] = useState('');
   const [basicSalary, setBasicSalary] = useState('');
   const [salaryGrade, setSalaryGrade] = useState('');
-  const [salaryStep, setSalaryStep] = useState('');
+  const [salaryStep] = useState('');
 
   useEffect(() => {
     getDepartments()

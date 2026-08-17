@@ -39,9 +39,11 @@ function toIsoDate(raw: string): string | null {
   // M/D/Y or D/M/Y (assume US M/D/Y — the common PH bank export) with - or /
   const m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
   if (m) {
-    let [, a, b, y] = m;
-    if (y.length === 2) y = `20${y}`;
-    return `${y}-${a.padStart(2, '0')}-${b.padStart(2, '0')}`;
+    const [, a, b, rawY] = m;
+    if (a !== undefined && b !== undefined && rawY !== undefined) {
+      const y = rawY.length === 2 ? `20${rawY}` : rawY;
+      return `${y}-${a.padStart(2, '0')}-${b.padStart(2, '0')}`;
+    }
   }
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);

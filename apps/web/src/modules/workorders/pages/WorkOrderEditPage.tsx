@@ -5,8 +5,18 @@ import { getConsumersLookup, getEmployeesLookup, getWorkOrder, updateWorkOrder }
 import type { WorkOrder } from '../types';
 import '../workorders.css';
 
-interface ConsumerOption { id: string; accountNumber: string; firstName: string; lastName: string }
-interface EmployeeOption { id: string; firstName: string; lastName: string; position?: { title: string } | null }
+interface ConsumerOption {
+  id: string;
+  accountNumber: string;
+  firstName: string;
+  lastName: string;
+}
+interface EmployeeOption {
+  id: string;
+  firstName: string;
+  lastName: string;
+  position?: { title: string } | null;
+}
 
 export default function WorkOrderEditPage() {
   const { id } = useParams<{ id: string }>();
@@ -16,7 +26,6 @@ export default function WorkOrderEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [consumers, setConsumers] = useState<ConsumerOption[]>([]);
-  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
 
   const [priority, setPriority] = useState('normal');
   const [title, setTitle] = useState('');
@@ -32,18 +41,21 @@ export default function WorkOrderEditPage() {
       getWorkOrder(id),
       getConsumersLookup().catch(() => [] as ConsumerOption[]),
       getEmployeesLookup().catch(() => [] as EmployeeOption[]),
-    ]).then(([order, cons, emps]) => {
-      setWo(order);
-      setConsumers(cons);
-      setEmployees(emps);
-      setPriority(order.priority);
-      setTitle(order.title);
-      setDescription(order.description ?? '');
-      setConsumerId(order.consumerId ?? '');
-      setLocation(order.location ?? '');
-      setScheduledDate(order.scheduledDate ? order.scheduledDate.slice(0, 10) : '');
-      setEstimatedHrs(order.estimatedDurationHrs ? String(Number(order.estimatedDurationHrs)) : '');
-    }).catch((e) => setError(e.message))
+    ])
+      .then(([order, cons]) => {
+        setWo(order);
+        setConsumers(cons);
+        setPriority(order.priority);
+        setTitle(order.title);
+        setDescription(order.description ?? '');
+        setConsumerId(order.consumerId ?? '');
+        setLocation(order.location ?? '');
+        setScheduledDate(order.scheduledDate ? order.scheduledDate.slice(0, 10) : '');
+        setEstimatedHrs(
+          order.estimatedDurationHrs ? String(Number(order.estimatedDurationHrs)) : '',
+        );
+      })
+      .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -106,7 +118,11 @@ export default function WorkOrderEditPage() {
 
           <label className="wo-form__field">
             <span className="wo-form__label">Priority</span>
-            <select className="wo-select" value={priority} onChange={(e) => setPriority(e.target.value)}>
+            <select
+              className="wo-select"
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+            >
               <option value="low">Low</option>
               <option value="normal">Normal</option>
               <option value="high">High</option>
@@ -136,7 +152,11 @@ export default function WorkOrderEditPage() {
 
           <label className="wo-form__field">
             <span className="wo-form__label">Consumer</span>
-            <select className="wo-select" value={consumerId} onChange={(e) => setConsumerId(e.target.value)}>
+            <select
+              className="wo-select"
+              value={consumerId}
+              onChange={(e) => setConsumerId(e.target.value)}
+            >
               <option value="">— None —</option>
               {consumers.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -179,7 +199,11 @@ export default function WorkOrderEditPage() {
         </div>
 
         <div className="wo-form__actions">
-          <button type="button" className="wo-btn" onClick={() => navigate(`/work-orders/${wo.id}`)}>
+          <button
+            type="button"
+            className="wo-btn"
+            onClick={() => navigate(`/work-orders/${wo.id}`)}
+          >
             Cancel
           </button>
           <button type="submit" className="wo-btn wo-btn--primary" disabled={saving}>

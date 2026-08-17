@@ -28,7 +28,8 @@ export default function SubsidiaryLedgerPage() {
   useEffect(() => {
     getGlFiscalYears().then((fy) => {
       setFiscalYears(fy);
-      if (fy.length > 0) setSelectedFY(fy[0].id);
+      const first = fy[0];
+      if (first) setSelectedFY(first.id);
     });
   }, []);
 

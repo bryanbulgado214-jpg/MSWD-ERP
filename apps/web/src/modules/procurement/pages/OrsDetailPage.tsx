@@ -318,15 +318,17 @@ export function OrsDetailPage() {
             gap: 12,
           }}
         >
-          {[
-            ['Original', ors.originalAmount],
-            ['Adjustments', ors.adjustmentAmount],
-            ['Adjusted', ors.adjustedAmount],
-            ['Payable', ors.cumulativePayable],
-            ['Paid', ors.cumulativePaid],
-            ['Remaining', ors.remainingUnpaid],
-            ['De-obligated', ors.deobligatedAmount],
-          ].map(([label, val]) => (
+          {(
+            [
+              ['Original', ors.originalAmount],
+              ['Adjustments', ors.adjustmentAmount],
+              ['Adjusted', ors.adjustedAmount],
+              ['Payable', ors.cumulativePayable],
+              ['Paid', ors.cumulativePaid],
+              ['Remaining', ors.remainingUnpaid],
+              ['De-obligated', ors.deobligatedAmount],
+            ] as const
+          ).map(([label, val]) => (
             <div key={label}>
               <div
                 style={{

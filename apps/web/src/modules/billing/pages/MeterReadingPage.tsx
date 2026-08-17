@@ -20,12 +20,6 @@ type LoadState<T> =
   | { status: 'error'; message: string }
   | { status: 'loaded'; data: T };
 
-function formatPeso(val: string | number) {
-  const num = typeof val === 'string' ? parseFloat(val) : val;
-  if (isNaN(num)) return '--';
-  return num.toLocaleString('en-PH', { style: 'currency', currency: 'PHP' });
-}
-
 interface UnreadConsumer {
   id: string;
   accountNumber: string;

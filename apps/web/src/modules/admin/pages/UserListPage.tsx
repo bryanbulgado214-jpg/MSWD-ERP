@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 
 import type { UserSummary, RoleSummary } from '../api';
 import { listUsers, listRoles, createUser, updateUser, assignRole, revokeRole } from '../api';

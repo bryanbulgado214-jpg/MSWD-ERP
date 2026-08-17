@@ -29,7 +29,8 @@ export default function PeriodManagementPage() {
     try {
       const fy = await getPeriodFiscalYears();
       setFiscalYears(fy);
-      if (fy.length > 0 && !selectedFY) setSelectedFY(fy[0]);
+      const first = fy[0];
+      if (first && !selectedFY) setSelectedFY(first);
     } catch (err: any) {
       setError(err.message);
     } finally {

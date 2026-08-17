@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { formatPeso } from '../../budgeting/format-peso';
 import { getStockReceipts, InventoryApiError } from '../api';
 import type { StockReceiptListItem } from '../types';
 
