@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
@@ -16,6 +16,7 @@ import {
 } from '../api';
 import type { AccountingPeriod, ChartOfAccount, JevDetail } from '../types';
 
+import { AccountCombobox } from './AccountCombobox';
 import { AccountingSubNav } from './AccountingSubNav';
 import './accounting.css';
 
@@ -59,6 +60,8 @@ export default function JevDetailPage() {
 
   const [jev, setJev] = useState<JevDetail | null>(null);
   const [accounts, setAccounts] = useState<ChartOfAccount[]>([]);
+  // Journal lines post to real (postable) accounts, never summary/header accounts.
+  const postableAccounts = useMemo(() => accounts.filter((a) => !a.isHeader), [accounts]);
   const [periods, setPeriods] = useState<AccountingPeriod[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -299,25 +302,14 @@ export default function JevDetailPage() {
                 {lines.map((line, idx) => (
                   <tr key={idx}>
                     <td>
-                      <select
-                        value={line.chartOfAccountId}
-                        onChange={(e) => updateLine(idx, 'chartOfAccountId', e.target.value)}
-                        required
-                        style={{
-                          width: '100%',
-                          maxWidth: 320,
-                          boxSizing: 'border-box',
-                          fontSize: 12,
-                          padding: '4px 6px',
-                        }}
-                      >
-                        <option value="">Select account...</option>
-                        {accounts.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.accountCode} — {a.name}
-                          </option>
-                        ))}
-                      </select>
+                      <div style={{ maxWidth: 320 }}>
+                        <AccountCombobox
+                          accounts={postableAccounts}
+                          value={line.chartOfAccountId}
+                          onChange={(id) => updateLine(idx, 'chartOfAccountId', id)}
+                          placeholder="Type code or name…"
+                        />
+                      </div>
                     </td>
                     <td>
                       <input
