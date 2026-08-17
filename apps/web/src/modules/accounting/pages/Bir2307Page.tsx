@@ -4,6 +4,8 @@ import { useParams } from 'react-router-dom';
 import { AccountingApiError, getBir2307, type Bir2307Data } from '../api';
 import '../../procurement/pages/print-forms.css';
 
+import { PayeeCombobox } from './PayeeCombobox';
+
 // ── Editable model for BIR Form 2307 (page 1) ──
 interface EwtRow {
   nature: string;
@@ -285,10 +287,25 @@ export default function Bir2307Page() {
                   (Last Name, First Name, Middle Name for Individual OR Registered Name for
                   Non-Individual)
                 </div>
-                <input
-                  style={lineIn}
-                  value={form.payee.name}
-                  onChange={(e) => setParty('payee', 'name', e.target.value)}
+                <PayeeCombobox
+                  name={form.payee.name}
+                  onNameChange={(v) => setParty('payee', 'name', v)}
+                  onPick={(pk) =>
+                    setForm((f) =>
+                      f
+                        ? {
+                            ...f,
+                            payee: {
+                              ...f.payee,
+                              name: pk.name,
+                              tin: pk.tin ?? '',
+                              address: pk.address ?? '',
+                            },
+                          }
+                        : f,
+                    )
+                  }
+                  inputStyle={lineIn}
                 />
               </td>
             </tr>

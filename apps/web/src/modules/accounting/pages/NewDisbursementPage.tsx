@@ -15,6 +15,7 @@ import type { BankAccount, ChartOfAccount, CreateDisbursementInput } from '../ty
 
 import { AccountCombobox } from './AccountCombobox';
 import { AccountingSubNav } from './AccountingSubNav';
+import { PayeeCombobox } from './PayeeCombobox';
 import './accounting.css';
 
 interface LineDraft {
@@ -283,11 +284,16 @@ export default function NewDisbursementPage() {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 10 }}>
             <div style={cell('280px')}>
               <label style={labelStyle}>Payee *</label>
-              <input
-                style={inputStyle}
-                value={payeeName}
-                onChange={(e) => setPayeeName(e.target.value)}
-                placeholder="Name of person or entity paid"
+              <PayeeCombobox
+                name={payeeName}
+                onNameChange={setPayeeName}
+                onPick={(p) => {
+                  setPayeeName(p.name);
+                  setPayeeTin(p.tin ?? '');
+                  setPayeeAddress(p.address ?? '');
+                }}
+                inputStyle={inputStyle}
+                placeholder="Type or select a payee…"
               />
             </div>
             <div style={cell('150px')}>
