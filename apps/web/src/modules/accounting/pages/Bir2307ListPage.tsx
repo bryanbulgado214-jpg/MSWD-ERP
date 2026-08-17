@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { AccountingApiError, getDisbursements } from '../api';
+import { amountSearchTokens, matchesQuery } from '../search';
 import type { DisbursementSummary } from '../types';
 
 import { AccountingSubNav } from './AccountingSubNav';
@@ -39,15 +40,17 @@ export default function Bir2307ListPage() {
 
   const rows =
     state.status === 'loaded'
-      ? state.data.filter((dv) => {
-          const q = search.trim().toLowerCase();
-          if (!q) return true;
-          return (
-            dv.dvNumber.toLowerCase().includes(q) ||
-            (dv.payeeName ?? dv.supplier?.name ?? '').toLowerCase().includes(q) ||
-            dv.particulars.toLowerCase().includes(q)
-          );
-        })
+      ? state.data.filter((dv) =>
+          matchesQuery(
+            [
+              dv.dvNumber,
+              dv.payeeName ?? dv.supplier?.name ?? '',
+              dv.particulars,
+              amountSearchTokens(dv.grossAmount, dv.taxAmount, dv.netAmount),
+            ].join(' '),
+            search,
+          ),
+        )
       : [];
 
   return (
@@ -63,7 +66,7 @@ export default function Bir2307ListPage() {
       <div className="acct-toolbar">
         <input
           type="search"
-          placeholder="Search DV #, payee, or particulars…"
+          placeholder="Search DV #, payee, particulars, or amount…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{ minWidth: 260, flex: '1 1 260px' }}

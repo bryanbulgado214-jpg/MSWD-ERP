@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
 import { AccountingApiError, deleteDisbursement, getDisbursements, postDisbursement } from '../api';
+import { amountSearchTokens, matchesQuery } from '../search';
 import type { DisbursementSummary } from '../types';
 
 import { AccountingSubNav } from './AccountingSubNav';
@@ -58,13 +59,13 @@ function effectiveStatus(dv: DisbursementSummary): string {
 }
 
 function matchesSearch(dv: DisbursementSummary, q: string): boolean {
-  const s = q.trim().toLowerCase();
-  if (!s) return true;
-  return (
-    dv.dvNumber.toLowerCase().includes(s) ||
-    (dv.supplier?.name ?? dv.payeeName ?? '').toLowerCase().includes(s) ||
-    dv.particulars.toLowerCase().includes(s)
-  );
+  const hay = [
+    dv.dvNumber,
+    dv.supplier?.name ?? dv.payeeName ?? '',
+    dv.particulars,
+    amountSearchTokens(dv.grossAmount, dv.taxAmount, dv.netAmount),
+  ].join(' ');
+  return matchesQuery(hay, q);
 }
 
 export default function DisbursementListPage() {
@@ -141,7 +142,7 @@ export default function DisbursementListPage() {
       <div className="acct-toolbar">
         <input
           type="search"
-          placeholder="Search DV #, payee, or particulars…"
+          placeholder="Search DV #, payee, particulars, or amount…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{ minWidth: 260, flex: '1 1 260px' }}

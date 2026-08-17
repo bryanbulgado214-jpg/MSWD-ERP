@@ -218,7 +218,7 @@ export default function CheckRegisterPage() {
         <form onSubmit={handleSearch} style={{ display: 'contents' }}>
           <input
             type="text"
-            placeholder="Search check# or payee..."
+            placeholder="Search check#, payee, or amount..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />

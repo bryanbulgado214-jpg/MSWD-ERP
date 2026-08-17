@@ -73,7 +73,7 @@ export default function JevListPage() {
         </select>
         <input
           type="text"
-          placeholder="Search JEV# or particulars..."
+          placeholder="Search JEV#, particulars, or amount..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />

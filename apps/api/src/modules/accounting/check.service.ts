@@ -9,6 +9,8 @@ import {
 import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
 
+import { parseAmountQuery } from './parse-amount-query';
+
 const CHECK_SELECT = {
   id: true,
   checkNumber: true,
@@ -71,19 +73,24 @@ export class CheckService {
     organizationId: string,
     filters?: { bankAccountId?: string; status?: string; search?: string },
   ) {
+    const search = filters?.search?.trim();
+    let searchWhere = {};
+    if (search) {
+      const or: any[] = [
+        { checkNumber: { contains: search, mode: 'insensitive' as const } },
+        { payeeName: { contains: search, mode: 'insensitive' as const } },
+      ];
+      // Let users find a check by amount too (e.g. "525", "525.00", "1,234.56").
+      const amount = parseAmountQuery(search);
+      if (amount !== null) or.push({ amount });
+      searchWhere = { OR: or };
+    }
     return this.prisma.check.findMany({
       where: {
         organizationId,
         ...(filters?.bankAccountId ? { bankAccountId: filters.bankAccountId } : {}),
         ...(filters?.status ? { status: filters.status as any } : {}),
-        ...(filters?.search
-          ? {
-              OR: [
-                { checkNumber: { contains: filters.search, mode: 'insensitive' as const } },
-                { payeeName: { contains: filters.search, mode: 'insensitive' as const } },
-              ],
-            }
-          : {}),
+        ...searchWhere,
       },
       select: CHECK_SELECT,
       orderBy: { checkDate: 'desc' },
