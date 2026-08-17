@@ -112,6 +112,9 @@ export const MODULE_GATES = {
     // ledgers / registers) live under Reports; accounting.read grants them.
     'accounting.read',
     'accounting.reports',
+    // The cashier's Report of Checks Issued (COA Appendix 35) also lives under
+    // Reports, so a check-read grant opens the module for the cashier.
+    'accounting.check.read',
     'procurement.read',
     'budgeting.read',
     'billing.reports',

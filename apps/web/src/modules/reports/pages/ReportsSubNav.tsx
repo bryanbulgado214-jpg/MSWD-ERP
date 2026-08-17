@@ -129,6 +129,13 @@ export const REPORT_GROUPS: ReportGroup[] = [
     label: 'Cash & Banks',
     items: [
       {
+        to: '/reports/report-of-checks-issued',
+        label: 'Report of Checks Issued',
+        perm: 'accounting.check.read',
+        icon: '🧾',
+        blurb: 'Monthly RCI (COA Appendix 35)',
+      },
+      {
         to: '/reports/check-register',
         label: 'Check Register',
         perm: 'accounting.check.read',

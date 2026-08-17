@@ -21,6 +21,7 @@ import { JournalEntryRegisterPage } from './pages/JournalEntryRegisterPage';
 import { LoanAmortizationPage } from './pages/LoanAmortizationPage';
 import { PayeesPage } from './pages/PayeesPage';
 import { ProcurementReportPage } from './pages/ProcurementReportPage';
+import { RciReportPage } from './pages/RciReportPage';
 import { ReportsLanding } from './pages/ReportsLanding';
 import { ReportsLayout } from './pages/ReportsLayout';
 import { SubsidiaryLedgersIndexPage } from './pages/SubsidiaryLedgersIndexPage';
@@ -55,6 +56,7 @@ export const reportsRoutes = [
       { path: 'loan-amortization', element: <LoanAmortizationPage /> },
 
       // ── Cash & Banks ───────────────────────────────────────────────────
+      { path: 'report-of-checks-issued', element: <RciReportPage /> },
       { path: 'check-register', element: <CheckRegisterReportPage /> },
       { path: 'bank-reconciliation', element: <BankReconciliationReportPage /> },
       { path: 'cash-bank-activity', element: <CashBankActivityPage /> },
