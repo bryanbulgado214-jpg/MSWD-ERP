@@ -11,6 +11,7 @@ import {
   getDisbursement,
   updateDisbursement,
 } from '../api';
+import { bankAccountLabel } from '../bank-account-label';
 import type { BankAccount, ChartOfAccount, CreateDisbursementInput } from '../types';
 
 import { AccountCombobox } from './AccountCombobox';
@@ -339,7 +340,7 @@ export default function NewDisbursementPage() {
                 <option value="">Select paying bank account...</option>
                 {bankAccounts.map((b) => (
                   <option key={b.id} value={b.id}>
-                    {b.bank.name} — {b.accountName} ({b.accountNumber})
+                    {bankAccountLabel(b)}
                   </option>
                 ))}
               </select>

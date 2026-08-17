@@ -27,6 +27,7 @@ import {
   type MatchView,
   type ReconAttachment,
 } from '../api';
+import { bankAccountLabel } from '../bank-account-label';
 import { parseBankCsv, formatBytes, type ParsedTxn } from '../bank-csv';
 import { downloadBankReconPdf } from '../bank-recon-report';
 import type {
@@ -265,7 +266,7 @@ function ReconciliationList() {
           <option value="">All Bank Accounts</option>
           {bankAccounts.map((ba) => (
             <option key={ba.id} value={ba.id}>
-              {ba.bank.code} — {ba.accountName}
+              {bankAccountLabel(ba)}
             </option>
           ))}
         </select>
@@ -292,7 +293,7 @@ function ReconciliationList() {
                     .filter((ba) => ba.status === 'active')
                     .map((ba) => (
                       <option key={ba.id} value={ba.id}>
-                        {ba.bank.code} — {ba.accountName}
+                        {bankAccountLabel(ba)}
                       </option>
                     ))}
                 </select>

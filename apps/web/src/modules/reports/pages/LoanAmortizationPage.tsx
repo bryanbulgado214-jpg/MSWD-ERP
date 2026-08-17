@@ -15,6 +15,7 @@ import {
   type LoanDetail,
   type LoanSummary,
 } from '../../accounting/api';
+import { bankAccountLabel } from '../../accounting/bank-account-label';
 import { AccountCombobox } from '../../accounting/pages/AccountCombobox';
 import '../../accounting/pages/accounting.css';
 import type { BankAccount, ChartOfAccount } from '../../accounting/types';
@@ -463,7 +464,7 @@ function NewLoanForm({
             <option value="">Select…</option>
             {banks.map((b) => (
               <option key={b.id} value={b.id}>
-                {b.bank.name} — {b.accountName} ({b.accountNumber})
+                {bankAccountLabel(b)}
               </option>
             ))}
           </select>
