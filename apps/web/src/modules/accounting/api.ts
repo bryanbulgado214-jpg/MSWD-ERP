@@ -244,6 +244,10 @@ export async function upsertAccountMapping(data: {
   return res.json();
 }
 
+export async function deleteAccountMapping(mappingKey: string): Promise<void> {
+  await authFetchMutate(`/accounting/mappings/${encodeURIComponent(mappingKey)}`, 'DELETE');
+}
+
 // ── JEV ──
 
 export async function getJevList(params?: string): Promise<JevListItem[]> {

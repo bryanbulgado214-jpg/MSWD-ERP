@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { IsString, MinLength } from 'class-validator';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -6,6 +6,7 @@ import { RequirePermissions } from '../../common/decorators/require-permissions.
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
+
 import { AccountMappingService } from './account-mapping.service';
 
 class UpsertAccountMappingDto {
@@ -30,10 +31,13 @@ export class AccountMappingController {
 
   @Post()
   @RequirePermissions('accounting.coa.manage')
-  upsert(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body() dto: UpsertAccountMappingDto,
-  ) {
+  upsert(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpsertAccountMappingDto) {
     return this.mappingService.upsert(user.organizationId, user.userId, dto);
+  }
+
+  @Delete(':mappingKey')
+  @RequirePermissions('accounting.coa.manage')
+  remove(@CurrentUser() user: AuthenticatedUser, @Param('mappingKey') mappingKey: string) {
+    return this.mappingService.remove(user.organizationId, user.userId, mappingKey);
   }
 }

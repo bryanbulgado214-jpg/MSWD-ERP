@@ -3,12 +3,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../../app/auth';
 import {
   AccountingApiError,
+  deleteAccountMapping,
   getAccountMappings,
   getChartOfAccounts,
   upsertAccountMapping,
 } from '../api';
 import type { AccountMapping, ChartOfAccount } from '../types';
 
+import { AccountCombobox } from './AccountCombobox';
 import { AccountingSubNav } from './AccountingSubNav';
 import './accounting.css';
 
@@ -74,6 +76,19 @@ export default function AccountMappingsPage() {
     }
   }
 
+  async function handleUnmap(mappingKey: string) {
+    setSaving(mappingKey);
+    setError('');
+    try {
+      await deleteAccountMapping(mappingKey);
+      load();
+    } catch (e) {
+      setError(e instanceof AccountingApiError ? e.message : 'Failed to remove mapping.');
+    } finally {
+      setSaving(null);
+    }
+  }
+
   const mappingMap = new Map<string, AccountMapping>();
   if (mappings.status === 'loaded') {
     for (const m of mappings.data) mappingMap.set(m.mappingKey, m);
@@ -127,25 +142,34 @@ export default function AccountMappingsPage() {
                     </td>
                     {canManage && (
                       <td>
-                        <select
+                        <div
                           style={{
-                            fontSize: 12,
-                            padding: '4px 8px',
-                            width: '100%',
-                            maxWidth: 340,
-                            boxSizing: 'border-box',
+                            display: 'flex',
+                            gap: 6,
+                            alignItems: 'center',
+                            maxWidth: 360,
                           }}
-                          value={existing?.chartOfAccount.id ?? ''}
-                          onChange={(e) => handleMap(sm.key, e.target.value)}
-                          disabled={saving === sm.key}
                         >
-                          <option value="">Select account...</option>
-                          {accounts.map((a) => (
-                            <option key={a.id} value={a.id}>
-                              {a.accountCode} — {a.name}
-                            </option>
-                          ))}
-                        </select>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <AccountCombobox
+                              accounts={accounts}
+                              value={existing?.chartOfAccount.id ?? ''}
+                              onChange={(id) => handleMap(sm.key, id)}
+                              placeholder="Type code or name…"
+                            />
+                          </div>
+                          {existing && (
+                            <button
+                              type="button"
+                              className="acct-btn acct-btn--sm"
+                              onClick={() => handleUnmap(sm.key)}
+                              disabled={saving === sm.key}
+                              title="Remove this mapping"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>

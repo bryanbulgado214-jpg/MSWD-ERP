@@ -60,6 +60,19 @@ export class AccountMappingService {
     );
   }
 
+  async remove(organizationId: string, userId: string, mappingKey: string) {
+    const existing = await this.prisma.accountMapping.findUnique({
+      where: { organizationId_mappingKey: { organizationId, mappingKey } },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundException('Mapping not found.');
+    return runAudited(this.prisma, userId, (tx) =>
+      tx.accountMapping.delete({
+        where: { organizationId_mappingKey: { organizationId, mappingKey } },
+      }),
+    );
+  }
+
   async resolve(organizationId: string, mappingKey: string) {
     const mapping = await this.prisma.accountMapping.findFirst({
       where: { organizationId, mappingKey, isActive: true },
