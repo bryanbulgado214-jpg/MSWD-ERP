@@ -390,6 +390,59 @@ export async function getGlPeriods(fiscalYearId: string): Promise<PeriodOption[]
   return res.json();
 }
 
+// ── Beginning balances (Trial Balance CSV upload) ──
+
+export interface PostableAccount {
+  id: string;
+  accountCode: string;
+  name: string;
+  accountType: string;
+  normalBalance: string;
+}
+
+export interface OpeningBalancePreviewRow {
+  line: number;
+  accountCode: string;
+  csvName: string;
+  matchedName: string | null;
+  debit: number;
+  credit: number;
+  status: 'ok' | 'unmatched' | 'header' | 'inactive' | 'duplicate' | 'invalid';
+  message?: string;
+}
+
+export interface OpeningBalancePreview {
+  rows: OpeningBalancePreviewRow[];
+  totalDebit: number;
+  totalCredit: number;
+  balanced: boolean;
+  okCount: number;
+  errors: string[];
+  canImport: boolean;
+  existingOpeningJev: { id: string; jevNumber: string } | null;
+}
+
+export async function getPostableAccounts(): Promise<PostableAccount[]> {
+  const res = await authFetch('/accounting/gl/accounts');
+  return res.json();
+}
+
+export async function previewOpeningBalances(csv: string): Promise<OpeningBalancePreview> {
+  const res = await authFetchMutate('/accounting/gl/opening-balances/preview', 'POST', { csv });
+  return res.json();
+}
+
+export async function importOpeningBalances(
+  csv: string,
+  asOfDate: string,
+): Promise<{ jevId: string; jevNumber: string; lineCount: number; totalDebit: number }> {
+  const res = await authFetchMutate('/accounting/gl/opening-balances/import', 'POST', {
+    csv,
+    asOfDate,
+  });
+  return res.json();
+}
+
 // ── Check Register ──
 
 export async function getChecks(params?: string): Promise<CheckListItem[]> {

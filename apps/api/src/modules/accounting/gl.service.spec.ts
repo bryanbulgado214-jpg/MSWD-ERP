@@ -11,11 +11,13 @@ import { PrismaClient } from '@prisma/client';
 
 import type { PrismaService } from '../../database/prisma.service';
 
+import { AutoJevService } from './auto-jev.service';
 import { GlService } from './gl.service';
 import { JevService } from './jev.service';
 
 const prisma = new PrismaClient();
-const gl = new GlService(prisma as unknown as PrismaService);
+const autoJev = new AutoJevService(prisma as unknown as PrismaService);
+const gl = new GlService(prisma as unknown as PrismaService, autoJev);
 const jevService = new JevService(prisma as unknown as PrismaService);
 const runId = Date.now().toString(36);
 

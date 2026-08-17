@@ -1,10 +1,21 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
+
+import { ImportOpeningBalancesDto, PreviewOpeningBalancesDto } from './dto/opening-balance.dto';
 import { GlService } from './gl.service';
 
 @Controller('accounting/gl')
@@ -73,5 +84,28 @@ export class GlController {
   @RequirePermissions('accounting.read')
   getPostableAccounts(@CurrentUser() user: AuthenticatedUser) {
     return this.glService.getPostableAccounts(user.organizationId);
+  }
+
+  @Post('opening-balances/preview')
+  @RequirePermissions('accounting.jev.create')
+  previewOpeningBalances(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: PreviewOpeningBalancesDto,
+  ) {
+    return this.glService.previewOpeningBalances(user.organizationId, dto.csv);
+  }
+
+  @Post('opening-balances/import')
+  @RequirePermissions('accounting.jev.create')
+  importOpeningBalances(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ImportOpeningBalancesDto,
+  ) {
+    return this.glService.importOpeningBalances(
+      user.organizationId,
+      user.userId,
+      dto.csv,
+      dto.asOfDate,
+    );
   }
 }

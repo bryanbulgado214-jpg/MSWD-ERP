@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { useAuth } from '../../../app/auth';
 import './accounting.css';
 import { getTrialBalance, getGlFiscalYears, getGlPeriods } from '../api';
 import type { TrialBalanceRow, FiscalYearOption, PeriodOption } from '../types';
+
+import { OpeningBalanceUploadModal } from './OpeningBalanceUploadModal';
 
 function formatPeso(value: string | number): string {
   const num = typeof value === 'string' ? parseFloat(value) : value;
@@ -18,11 +21,16 @@ type LoadState =
   | { status: 'loaded'; data: TrialBalanceRow[] };
 
 export default function TrialBalancePage() {
+  const { permissions } = useAuth();
+  const canUploadOpening = permissions.has('accounting.jev.create');
   const [fiscalYears, setFiscalYears] = useState<FiscalYearOption[]>([]);
   const [periods, setPeriods] = useState<PeriodOption[]>([]);
   const [selectedFY, setSelectedFY] = useState('');
   const [selectedPeriod, setSelectedPeriod] = useState('');
   const [state, setState] = useState<LoadState>({ status: 'idle' });
+  const [showUpload, setShowUpload] = useState(false);
+  const [flash, setFlash] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     getGlFiscalYears().then((fy) => {
@@ -49,7 +57,7 @@ export default function TrialBalancePage() {
     getTrialBalance(params.toString())
       .then((data) => setState({ status: 'loaded', data }))
       .catch((err) => setState({ status: 'error', message: err.message }));
-  }, [selectedFY, selectedPeriod]);
+  }, [selectedFY, selectedPeriod, reloadKey]);
 
   const rows = state.status === 'loaded' ? state.data : [];
   const totalDebit = rows.reduce((s, r) => s + parseFloat(r.totalDebit), 0);
@@ -76,7 +84,34 @@ export default function TrialBalancePage() {
             </option>
           ))}
         </select>
+
+        {canUploadOpening && (
+          <button
+            type="button"
+            className="acct-btn acct-btn--sm acct-btn--primary"
+            style={{ marginLeft: 'auto' }}
+            onClick={() => setShowUpload(true)}
+          >
+            ⬆ Upload beginning balances
+          </button>
+        )}
       </div>
+
+      {flash && (
+        <div
+          style={{
+            background: '#ecfdf3',
+            border: '1px solid #6ce9a6',
+            color: '#027a48',
+            borderRadius: 8,
+            padding: '10px 14px',
+            fontSize: 13,
+            marginBottom: 12,
+          }}
+        >
+          {flash}
+        </div>
+      )}
 
       {state.status === 'error' && <div className="acct-error">{state.message}</div>}
       {state.status === 'loading' && <div className="acct-empty">Loading...</div>}
@@ -141,6 +176,17 @@ export default function TrialBalancePage() {
             </tfoot>
           </table>
         </div>
+      )}
+
+      {showUpload && (
+        <OpeningBalanceUploadModal
+          onClose={() => setShowUpload(false)}
+          onImported={(message) => {
+            setShowUpload(false);
+            setFlash(message);
+            setReloadKey((k) => k + 1);
+          }}
+        />
       )}
     </div>
   );
