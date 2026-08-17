@@ -39,6 +39,12 @@ export class CreateJevDto {
   @MinLength(1)
   particulars!: string;
 
+  /** Manual JEV number (used when the org has manual document numbering on). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  jevNumber?: string;
+
   @IsOptional()
   @IsString()
   responsibilityCenterId?: string;

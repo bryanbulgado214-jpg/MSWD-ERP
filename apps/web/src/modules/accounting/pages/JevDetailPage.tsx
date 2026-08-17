@@ -6,6 +6,7 @@ import {
   AccountingApiError,
   approveJev,
   createJev,
+  getAccountingSettings,
   getChartOfAccounts,
   getJev,
   getOpenPeriods,
@@ -74,6 +75,8 @@ export default function JevDetailPage() {
   // Form state
   const [jevDate, setJevDate] = useState(new Date().toISOString().slice(0, 10));
   const [particulars, setParticulars] = useState('');
+  const [jevNumber, setJevNumber] = useState('');
+  const [manualNumbering, setManualNumbering] = useState(false);
   const [lines, setLines] = useState<LineDraft[]>([emptyLine(), emptyLine()]);
 
   const loadRef = useCallback(async () => {
@@ -105,6 +108,14 @@ export default function JevDetailPage() {
       setLoading(false);
     }
   }, [id, isNew]);
+
+  useEffect(() => {
+    if (isNew) {
+      getAccountingSettings()
+        .then((s) => setManualNumbering(s.manualDocumentNumbering))
+        .catch(() => setManualNumbering(false));
+    }
+  }, [isNew]);
 
   useEffect(() => {
     loadRef();
@@ -143,6 +154,7 @@ export default function JevDetailPage() {
       const payload = {
         jevDate,
         particulars,
+        ...(manualNumbering && jevNumber.trim() ? { jevNumber: jevNumber.trim() } : {}),
         lines: lines
           .filter((l) => l.chartOfAccountId)
           .map((l) => ({
@@ -255,6 +267,22 @@ export default function JevDetailPage() {
         <h1>New Journal Entry Voucher</h1>
         {error && <div className="acct-error">{error}</div>}
         <form className="acct-form" onSubmit={handleSave}>
+          {manualNumbering && (
+            <div className="acct-form-row">
+              <div className="acct-field">
+                <label>JEV Number</label>
+                <input
+                  value={jevNumber}
+                  onChange={(e) => setJevNumber(e.target.value)}
+                  required
+                  placeholder="e.g. JEV-2026-01-001"
+                />
+                <div style={{ fontSize: 12, color: '#98a2b3', marginTop: 4 }}>
+                  Manual numbering is on — type the actual JEV number.
+                </div>
+              </div>
+            </div>
+          )}
           <div className="acct-form-row">
             <div className="acct-field">
               <label>JEV Date</label>

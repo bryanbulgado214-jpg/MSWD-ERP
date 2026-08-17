@@ -200,6 +200,9 @@ model OrganizationSettings {
   defaultCurrencyCode    String   @default("PHP") @map("default_currency_code") @db.VarChar(3)
   fiscalYearStartMonth   Int      @default(1) @map("fiscal_year_start_month") @db.SmallInt
   timezone               String   @default("Asia/Manila") @db.VarChar(50)
+  /// When true, JEV and DV numbers are entered by hand instead of being
+  /// auto-generated from document_sequences (used while back-entering history).
+  manualDocumentNumbering Boolean @default(false) @map("manual_document_numbering")
   // Configurable "District Profile" — shown on printed forms and headings.
   address                String?  @db.VarChar(500)
   contact                String?  @db.VarChar(255)
@@ -352,6 +355,8 @@ model User {
   userRoles                  UserRole[]                @relation("UserRolesForUser")
   grantedUserRoles            UserRole[]                @relation("UserRolesGrantedBy")
   grantedRolePermissions       RolePermission[]         @relation("RolePermissionsGrantedBy")
+  directPermissions            UserPermission[]         @relation("UserDirectPermissions")
+  grantedUserPermissions       UserPermission[]         @relation("UserPermissionsGrantedBy")
   auditLogs                   AuditLog[]                @relation("AuditLogsPerformedBy")
   uploadedAttachments          Attachment[]              @relation("AttachmentsUploadedBy")
   authoredComments             Comment[]                @relation("CommentsCreatedBy")
@@ -566,9 +571,30 @@ model Permission {
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   rolePermissions RolePermission[]
+  userPermissions UserPermission[]
 
   @@index([module])
   @@map("permissions")
+}
+
+/// Direct per-user permission grant. Access is the union of a user's role
+/// permissions and these direct grants (see get-granted-permission-codes).
+/// Lets an admin tailor exactly what an individual person can do, independent
+/// of any position/role.
+model UserPermission {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  permissionId String   @map("permission_id") @db.Uuid
+  grantedBy    String?  @map("granted_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user       User       @relation("UserDirectPermissions", fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  granter    User?      @relation("UserPermissionsGrantedBy", fields: [grantedBy], references: [id], onDelete: SetNull)
+
+  @@unique([userId, permissionId])
+  @@index([userId])
+  @@map("user_permissions")
 }
 
 /// Which roles a user holds. `organizational_unit_id` is NOT NULL by

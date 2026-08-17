@@ -290,6 +290,17 @@ export class GlService {
     });
   }
 
+  /** Accounting-wide flags the entry forms need (readable by any accounting user). */
+  async getAccountingSettings(
+    organizationId: string,
+  ): Promise<{ manualDocumentNumbering: boolean }> {
+    const s = await this.prisma.organizationSettings.findUnique({
+      where: { organizationId },
+      select: { manualDocumentNumbering: true },
+    });
+    return { manualDocumentNumbering: s?.manualDocumentNumbering ?? false };
+  }
+
   async getPostableAccounts(organizationId: string) {
     return this.prisma.chartOfAccount.findMany({
       where: {

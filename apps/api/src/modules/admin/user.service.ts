@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 
 import { PrismaService } from '../../database/prisma.service';
@@ -61,7 +66,11 @@ export class UserService {
     };
   }
 
-  async create(organizationId: string, actorId: string, data: { username: string; email: string; password: string; isActive?: boolean }) {
+  async create(
+    organizationId: string,
+    actorId: string,
+    data: { username: string; email: string; password: string; isActive?: boolean },
+  ) {
     const existing = await this.prisma.user.findFirst({
       where: { organizationId, OR: [{ username: data.username }, { email: data.email }] },
     });
@@ -86,7 +95,12 @@ export class UserService {
     });
   }
 
-  async update(organizationId: string, actorId: string, userId: string, data: { email?: string; password?: string; isActive?: boolean }) {
+  async update(
+    organizationId: string,
+    actorId: string,
+    userId: string,
+    data: { email?: string; password?: string; isActive?: boolean },
+  ) {
     const user = await this.prisma.user.findFirst({ where: { id: userId, organizationId } });
     if (!user) throw new NotFoundException('User not found.');
 
@@ -138,6 +152,58 @@ export class UserService {
         },
         select: { id: true, role: { select: { id: true, code: true, name: true } } },
       });
+    });
+  }
+
+  /** The permission codes granted directly to this user (independent of roles). */
+  async getPermissions(organizationId: string, userId: string): Promise<string[]> {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, organizationId },
+      select: { id: true },
+    });
+    if (!user) throw new NotFoundException('User not found.');
+    const grants = await this.prisma.userPermission.findMany({
+      where: { userId },
+      select: { permission: { select: { code: true } } },
+      orderBy: { permission: { code: 'asc' } },
+    });
+    return grants.map((g) => g.permission.code);
+  }
+
+  /** Replace this user's direct permission grants with exactly `codes`. */
+  async setPermissions(
+    organizationId: string,
+    actorId: string,
+    userId: string,
+    codes: string[],
+  ): Promise<{ codes: string[] }> {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, organizationId },
+      select: { id: true },
+    });
+    if (!user) throw new NotFoundException('User not found.');
+
+    const unique = [...new Set(codes.map((c) => c.trim()).filter(Boolean))];
+    const perms = unique.length
+      ? await this.prisma.permission.findMany({
+          where: { code: { in: unique } },
+          select: { id: true, code: true },
+        })
+      : [];
+    const found = new Set(perms.map((p) => p.code));
+    const invalid = unique.filter((c) => !found.has(c));
+    if (invalid.length) {
+      throw new BadRequestException(`Unknown permission code(s): ${invalid.join(', ')}`);
+    }
+
+    return runAudited(this.prisma, actorId, async (tx) => {
+      await tx.userPermission.deleteMany({ where: { userId } });
+      if (perms.length) {
+        await tx.userPermission.createMany({
+          data: perms.map((p) => ({ userId, permissionId: p.id, grantedBy: actorId })),
+        });
+      }
+      return { codes: perms.map((p) => p.code) };
     });
   }
 

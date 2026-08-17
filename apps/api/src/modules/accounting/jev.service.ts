@@ -126,6 +126,7 @@ export class JevService {
       particulars: string;
       responsibilityCenterId?: string;
       fundSourceId?: string;
+      jevNumber?: string;
       lines: Array<{
         chartOfAccountId: string;
         debitAmount: number;
@@ -138,12 +139,27 @@ export class JevService {
 
     const period = await this.findOpenPeriod(organizationId, new Date(data.jevDate));
 
+    const settings = await this.prisma.organizationSettings.findUnique({
+      where: { organizationId },
+      select: { manualDocumentNumbering: true },
+    });
+    const manualNumbering = settings?.manualDocumentNumbering ?? false;
+    const manualNumber = data.jevNumber?.trim();
+    if (manualNumbering && !manualNumber) {
+      throw new BadRequestException('Enter the JEV number (manual numbering is turned on).');
+    }
+    if (manualNumber) {
+      const clash = await this.prisma.journalEntryVoucher.findFirst({
+        where: { organizationId, jevNumber: manualNumber },
+        select: { id: true },
+      });
+      if (clash) throw new ConflictException(`JEV number "${manualNumber}" is already used.`);
+    }
+
     return runAudited(this.prisma, userId, async (tx) => {
-      const jevNumber = await this.generateJevNumber(
-        tx,
-        organizationId,
-        new Date(data.jevDate).getUTCFullYear(),
-      );
+      const jevNumber =
+        manualNumber ??
+        (await this.generateJevNumber(tx, organizationId, new Date(data.jevDate).getUTCFullYear()));
 
       const totalDebit = data.lines.reduce((sum, l) => sum + l.debitAmount, 0);
       const totalCredit = data.lines.reduce((sum, l) => sum + l.creditAmount, 0);

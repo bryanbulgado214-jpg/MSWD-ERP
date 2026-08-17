@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
@@ -325,7 +330,24 @@ export class DisbursementService {
 
     const bankDisplay = `${bankAccount.bank.name} — ${bankAccount.accountName} (${bankAccount.accountNumber})`;
     const asDraft = dto.asDraft === true;
-    const dvNumber = await this.generateDvNumber(orgId);
+
+    const settings = await this.prisma.organizationSettings.findUnique({
+      where: { organizationId: orgId },
+      select: { manualDocumentNumbering: true },
+    });
+    const manualNumbering = settings?.manualDocumentNumbering ?? false;
+    const manualNumber = dto.dvNumber?.trim();
+    if (manualNumbering && !manualNumber) {
+      throw new BadRequestException('Enter the DV number (manual numbering is turned on).');
+    }
+    if (manualNumber) {
+      const clash = await this.prisma.disbursementVoucher.findFirst({
+        where: { organizationId: orgId, dvNumber: manualNumber },
+        select: { id: true },
+      });
+      if (clash) throw new ConflictException(`DV number "${manualNumber}" is already used.`);
+    }
+    const dvNumber = manualNumber ?? (await this.generateDvNumber(orgId));
     const now = new Date();
     const dvDate = new Date(dto.dvDate);
 

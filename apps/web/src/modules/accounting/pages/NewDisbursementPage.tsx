@@ -6,6 +6,7 @@ import { listFundSources } from '../../budgeting/api';
 import {
   AccountingApiError,
   createDisbursement,
+  getAccountingSettings,
   getBankAccounts,
   getChartOfAccounts,
   getDisbursement,
@@ -65,6 +66,8 @@ export default function NewDisbursementPage() {
   // Header
   const [dvType, setDvType] = useState('travel');
   const [dvDate, setDvDate] = useState(new Date().toISOString().slice(0, 10));
+  const [dvNumber, setDvNumber] = useState('');
+  const [manualNumbering, setManualNumbering] = useState(false);
   const [payeeName, setPayeeName] = useState('');
   const [payeeTin, setPayeeTin] = useState('');
   const [payeeAddress, setPayeeAddress] = useState('');
@@ -87,6 +90,14 @@ export default function NewDisbursementPage() {
         setFundSources(await listFundSources());
       } catch {
         /* fund sources optional */
+      }
+      if (!id) {
+        try {
+          const s = await getAccountingSettings();
+          setManualNumbering(s.manualDocumentNumbering);
+        } catch {
+          /* numbering setting optional */
+        }
       }
 
       // Edit mode — prefill from the existing draft DV.
@@ -169,6 +180,7 @@ export default function NewDisbursementPage() {
       const payload: CreateDisbursementInput = {
         dvType,
         dvDate,
+        ...(manualNumbering && dvNumber.trim() ? { dvNumber: dvNumber.trim() } : {}),
         payeeName: payeeName.trim(),
         ...(payeeTin.trim() ? { payeeTin: payeeTin.trim() } : {}),
         ...(payeeAddress.trim() ? { payeeAddress: payeeAddress.trim() } : {}),
@@ -265,6 +277,18 @@ export default function NewDisbursementPage() {
                 onChange={(e) => setDvDate(e.target.value)}
               />
             </div>
+            {manualNumbering && (
+              <div style={cell('180px')}>
+                <label style={labelStyle}>DV Number</label>
+                <input
+                  style={inputStyle}
+                  value={dvNumber}
+                  onChange={(e) => setDvNumber(e.target.value)}
+                  placeholder="e.g. DV-2026-01-001"
+                  required
+                />
+              </div>
+            )}
             <div style={cell('220px')}>
               <label style={labelStyle}>Fund Cluster</label>
               <select

@@ -271,6 +271,7 @@ export async function createJev(data: {
   particulars: string;
   responsibilityCenterId?: string;
   fundSourceId?: string;
+  jevNumber?: string;
   lines: Array<{
     chartOfAccountId: string;
     debitAmount: number;
@@ -428,6 +429,12 @@ export interface OpeningBalancePreview {
 
 export async function getPostableAccounts(): Promise<PostableAccount[]> {
   const res = await authFetch('/accounting/gl/accounts');
+  return res.json();
+}
+
+/** Accounting-wide flags the entry forms need (e.g. manual document numbering). */
+export async function getAccountingSettings(): Promise<{ manualDocumentNumbering: boolean }> {
+  const res = await authFetch('/accounting/gl/settings');
   return res.json();
 }
 

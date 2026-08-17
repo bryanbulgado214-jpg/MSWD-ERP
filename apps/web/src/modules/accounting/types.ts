@@ -505,6 +505,8 @@ export interface CreateDisbursementLineInput {
 export interface CreateDisbursementInput {
   dvType: string;
   dvDate: string;
+  /** Manual DV number (used when manual document numbering is on). */
+  dvNumber?: string;
   payeeName: string;
   payeeTin?: string;
   payeeAddress?: string;

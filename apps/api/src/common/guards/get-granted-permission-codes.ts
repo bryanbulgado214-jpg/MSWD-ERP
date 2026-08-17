@@ -1,12 +1,12 @@
 import type { PrismaClient } from '@prisma/client';
 
 export async function getGrantedPermissionCodes(
-  prisma: Pick<PrismaClient, 'userRole' | 'delegationAuthority'>,
+  prisma: Pick<PrismaClient, 'userRole' | 'delegationAuthority' | 'userPermission'>,
   userId: string,
 ): Promise<Set<string>> {
   const today = new Date();
 
-  const [userRoles, delegations] = await Promise.all([
+  const [userRoles, delegations, directGrants] = await Promise.all([
     prisma.userRole.findMany({
       where: { userId },
       include: {
@@ -28,6 +28,11 @@ export async function getGrantedPermissionCodes(
       },
       select: { permissionCode: true },
     }),
+    // Direct per-user grants — access is the union of roles + these.
+    prisma.userPermission.findMany({
+      where: { userId },
+      select: { permission: { select: { code: true } } },
+    }),
   ]);
 
   const codes = new Set<string>();
@@ -39,6 +44,9 @@ export async function getGrantedPermissionCodes(
   }
   for (const d of delegations) {
     codes.add(d.permissionCode);
+  }
+  for (const g of directGrants) {
+    codes.add(g.permission.code);
   }
   return codes;
 }

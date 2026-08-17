@@ -59,6 +59,7 @@ export function DistrictProfilePage() {
         address: form.address ?? '',
         contact: form.contact ?? '',
         logoUrl: form.logoUrl ?? '',
+        manualDocumentNumbering: form.manualDocumentNumbering,
       });
       setSaved(true);
       // Reload so the header and printed forms pick up the new profile everywhere.
@@ -148,6 +149,37 @@ export function DistrictProfilePage() {
                 }}
               />
             ) : null}
+          </div>
+
+          <div
+            style={{
+              borderTop: '1px solid #eaecf0',
+              paddingTop: 16,
+            }}
+          >
+            <label style={LABEL_STYLE}>Document Numbering</label>
+            <label
+              style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer' }}
+            >
+              <input
+                type="checkbox"
+                checked={form.manualDocumentNumbering}
+                onChange={(e) => {
+                  setForm((f) => (f ? { ...f, manualDocumentNumbering: e.target.checked } : f));
+                  setSaved(false);
+                }}
+                style={{ marginTop: 3 }}
+              />
+              <span style={{ fontSize: 13 }}>
+                <strong>Enter JEV &amp; DV numbers manually</strong>
+                <br />
+                <span style={{ color: '#667085' }}>
+                  Turns off automatic numbering so you can type the exact document number when
+                  back-entering historical Journal Entry Vouchers and Disbursement Vouchers. Turn
+                  this off later to resume auto-numbering for new entries.
+                </span>
+              </span>
+            </label>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>

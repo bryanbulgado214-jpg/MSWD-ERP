@@ -10,6 +10,7 @@ export interface OrganizationProfile {
   address: string | null;
   contact: string | null;
   logoUrl: string | null;
+  manualDocumentNumbering: boolean;
 }
 
 const norm = (s?: string): string | null => (s && s.trim() ? s.trim() : null);
@@ -24,7 +25,15 @@ export class OrganizationProfileService {
       select: {
         id: true,
         name: true,
-        settings: { select: { legalName: true, address: true, contact: true, logoUrl: true } },
+        settings: {
+          select: {
+            legalName: true,
+            address: true,
+            contact: true,
+            logoUrl: true,
+            manualDocumentNumbering: true,
+          },
+        },
       },
     });
     return {
@@ -34,6 +43,7 @@ export class OrganizationProfileService {
       address: org.settings?.address ?? null,
       contact: org.settings?.contact ?? null,
       logoUrl: org.settings?.logoUrl ?? null,
+      manualDocumentNumbering: org.settings?.manualDocumentNumbering ?? false,
     };
   }
 
@@ -46,6 +56,7 @@ export class OrganizationProfileService {
       address?: string;
       contact?: string;
       logoUrl?: string;
+      manualDocumentNumbering?: boolean;
     },
   ): Promise<OrganizationProfile> {
     await runAudited(this.prisma, userId, async (tx) => {
@@ -58,12 +69,14 @@ export class OrganizationProfileService {
       const existing = await tx.organizationSettings.findUnique({ where: { organizationId } });
       // Partial update: only touch fields actually present in the payload
       // (an omitted field is left unchanged; an empty string clears it).
-      const patch: Record<string, string | null> = { updatedBy: userId };
+      const patch: Record<string, string | boolean | null> = { updatedBy: userId };
       if (data.legalName !== undefined && data.legalName.trim())
         patch.legalName = data.legalName.trim();
       if (data.address !== undefined) patch.address = norm(data.address);
       if (data.contact !== undefined) patch.contact = norm(data.contact);
       if (data.logoUrl !== undefined) patch.logoUrl = norm(data.logoUrl);
+      if (data.manualDocumentNumbering !== undefined)
+        patch.manualDocumentNumbering = data.manualDocumentNumbering;
 
       if (existing) {
         await tx.organizationSettings.update({ where: { organizationId }, data: patch });
@@ -76,6 +89,8 @@ export class OrganizationProfileService {
             address: (patch.address as string | null) ?? null,
             contact: (patch.contact as string | null) ?? null,
             logoUrl: (patch.logoUrl as string | null) ?? null,
+            manualDocumentNumbering:
+              (patch.manualDocumentNumbering as boolean | undefined) ?? false,
             updatedBy: userId,
           },
         });

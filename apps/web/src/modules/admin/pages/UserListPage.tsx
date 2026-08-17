@@ -5,6 +5,7 @@ import type { UserSummary, RoleSummary } from '../api';
 import { listUsers, listRoles, createUser, updateUser, assignRole, revokeRole } from '../api';
 
 import { AdminSubNav } from './AdminSubNav';
+import { UserAccessModal } from './UserAccessModal';
 import './admin.css';
 
 export function UserListPage() {
@@ -17,6 +18,8 @@ export function UserListPage() {
   const [creating, setCreating] = useState(false);
   const [roleModal, setRoleModal] = useState<{ userId: string; username: string } | null>(null);
   const [selectedRoleId, setSelectedRoleId] = useState('');
+  const [accessModal, setAccessModal] = useState<{ userId: string; username: string } | null>(null);
+  const [flash, setFlash] = useState('');
 
   function load() {
     setLoading(true);
@@ -37,10 +40,12 @@ export function UserListPage() {
     e.preventDefault();
     setCreating(true);
     try {
-      await createUser(createForm);
+      const created = (await createUser(createForm)) as { id: string; username: string };
       setShowCreate(false);
       setCreateForm({ username: '', email: '', password: '' });
       load();
+      // Immediately let the admin choose this person's access.
+      setAccessModal({ userId: created.id, username: created.username });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create user');
     } finally {
@@ -105,6 +110,22 @@ export function UserListPage() {
           <button type="button" onClick={() => setError('')}>
             dismiss
           </button>
+        </div>
+      )}
+
+      {flash && (
+        <div
+          style={{
+            background: '#ecfdf3',
+            border: '1px solid #6ce9a6',
+            color: '#027a48',
+            borderRadius: 8,
+            padding: '8px 12px',
+            fontSize: 13,
+            marginBottom: 12,
+          }}
+        >
+          {flash}
         </div>
       )}
 
@@ -243,19 +264,40 @@ export function UserListPage() {
                   {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : 'Never'}
                 </td>
                 <td>
-                  <button
-                    type="button"
-                    className={`admin-btn admin-btn--sm ${u.isActive ? 'admin-btn--danger' : 'admin-btn--success'}`}
-                    onClick={() => handleToggleActive(u)}
-                  >
-                    {u.isActive ? 'Deactivate' : 'Activate'}
-                  </button>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--sm"
+                      onClick={() => setAccessModal({ userId: u.id, username: u.username })}
+                    >
+                      Access
+                    </button>
+                    <button
+                      type="button"
+                      className={`admin-btn admin-btn--sm ${u.isActive ? 'admin-btn--danger' : 'admin-btn--success'}`}
+                      onClick={() => handleToggleActive(u)}
+                    >
+                      {u.isActive ? 'Deactivate' : 'Activate'}
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {accessModal && (
+        <UserAccessModal
+          userId={accessModal.userId}
+          username={accessModal.username}
+          onClose={() => setAccessModal(null)}
+          onSaved={(count) => {
+            setAccessModal(null);
+            setFlash(`Saved access for ${accessModal.username} — ${count} feature(s) granted.`);
+          }}
+        />
+      )}
     </div>
   );
 }

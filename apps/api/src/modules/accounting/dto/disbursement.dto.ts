@@ -49,6 +49,12 @@ export class CreateDisbursementDto {
   @IsDateString()
   dvDate!: string;
 
+  /** Manual DV number (used when the org has manual document numbering on). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  dvNumber?: string;
+
   @IsString()
   @MinLength(1)
   @MaxLength(200)

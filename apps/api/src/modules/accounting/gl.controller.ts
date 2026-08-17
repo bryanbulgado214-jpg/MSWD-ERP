@@ -86,6 +86,12 @@ export class GlController {
     return this.glService.getPostableAccounts(user.organizationId);
   }
 
+  @Get('settings')
+  @RequirePermissions('accounting.read')
+  getAccountingSettings(@CurrentUser() user: AuthenticatedUser) {
+    return this.glService.getAccountingSettings(user.organizationId);
+  }
+
   @Post('opening-balances/preview')
   @RequirePermissions('accounting.jev.create')
   previewOpeningBalances(

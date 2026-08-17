@@ -18,7 +18,7 @@ async function authFetch(path: string): Promise<Response> {
 
 async function authFetchMutate(
   path: string,
-  method: 'POST' | 'PATCH' | 'DELETE',
+  method: 'POST' | 'PATCH' | 'PUT' | 'DELETE',
   body?: unknown,
 ): Promise<Response> {
   const token = getAccessToken();
@@ -99,6 +99,21 @@ export async function updateUser(
   data: { email?: string; password?: string; isActive?: boolean },
 ): Promise<unknown> {
   const res = await authFetchMutate(`/admin/users/${id}`, 'PATCH', data);
+  return res.json();
+}
+
+/** The permission codes granted directly to this user (independent of roles). */
+export async function getUserPermissions(userId: string): Promise<string[]> {
+  const res = await authFetch(`/admin/users/${userId}/permissions`);
+  return res.json();
+}
+
+/** Replace this user's direct permission grants with exactly `codes`. */
+export async function setUserPermissions(
+  userId: string,
+  codes: string[],
+): Promise<{ codes: string[] }> {
+  const res = await authFetchMutate(`/admin/users/${userId}/permissions`, 'PUT', { codes });
   return res.json();
 }
 
@@ -183,6 +198,7 @@ export interface OrganizationProfile {
   address: string | null;
   contact: string | null;
   logoUrl: string | null;
+  manualDocumentNumbering: boolean;
 }
 
 export async function getOrganizationProfile(): Promise<OrganizationProfile> {
@@ -196,6 +212,7 @@ export async function updateOrganizationProfile(data: {
   address?: string;
   contact?: string;
   logoUrl?: string;
+  manualDocumentNumbering?: boolean;
 }): Promise<OrganizationProfile> {
   const res = await authFetchMutate('/admin/organization-profile', 'PATCH', data);
   return res.json();

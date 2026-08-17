@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
@@ -15,6 +15,7 @@ class UpdateOrganizationProfileDto {
   @IsOptional() @IsString() @MaxLength(500) address?: string;
   @IsOptional() @IsString() @MaxLength(255) contact?: string;
   @IsOptional() @IsString() @MaxLength(1000) logoUrl?: string;
+  @IsOptional() @IsBoolean() manualDocumentNumbering?: boolean;
 }
 
 @Controller('admin/organization-profile')
