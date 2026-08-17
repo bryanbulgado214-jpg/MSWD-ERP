@@ -100,6 +100,119 @@ export class CheckService {
     return check;
   }
 
+  /**
+   * Report of Checks Issued (COA Appendix 35) for one month. Includes every
+   * issued check (a serial number was assigned) whose Disbursement Voucher is
+   * dated within the month — the month is keyed off the DV date, as required.
+   */
+  async getRci(
+    organizationId: string,
+    month: string,
+    opts?: { bankAccountId?: string; fundCluster?: string },
+  ) {
+    const bankAccountId = opts?.bankAccountId;
+    const m = /^(\d{4})-(\d{2})$/.exec(month ?? '');
+    if (!m) throw new BadRequestException('Provide the month as YYYY-MM.');
+    const year = Number(m[1]);
+    const mon = Number(m[2]);
+    const start = new Date(Date.UTC(year, mon - 1, 1));
+    const endExclusive = new Date(Date.UTC(year, mon, 1));
+
+    const checks = await this.prisma.check.findMany({
+      where: {
+        organizationId,
+        checkNumber: { not: null },
+        status: { in: ['printed', 'released', 'cleared', 'stale_dated'] },
+        ...(bankAccountId ? { bankAccountId } : {}),
+        disbursementVoucher: { dvDate: { gte: start, lt: endExclusive } },
+      },
+      orderBy: [{ checkDate: 'asc' }, { checkNumber: 'asc' }],
+      select: {
+        checkNumber: true,
+        checkDate: true,
+        amount: true,
+        payeeName: true,
+        disbursementVoucher: {
+          select: {
+            id: true,
+            dvNumber: true,
+            particulars: true,
+            accountCode: true,
+            payeeName: true,
+            ors: { select: { orsNumber: true } },
+            responsibilityCenter: { select: { code: true } },
+            supplier: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    // UACS object code = the primary (largest) debit account on the DV's entry.
+    const dvIds = checks.map((c) => c.disbursementVoucher?.id).filter((x): x is string => !!x);
+    const jevs = dvIds.length
+      ? await this.prisma.journalEntryVoucher.findMany({
+          where: { organizationId, sourceType: 'disbursement', sourceId: { in: dvIds } },
+          select: {
+            sourceId: true,
+            lines: {
+              orderBy: { debitAmount: 'desc' },
+              select: { debitAmount: true, chartOfAccount: { select: { accountCode: true } } },
+            },
+          },
+        })
+      : [];
+    const uacsByDv = new Map<string, string>();
+    for (const j of jevs) {
+      if (!j.sourceId) continue;
+      const topDebit = j.lines.find((l) => Number(l.debitAmount) > 0);
+      if (topDebit) uacsByDv.set(j.sourceId, topDebit.chartOfAccount.accountCode);
+    }
+
+    const rows = checks.map((c) => {
+      const dv = c.disbursementVoucher;
+      return {
+        checkDate: c.checkDate,
+        checkSerialNo: c.checkNumber ?? '',
+        dvNumber: dv?.dvNumber ?? '',
+        orsNumber: dv?.ors?.orsNumber ?? '',
+        rcCode: dv?.responsibilityCenter?.code ?? '',
+        payee: dv?.supplier?.name ?? dv?.payeeName ?? c.payeeName,
+        uacsObjectCode: dv?.accountCode ?? (dv ? (uacsByDv.get(dv.id) ?? '') : ''),
+        natureOfPayment: dv?.particulars ?? '',
+        amount: Number(c.amount),
+      };
+    });
+    const total = Math.round(rows.reduce((s, r) => s + r.amount, 0) * 100) / 100;
+
+    const org = await this.prisma.organization.findFirst({
+      where: { id: organizationId },
+      select: { name: true, settings: { select: { legalName: true } } },
+    });
+    let bankLabel = 'All bank accounts';
+    if (bankAccountId) {
+      const ba = await this.prisma.bankAccount.findFirst({
+        where: { id: bankAccountId, organizationId },
+        select: { accountName: true, accountNumber: true, bank: { select: { name: true } } },
+      });
+      if (ba) bankLabel = `${ba.bank.name} — ${ba.accountName} (${ba.accountNumber})`;
+    }
+    const periodCovered = new Date(Date.UTC(year, mon - 1, 1)).toLocaleString('en-PH', {
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+
+    return {
+      periodCovered,
+      entityName: org?.settings?.legalName ?? org?.name ?? '',
+      fundCluster: opts?.fundCluster ?? '',
+      bankLabel,
+      month,
+      rows,
+      total,
+    };
+  }
+
   async create(
     organizationId: string,
     userId: string,

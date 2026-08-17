@@ -6,8 +6,18 @@ import { useAuth } from '../../../app/auth';
 import { AccountingSubNav } from './AccountingSubNav';
 
 import './accounting.css';
-import { getChecks, printCheck, transitionCheck, voidCheck } from '../api';
-import type { CheckListItem } from '../types';
+import {
+  getBankAccounts,
+  getCheckRci,
+  getChecks,
+  printCheck,
+  transitionCheck,
+  voidCheck,
+} from '../api';
+import { downloadRciCsv, downloadRciPdf } from '../rci-report';
+import type { BankAccount, CheckListItem } from '../types';
+
+const FUND_CLUSTERS = ['Corporate Operating Budget'];
 
 function formatPeso(value: string | number): string {
   const num = typeof value === 'string' ? parseFloat(value) : value;
@@ -53,6 +63,14 @@ export default function CheckRegisterPage() {
   const [printError, setPrintError] = useState('');
   const [printing, setPrinting] = useState(false);
 
+  // Report of Checks Issued (COA Appendix 35)
+  const [rciMonth, setRciMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [rciFund, setRciFund] = useState(FUND_CLUSTERS[0]!);
+  const [rciBank, setRciBank] = useState('');
+  const [rciBanks, setRciBanks] = useState<BankAccount[]>([]);
+  const [rciBusy, setRciBusy] = useState<'csv' | 'pdf' | null>(null);
+  const [rciError, setRciError] = useState('');
+
   // Cleared-date modal (date picker, min = DV date)
   const [clearTarget, setClearTarget] = useState<CheckListItem | null>(null);
   const [clearDate, setClearDate] = useState(new Date().toISOString().slice(0, 10));
@@ -73,6 +91,36 @@ export default function CheckRegisterPage() {
   useEffect(() => {
     loadChecks();
   }, [filterBank, filterStatus]);
+
+  // Active bank accounts for the RCI bank filter (accountant view). Falls back
+  // silently for cashiers who lack the broad accounting.read permission.
+  useEffect(() => {
+    getBankAccounts()
+      .then((banks) => setRciBanks(banks.filter((b) => b.status === 'active')))
+      .catch(() => setRciBanks([]));
+  }, []);
+
+  async function downloadRci(format: 'csv' | 'pdf') {
+    if (!rciMonth) return;
+    setRciBusy(format);
+    setRciError('');
+    try {
+      const report = await getCheckRci(rciMonth, {
+        ...(rciBank ? { bankAccountId: rciBank } : {}),
+        ...(rciFund ? { fundCluster: rciFund } : {}),
+      });
+      if (report.rows.length === 0) {
+        setRciError('No checks were issued for the selected month and bank account.');
+        return;
+      }
+      if (format === 'csv') downloadRciCsv(report);
+      else downloadRciPdf(report);
+    } catch (e: any) {
+      setRciError(e?.message ?? 'Could not generate the report.');
+    } finally {
+      setRciBusy(null);
+    }
+  }
 
   const checks = state.status === 'loaded' ? state.data : [];
 
@@ -183,6 +231,20 @@ export default function CheckRegisterPage() {
     }
   }
 
+  const rciCtl: React.CSSProperties = {
+    padding: '6px 8px',
+    border: '1px solid #d0d5dd',
+    borderRadius: 6,
+    fontSize: 13,
+    boxSizing: 'border-box',
+  };
+  const rciLbl: React.CSSProperties = {
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#344054',
+    marginBottom: 3,
+  };
+
   return (
     <div className="acct-page">
       <AccountingSubNav />
@@ -226,6 +288,85 @@ export default function CheckRegisterPage() {
       </div>
 
       {actionError && <div className="acct-error">{actionError}</div>}
+
+      {/* Report of Checks Issued (COA Appendix 35) */}
+      <div
+        style={{
+          border: '1px solid #e4e7ec',
+          borderRadius: 10,
+          background: '#fcfcfd',
+          padding: '12px 14px',
+          margin: '14px 0 4px',
+          display: 'flex',
+          gap: 14,
+          alignItems: 'flex-end',
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ marginRight: 'auto' }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--mswd-navy)' }}>
+            Report of Checks Issued (COA Appendix 35)
+          </div>
+          <div style={{ fontSize: 11.5, color: '#667085', maxWidth: 360 }}>
+            Monthly COA report — includes issued checks whose DV date falls in the selected month.
+          </div>
+        </div>
+        <label style={{ display: 'flex', flexDirection: 'column' }}>
+          <span style={rciLbl}>Month covered</span>
+          <input
+            type="month"
+            value={rciMonth}
+            onChange={(e) => setRciMonth(e.target.value)}
+            style={rciCtl}
+          />
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column' }}>
+          <span style={rciLbl}>Fund Cluster</span>
+          <select value={rciFund} onChange={(e) => setRciFund(e.target.value)} style={rciCtl}>
+            {FUND_CLUSTERS.map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column' }}>
+          <span style={rciLbl}>Bank Name/Account No.</span>
+          <select
+            value={rciBank}
+            onChange={(e) => setRciBank(e.target.value)}
+            style={{ ...rciCtl, minWidth: 220 }}
+          >
+            <option value="">All bank accounts</option>
+            {rciBanks.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.bank.name} — {b.accountName} ({b.accountNumber})
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="acct-btn acct-btn--sm"
+          disabled={rciBusy !== null || !rciMonth}
+          onClick={() => downloadRci('csv')}
+        >
+          {rciBusy === 'csv' ? 'Generating…' : '⭳ CSV'}
+        </button>
+        <button
+          type="button"
+          className="acct-btn acct-btn--sm acct-btn--primary"
+          disabled={rciBusy !== null || !rciMonth}
+          onClick={() => downloadRci('pdf')}
+        >
+          {rciBusy === 'pdf' ? 'Generating…' : '⭳ PDF'}
+        </button>
+      </div>
+      {rciError && (
+        <div className="acct-error" style={{ marginTop: 8 }}>
+          {rciError}
+        </div>
+      )}
 
       {clearTarget && (
         <div

@@ -38,6 +38,21 @@ export class CheckController {
     });
   }
 
+  // Report of Checks Issued (COA Appendix 35) for a month, keyed off the DV date.
+  @Get('rci')
+  @RequirePermissions('accounting.check.read')
+  rci(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('month') month: string,
+    @Query('bankAccountId') bankAccountId?: string,
+    @Query('fundCluster') fundCluster?: string,
+  ) {
+    return this.checkService.getRci(user.organizationId, month, {
+      ...(bankAccountId ? { bankAccountId } : {}),
+      ...(fundCluster ? { fundCluster } : {}),
+    });
+  }
+
   @Get(':id')
   @RequirePermissions('accounting.check.read')
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {

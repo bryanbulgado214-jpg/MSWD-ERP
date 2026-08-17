@@ -403,6 +403,38 @@ export async function getCheck(id: string): Promise<CheckDetail> {
   return res.json();
 }
 
+// ── Report of Checks Issued (COA Appendix 35) ──
+export interface RciRow {
+  checkDate: string;
+  checkSerialNo: string;
+  dvNumber: string;
+  orsNumber: string;
+  rcCode: string;
+  payee: string;
+  uacsObjectCode: string;
+  natureOfPayment: string;
+  amount: number;
+}
+export interface RciReport {
+  periodCovered: string;
+  entityName: string;
+  fundCluster: string;
+  bankLabel: string;
+  month: string;
+  rows: RciRow[];
+  total: number;
+}
+export async function getCheckRci(
+  month: string,
+  opts?: { bankAccountId?: string; fundCluster?: string },
+): Promise<RciReport> {
+  const qs = new URLSearchParams({ month });
+  if (opts?.bankAccountId) qs.set('bankAccountId', opts.bankAccountId);
+  if (opts?.fundCluster) qs.set('fundCluster', opts.fundCluster);
+  const res = await authFetch(`/accounting/checks/rci?${qs.toString()}`);
+  return res.json();
+}
+
 // Cashier assigns the physical check number to a pending check and prints it.
 export async function printCheck(
   id: string,
