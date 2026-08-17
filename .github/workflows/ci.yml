@@ -29,6 +29,8 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://mswd_erp:mswd_erp_dev_password@localhost:5432/mswd_erp
+      # CI-only secret so the app's env validation passes (min 32 chars). Not used anywhere real.
+      JWT_SECRET: ci_only_jwt_secret_min_32_characters_long_0123456789
 
     steps:
       - uses: actions/checkout@v4
