@@ -53,10 +53,15 @@ export function PayeeCombobox({
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
-  const q = name.trim().toLowerCase();
+  const trimmed = name.trim();
+  const q = trimmed.toLowerCase();
   const filtered = (
     q ? payees.filter((p) => p.name.toLowerCase().includes(q) || (p.tin ?? '').includes(q)) : payees
   ).slice(0, 40);
+  // Only offer "Add" when something is typed and it's not already an exact
+  // payee name — so the user can't create a duplicate of an existing payee.
+  const hasExactMatch = payees.some((p) => p.name.trim().toLowerCase() === q);
+  const showAdd = trimmed.length > 0 && !hasExactMatch;
 
   const defaultInput: React.CSSProperties = {
     width: '100%',
@@ -143,33 +148,35 @@ export function PayeeCombobox({
               </div>
             </div>
           ))}
-          {filtered.length === 0 && (
+          {filtered.length === 0 && !showAdd && (
             <div style={{ padding: '8px 10px', color: '#98a2b3', fontSize: 12 }}>
               No matching payee.
             </div>
           )}
-          <button
-            type="button"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              openAdd();
-            }}
-            style={{
-              display: 'block',
-              width: '100%',
-              textAlign: 'left',
-              padding: '8px 10px',
-              border: 'none',
-              borderTop: '1px solid #eaecf0',
-              background: '#f9fafb',
-              color: 'var(--mswd-blue, #175cd3)',
-              fontWeight: 600,
-              fontSize: 12.5,
-              cursor: 'pointer',
-            }}
-          >
-            + Add “{name.trim() || 'new payee'}” to the payee list
-          </button>
+          {showAdd && (
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                openAdd();
+              }}
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                padding: '8px 10px',
+                border: 'none',
+                borderTop: '1px solid #eaecf0',
+                background: '#f9fafb',
+                color: 'var(--mswd-blue, #175cd3)',
+                fontWeight: 600,
+                fontSize: 12.5,
+                cursor: 'pointer',
+              }}
+            >
+              + Add “{trimmed}” to the payee list
+            </button>
+          )}
         </div>
       )}
 
