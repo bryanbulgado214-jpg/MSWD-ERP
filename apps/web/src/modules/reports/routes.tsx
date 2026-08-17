@@ -19,6 +19,7 @@ import { FixedAssetLapsingReportPage } from './pages/FixedAssetLapsingReportPage
 import { FixedAssetRegisterPage } from './pages/FixedAssetRegisterPage';
 import { JournalEntryRegisterPage } from './pages/JournalEntryRegisterPage';
 import { LoanAmortizationPage } from './pages/LoanAmortizationPage';
+import { PayeesPage } from './pages/PayeesPage';
 import { ProcurementReportPage } from './pages/ProcurementReportPage';
 import { ReportsLanding } from './pages/ReportsLanding';
 import { ReportsLayout } from './pages/ReportsLayout';
@@ -41,6 +42,7 @@ export const reportsRoutes = [
       { path: 'subsidiary-ledgers', element: <SubsidiaryLedgersIndexPage /> },
       { path: 'subsidiary-ledgers/:accountId', element: <SubsidiaryLedgerPage /> },
       { path: 'journal-entry-register', element: <JournalEntryRegisterPage /> },
+      { path: 'payees', element: <PayeesPage /> },
 
       // ── Receivables ────────────────────────────────────────────────────
       { path: 'ar-aging', element: <ArAgingReportPage /> },

@@ -24,6 +24,8 @@ import { JevController } from './jev.controller';
 import { JevService } from './jev.service';
 import { LoanController } from './loan.controller';
 import { LoanService } from './loan.service';
+import { PayeeController } from './payee.controller';
+import { PayeeService } from './payee.service';
 import { PeriodController } from './period.controller';
 import { PeriodService } from './period.service';
 import { AccountingReportsController } from './reports.controller';
@@ -44,6 +46,7 @@ import { AccountingReportsService } from './reports.service';
     DisbursementController,
     AccountingReportsController,
     LoanController,
+    PayeeController,
   ],
   providers: [
     ChartOfAccountService,
@@ -61,6 +64,7 @@ import { AccountingReportsService } from './reports.service';
     DisbursementService,
     AccountingReportsService,
     LoanService,
+    PayeeService,
   ],
   exports: [
     ChartOfAccountService,

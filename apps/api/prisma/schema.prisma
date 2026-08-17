@@ -3207,6 +3207,32 @@ model LoanAmortization {
   @@map("loan_amortizations")
 }
 
+/// Accounting payee master — everyone the district pays (suppliers, employees,
+/// utilities, LWUA, BIR, etc.). Payees are never deleted: they can be
+/// deactivated, or merged into another payee (the absorbed record is
+/// deactivated and points to the survivor via mergedIntoId).
+model Payee {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(255)
+  address        String?
+  tin            String?  @db.VarChar(30)
+  isActive       Boolean  @default(true) @map("is_active")
+  mergedIntoId   String?  @map("merged_into_id") @db.Uuid
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version        Int      @default(1)
+
+  mergedInto Payee?  @relation("PayeeMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedFrom Payee[] @relation("PayeeMerge")
+
+  @@index([organizationId])
+  @@index([tin])
+  @@map("payees")
+}
+
 // ════════════════════════════════════════════════════════════════════
 // BILLING & COLLECTIONS MODULE
 // ════════════════════════════════════════════════════════════════════

@@ -64,6 +64,13 @@ export const REPORT_GROUPS: ReportGroup[] = [
         icon: '📒',
         blurb: 'All recorded journal vouchers',
       },
+      {
+        to: '/reports/payees',
+        label: 'List of Payees',
+        perm: 'accounting.read',
+        icon: '🧑‍💼',
+        blurb: 'Suppliers & payees master list',
+      },
     ],
   },
   {

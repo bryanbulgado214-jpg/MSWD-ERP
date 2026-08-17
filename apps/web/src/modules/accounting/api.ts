@@ -944,6 +944,46 @@ export async function deleteLoan(id: string): Promise<{ deleted: boolean }> {
   return res.json();
 }
 
+// ── Payee master ──
+
+export interface Payee {
+  id: string;
+  name: string;
+  address: string | null;
+  tin: string | null;
+  isActive: boolean;
+  version: number;
+}
+export interface CreatePayeeInput {
+  name: string;
+  address?: string;
+  tin?: string;
+}
+export interface UpdatePayeeInput {
+  name?: string;
+  address?: string;
+  tin?: string;
+  isActive?: boolean;
+}
+
+export async function getPayees(params?: string): Promise<Payee[]> {
+  const qs = params ? `?${params}` : '';
+  const res = await authFetch(`/accounting/payees${qs}`);
+  return res.json();
+}
+export async function createPayee(input: CreatePayeeInput): Promise<Payee> {
+  const res = await authFetchMutate('/accounting/payees', 'POST', input);
+  return res.json();
+}
+export async function updatePayee(id: string, input: UpdatePayeeInput): Promise<Payee> {
+  const res = await authFetchMutate(`/accounting/payees/${id}`, 'PATCH', input);
+  return res.json();
+}
+export async function mergePayee(sourceId: string, targetId: string): Promise<Payee> {
+  const res = await authFetchMutate(`/accounting/payees/${sourceId}/merge`, 'POST', { targetId });
+  return res.json();
+}
+
 // ── Accounts-Payable Aging ──
 export async function getApAging(): Promise<ApAgingResult> {
   const res = await authFetch('/accounting/reports/ap-aging');
