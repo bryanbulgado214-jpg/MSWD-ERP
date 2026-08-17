@@ -7,6 +7,7 @@ import {
   createChartOfAccount,
   getChartOfAccounts,
   getCoaImportPreview,
+  updateChartOfAccount,
 } from '../api';
 import type { ChartOfAccount, CoaImportPreviewResult } from '../types';
 
@@ -41,6 +42,15 @@ export default function ChartOfAccountsPage() {
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState('');
+
+  // ── Edit / (de)activate a postable account ──
+  const [editing, setEditing] = useState<ChartOfAccount | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editUacs, setEditUacs] = useState('');
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [rowBusy, setRowBusy] = useState<string | null>(null);
+  const [rowError, setRowError] = useState('');
 
   // ── CSV import state ──
   const [showImport, setShowImport] = useState(false);
@@ -90,6 +100,53 @@ export default function ChartOfAccountsPage() {
       load();
     } catch (e) {
       setFormError(e instanceof AccountingApiError ? e.message : 'Failed to create account.');
+    }
+  }
+
+  function startEdit(acct: ChartOfAccount) {
+    setEditing(acct);
+    setEditName(acct.name);
+    setEditUacs(acct.uacsCode ?? '');
+    setEditError('');
+  }
+
+  async function saveEdit() {
+    if (!editing) return;
+    const name = editName.trim();
+    if (!name) {
+      setEditError('Account name is required.');
+      return;
+    }
+    setEditBusy(true);
+    setEditError('');
+    try {
+      await updateChartOfAccount(editing.id, {
+        expectedVersion: editing.version,
+        name,
+        uacsCode: editUacs.trim(),
+      });
+      setEditing(null);
+      load();
+    } catch (e) {
+      setEditError(e instanceof AccountingApiError ? e.message : 'Failed to save changes.');
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
+  async function toggleActive(acct: ChartOfAccount) {
+    setRowBusy(acct.id);
+    setRowError('');
+    try {
+      await updateChartOfAccount(acct.id, {
+        expectedVersion: acct.version,
+        isActive: !acct.isActive,
+      });
+      load();
+    } catch (e) {
+      setRowError(e instanceof AccountingApiError ? e.message : 'Failed to update account.');
+    } finally {
+      setRowBusy(null);
     }
   }
 
@@ -428,6 +485,7 @@ export default function ChartOfAccountsPage() {
       {state.status === 'loaded' && state.data.length === 0 && (
         <div className="acct-empty">No accounts found.</div>
       )}
+      {rowError && <div className="acct-error">{rowError}</div>}
       {state.status === 'loaded' && state.data.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
           <table className="acct-table">
@@ -440,6 +498,7 @@ export default function ChartOfAccountsPage() {
                 <th>UACS</th>
                 <th>Kind</th>
                 <th>Status</th>
+                {canManage && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -470,10 +529,104 @@ export default function ChartOfAccountsPage() {
                       {acct.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </td>
+                  {canManage && (
+                    <td>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          type="button"
+                          className="acct-btn acct-btn--sm"
+                          onClick={() => startEdit(acct)}
+                          disabled={rowBusy === acct.id}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="acct-btn acct-btn--sm"
+                          onClick={() => toggleActive(acct)}
+                          disabled={rowBusy === acct.id}
+                          title={
+                            acct.isHeader && acct.isActive
+                              ? 'Deactivating this summary account also deactivates all accounts under it'
+                              : undefined
+                          }
+                        >
+                          {acct.isActive ? 'Deactivate' : 'Activate'}
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {editing && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(16,24,40,0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16,
+          }}
+          onMouseDown={(e) => e.target === e.currentTarget && setEditing(null)}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 12,
+              width: 'min(460px, 100%)',
+              padding: '18px 20px',
+              boxShadow: '0 20px 48px rgba(16,24,40,0.28)',
+            }}
+          >
+            <h2 style={{ margin: '0 0 4px', fontSize: 17 }}>Edit account</h2>
+            <p style={{ margin: '0 0 14px', color: '#667085', fontSize: 12 }}>
+              <span className="acct-text-mono">{editing.accountCode}</span> · {editing.accountType}{' '}
+              · {editing.normalBalance}
+            </p>
+            {editError && <div className="acct-error">{editError}</div>}
+            <div className="acct-field" style={{ marginBottom: 12 }}>
+              <label>Account Name</label>
+              <input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                maxLength={255}
+              />
+            </div>
+            <div className="acct-field" style={{ marginBottom: 16 }}>
+              <label>UACS Code</label>
+              <input
+                value={editUacs}
+                onChange={(e) => setEditUacs(e.target.value)}
+                maxLength={30}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                type="button"
+                className="acct-btn acct-btn--sm"
+                onClick={() => setEditing(null)}
+                disabled={editBusy}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="acct-btn acct-btn--sm acct-btn--primary"
+                onClick={saveEdit}
+                disabled={editBusy}
+              >
+                {editBusy ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -224,8 +224,8 @@ export class ChartOfAccountService {
       throw new ConflictException('Account was modified by another user. Please refresh.');
     }
 
-    return runAudited(this.prisma, userId, (tx) =>
-      tx.chartOfAccount.update({
+    return runAudited(this.prisma, userId, async (tx) => {
+      const updated = await tx.chartOfAccount.update({
         where: { id },
         data: {
           ...(data.name ? { name: data.name } : {}),
@@ -235,8 +235,29 @@ export class ChartOfAccountService {
           version: { increment: 1 },
         },
         select: COA_SELECT,
-      }),
-    );
+      });
+
+      // Deactivating a summary/parent account deactivates every account beneath it.
+      if (data.isActive === false) {
+        await tx.$executeRawUnsafe(
+          `WITH RECURSIVE descendants AS (
+             SELECT id FROM chart_of_accounts
+             WHERE parent_account_id = $1::uuid AND organization_id = $2::uuid
+             UNION ALL
+             SELECT c.id FROM chart_of_accounts c
+             JOIN descendants d ON c.parent_account_id = d.id
+           )
+           UPDATE chart_of_accounts
+           SET is_active = false, updated_by = $3::uuid, version = version + 1
+           WHERE id IN (SELECT id FROM descendants) AND is_active = true`,
+          id,
+          organizationId,
+          userId,
+        );
+      }
+
+      return updated;
+    });
   }
 
   // ── CSV Import ──
