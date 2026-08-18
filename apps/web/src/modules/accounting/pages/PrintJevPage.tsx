@@ -7,9 +7,10 @@ import { getJev } from '../api';
 import type { JevDetail } from '../types';
 import '../../procurement/pages/print-forms.css';
 
-// Fallback letterhead details used only when the District Profile is blank.
-const FALLBACK_ADDRESS = 'Rizal Street, Poblacion, Sta. Barbara, Iloilo 5002';
-const FALLBACK_CONTACT = 'Tel. (033) 523-0000 • sbwd@example.invalid';
+// Letterhead address/contact come from the District Profile (Admin → District
+// Profile). Left blank until configured — no hardcoded district is assumed.
+const FALLBACK_ADDRESS = '';
+const FALLBACK_CONTACT = '';
 
 function amt(v: string): string {
   return parseFloat(v) > 0 ? formatPeso(v) : '';
@@ -108,7 +109,7 @@ export function PrintJevPage() {
         >
           <thead>
             <tr>
-              <th rowSpan={2} style={{ width: '16%', fontSize: '8.5pt' }}>
+              <th rowSpan={3} style={{ width: '16%', fontSize: '8.5pt' }}>
                 Responsibility Center
               </th>
               <th colSpan={4} style={{ fontSize: '9pt' }}>
@@ -116,8 +117,17 @@ export function PrintJevPage() {
               </th>
             </tr>
             <tr>
-              <th style={{ width: '40%', fontSize: '8.5pt' }}>Accounts and Explanation</th>
-              <th style={{ width: '16%', fontSize: '8.5pt' }}>UACS Object Code</th>
+              <th rowSpan={2} style={{ width: '40%', fontSize: '8.5pt' }}>
+                Accounts and Explanation
+              </th>
+              <th rowSpan={2} style={{ width: '16%', fontSize: '8.5pt' }}>
+                UACS Object Code
+              </th>
+              <th colSpan={2} style={{ fontSize: '8.5pt' }}>
+                Amount
+              </th>
+            </tr>
+            <tr>
               <th style={{ width: '14%', fontSize: '8.5pt' }}>Debit</th>
               <th style={{ width: '14%', fontSize: '8.5pt' }}>Credit</th>
             </tr>

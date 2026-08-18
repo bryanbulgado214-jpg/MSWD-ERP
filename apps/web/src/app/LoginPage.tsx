@@ -5,19 +5,10 @@ import { useAuth } from './auth';
 import './login.css';
 
 const ROLE_HINTS: Record<string, string> = {
+  'sbwd.admin': 'Administrator — full system access, user & role management',
   'sbwd.accountant': 'Accountant — prepares JEVs, views ledgers & statements',
   'sbwd.cashier': 'Cashier — disburses: assigns check #, prints, releases',
   'sbwd.gm': 'General Manager — dedicated check-void approver',
-  'j.delacruz': 'Employee — Juan Dela Cruz (8 PPMP items)',
-  end_user: 'Create & submit purchase requests',
-  dept_head: 'Endorse purchase requests',
-  budget_officer: 'Budget certification & management',
-  general_manager: 'Final PR approval',
-  procurement_officer: 'Procurement processing',
-  bac_member: 'BAC read-only access',
-  inspection_officer: 'Inspect delivered items',
-  approver: 'Budget approvals',
-  admin: 'Full system access',
 };
 
 export function LoginPage() {
