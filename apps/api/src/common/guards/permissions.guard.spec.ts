@@ -50,6 +50,10 @@ function fakePrismaGranting(permissionCodes: string[]) {
     delegationAuthority: {
       findMany: jest.fn().mockResolvedValue([]),
     },
+    // …and direct per-user grants via prisma.userPermission.findMany.
+    userPermission: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
   };
 }
 
@@ -121,6 +125,9 @@ describe('PermissionsGuard', () => {
         ]),
       },
       delegationAuthority: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      userPermission: {
         findMany: jest.fn().mockResolvedValue([]),
       },
     };

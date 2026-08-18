@@ -16,6 +16,7 @@
 import { PrismaClient } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+
 import { ReservationService } from './reservation.service';
 
 const prisma = new PrismaClient();
@@ -26,7 +27,7 @@ let organizationId: string;
 let budgetHeaderId: string;
 
 beforeAll(async () => {
-  const organization = await prisma.organization.findFirstOrThrow();
+  const organization = await prisma.organization.findFirstOrThrow({ where: { code: 'SBWD' } });
   organizationId = organization.id;
   const header = await prisma.budgetHeader.findFirstOrThrow({ where: { organizationId } });
   budgetHeaderId = header.id;
@@ -75,19 +76,25 @@ describe('Concurrent reservation protection', () => {
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
 
-    const finalRelease = await prisma.budgetRelease.findUniqueOrThrow({ where: { id: release.id } });
+    const finalRelease = await prisma.budgetRelease.findUniqueOrThrow({
+      where: { id: release.id },
+    });
     expect(finalRelease.reservedAmount.lte(finalRelease.releasedAmount)).toBe(true);
     // Exactly one reservation's worth (70,000 or 60,000) was committed —
     // never both, never neither.
     expect(['70000', '60000']).toContain(finalRelease.reservedAmount.toFixed(0));
 
     // Cleanup.
-    await prisma.budgetTransactionLog.deleteMany({ where: { budgetReleaseId: release.id } }).catch(() => {
-      // Expected to fail — budget_transaction_logs is append-only by
-      // design (a DB trigger rejects the delete). Left in place
-      // deliberately, same as production would behave.
-    });
-    await prisma.budgetReservation.deleteMany({ where: { budgetReleaseId: release.id } }).catch(() => {});
+    await prisma.budgetTransactionLog
+      .deleteMany({ where: { budgetReleaseId: release.id } })
+      .catch(() => {
+        // Expected to fail — budget_transaction_logs is append-only by
+        // design (a DB trigger rejects the delete). Left in place
+        // deliberately, same as production would behave.
+      });
+    await prisma.budgetReservation
+      .deleteMany({ where: { budgetReleaseId: release.id } })
+      .catch(() => {});
     await prisma.budgetRelease.delete({ where: { id: release.id } }).catch(() => {});
   });
 
@@ -116,12 +123,18 @@ describe('Concurrent reservation protection', () => {
     const fulfilled = results.filter((r) => r.status === 'fulfilled');
     expect(fulfilled).toHaveLength(1);
 
-    const finalRelease = await prisma.budgetRelease.findUniqueOrThrow({ where: { id: release.id } });
+    const finalRelease = await prisma.budgetRelease.findUniqueOrThrow({
+      where: { id: release.id },
+    });
     // Must be committed exactly ONCE (40,000), never twice (80,000).
     expect(finalRelease.reservedAmount.toFixed(0)).toBe('40000');
 
-    await prisma.budgetTransactionLog.deleteMany({ where: { budgetReleaseId: release.id } }).catch(() => {});
-    await prisma.budgetReservation.deleteMany({ where: { budgetReleaseId: release.id } }).catch(() => {});
+    await prisma.budgetTransactionLog
+      .deleteMany({ where: { budgetReleaseId: release.id } })
+      .catch(() => {});
+    await prisma.budgetReservation
+      .deleteMany({ where: { budgetReleaseId: release.id } })
+      .catch(() => {});
     await prisma.budgetRelease.delete({ where: { id: release.id } }).catch(() => {});
   });
 });

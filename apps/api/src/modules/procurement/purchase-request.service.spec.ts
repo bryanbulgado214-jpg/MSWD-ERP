@@ -9,6 +9,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { ReservationService } from '../budgeting/reservation.service';
 import { NotificationService } from '../notification/notification.service';
 import { WorkflowService } from '../workflow/workflow.service';
+
 import { PurchaseRequestService } from './purchase-request.service';
 
 const prisma = new PrismaClient();
@@ -30,15 +31,21 @@ let deptHeadUserId: string;
 let budgetOfficerUserId: string;
 
 beforeAll(async () => {
-  const organization = await prisma.organization.findFirstOrThrow();
+  const organization = await prisma.organization.findFirstOrThrow({ where: { code: 'SBWD' } });
   organizationId = organization.id;
   const header = await prisma.budgetHeader.findFirstOrThrow({ where: { organizationId } });
   budgetHeaderId = header.id;
-  const endUser = await prisma.user.findFirstOrThrow({ where: { organizationId, username: 'end_user' } });
+  const endUser = await prisma.user.findFirstOrThrow({
+    where: { organizationId, username: 'end_user' },
+  });
   endUserId = endUser.id;
-  const deptHead = await prisma.user.findFirstOrThrow({ where: { organizationId, username: 'dept_head' } });
+  const deptHead = await prisma.user.findFirstOrThrow({
+    where: { organizationId, username: 'dept_head' },
+  });
   deptHeadUserId = deptHead.id;
-  const budgetOfficer = await prisma.user.findFirstOrThrow({ where: { organizationId, username: 'budget_officer' } });
+  const budgetOfficer = await prisma.user.findFirstOrThrow({
+    where: { organizationId, username: 'budget_officer' },
+  });
   budgetOfficerUserId = budgetOfficer.id;
 });
 
@@ -60,12 +67,20 @@ async function makeReleasedRelease(amount: number, suffix: string) {
 }
 
 async function cleanup(releaseId: string) {
-  await prisma.purchaseRequestItem.deleteMany({
-    where: { purchaseRequest: { budgetReleaseId: releaseId } },
-  }).catch(() => {});
-  await prisma.budgetTransactionLog.deleteMany({ where: { budgetReleaseId: releaseId } }).catch(() => {});
-  await prisma.budgetReservation.deleteMany({ where: { budgetReleaseId: releaseId } }).catch(() => {});
-  await prisma.purchaseRequest.deleteMany({ where: { budgetReleaseId: releaseId } }).catch(() => {});
+  await prisma.purchaseRequestItem
+    .deleteMany({
+      where: { purchaseRequest: { budgetReleaseId: releaseId } },
+    })
+    .catch(() => {});
+  await prisma.budgetTransactionLog
+    .deleteMany({ where: { budgetReleaseId: releaseId } })
+    .catch(() => {});
+  await prisma.budgetReservation
+    .deleteMany({ where: { budgetReleaseId: releaseId } })
+    .catch(() => {});
+  await prisma.purchaseRequest
+    .deleteMany({ where: { budgetReleaseId: releaseId } })
+    .catch(() => {});
   await prisma.budgetRelease.delete({ where: { id: releaseId } }).catch(() => {});
 }
 
@@ -89,7 +104,9 @@ describe('PurchaseRequestService lifecycle', () => {
       expect(pr.items[0]!.itemNumber).toBe(1);
       expect(pr.items[1]!.itemNumber).toBe(2);
 
-      const reloadedRelease = await prisma.budgetRelease.findUniqueOrThrow({ where: { id: release.id } });
+      const reloadedRelease = await prisma.budgetRelease.findUniqueOrThrow({
+        where: { id: release.id },
+      });
       expect(reloadedRelease.reservedAmount.toFixed(2)).toBe('0.00');
     } finally {
       await cleanup(release.id);
@@ -113,14 +130,18 @@ describe('PurchaseRequestService lifecycle', () => {
       const pr = await service.create(organizationId, {
         budgetReleaseId: release.id,
         title: 'Submit Test',
-        items: [{ description: 'Widget', quantity: 10, unitOfMeasure: 'pc', estimatedUnitCost: 500 }],
+        items: [
+          { description: 'Widget', quantity: 10, unitOfMeasure: 'pc', estimatedUnitCost: 500 },
+        ],
       });
       expect(pr.totalAmount.toFixed(2)).toBe('5000.00');
 
       const submitted = await service.submit(organizationId, pr.id, pr.version);
       expect(submitted.status).toBe('submitted');
 
-      const reloadedRelease = await prisma.budgetRelease.findUniqueOrThrow({ where: { id: release.id } });
+      const reloadedRelease = await prisma.budgetRelease.findUniqueOrThrow({
+        where: { id: release.id },
+      });
       expect(reloadedRelease.reservedAmount.toFixed(2)).toBe('0.00');
     } finally {
       await cleanup(release.id);
@@ -134,7 +155,9 @@ describe('PurchaseRequestService lifecycle', () => {
         budgetReleaseId: release.id,
         title: 'Endorse Test',
         createdBy: endUserId,
-        items: [{ description: 'Gadget', quantity: 1, unitOfMeasure: 'pc', estimatedUnitCost: 3000 }],
+        items: [
+          { description: 'Gadget', quantity: 1, unitOfMeasure: 'pc', estimatedUnitCost: 3000 },
+        ],
       });
       const submitted = await service.submit(organizationId, pr.id, pr.version);
       const endorsed = await service.endorse(
@@ -161,11 +184,15 @@ describe('PurchaseRequestService lifecycle', () => {
       });
       const submitted = await service.submit(organizationId, pr.id, pr.version);
       const endorsed = await service.endorse(
-        organizationId, submitted.id, submitted.version,
+        organizationId,
+        submitted.id,
+        submitted.version,
         deptHeadUserId,
       );
       const certified = await service.budgetCertify(
-        organizationId, endorsed.id, endorsed.version,
+        organizationId,
+        endorsed.id,
+        endorsed.version,
         budgetOfficerUserId,
       );
       expect(certified.status).toBe('budget_certified');
@@ -177,7 +204,9 @@ describe('PurchaseRequestService lifecycle', () => {
       expect(reservation!.status).toBe('approved');
       expect(reservation!.reservationAmount.toFixed(2)).toBe('3000.00');
 
-      const reloadedRelease = await prisma.budgetRelease.findUniqueOrThrow({ where: { id: release.id } });
+      const reloadedRelease = await prisma.budgetRelease.findUniqueOrThrow({
+        where: { id: release.id },
+      });
       expect(reloadedRelease.reservedAmount.toFixed(2)).toBe('3000.00');
     } finally {
       await cleanup(release.id);
@@ -190,13 +219,23 @@ describe('PurchaseRequestService lifecycle', () => {
       const pr = await service.create(organizationId, {
         budgetReleaseId: release.id,
         title: 'Reject Test',
-        items: [{ description: 'Thing', quantity: 20, unitOfMeasure: 'pc', estimatedUnitCost: 100 }],
+        items: [
+          { description: 'Thing', quantity: 20, unitOfMeasure: 'pc', estimatedUnitCost: 100 },
+        ],
       });
       const submitted = await service.submit(organizationId, pr.id, pr.version);
-      const rejected = await service.reject(organizationId, submitted.id, submitted.version, undefined, 'Too costly');
+      const rejected = await service.reject(
+        organizationId,
+        submitted.id,
+        submitted.version,
+        undefined,
+        'Too costly',
+      );
       expect(rejected.status).toBe('rejected');
 
-      const reloadedRelease = await prisma.budgetRelease.findUniqueOrThrow({ where: { id: release.id } });
+      const reloadedRelease = await prisma.budgetRelease.findUniqueOrThrow({
+        where: { id: release.id },
+      });
       expect(reloadedRelease.reservedAmount.toFixed(2)).toBe('0.00');
       expect(reloadedRelease.availableAmount.toFixed(2)).toBe('100000.00');
     } finally {
@@ -213,10 +252,18 @@ describe('PurchaseRequestService lifecycle', () => {
         items: [{ description: 'Stuff', quantity: 5, unitOfMeasure: 'pc', estimatedUnitCost: 400 }],
       });
       const submitted = await service.submit(organizationId, pr.id, pr.version);
-      const cancelled = await service.cancel(organizationId, submitted.id, submitted.version, undefined, 'Changed mind');
+      const cancelled = await service.cancel(
+        organizationId,
+        submitted.id,
+        submitted.version,
+        undefined,
+        'Changed mind',
+      );
       expect(cancelled.status).toBe('cancelled');
 
-      const reloadedRelease = await prisma.budgetRelease.findUniqueOrThrow({ where: { id: release.id } });
+      const reloadedRelease = await prisma.budgetRelease.findUniqueOrThrow({
+        where: { id: release.id },
+      });
       expect(reloadedRelease.reservedAmount.toFixed(2)).toBe('0.00');
     } finally {
       await cleanup(release.id);
@@ -234,7 +281,9 @@ describe('PurchaseRequestService lifecycle', () => {
       const cancelled = await service.cancel(organizationId, pr.id, pr.version);
       expect(cancelled.status).toBe('cancelled');
 
-      const reloadedRelease = await prisma.budgetRelease.findUniqueOrThrow({ where: { id: release.id } });
+      const reloadedRelease = await prisma.budgetRelease.findUniqueOrThrow({
+        where: { id: release.id },
+      });
       expect(reloadedRelease.reservedAmount.toFixed(2)).toBe('0.00');
     } finally {
       await cleanup(release.id);
@@ -289,12 +338,17 @@ describe('PurchaseRequestService lifecycle', () => {
         budgetReleaseId: release.id,
         title: 'Return Test',
         createdBy: endUserId,
-        items: [{ description: 'Widget', quantity: 1, unitOfMeasure: 'pc', estimatedUnitCost: 500 }],
+        items: [
+          { description: 'Widget', quantity: 1, unitOfMeasure: 'pc', estimatedUnitCost: 500 },
+        ],
       });
       const submitted = await service.submit(organizationId, pr.id, pr.version);
       const returned = await service.returnForCorrection(
-        organizationId, submitted.id, submitted.version,
-        deptHeadUserId, 'Fix description',
+        organizationId,
+        submitted.id,
+        submitted.version,
+        deptHeadUserId,
+        'Fix description',
       );
       expect(returned.status).toBe('returned');
     } finally {
@@ -309,12 +363,17 @@ describe('PurchaseRequestService lifecycle', () => {
         budgetReleaseId: release.id,
         title: 'Return Edit Test',
         createdBy: endUserId,
-        items: [{ description: 'Widget', quantity: 1, unitOfMeasure: 'pc', estimatedUnitCost: 500 }],
+        items: [
+          { description: 'Widget', quantity: 1, unitOfMeasure: 'pc', estimatedUnitCost: 500 },
+        ],
       });
       const submitted = await service.submit(organizationId, pr.id, pr.version);
       const returned = await service.returnForCorrection(
-        organizationId, submitted.id, submitted.version,
-        deptHeadUserId, 'Fix it',
+        organizationId,
+        submitted.id,
+        submitted.version,
+        deptHeadUserId,
+        'Fix it',
       );
 
       const edited = await service.update(organizationId, returned.id, returned.version, {

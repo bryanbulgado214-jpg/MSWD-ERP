@@ -9,6 +9,7 @@
 import { PrismaClient } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+
 import { BudgetCalculationService } from './budget-calculation.service';
 
 const prisma = new PrismaClient();
@@ -19,7 +20,7 @@ let budgetHeaderId: string;
 const runId = Date.now().toString(36);
 
 beforeAll(async () => {
-  const organization = await prisma.organization.findFirstOrThrow();
+  const organization = await prisma.organization.findFirstOrThrow({ where: { code: 'SBWD' } });
   organizationId = organization.id;
   const header = await prisma.budgetHeader.findFirstOrThrow({ where: { organizationId } });
   budgetHeaderId = header.id;
@@ -56,7 +57,9 @@ describe('BudgetCalculationService', () => {
     const summary = await service.getReleaseSummary(organizationId, release.id);
 
     expect(summary.approvedAmount.toFixed(2)).toBe(
-      (await prisma.budgetHeader.findUniqueOrThrow({ where: { id: budgetHeaderId } })).totalAmount.toFixed(2),
+      (
+        await prisma.budgetHeader.findUniqueOrThrow({ where: { id: budgetHeaderId } })
+      ).totalAmount.toFixed(2),
     );
     expect(summary.releasedAmount.toFixed(2)).toBe('100000.00');
     expect(summary.reservedAmount.toFixed(2)).toBe('30000.00');
@@ -65,7 +68,9 @@ describe('BudgetCalculationService', () => {
     expect(summary.isConsistent).toBe(true);
     expect(summary.utilizedAmount.toFixed(2)).toBe('0.00'); // no data source yet, by design
 
-    await prisma.budgetTransactionLog.deleteMany({ where: { budgetReleaseId: release.id } }).catch(() => {});
+    await prisma.budgetTransactionLog
+      .deleteMany({ where: { budgetReleaseId: release.id } })
+      .catch(() => {});
     await prisma.budgetRelease.delete({ where: { id: release.id } }).catch(() => {});
   });
 
@@ -96,7 +101,9 @@ describe('BudgetCalculationService', () => {
     expect(summary.reservedAmount.toFixed(2)).toBe('20000.00');
     expect(summary.obligatedAmount.toFixed(2)).toBe('15000.00');
 
-    await prisma.budgetTransactionLog.deleteMany({ where: { budgetReleaseId: release.id } }).catch(() => {});
+    await prisma.budgetTransactionLog
+      .deleteMany({ where: { budgetReleaseId: release.id } })
+      .catch(() => {});
     await prisma.budgetRelease.delete({ where: { id: release.id } }).catch(() => {});
   });
 
@@ -128,11 +135,15 @@ describe('BudgetCalculationService', () => {
     // so assert a lower bound rather than an exact total.
     expect(summary.releasedAmount.gte(100_000)).toBe(true);
 
-    await prisma.budgetRelease.deleteMany({ where: { id: { in: [releaseA.id, releaseB.id] } } }).catch(() => {});
+    await prisma.budgetRelease
+      .deleteMany({ where: { id: { in: [releaseA.id, releaseB.id] } } })
+      .catch(() => {});
   });
 
   it('throws NotFoundException for a release that does not exist', async () => {
-    await expect(service.getReleaseSummary(organizationId, '00000000-0000-0000-0000-000000000000')).rejects.toThrow(/not found/);
+    await expect(
+      service.getReleaseSummary(organizationId, '00000000-0000-0000-0000-000000000000'),
+    ).rejects.toThrow(/not found/);
   });
 
   // Regression test for the Budgeting Module Audit's critical finding:
@@ -141,20 +152,44 @@ describe('BudgetCalculationService', () => {
   // summary data. Proves the fix — a genuinely different organization's
   // valid header/release id must now come back NotFoundException, not
   // that organization's real data.
-  it('does not leak another organization\'s budget header summary (org isolation)', async () => {
-    const otherOrg = await prisma.organization.create({ data: { code: `AUDIT-ORG-${runId}`, name: 'Audit Test Org' } });
+  it("does not leak another organization's budget header summary (org isolation)", async () => {
+    const otherOrg = await prisma.organization.create({
+      data: { code: `AUDIT-ORG-${runId}`, name: 'Audit Test Org' },
+    });
     const otherUnit = await prisma.organizationalUnit.create({
       data: { organizationId: otherOrg.id, code: 'ROOT', name: 'Root', unitType: 'division' },
     });
     const otherRc = await prisma.responsibilityCenter.create({
-      data: { organizationId: otherOrg.id, organizationalUnitId: otherUnit.id, code: 'AUDIT-RC', name: 'Audit RC' },
+      data: {
+        organizationId: otherOrg.id,
+        organizationalUnitId: otherUnit.id,
+        code: 'AUDIT-RC',
+        name: 'Audit RC',
+      },
     });
-    const otherFund = await prisma.fundSource.create({ data: { organizationId: otherOrg.id, code: 'AUDIT-FUND', name: 'Audit Fund' } });
+    const otherFund = await prisma.fundSource.create({
+      data: { organizationId: otherOrg.id, code: 'AUDIT-FUND', name: 'Audit Fund' },
+    });
     const otherFy = await prisma.fiscalYear.create({
-      data: { organizationId: otherOrg.id, year: 2099, name: 'FY2099', startDate: new Date('2099-01-01'), endDate: new Date('2099-12-31') },
+      data: {
+        organizationId: otherOrg.id,
+        year: 2099,
+        name: 'FY2099',
+        startDate: new Date('2099-01-01'),
+        endDate: new Date('2099-12-31'),
+      },
     });
-    const otherCycle = await prisma.budgetCycle.create({ data: { organizationId: otherOrg.id, fiscalYearId: otherFy.id, code: 'AUDIT-CYCLE', name: 'Audit Cycle' } });
-    const otherVersion = await prisma.budgetVersion.create({ data: { budgetCycleId: otherCycle.id, versionNumber: 1, name: 'Original' } });
+    const otherCycle = await prisma.budgetCycle.create({
+      data: {
+        organizationId: otherOrg.id,
+        fiscalYearId: otherFy.id,
+        code: 'AUDIT-CYCLE',
+        name: 'Audit Cycle',
+      },
+    });
+    const otherVersion = await prisma.budgetVersion.create({
+      data: { budgetCycleId: otherCycle.id, versionNumber: 1, name: 'Original' },
+    });
     const otherHeader = await prisma.budgetHeader.create({
       data: {
         organizationId: otherOrg.id,
@@ -166,7 +201,9 @@ describe('BudgetCalculationService', () => {
       },
     });
 
-    await expect(service.getHeaderSummary(organizationId, otherHeader.id)).rejects.toThrow(/not found/);
+    await expect(service.getHeaderSummary(organizationId, otherHeader.id)).rejects.toThrow(
+      /not found/,
+    );
 
     await prisma.budgetHeader.delete({ where: { id: otherHeader.id } }).catch(() => {});
     await prisma.budgetVersion.delete({ where: { id: otherVersion.id } }).catch(() => {});

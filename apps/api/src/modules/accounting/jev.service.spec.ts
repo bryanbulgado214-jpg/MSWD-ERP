@@ -40,7 +40,7 @@ function track<T extends { id: string }>(jev: T): T {
 }
 
 beforeAll(async () => {
-  const org = await prisma.organization.findFirstOrThrow({ where: { code: 'MSWD' } });
+  const org = await prisma.organization.findFirstOrThrow({ where: { code: 'SBWD' } });
   organizationId = org.id;
 
   // Two DIFFERENT seeded users — creator vs poster. Any two distinct ids

@@ -28,7 +28,7 @@ const jevDate = '2026-08-12';
 const createdJevIds = new Set<string>();
 
 beforeAll(async () => {
-  const org = await prisma.organization.findFirstOrThrow({ where: { code: 'MSWD' } });
+  const org = await prisma.organization.findFirstOrThrow({ where: { code: 'SBWD' } });
   organizationId = org.id;
 
   const fy = await prisma.fiscalYear.findFirstOrThrow({

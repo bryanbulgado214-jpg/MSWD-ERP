@@ -35,7 +35,7 @@ const createdJevIds = new Set<string>();
 let otherOrgId: string | undefined;
 
 beforeAll(async () => {
-  const org = await prisma.organization.findFirstOrThrow({ where: { code: 'MSWD' } });
+  const org = await prisma.organization.findFirstOrThrow({ where: { code: 'SBWD' } });
   organizationId = org.id;
 
   const fy = await prisma.fiscalYear.findFirstOrThrow({
