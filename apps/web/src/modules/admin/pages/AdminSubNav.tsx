@@ -6,6 +6,7 @@ const LINKS = [
   { to: '/admin/roles', label: 'Roles' },
   { to: '/admin/audit-trail', label: 'Audit Trail' },
   { to: '/admin/district-profile', label: 'District Profile' },
+  { to: '/admin/demo-data', label: 'Demo Data' },
 ];
 
 export function AdminSubNav() {

@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 
 import { AdminLayout } from './pages/AdminLayout';
 import { AuditTrailPage } from './pages/AuditTrailPage';
+import { DemoDataPage } from './pages/DemoDataPage';
 import { DistrictProfilePage } from './pages/DistrictProfilePage';
 import { RoleDetailPage } from './pages/RoleDetailPage';
 import { RoleListPage } from './pages/RoleListPage';
@@ -19,6 +20,7 @@ export const adminRoutes: RouteObject[] = [
       { path: 'roles/:id', element: <RoleDetailPage /> },
       { path: 'audit-trail', element: <AuditTrailPage /> },
       { path: 'district-profile', element: <DistrictProfilePage /> },
+      { path: 'demo-data', element: <DemoDataPage /> },
     ],
   },
 ];

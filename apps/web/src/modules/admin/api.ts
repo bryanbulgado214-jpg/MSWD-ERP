@@ -153,6 +153,23 @@ export async function removePermissionFromRole(
   await authFetchMutate(`/admin/roles/${roleId}/permissions/${assignmentId}`, 'DELETE');
 }
 
+// ── Demo Data (demonstration only) ──
+
+export async function getDemoStatus(): Promise<{ present: boolean; jevCount: number }> {
+  const res = await authFetch('/admin/demo-data/status');
+  return res.json();
+}
+
+export async function generateDemoData(): Promise<{ created: number }> {
+  const res = await authFetchMutate('/admin/demo-data/generate', 'POST');
+  return res.json();
+}
+
+export async function wipeDemoData(): Promise<{ removed: number }> {
+  const res = await authFetchMutate('/admin/demo-data/wipe', 'POST');
+  return res.json();
+}
+
 // ── Audit Trail ──
 
 export interface AuditLogRow {
