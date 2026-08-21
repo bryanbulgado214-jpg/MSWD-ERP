@@ -18,10 +18,14 @@ export class BillingReportService {
         },
       },
       include: {
-        consumer: { select: { accountNumber: true, firstName: true, lastName: true, consumerType: true } },
+        consumer: {
+          select: { accountNumber: true, firstName: true, lastName: true, consumerType: true },
+        },
         cashier: { select: { username: true } },
         allocations: {
-          include: { bill: { select: { billNumber: true, billingPeriod: { select: { name: true } } } } },
+          include: {
+            bill: { select: { billNumber: true, billingPeriod: { select: { name: true } } } },
+          },
         },
       },
       orderBy: { paymentDate: 'asc' },
@@ -66,7 +70,15 @@ export class BillingReportService {
         status: { in: ['unpaid', 'partial'] },
       },
       include: {
-        consumer: { select: { id: true, accountNumber: true, firstName: true, lastName: true, consumerType: true } },
+        consumer: {
+          select: {
+            id: true,
+            accountNumber: true,
+            firstName: true,
+            lastName: true,
+            consumerType: true,
+          },
+        },
         billingPeriod: { select: { name: true } },
       },
       orderBy: { dueDate: 'asc' },
@@ -75,7 +87,10 @@ export class BillingReportService {
     const today = new Date();
     const results = unpaidBills.map((b) => {
       const dueDate = new Date(b.dueDate);
-      const daysOverdue = Math.max(0, Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)));
+      const daysOverdue = Math.max(
+        0,
+        Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)),
+      );
       let bracket = 'current';
       if (daysOverdue > 0 && daysOverdue <= 30) bracket = '1-30';
       else if (daysOverdue > 30 && daysOverdue <= 60) bracket = '31-60';
@@ -125,8 +140,15 @@ export class BillingReportService {
     const consumer = await this.prisma.consumer.findFirst({
       where: { id: consumerId, organizationId: orgId },
       select: {
-        id: true, accountNumber: true, firstName: true, middleName: true, lastName: true,
-        address: true, barangay: true, consumerType: true, status: true,
+        id: true,
+        accountNumber: true,
+        firstName: true,
+        middleName: true,
+        lastName: true,
+        address: true,
+        barangay: true,
+        consumerType: true,
+        status: true,
       },
     });
 
@@ -150,13 +172,66 @@ export class BillingReportService {
     });
 
     const totalBilled = bills.reduce((s, b) => s + Number(b.totalAmount), 0);
-    const totalPaid = payments.filter((p) => p.status === 'valid').reduce((s, p) => s + Number(p.totalAmount), 0);
+    const totalPaid = payments
+      .filter((p) => p.status === 'valid')
+      .reduce((s, p) => s + Number(p.totalAmount), 0);
+
+    // Interleaved, date-ordered ledger with a running balance ("passbook" view):
+    // a bill charges the account (debit), a valid payment settles it (credit).
+    // Voided payments are excluded — they net to zero.
+    const rows: Array<{
+      date: Date;
+      type: 'bill' | 'payment';
+      reference: string;
+      particulars: string;
+      charges: number;
+      payments: number;
+    }> = [];
+    for (const b of bills) {
+      rows.push({
+        date: b.createdAt,
+        type: 'bill',
+        reference: b.billNumber,
+        particulars: `${b.billingPeriod.name} — ${Number(b.consumption)} cu.m.`,
+        charges: Number(b.totalAmount),
+        payments: 0,
+      });
+    }
+    for (const p of payments) {
+      if (p.status !== 'valid') continue;
+      rows.push({
+        date: p.paymentDate,
+        type: 'payment',
+        reference: p.orNumber,
+        particulars: `Payment — ${p.paymentMethod.replace('_', ' ')}`,
+        charges: 0,
+        payments: Number(p.totalAmount),
+      });
+    }
+    // Chronological; on the same date a bill is charged before a payment settles it.
+    rows.sort(
+      (a, b) =>
+        a.date.getTime() - b.date.getTime() || (a.type === b.type ? 0 : a.type === 'bill' ? -1 : 1),
+    );
+    let running = 0;
+    const ledger = rows.map((r) => {
+      running = Math.round((running + r.charges - r.payments) * 100) / 100;
+      return {
+        date: r.date,
+        reference: r.reference,
+        particulars: r.particulars,
+        charges: r.charges,
+        payments: r.payments,
+        balance: running,
+      };
+    });
 
     return {
       consumer,
       totalBilled,
       totalPaid,
       balance: totalBilled - totalPaid,
+      ledger,
       bills: bills.map((b) => ({
         id: b.id,
         billNumber: b.billNumber,

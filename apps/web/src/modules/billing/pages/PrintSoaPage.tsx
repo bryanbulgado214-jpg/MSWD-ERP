@@ -45,22 +45,13 @@ export default function PrintSoaPage() {
     totalBilled: number;
     totalPaid: number;
     balance: number;
-    bills: Array<{
-      billNumber: string;
-      period: string;
-      totalAmount: string;
-      amountPaid: string;
-      balance: string;
-      dueDate: string;
-      status: string;
-      consumption: string;
-    }>;
-    payments: Array<{
-      orNumber: string;
-      paymentDate: string;
-      totalAmount: string;
-      paymentMethod: string;
-      status: string;
+    ledger: Array<{
+      date: string;
+      reference: string;
+      particulars: string;
+      charges: number;
+      payments: number;
+      balance: number;
     }>;
   };
 
@@ -129,38 +120,40 @@ export default function PrintSoaPage() {
 
         <hr className="bill-print-divider" />
 
+        <p style={{ fontWeight: 700, margin: '0 0 4px' }}>Account Ledger</p>
         <table className="bill-print-table">
           <thead>
             <tr>
-              <th>Bill No.</th>
-              <th>Period</th>
-              <th>Cu.M.</th>
-              <th>Total Amount</th>
-              <th>Amount Paid</th>
+              <th>Date</th>
+              <th>Reference</th>
+              <th>Particulars</th>
+              <th>Charges</th>
+              <th>Payments</th>
               <th>Balance</th>
-              <th>Due Date</th>
-              <th>Status</th>
             </tr>
           </thead>
           <tbody>
-            {d.bills.map((b) => (
-              <tr key={b.billNumber}>
-                <td className="bp-center">{b.billNumber}</td>
-                <td className="bp-center">{b.period}</td>
-                <td className="bp-right">{b.consumption}</td>
-                <td className="bp-right">{formatPeso(b.totalAmount)}</td>
-                <td className="bp-right">{formatPeso(b.amountPaid)}</td>
-                <td className="bp-right bp-bold">{formatPeso(b.balance)}</td>
+            {d.ledger.length === 0 && (
+              <tr>
+                <td colSpan={6} className="bp-center">
+                  No transactions yet.
+                </td>
+              </tr>
+            )}
+            {d.ledger.map((e, i) => (
+              <tr key={i}>
                 <td className="bp-center">
-                  {new Date(b.dueDate).toLocaleDateString('en-PH', {
+                  {new Date(e.date).toLocaleDateString('en-PH', {
                     month: '2-digit',
                     day: '2-digit',
                     year: 'numeric',
                   })}
                 </td>
-                <td className="bp-center" style={{ textTransform: 'capitalize' }}>
-                  {b.status}
-                </td>
+                <td className="bp-center">{e.reference}</td>
+                <td>{e.particulars}</td>
+                <td className="bp-right">{e.charges > 0 ? formatPeso(e.charges) : ''}</td>
+                <td className="bp-right">{e.payments > 0 ? formatPeso(e.payments) : ''}</td>
+                <td className="bp-right bp-bold">{formatPeso(e.balance)}</td>
               </tr>
             ))}
           </tbody>
@@ -171,56 +164,10 @@ export default function PrintSoaPage() {
               </td>
               <td className="bp-right">{formatPeso(d.totalBilled)}</td>
               <td className="bp-right">{formatPeso(d.totalPaid)}</td>
-              <td className="bp-right">{formatPeso(d.balance)}</td>
-              <td colSpan={2}></td>
+              <td className="bp-right bp-bold">{formatPeso(d.balance)}</td>
             </tr>
           </tfoot>
         </table>
-
-        {d.payments.length > 0 && (
-          <>
-            <p style={{ fontWeight: 700, marginTop: 16, marginBottom: 4 }}>Payment History</p>
-            <table className="bill-print-table">
-              <thead>
-                <tr>
-                  <th>OR No.</th>
-                  <th>Date</th>
-                  <th>Amount</th>
-                  <th>Method</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {d.payments.map((p) => (
-                  <tr
-                    key={p.orNumber}
-                    style={
-                      p.status === 'voided'
-                        ? { textDecoration: 'line-through', color: '#888' }
-                        : undefined
-                    }
-                  >
-                    <td className="bp-center">{p.orNumber}</td>
-                    <td className="bp-center">
-                      {new Date(p.paymentDate).toLocaleDateString('en-PH', {
-                        month: '2-digit',
-                        day: '2-digit',
-                        year: 'numeric',
-                      })}
-                    </td>
-                    <td className="bp-right">{formatPeso(p.totalAmount)}</td>
-                    <td className="bp-center" style={{ textTransform: 'capitalize' }}>
-                      {p.paymentMethod.replace('_', ' ')}
-                    </td>
-                    <td className="bp-center" style={{ textTransform: 'capitalize' }}>
-                      {p.status}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </>
-        )}
 
         <div className="bill-print-summary" style={{ marginTop: 24 }}>
           <div className="bill-print-summary__row">
