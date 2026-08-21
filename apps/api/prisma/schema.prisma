@@ -2762,6 +2762,10 @@ enum JevStatus {
 
 enum JevSourceType {
   manual
+  // Budgetary only: obligations live in BudgetTransactionLog (the RAOD-style
+  // registry), NOT the general ledger. No AutoJev handler by design — the GL
+  // recognizes the transaction at execution (disbursement/receipt/etc.). Kept
+  // for enum stability.
   obligation
   disbursement
   stock_receipt
