@@ -520,10 +520,11 @@ export class AutoJevService {
       const accumDepr = await this.resolveByCode(tx, organizationId, cat.accumDeprAccountCode);
 
       if (!deprExpense || !accumDepr) {
-        this.logger.warn(
-          `Skipping category ${cat.categoryName}: COA accounts not found (${cat.deprExpenseAccountCode} / ${cat.accumDeprAccountCode}).`,
+        throw new BadRequestException(
+          `Cannot post depreciation for "${cat.categoryName}": the depreciation-expense ` +
+            `(${cat.deprExpenseAccountCode}) or accumulated-depreciation ` +
+            `(${cat.accumDeprAccountCode}) account is not set up in the chart of accounts.`,
         );
-        continue;
       }
 
       lines.push({
@@ -542,6 +543,7 @@ export class AutoJevService {
     }
 
     if (lines.length === 0) return null;
+    this.assertBalanced(lines, `Depreciation ${periodLabel}`);
 
     const lastDay = new Date(run.periodYear, run.periodMonth, 0);
 
