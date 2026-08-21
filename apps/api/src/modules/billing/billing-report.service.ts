@@ -155,7 +155,7 @@ export class BillingReportService {
     const bills = await this.prisma.bill.findMany({
       where: { organizationId: orgId, consumerId },
       include: {
-        billingPeriod: { select: { name: true } },
+        billingPeriod: { select: { name: true, billingMonth: true, billingYear: true } },
         charges: { orderBy: { sortOrder: 'asc' } },
       },
       orderBy: { createdAt: 'asc' },
@@ -189,7 +189,9 @@ export class BillingReportService {
     }> = [];
     for (const b of bills) {
       rows.push({
-        date: b.createdAt,
+        // The billing period's month-end (matches the accrual date) — not the
+        // bulk-generation timestamp, which would misorder against payments.
+        date: new Date(Date.UTC(b.billingPeriod.billingYear, b.billingPeriod.billingMonth, 0)),
         type: 'bill',
         reference: b.billNumber,
         particulars: `${b.billingPeriod.name} — ${Number(b.consumption)} cu.m.`,
