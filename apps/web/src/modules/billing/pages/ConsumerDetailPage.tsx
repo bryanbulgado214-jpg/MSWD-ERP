@@ -6,6 +6,7 @@ import {
   assignMeter,
   BillingApiError,
   getConsumer,
+  getConsumerLedger,
   getUnassignedMeters,
   updateConsumer,
 } from '../api';
@@ -13,6 +14,24 @@ import type { Consumer, MeterListItem } from '../types';
 
 import BillingSubNav from './BillingSubNav';
 import './billing.css';
+
+interface Ledger {
+  totalBilled: number;
+  totalPaid: number;
+  balance: number;
+  ledger: Array<{
+    date: string;
+    reference: string;
+    particulars: string;
+    charges: number;
+    payments: number;
+    balance: number;
+  }>;
+}
+
+function formatPeso(val: number) {
+  return (val || 0).toLocaleString('en-PH', { style: 'currency', currency: 'PHP' });
+}
 
 type LoadState =
   | { status: 'loading' }
@@ -23,6 +42,7 @@ export default function ConsumerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { hasPermission } = useAuth();
   const [state, setState] = useState<LoadState>({ status: 'loading' });
+  const [ledger, setLedger] = useState<Ledger | null>(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
@@ -53,6 +73,9 @@ export default function ConsumerDetailPage() {
     try {
       const data = await getConsumer(id);
       setState({ status: 'loaded', data });
+      getConsumerLedger(id)
+        .then((d) => setLedger(d as Ledger))
+        .catch(() => {});
     } catch (err) {
       setState({
         status: 'error',
@@ -407,6 +430,82 @@ export default function ConsumerDetailPage() {
             </button>
           </div>
         </form>
+      )}
+
+      <h3 className="bill-section-title">Account Ledger</h3>
+      {!ledger ? (
+        <p style={{ color: '#667085' }}>Loading ledger…</p>
+      ) : (
+        <>
+          <div
+            style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 10, fontSize: 13 }}
+          >
+            <span>
+              Total Billed: <strong>{formatPeso(ledger.totalBilled)}</strong>
+            </span>
+            <span>
+              Total Paid: <strong>{formatPeso(ledger.totalPaid)}</strong>
+            </span>
+            <span>
+              Balance:{' '}
+              <strong style={{ color: ledger.balance > 0 ? '#b42318' : '#067647' }}>
+                {formatPeso(ledger.balance)}
+              </strong>
+            </span>
+            <Link
+              to={`/billing/print/soa?consumerId=${c.id}`}
+              className="bill-table__link"
+              style={{ marginLeft: 'auto', fontSize: 12 }}
+            >
+              Print SOA &rarr;
+            </Link>
+          </div>
+          {ledger.ledger.length === 0 ? (
+            <div className="bill-empty">No transactions yet.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="bill-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Reference</th>
+                    <th>Particulars</th>
+                    <th style={{ textAlign: 'right' }}>Charges</th>
+                    <th style={{ textAlign: 'right' }}>Payments</th>
+                    <th style={{ textAlign: 'right' }}>Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ledger.ledger.map((e, i) => (
+                    <tr key={i}>
+                      <td>
+                        {new Date(e.date).toLocaleDateString('en-PH', {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                        })}
+                      </td>
+                      <td className="bill-text-mono">{e.reference}</td>
+                      <td>{e.particulars}</td>
+                      <td className="bill-text-mono" style={{ textAlign: 'right' }}>
+                        {e.charges > 0 ? formatPeso(e.charges) : ''}
+                      </td>
+                      <td className="bill-text-mono" style={{ textAlign: 'right' }}>
+                        {e.payments > 0 ? formatPeso(e.payments) : ''}
+                      </td>
+                      <td
+                        className="bill-text-mono"
+                        style={{ textAlign: 'right', fontWeight: 600 }}
+                      >
+                        {formatPeso(e.balance)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
 
       <h3 className="bill-section-title">Meter History</h3>
