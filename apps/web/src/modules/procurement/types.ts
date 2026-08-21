@@ -380,6 +380,16 @@ export interface DisbursementVoucher {
   grossAmount: string;
   taxAmount: string;
   otherDeductions: string;
+  // Free-form deduction lines (retention, non-tax withholding); each credits
+  // its own liability account on release. `otherDeductions` is their total.
+  deductions: Array<{
+    id: string;
+    label: string;
+    amount: string;
+    chartOfAccountId: string;
+    sortOrder: number;
+    chartOfAccount: { id: string; accountCode: string; name: string };
+  }>;
   netAmount: string;
   checkNumber: string | null;
   checkDate: string | null;

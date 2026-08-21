@@ -14,6 +14,11 @@ export interface DvSheetData {
   grossAmount: string;
   taxAmount: string;
   otherDeductions: string;
+  deductions?: Array<{
+    label: string;
+    amount: string;
+    chartOfAccount?: { accountCode: string; name: string } | null;
+  }> | null;
   netAmount: string;
   accountCode?: string | null;
   checkNumber?: string | null;
@@ -306,16 +311,29 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
                 </td>
               </tr>
             )}
-            {parseFloat(dv.otherDeductions) > 0 && (
-              <tr>
-                <td></td>
-                <td style={{ fontSize: 10, paddingLeft: 24 }}>Less: Other Deductions</td>
-                <td></td>
-                <td className="gov-right gov-mono" style={{ fontSize: 10, color: '#b42318' }}>
-                  ({formatPeso(dv.otherDeductions)})
-                </td>
-              </tr>
-            )}
+            {dv.deductions && dv.deductions.length > 0
+              ? dv.deductions.map((d, i) => (
+                  <tr key={i}>
+                    <td></td>
+                    <td style={{ fontSize: 10, paddingLeft: 24 }}>Less: {d.label}</td>
+                    <td className="gov-center gov-mono" style={{ fontSize: 9 }}>
+                      {d.chartOfAccount?.accountCode ?? ''}
+                    </td>
+                    <td className="gov-right gov-mono" style={{ fontSize: 10, color: '#b42318' }}>
+                      ({formatPeso(d.amount)})
+                    </td>
+                  </tr>
+                ))
+              : parseFloat(dv.otherDeductions) > 0 && (
+                  <tr>
+                    <td></td>
+                    <td style={{ fontSize: 10, paddingLeft: 24 }}>Less: Other Deductions</td>
+                    <td></td>
+                    <td className="gov-right gov-mono" style={{ fontSize: 10, color: '#b42318' }}>
+                      ({formatPeso(dv.otherDeductions)})
+                    </td>
+                  </tr>
+                )}
           </tbody>
         </table>
 
