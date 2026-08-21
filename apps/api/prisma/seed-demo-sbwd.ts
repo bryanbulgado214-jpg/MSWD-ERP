@@ -595,6 +595,32 @@ async function main() {
     }
   }
 
+  // 11c. Posting-account mappings the auto-JEV engine resolves. The mappings
+  // were cleared above; recreate the disbursement-cycle defaults so releasing a
+  // DV (and any other auto-posted document) records to the ledger instead of
+  // being blocked. Extend this table as more modules are integrated (payroll,
+  // inventory, etc.). Keys must match those resolved in AutoJevService.
+  const POSTING_MAPPINGS: Record<string, string> = {
+    'cash.in_bank': '1-01-02-020-02', // Cash in Bank - LC, DBP Current Account
+    'ap.accounts_payable': '2-01-01-010', // Accounts Payable
+    'ap.due_to_bir': '2-02-01-010-02', // Due to BIR - Expanded Withholding Tax
+  };
+  for (const [mappingKey, code] of Object.entries(POSTING_MAPPINGS)) {
+    const chartOfAccountId = coaId[code];
+    if (!chartOfAccountId) continue;
+    await prisma.accountMapping.upsert({
+      where: { organizationId_mappingKey: { organizationId: org.id, mappingKey } },
+      update: { chartOfAccountId, updatedBy: adminUser.id },
+      create: {
+        organizationId: org.id,
+        mappingKey,
+        chartOfAccountId,
+        createdBy: adminUser.id,
+        updatedBy: adminUser.id,
+      },
+    });
+  }
+
   // 10. JEV factory -----------------------------------------------------------
   let seq = 0;
   const nextJevNumber = () => `JEV-${FY_YEAR}-${String(++seq).padStart(6, '0')}`;
