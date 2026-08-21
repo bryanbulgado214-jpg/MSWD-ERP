@@ -1,10 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { getPostableAccounts, type PostableAccount } from '../../accounting/api';
+import { AccountCombobox } from '../../accounting/pages/AccountCombobox';
 import { formatPeso } from '../../budgeting/format-peso';
 import { createDv, listOrs, ProcurementApiError } from '../api';
 import type { Ors } from '../types';
 import './procurement.css';
+
+interface DeductionRow {
+  key: string;
+  label: string;
+  chartOfAccountId: string;
+  amount: string;
+}
 
 export function NewDvPage() {
   const navigate = useNavigate();
@@ -14,7 +23,9 @@ export function NewDvPage() {
   const [paymentMode, setPaymentMode] = useState<'check' | 'ada' | 'others'>('check');
   const [grossAmount, setGrossAmount] = useState('');
   const [taxAmount, setTaxAmount] = useState('0');
-  const [otherDeductions, setOtherDeductions] = useState('0');
+  const [postable, setPostable] = useState<PostableAccount[]>([]);
+  const [deductionRows, setDeductionRows] = useState<DeductionRow[]>([]);
+  const rowSeq = useRef(0);
   const [accountCode, setAccountCode] = useState('');
   const [checkNumber, setCheckNumber] = useState('');
   const [checkDate, setCheckDate] = useState('');
@@ -26,7 +37,24 @@ export function NewDvPage() {
     listOrs({ status: 'obligated' })
       .then(setOrsList)
       .catch(() => {});
+    getPostableAccounts()
+      .then(setPostable)
+      .catch(() => {});
   }, []);
+
+  function addDeduction() {
+    rowSeq.current += 1;
+    setDeductionRows((rows) => [
+      ...rows,
+      { key: `d${rowSeq.current}`, label: '', chartOfAccountId: '', amount: '' },
+    ]);
+  }
+  function updateDeduction(key: string, patch: Partial<DeductionRow>) {
+    setDeductionRows((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  }
+  function removeDeduction(key: string) {
+    setDeductionRows((rows) => rows.filter((r) => r.key !== key));
+  }
 
   const selectedOrs = orsList.find((o) => o.id === selectedOrsId);
 
@@ -43,8 +71,8 @@ export function NewDvPage() {
 
   const gross = parseFloat(grossAmount) || 0;
   const tax = parseFloat(taxAmount) || 0;
-  const deductions = parseFloat(otherDeductions) || 0;
-  const net = gross - tax - deductions;
+  const deductionsTotal = deductionRows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+  const net = gross - tax - deductionsTotal;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -61,6 +89,22 @@ export function NewDvPage() {
       return;
     }
 
+    const deductionPayload = deductionRows
+      .map((r) => ({
+        label: r.label.trim(),
+        chartOfAccountId: r.chartOfAccountId,
+        amount: parseFloat(r.amount) || 0,
+      }))
+      .filter((r) => r.amount > 0);
+    if (deductionPayload.some((r) => !r.label || !r.chartOfAccountId)) {
+      setError('Each deduction line needs a description, a credit account, and an amount.');
+      return;
+    }
+    if (net < 0) {
+      setError('Tax and deductions cannot exceed the gross amount.');
+      return;
+    }
+
     setSubmitting(true);
     setError('');
     try {
@@ -70,7 +114,7 @@ export function NewDvPage() {
         grossAmount: gross,
         paymentMode,
         ...(tax > 0 ? { taxAmount: tax } : {}),
-        ...(deductions > 0 ? { otherDeductions: deductions } : {}),
+        ...(deductionPayload.length ? { deductions: deductionPayload } : {}),
         ...(accountCode ? { accountCode } : {}),
         ...(checkNumber ? { checkNumber } : {}),
         ...(checkDate ? { checkDate } : {}),
@@ -164,9 +208,7 @@ export function NewDvPage() {
 
         {/* Financial */}
         <h3 style={{ fontSize: 15, fontWeight: 700, margin: '16px 0 8px' }}>Financial Details</h3>
-        <div
-          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}
-        >
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
           <div className="pr-form-field">
             <label>Gross Amount *</label>
             <input
@@ -178,7 +220,7 @@ export function NewDvPage() {
             />
           </div>
           <div className="pr-form-field">
-            <label>Tax Withheld</label>
+            <label>Tax Withheld (BIR)</label>
             <input
               type="number"
               step="0.01"
@@ -186,15 +228,128 @@ export function NewDvPage() {
               onChange={(e) => setTaxAmount(e.target.value)}
             />
           </div>
-          <div className="pr-form-field">
-            <label>Other Deductions</label>
-            <input
-              type="number"
-              step="0.01"
-              value={otherDeductions}
-              onChange={(e) => setOtherDeductions(e.target.value)}
-            />
+        </div>
+
+        {/* Other deductions — free-form; each is credited to its own account */}
+        <div style={{ marginBottom: 16 }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 8,
+            }}
+          >
+            <label style={{ fontWeight: 600, fontSize: 13 }}>Other Deductions</label>
+            <button
+              type="button"
+              className="pr-btn"
+              onClick={addDeduction}
+              style={{ padding: '4px 10px', fontSize: 12 }}
+            >
+              + Add deduction
+            </button>
           </div>
+
+          {deductionRows.length === 0 ? (
+            <div style={{ color: '#98a2b3', fontSize: 12, padding: '4px 0' }}>
+              None. BIR withholding goes in &ldquo;Tax Withheld&rdquo; above; add retention or other
+              withholdings here — each is credited to its own liability account when the DV is
+              released.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1.3fr 1.7fr 0.9fr 30px',
+                  gap: 8,
+                  fontSize: 11,
+                  color: '#667085',
+                  fontWeight: 600,
+                }}
+              >
+                <span>Description</span>
+                <span>Credit account</span>
+                <span>Amount</span>
+                <span />
+              </div>
+              {deductionRows.map((r) => (
+                <div
+                  key={r.key}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1.3fr 1.7fr 0.9fr 30px',
+                    gap: 8,
+                    alignItems: 'start',
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="e.g. Retention 10%"
+                    value={r.label}
+                    maxLength={120}
+                    onChange={(e) => updateDeduction(r.key, { label: e.target.value })}
+                    style={{
+                      padding: '7px 9px',
+                      border: '1px solid #d0d5dd',
+                      borderRadius: 6,
+                      fontSize: 12,
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <AccountCombobox
+                    accounts={postable}
+                    value={r.chartOfAccountId}
+                    onChange={(id) => updateDeduction(r.key, { chartOfAccountId: id })}
+                    placeholder="Search liability / payable account…"
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={r.amount}
+                    onChange={(e) => updateDeduction(r.key, { amount: e.target.value })}
+                    style={{
+                      padding: '7px 9px',
+                      border: '1px solid #d0d5dd',
+                      borderRadius: 6,
+                      fontSize: 12,
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeDeduction(r.key)}
+                    title="Remove deduction"
+                    style={{
+                      border: '1px solid #fecdca',
+                      color: '#b42318',
+                      background: '#fff',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontSize: 13,
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: 8,
+                  fontSize: 12,
+                  color: '#475467',
+                }}
+              >
+                <span>Total deductions:</span>
+                <strong>{formatPeso(deductionsTotal)}</strong>
+              </div>
+            </div>
+          )}
         </div>
 
         <div

@@ -36,6 +36,14 @@ export class AutoJevService {
       return null;
     }
 
+    // Free-form deduction lines captured on the DV — each credits its own
+    // liability/payable account, so no non-tax deduction is folded into cash.
+    const deductions = await tx.dvDeduction.findMany({
+      where: { dvId: dv.id },
+      orderBy: { sortOrder: 'asc' },
+      select: { label: true, amount: true, chartOfAccountId: true },
+    });
+
     const lines: Array<{
       chartOfAccountId: string;
       debitAmount: number;
@@ -43,6 +51,7 @@ export class AutoJevService {
       description: string;
     }> = [];
 
+    // Dr Accounts Payable — the full gross obligation to the payee.
     lines.push({
       chartOfAccountId: apAccount.id,
       debitAmount: dv.grossAmount,
@@ -50,31 +59,53 @@ export class AutoJevService {
       description: `Accounts Payable — DV ${dv.dvNumber}`,
     });
 
+    // Cr Due to BIR — statutory income-tax withholding.
     if (dv.taxAmount > 0) {
       const birAccount = await this.resolve(organizationId, 'ap.due_to_bir');
-      if (birAccount) {
-        lines.push({
-          chartOfAccountId: birAccount.id,
-          debitAmount: 0,
-          creditAmount: dv.taxAmount,
-          description: `Tax Withheld — DV ${dv.dvNumber}`,
-        });
+      if (!birAccount) {
+        this.logger.warn(
+          `Skipping auto-JEV for DV ${dv.dvNumber}: tax withheld but no ap.due_to_bir mapping.`,
+        );
+        return null;
       }
+      lines.push({
+        chartOfAccountId: birAccount.id,
+        debitAmount: 0,
+        creditAmount: dv.taxAmount,
+        description: `Tax Withheld — DV ${dv.dvNumber}`,
+      });
     }
 
+    // Cr each free-form deduction to its own account.
+    for (const d of deductions) {
+      const amount = Number(d.amount);
+      if (amount <= 0) continue;
+      lines.push({
+        chartOfAccountId: d.chartOfAccountId,
+        debitAmount: 0,
+        creditAmount: amount,
+        description: `${d.label} — DV ${dv.dvNumber}`,
+      });
+    }
+
+    // Cr Cash in Bank — the net actually disbursed to the payee.
     lines.push({
       chartOfAccountId: cashAccount.id,
       debitAmount: 0,
-      creditAmount: dv.netAmount + (dv.taxAmount > 0 ? 0 : 0),
+      creditAmount: dv.netAmount,
       description: `Cash Disbursement — DV ${dv.dvNumber}`,
     });
 
+    // Must balance exactly: gross = tax + Σdeductions + net (enforced when the
+    // DV is created). Refuse to post rather than silently plug the cash line.
     const totalDebit = lines.reduce((s, l) => s + l.debitAmount, 0);
     const totalCredit = lines.reduce((s, l) => s + l.creditAmount, 0);
-    const gap = totalDebit - totalCredit;
-    if (Math.abs(gap) > 0.005) {
-      const cashLine = lines.find((l) => l.chartOfAccountId === cashAccount.id)!;
-      cashLine.creditAmount += gap;
+    if (Math.abs(totalDebit - totalCredit) > 0.005) {
+      throw new Error(
+        `DV ${dv.dvNumber} produces an unbalanced entry ` +
+          `(debit ${totalDebit.toFixed(2)} ≠ credit ${totalCredit.toFixed(2)}). ` +
+          `Check that gross equals tax + deductions + net.`,
+      );
     }
 
     return this.createAutoJev(tx, {

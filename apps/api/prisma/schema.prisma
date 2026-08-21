@@ -2087,6 +2087,7 @@ model DisbursementVoucher {
   updater              User                  @relation("DvsUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict)
 
   checks               Check[]
+  deductions           DvDeduction[]
 
   @@unique([organizationId, dvNumber])
   @@index([organizationId, status])
@@ -2094,6 +2095,27 @@ model DisbursementVoucher {
   @@index([purchaseOrderId])
   @@index([supplierId])
   @@map("disbursement_vouchers")
+}
+
+/// A free-form deduction line on a Disbursement Voucher (retention,
+/// non-tax withholding, etc.). Each line names its own liability/payable
+/// account, so releasing the DV posts an exact per-deduction credit instead
+/// of folding the amount into cash. BIR income tax keeps its dedicated
+/// `taxAmount` field on the DV (posted to Due-to-BIR).
+model DvDeduction {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dvId             String   @map("dv_id") @db.Uuid
+  label            String   @db.VarChar(120)
+  chartOfAccountId String   @map("chart_of_account_id") @db.Uuid
+  amount           Decimal  @default(0) @db.Decimal(18, 2)
+  sortOrder        Int      @default(0) @map("sort_order")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  dv             DisbursementVoucher @relation(fields: [dvId], references: [id], onDelete: Cascade)
+  chartOfAccount ChartOfAccount      @relation(fields: [chartOfAccountId], references: [id], onDelete: Restrict)
+
+  @@index([dvId])
+  @@map("dv_deductions")
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -2819,6 +2841,7 @@ model ChartOfAccount {
   jevLines        JevLine[]
   accountMappings AccountMapping[]
   bankAccounts    BankAccount[]    @relation("BankAccountGl")
+  dvDeductions    DvDeduction[]
 
   @@unique([organizationId, accountCode])
   @@index([organizationId])

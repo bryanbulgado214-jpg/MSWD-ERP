@@ -888,6 +888,7 @@ export async function createDv(data: {
   paymentMode?: string;
   taxAmount?: number;
   otherDeductions?: number;
+  deductions?: { label: string; chartOfAccountId: string; amount: number }[];
   inspectionReportId?: string;
   accountCode?: string;
   checkNumber?: string;

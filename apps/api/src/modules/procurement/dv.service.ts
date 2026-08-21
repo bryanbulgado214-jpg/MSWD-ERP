@@ -61,7 +61,24 @@ const DV_SELECT = {
   releaser: { select: { id: true, username: true } },
   creator: { select: { id: true, username: true } },
   updater: { select: { id: true, username: true } },
+  deductions: {
+    select: {
+      id: true,
+      label: true,
+      amount: true,
+      chartOfAccountId: true,
+      sortOrder: true,
+      chartOfAccount: { select: { id: true, accountCode: true, name: true } },
+    },
+    orderBy: { sortOrder: 'asc' as const },
+  },
 };
+
+interface DvDeductionInput {
+  label: string;
+  chartOfAccountId: string;
+  amount: number;
+}
 
 interface CreateDvData {
   orsId: string;
@@ -69,7 +86,10 @@ interface CreateDvData {
   paymentMode?: 'check' | 'ada' | 'others';
   grossAmount: number;
   taxAmount?: number;
+  /** Legacy lump sum; superseded by `deductions` when that is provided. */
   otherDeductions?: number;
+  /** Free-form deduction lines, each crediting its own liability account. */
+  deductions?: DvDeductionInput[];
   inspectionReportId?: string;
   accountCode?: string;
   checkNumber?: string;
@@ -151,9 +171,27 @@ export class DvService {
       throw new BadRequestException('ORS must be linked to a Purchase Order.');
     }
 
+    const round2 = (n: number) => Math.round(n * 100) / 100;
     const taxAmount = data.taxAmount ?? 0;
-    const otherDeductions = data.otherDeductions ?? 0;
-    const netAmount = data.grossAmount - taxAmount - otherDeductions;
+    const deductionLines = (data.deductions ?? []).filter((d) => d.amount > 0);
+    const otherDeductions = deductionLines.length
+      ? round2(deductionLines.reduce((s, d) => s + d.amount, 0))
+      : (data.otherDeductions ?? 0);
+    const netAmount = round2(data.grossAmount - taxAmount - otherDeductions);
+    if (netAmount < 0) {
+      throw new BadRequestException('Tax and deductions exceed the gross amount.');
+    }
+    if (deductionLines.length) {
+      const ids = [...new Set(deductionLines.map((d) => d.chartOfAccountId))];
+      const valid = await this.prisma.chartOfAccount.count({
+        where: { organizationId: orgId, id: { in: ids }, isActive: true, isHeader: false },
+      });
+      if (valid !== ids.length) {
+        throw new BadRequestException(
+          'One or more deduction accounts are invalid or not postable for this district.',
+        );
+      }
+    }
 
     const dvNumber = await this.generateDvNumber(orgId);
 
@@ -179,6 +217,18 @@ export class DvService {
           taxAmount,
           otherDeductions,
           netAmount,
+          ...(deductionLines.length
+            ? {
+                deductions: {
+                  create: deductionLines.map((d, i) => ({
+                    label: d.label,
+                    chartOfAccountId: d.chartOfAccountId,
+                    amount: d.amount,
+                    sortOrder: i,
+                  })),
+                },
+              }
+            : {}),
           ...(data.checkNumber ? { checkNumber: data.checkNumber } : {}),
           ...(data.checkDate ? { checkDate: new Date(data.checkDate) } : {}),
           ...(data.bankName ? { bankName: data.bankName } : {}),

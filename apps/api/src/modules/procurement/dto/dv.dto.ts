@@ -1,4 +1,6 @@
+import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsDateString,
   IsEnum,
   IsNumber,
@@ -6,7 +8,22 @@ import {
   IsString,
   IsUUID,
   MaxLength,
+  Min,
+  ValidateNested,
 } from 'class-validator';
+
+export class DvDeductionDto {
+  @IsString()
+  @MaxLength(120)
+  label!: string;
+
+  @IsUUID()
+  chartOfAccountId!: string;
+
+  @IsNumber()
+  @Min(0)
+  amount!: number;
+}
 
 export class CreateDvDto {
   @IsUUID()
@@ -29,6 +46,12 @@ export class CreateDvDto {
   @IsNumber()
   @IsOptional()
   otherDeductions?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => DvDeductionDto)
+  deductions?: DvDeductionDto[];
 
   @IsOptional()
   @IsUUID()
