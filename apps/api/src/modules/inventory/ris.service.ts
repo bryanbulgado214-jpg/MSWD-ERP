@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { PrismaService } from '../../database/prisma.service';
 import { AutoJevService } from '../accounting/auto-jev.service';
@@ -99,13 +104,20 @@ export class RisService {
           id: { in: data.items.map((i) => i.inventoryItemId) },
           organizationId,
         },
-        select: { id: true, itemCode: true, description: true, unitOfMeasure: true, unitCost: true },
+        select: {
+          id: true,
+          itemCode: true,
+          description: true,
+          unitOfMeasure: true,
+          unitCost: true,
+        },
       });
       const itemMap = new Map(inventoryItems.map((i) => [i.id, i]));
 
       const itemsData = data.items.map((item) => {
         const inv = itemMap.get(item.inventoryItemId);
-        if (!inv) throw new BadRequestException(`Inventory item not found: ${item.inventoryItemId}`);
+        if (!inv)
+          throw new BadRequestException(`Inventory item not found: ${item.inventoryItemId}`);
         return {
           inventoryItemId: item.inventoryItemId,
           stockNumber: inv.itemCode,
@@ -159,7 +171,8 @@ export class RisService {
       where: { id, organizationId },
     });
     if (!ris) throw new NotFoundException('RIS not found.');
-    if (ris.status !== 'submitted') throw new BadRequestException('Only submitted RIS can be approved.');
+    if (ris.status !== 'submitted')
+      throw new BadRequestException('Only submitted RIS can be approved.');
     if (ris.version !== expectedVersion) {
       throw new ConflictException('RIS was modified. Please refresh and try again.');
     }
@@ -188,7 +201,7 @@ export class RisService {
   ) {
     const ris = await this.prisma.requisitionIssueSlip.findFirst({
       where: { id, organizationId },
-      include: { items: true },
+      include: { items: { include: { inventoryItem: true } } },
     });
     if (!ris) throw new NotFoundException('RIS not found.');
     if (ris.status !== 'approved' && ris.status !== 'partially_issued') {
@@ -217,7 +230,8 @@ export class RisService {
         const stockCard = await tx.stockCard.findUnique({
           where: { inventoryItemId: risItem.inventoryItemId },
         });
-        if (!stockCard) throw new BadRequestException(`No stock card for item ${risItem.stockNumber}.`);
+        if (!stockCard)
+          throw new BadRequestException(`No stock card for item ${risItem.stockNumber}.`);
 
         const currentQty = Number(stockCard.balanceQuantity);
         if (toIssue > currentQty) {
@@ -281,9 +295,10 @@ export class RisService {
         issuedItems: items.map((issueItem) => {
           const risItem = ris.items.find((i) => i.id === issueItem.risItemId)!;
           return {
-            description: risItem.description,
             quantityIssued: issueItem.quantityIssued,
             unitCost: Number(risItem.unitCost),
+            accountCode: risItem.inventoryItem.accountCode,
+            classification: risItem.inventoryItem.classification,
           };
         }),
       });

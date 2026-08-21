@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
@@ -22,7 +27,9 @@ const RECEIPT_SELECT = {
   items: {
     select: {
       id: true,
-      inventoryItem: { select: { id: true, itemCode: true, description: true, unitOfMeasure: true } },
+      inventoryItem: {
+        select: { id: true, itemCode: true, description: true, unitOfMeasure: true },
+      },
       quantityReceived: true,
       unitCost: true,
       totalCost: true,
@@ -44,7 +51,9 @@ export class StockReceiptService {
     return this.prisma.stockReceipt.findMany({
       where: {
         organizationId,
-        ...(filters?.status ? { status: filters.status as 'draft' | 'received' | 'cancelled' } : {}),
+        ...(filters?.status
+          ? { status: filters.status as 'draft' | 'received' | 'cancelled' }
+          : {}),
       },
       select: {
         id: true,
@@ -98,14 +107,16 @@ export class StockReceiptService {
       `;
       const receiptNumber = `SR-${String(seq.next_number).padStart(6, '0')}`;
 
-      const itemsData: Prisma.StockReceiptItemCreateManyStockReceiptInput[] = data.items.map((item) => ({
-        inventoryItemId: item.inventoryItemId,
-        quantityReceived: item.quantityReceived,
-        unitCost: item.unitCost,
-        totalCost: item.quantityReceived * item.unitCost,
-        ...(item.lotNumber ? { lotNumber: item.lotNumber } : {}),
-        ...(item.expiryDate ? { expiryDate: new Date(item.expiryDate) } : {}),
-      }));
+      const itemsData: Prisma.StockReceiptItemCreateManyStockReceiptInput[] = data.items.map(
+        (item) => ({
+          inventoryItemId: item.inventoryItemId,
+          quantityReceived: item.quantityReceived,
+          unitCost: item.unitCost,
+          totalCost: item.quantityReceived * item.unitCost,
+          ...(item.lotNumber ? { lotNumber: item.lotNumber } : {}),
+          ...(item.expiryDate ? { expiryDate: new Date(item.expiryDate) } : {}),
+        }),
+      );
 
       return tx.stockReceipt.create({
         data: {
@@ -132,9 +143,12 @@ export class StockReceiptService {
       include: { items: { include: { inventoryItem: true } } },
     });
     if (!receipt) throw new NotFoundException('Stock receipt not found.');
-    if (receipt.status !== 'draft') throw new BadRequestException('Only draft receipts can be posted.');
+    if (receipt.status !== 'draft')
+      throw new BadRequestException('Only draft receipts can be posted.');
     if (receipt.version !== expectedVersion) {
-      throw new ConflictException('Receipt was modified by another user. Please refresh and try again.');
+      throw new ConflictException(
+        'Receipt was modified by another user. Please refresh and try again.',
+      );
     }
 
     return runAudited(this.prisma, userId, async (tx) => {
@@ -142,7 +156,10 @@ export class StockReceiptService {
         const stockCard = await tx.stockCard.findUnique({
           where: { inventoryItemId: item.inventoryItemId },
         });
-        if (!stockCard) throw new BadRequestException(`No stock card found for item ${item.inventoryItem.itemCode}.`);
+        if (!stockCard)
+          throw new BadRequestException(
+            `No stock card found for item ${item.inventoryItem.itemCode}.`,
+          );
 
         const prevBalance = Number(stockCard.balanceTotalCost);
         const prevQty = Number(stockCard.balanceQuantity);
@@ -197,7 +214,8 @@ export class StockReceiptService {
         receiptDate: receipt.receiptDate,
         items: receipt.items.map((i) => ({
           totalCost: Number(i.totalCost),
-          inventoryItem: { itemCode: i.inventoryItem.itemCode, name: i.inventoryItem.description },
+          accountCode: i.inventoryItem.accountCode,
+          classification: i.inventoryItem.classification,
         })),
       });
 
@@ -218,7 +236,8 @@ export class StockReceiptService {
       where: { id, organizationId },
     });
     if (!receipt) throw new NotFoundException('Stock receipt not found.');
-    if (receipt.status !== 'draft') throw new BadRequestException('Only draft receipts can be cancelled.');
+    if (receipt.status !== 'draft')
+      throw new BadRequestException('Only draft receipts can be cancelled.');
     if (receipt.version !== expectedVersion) {
       throw new ConflictException('Receipt was modified. Please refresh and try again.');
     }

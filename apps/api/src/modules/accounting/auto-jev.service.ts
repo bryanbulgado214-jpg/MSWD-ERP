@@ -3,6 +3,19 @@ import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 
+// Classification → default posting-account mapping key, used when an inventory
+// item does not name its own accountCode.
+const INVENTORY_MAPPING_KEY: Record<string, string> = {
+  expendable: 'inventory.expendable',
+  semi_expendable: 'inventory.semi_expendable',
+  ppe: 'inventory.ppe',
+};
+const EXPENSE_MAPPING_KEY: Record<string, string> = {
+  expendable: 'expense.expendable',
+  semi_expendable: 'expense.semi_expendable',
+  ppe: 'expense.expendable',
+};
+
 @Injectable()
 export class AutoJevService {
   private readonly logger = new Logger(AutoJevService.name);
@@ -180,22 +193,52 @@ export class AutoJevService {
       id: string;
       receiptNumber: string;
       receiptDate: Date;
-      items: Array<{ totalCost: number; inventoryItem: { itemCode: string; name: string } }>;
+      items: Array<{ totalCost: number; accountCode: string | null; classification: string }>;
     },
   ) {
-    const inventoryAccount = await this.resolve(organizationId, 'inventory.office_supplies');
-    const apAccount = await this.resolve(organizationId, 'ap.accounts_payable');
+    const ref = `Stock Receipt ${receipt.receiptNumber}`;
 
-    if (!inventoryAccount || !apAccount) {
-      this.logger.warn(
-        `Skipping auto-JEV for receipt ${receipt.receiptNumber}: missing account mappings (inventory.office_supplies or ap.accounts_payable).`,
-      );
-      return null;
+    // Group each received item's cost under its resolved inventory/PPE account
+    // (the item's own accountCode, else a classification default).
+    const byAccount = new Map<string, number>();
+    let total = 0;
+    for (const item of receipt.items) {
+      if (item.totalCost <= 0) continue;
+      const acct = await this.resolveInventoryAccount(tx, organizationId, item, ref);
+      byAccount.set(acct.id, (byAccount.get(acct.id) ?? 0) + item.totalCost);
+      total += item.totalCost;
     }
+    if (total <= 0) return null;
 
-    const totalCost = receipt.items.reduce((s, i) => s + i.totalCost, 0);
-    if (totalCost <= 0) return null;
+    const apAccount = await this.requireMapping(
+      organizationId,
+      'ap.accounts_payable',
+      'Accounts Payable',
+      ref,
+    );
 
+    const lines: Array<{
+      chartOfAccountId: string;
+      debitAmount: number;
+      creditAmount: number;
+      description: string;
+    }> = [];
+    for (const [chartOfAccountId, amount] of byAccount) {
+      lines.push({
+        chartOfAccountId,
+        debitAmount: amount,
+        creditAmount: 0,
+        description: `Inventory received — ${receipt.receiptNumber}`,
+      });
+    }
+    lines.push({
+      chartOfAccountId: apAccount.id,
+      debitAmount: 0,
+      creditAmount: total,
+      description: `A/P for stock receipt — ${receipt.receiptNumber}`,
+    });
+
+    this.assertBalanced(lines, ref);
     return this.createAutoJev(tx, {
       organizationId,
       userId,
@@ -203,21 +246,8 @@ export class AutoJevService {
       sourceType: 'stock_receipt',
       sourceTable: 'stock_receipts',
       sourceId: receipt.id,
-      particulars: `Stock Receipt ${receipt.receiptNumber}`,
-      lines: [
-        {
-          chartOfAccountId: inventoryAccount.id,
-          debitAmount: totalCost,
-          creditAmount: 0,
-          description: `Inventory received — ${receipt.receiptNumber}`,
-        },
-        {
-          chartOfAccountId: apAccount.id,
-          debitAmount: 0,
-          creditAmount: totalCost,
-          description: `AP for stock receipt — ${receipt.receiptNumber}`,
-        },
-      ],
+      particulars: ref,
+      lines,
     });
   }
 
@@ -228,22 +258,60 @@ export class AutoJevService {
     ris: {
       id: string;
       risNumber: string;
-      issuedItems: Array<{ description: string; quantityIssued: number; unitCost: number }>;
+      issuedItems: Array<{
+        quantityIssued: number;
+        unitCost: number;
+        accountCode: string | null;
+        classification: string;
+      }>;
     },
   ) {
-    const expenseAccount = await this.resolve(organizationId, 'expense.office_supplies');
-    const inventoryAccount = await this.resolve(organizationId, 'inventory.office_supplies');
+    const ref = `RIS ${ris.risNumber}`;
 
-    if (!expenseAccount || !inventoryAccount) {
-      this.logger.warn(
-        `Skipping auto-JEV for RIS ${ris.risNumber}: missing account mappings (expense.office_supplies or inventory.office_supplies).`,
+    // Dr supplies expense (by classification), Cr the item's inventory account.
+    const expenseByAccount = new Map<string, number>();
+    const inventoryByAccount = new Map<string, number>();
+    for (const item of ris.issuedItems) {
+      const cost = item.quantityIssued * item.unitCost;
+      if (cost <= 0) continue;
+      const inv = await this.resolveInventoryAccount(tx, organizationId, item, ref);
+      const expKey = EXPENSE_MAPPING_KEY[item.classification] ?? 'expense.expendable';
+      const exp = await this.requireMapping(
+        organizationId,
+        expKey,
+        `Supplies expense (${item.classification})`,
+        ref,
       );
-      return null;
+      inventoryByAccount.set(inv.id, (inventoryByAccount.get(inv.id) ?? 0) + cost);
+      expenseByAccount.set(exp.id, (expenseByAccount.get(exp.id) ?? 0) + cost);
+    }
+    const total = [...expenseByAccount.values()].reduce((s, v) => s + v, 0);
+    if (total <= 0) return null;
+
+    const lines: Array<{
+      chartOfAccountId: string;
+      debitAmount: number;
+      creditAmount: number;
+      description: string;
+    }> = [];
+    for (const [chartOfAccountId, amount] of expenseByAccount) {
+      lines.push({
+        chartOfAccountId,
+        debitAmount: amount,
+        creditAmount: 0,
+        description: `Supplies expense — RIS ${ris.risNumber}`,
+      });
+    }
+    for (const [chartOfAccountId, amount] of inventoryByAccount) {
+      lines.push({
+        chartOfAccountId,
+        debitAmount: 0,
+        creditAmount: amount,
+        description: `Inventory issued — RIS ${ris.risNumber}`,
+      });
     }
 
-    const totalCost = ris.issuedItems.reduce((s, i) => s + i.quantityIssued * i.unitCost, 0);
-    if (totalCost <= 0) return null;
-
+    this.assertBalanced(lines, ref);
     return this.createAutoJev(tx, {
       organizationId,
       userId,
@@ -252,20 +320,7 @@ export class AutoJevService {
       sourceTable: 'requisition_issue_slips',
       sourceId: ris.id,
       particulars: `RIS ${ris.risNumber} — issuance of supplies`,
-      lines: [
-        {
-          chartOfAccountId: expenseAccount.id,
-          debitAmount: totalCost,
-          creditAmount: 0,
-          description: `Supplies expense — RIS ${ris.risNumber}`,
-        },
-        {
-          chartOfAccountId: inventoryAccount.id,
-          debitAmount: 0,
-          creditAmount: totalCost,
-          description: `Inventory issued — RIS ${ris.risNumber}`,
-        },
-      ],
+      lines,
     });
   }
 
@@ -686,6 +741,27 @@ export class AutoJevService {
       );
     }
     return account;
+  }
+
+  /**
+   * Resolve an inventory item's asset account: the item's own accountCode when
+   * set and postable, otherwise the classification default mapping.
+   */
+  private async resolveInventoryAccount(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    item: { accountCode: string | null; classification: string },
+    docRef: string,
+  ) {
+    if (item.accountCode) {
+      const acct = await tx.chartOfAccount.findFirst({
+        where: { organizationId, accountCode: item.accountCode, isHeader: false, isActive: true },
+        select: { id: true, accountCode: true, name: true },
+      });
+      if (acct) return acct;
+    }
+    const key = INVENTORY_MAPPING_KEY[item.classification] ?? 'inventory.expendable';
+    return this.requireMapping(organizationId, key, `Inventory (${item.classification})`, docRef);
   }
 
   async createAutoJev(

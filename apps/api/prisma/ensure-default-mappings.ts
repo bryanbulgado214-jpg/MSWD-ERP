@@ -28,6 +28,13 @@ const DEFAULT_MAPPINGS: Record<string, string> = {
   'revenue.other': '4-02-02-990-04', // Other Business Income - Other Water Revenue (default)
   'income.penalty': '4-02-02-230', // Fines and Penalties - Business Income
   'contra.discount': '4-02-02-161', // Sales Discount (contra-revenue)
+  // Inventory cycle (stock receipt / issuance) — classification defaults; an
+  // item may override the inventory side with its own accountCode.
+  'inventory.expendable': '1-04-04-010', // Office Supplies Inventory
+  'inventory.semi_expendable': '1-04-04-990', // Other Supplies and Materials Inventory
+  'inventory.ppe': '1-06-05-990', // Other Machinery and Equipment (default)
+  'expense.expendable': '5-02-03-010', // Office Supplies Expenses
+  'expense.semi_expendable': '5-02-03-010', // Office Supplies Expenses (default)
 };
 
 async function main() {
