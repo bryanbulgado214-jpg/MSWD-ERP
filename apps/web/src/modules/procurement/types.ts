@@ -391,6 +391,9 @@ export interface DisbursementVoucher {
     chartOfAccount: { id: string; accountCode: string; name: string };
   }>;
   netAmount: string;
+  payeeName: string | null;
+  payeeTin: string | null;
+  payeeAddress: string | null;
   checkNumber: string | null;
   checkDate: string | null;
   bankName: string | null;
@@ -403,15 +406,17 @@ export interface DisbursementVoucher {
   certifiedAt: string | null;
   approvedAt: string | null;
   releasedAt: string | null;
-  ors: { id: string; orsNumber: string; originalAmount: string; status: string };
-  purchaseRequest: { id: string; prNumber: string; title: string; status: string };
+  // Nullable: non-procurement DVs (travel, reimbursement, payroll) have no ORS
+  // chain, and historical/irregular vouchers may lack a supplier/PR.
+  ors: { id: string; orsNumber: string; originalAmount: string; status: string } | null;
+  purchaseRequest: { id: string; prNumber: string; title: string; status: string } | null;
   purchaseOrder: {
     id: string;
     poNumber: string;
     contractAmount: string;
     supplier: { id: string; name: string };
-  };
-  supplier: { id: string; name: string; tin: string | null; address: string | null };
+  } | null;
+  supplier: { id: string; name: string; tin: string | null; address: string | null } | null;
   inspectionReport: { id: string; reportNumber: string; overallResult: string } | null;
   fundSource: { id: string; code: string; name: string } | null;
   responsibilityCenter: { id: string; code: string; name: string } | null;

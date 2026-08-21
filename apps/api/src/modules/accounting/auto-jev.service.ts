@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
@@ -26,15 +26,20 @@ export class AutoJevService {
       responsibilityCenterId: string | null;
     },
   ) {
-    const cashAccount = await this.resolve(organizationId, 'cash.in_bank');
-    const apAccount = await this.resolve(organizationId, 'ap.accounts_payable');
-
-    if (!cashAccount || !apAccount) {
-      this.logger.warn(
-        `Skipping auto-JEV for DV ${dv.dvNumber}: missing account mappings (cash.in_bank or ap.accounts_payable).`,
-      );
-      return null;
-    }
+    // Required posting accounts. A missing mapping BLOCKS the release (loud)
+    // rather than letting the DV disburse with no journal entry (silent drift).
+    const cashAccount = await this.requireMapping(
+      organizationId,
+      'cash.in_bank',
+      'Cash in Bank',
+      dv.dvNumber,
+    );
+    const apAccount = await this.requireMapping(
+      organizationId,
+      'ap.accounts_payable',
+      'Accounts Payable',
+      dv.dvNumber,
+    );
 
     // Free-form deduction lines captured on the DV — each credits its own
     // liability/payable account, so no non-tax deduction is folded into cash.
@@ -61,13 +66,12 @@ export class AutoJevService {
 
     // Cr Due to BIR — statutory income-tax withholding.
     if (dv.taxAmount > 0) {
-      const birAccount = await this.resolve(organizationId, 'ap.due_to_bir');
-      if (!birAccount) {
-        this.logger.warn(
-          `Skipping auto-JEV for DV ${dv.dvNumber}: tax withheld but no ap.due_to_bir mapping.`,
-        );
-        return null;
-      }
+      const birAccount = await this.requireMapping(
+        organizationId,
+        'ap.due_to_bir',
+        'Due to BIR',
+        dv.dvNumber,
+      );
       lines.push({
         chartOfAccountId: birAccount.id,
         debitAmount: 0,
@@ -449,6 +453,27 @@ export class AutoJevService {
       select: { chartOfAccount: { select: { id: true, accountCode: true, name: true } } },
     });
     return mapping?.chartOfAccount ?? null;
+  }
+
+  /**
+   * Resolve a required posting account, or refuse the operation with a clear,
+   * actionable error. Used on the release path so a missing mapping BLOCKS the
+   * disbursement instead of silently recording nothing to the ledger.
+   */
+  private async requireMapping(
+    organizationId: string,
+    mappingKey: string,
+    friendlyName: string,
+    docRef: string,
+  ) {
+    const account = await this.resolve(organizationId, mappingKey);
+    if (!account) {
+      throw new BadRequestException(
+        `Cannot record the accounting entry for ${docRef}: the "${friendlyName}" posting account ` +
+          `is not configured (mapping "${mappingKey}"). Set up the posting accounts before releasing this voucher.`,
+      );
+    }
+    return account;
   }
 
   async createAutoJev(

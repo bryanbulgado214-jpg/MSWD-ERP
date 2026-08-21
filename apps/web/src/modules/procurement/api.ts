@@ -876,6 +876,21 @@ export async function listDvs(): Promise<DisbursementVoucher[]> {
   return res.json();
 }
 
+export interface UnpostedDv {
+  id: string;
+  dvNumber: string;
+  dvDate: string;
+  netAmount: string;
+  payeeName: string;
+  releasedAt: string | null;
+}
+
+/** Released DVs that never produced a posted journal entry (integrity check). */
+export async function listUnpostedDvs(): Promise<UnpostedDv[]> {
+  const res = await authFetch('/procurement/dvs/reconciliation/unposted');
+  return res.json();
+}
+
 export async function getDv(id: string): Promise<DisbursementVoucher> {
   const res = await authFetch(`/procurement/dvs/${id}`);
   return res.json();

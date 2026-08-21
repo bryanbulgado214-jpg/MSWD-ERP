@@ -116,6 +116,51 @@ export class DvService {
     });
   }
 
+  /**
+   * Released DVs that have no posted journal entry — an integrity check that
+   * surfaces disbursements which never reached the ledger (e.g. released before
+   * the posting accounts were configured). Should be empty in a healthy system
+   * now that release blocks on a missing mapping.
+   */
+  async listUnposted(orgId: string) {
+    const released = await this.prisma.disbursementVoucher.findMany({
+      where: { organizationId: orgId, status: 'released' },
+      select: {
+        id: true,
+        dvNumber: true,
+        dvDate: true,
+        netAmount: true,
+        payeeName: true,
+        releasedAt: true,
+        supplier: { select: { name: true } },
+      },
+      orderBy: { releasedAt: 'desc' },
+    });
+    if (released.length === 0) return [];
+
+    const posted = await this.prisma.journalEntryVoucher.findMany({
+      where: {
+        organizationId: orgId,
+        sourceTable: 'disbursement_vouchers',
+        sourceId: { in: released.map((d) => d.id) },
+        status: { in: ['posted', 'reversed'] },
+      },
+      select: { sourceId: true },
+    });
+    const postedIds = new Set(posted.map((j) => j.sourceId));
+
+    return released
+      .filter((d) => !postedIds.has(d.id))
+      .map((d) => ({
+        id: d.id,
+        dvNumber: d.dvNumber,
+        dvDate: d.dvDate,
+        netAmount: d.netAmount,
+        payeeName: d.supplier?.name ?? d.payeeName ?? '—',
+        releasedAt: d.releasedAt,
+      }));
+  }
+
   async findOne(orgId: string, id: string) {
     const dv = await this.prisma.disbursementVoucher.findFirst({
       where: { id, organizationId: orgId },

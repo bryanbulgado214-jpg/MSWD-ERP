@@ -1,10 +1,20 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
+
 import { CreateDvDto, DvActionDto } from './dto/dv.dto';
 import { DvService } from './dv.service';
 
@@ -26,21 +36,22 @@ export class DvController {
     });
   }
 
+  // Integrity monitor: released DVs that never produced a posted journal entry.
+  @Get('reconciliation/unposted')
+  @RequirePermissions('procurement.read')
+  listUnposted(@CurrentUser() user: AuthenticatedUser) {
+    return this.dvService.listUnposted(user.organizationId);
+  }
+
   @Get(':id')
   @RequirePermissions('procurement.read')
-  findOne(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
+  findOne(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.dvService.findOne(user.organizationId, id);
   }
 
   @Post()
   @RequirePermissions('procurement.dv.create')
-  create(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body() dto: CreateDvDto,
-  ) {
+  create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateDvDto) {
     return this.dvService.create(user.organizationId, user.userId, dto);
   }
 
@@ -51,7 +62,12 @@ export class DvController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: DvActionDto,
   ) {
-    return this.dvService.submitForCertification(user.organizationId, id, dto.expectedVersion, user.userId);
+    return this.dvService.submitForCertification(
+      user.organizationId,
+      id,
+      dto.expectedVersion,
+      user.userId,
+    );
   }
 
   @Post(':id/certify')
@@ -61,7 +77,13 @@ export class DvController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: DvActionDto,
   ) {
-    return this.dvService.certify(user.organizationId, id, dto.expectedVersion, user.userId, dto.remarks);
+    return this.dvService.certify(
+      user.organizationId,
+      id,
+      dto.expectedVersion,
+      user.userId,
+      dto.remarks,
+    );
   }
 
   @Post(':id/submit-for-approval')
@@ -71,7 +93,12 @@ export class DvController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: DvActionDto,
   ) {
-    return this.dvService.submitForApproval(user.organizationId, id, dto.expectedVersion, user.userId);
+    return this.dvService.submitForApproval(
+      user.organizationId,
+      id,
+      dto.expectedVersion,
+      user.userId,
+    );
   }
 
   @Post(':id/approve')
@@ -81,7 +108,13 @@ export class DvController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: DvActionDto,
   ) {
-    return this.dvService.approve(user.organizationId, id, dto.expectedVersion, user.userId, dto.remarks);
+    return this.dvService.approve(
+      user.organizationId,
+      id,
+      dto.expectedVersion,
+      user.userId,
+      dto.remarks,
+    );
   }
 
   @Post(':id/release')
@@ -106,6 +139,12 @@ export class DvController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: DvActionDto,
   ) {
-    return this.dvService.cancel(user.organizationId, id, dto.expectedVersion, user.userId, dto.remarks);
+    return this.dvService.cancel(
+      user.organizationId,
+      id,
+      dto.expectedVersion,
+      user.userId,
+      dto.remarks,
+    );
   }
 }
