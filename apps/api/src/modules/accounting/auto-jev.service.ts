@@ -16,6 +16,22 @@ const EXPENSE_MAPPING_KEY: Record<string, string> = {
   ppe: 'expense.expendable',
 };
 
+// Payroll deduction referenceCode → payable-account mapping key. Unlisted codes
+// (e.g. loans, association dues) fall back to payroll.other_payable.
+const PAYROLL_DEDUCTION_KEY: Record<string, string> = {
+  BIR: 'payroll.due_bir',
+  WTAX: 'payroll.due_bir',
+  'W-TAX': 'payroll.due_bir',
+  GSIS: 'payroll.due_gsis',
+  PHIC: 'payroll.due_philhealth',
+  PHILHEALTH: 'payroll.due_philhealth',
+  HDMF: 'payroll.due_pagibig',
+  PAGIBIG: 'payroll.due_pagibig',
+  'PAG-IBIG': 'payroll.due_pagibig',
+};
+// Deduction codes that reduce salary earned rather than being withheld to a payable.
+const PAY_REDUCTION_CODES = new Set(['LATE', 'UNDERTIME', 'ABSENT']);
+
 @Injectable()
 export class AutoJevService {
   private readonly logger = new Logger(AutoJevService.name);
@@ -333,22 +349,85 @@ export class AutoJevService {
       runNumber: string;
       payDate: Date;
       totalGross: number;
-      totalDeductions: number;
       totalNet: number;
     },
   ) {
-    const salaryExpense = await this.resolve(organizationId, 'payroll.salaries_expense');
-    const payrollPayable = await this.resolve(organizationId, 'payroll.payable');
+    if (payroll.totalGross <= 0) return null;
+    const ref = `Payroll ${payroll.runNumber}`;
 
-    if (!salaryExpense || !payrollPayable) {
-      this.logger.warn(
-        `Skipping auto-JEV for payroll ${payroll.runNumber}: missing account mappings (payroll.salaries_expense or payroll.payable).`,
-      );
-      return null;
+    // Deduction breakdown from the run's payroll items. Statutory/loan codes are
+    // withheld to their payables; LATE/UNDERTIME/ABSENT reduce salary earned.
+    const details = await tx.payrollItemDetail.findMany({
+      where: { detailType: 'deduction', payrollItem: { payrollRunId: payroll.id } },
+      select: { referenceCode: true, amount: true },
+    });
+    let expenseReduction = 0;
+    const payableByCode = new Map<string, number>();
+    for (const d of details) {
+      const amt = Number(d.amount);
+      if (amt <= 0) continue;
+      const code = d.referenceCode.toUpperCase();
+      if (PAY_REDUCTION_CODES.has(code)) {
+        expenseReduction += amt;
+      } else {
+        payableByCode.set(code, (payableByCode.get(code) ?? 0) + amt);
+      }
     }
 
-    if (payroll.totalGross <= 0) return null;
+    const salaryExpense = await this.requireMapping(
+      organizationId,
+      'payroll.salaries_expense',
+      'Salaries and Wages',
+      ref,
+    );
+    const netPayable = await this.requireMapping(
+      organizationId,
+      'payroll.net_payable',
+      'Net Pay Payable',
+      ref,
+    );
 
+    const lines: Array<{
+      chartOfAccountId: string;
+      debitAmount: number;
+      creditAmount: number;
+      description: string;
+    }> = [];
+
+    // Dr Salaries & Wages — gross earnings net of late/undertime/absent.
+    lines.push({
+      chartOfAccountId: salaryExpense.id,
+      debitAmount: payroll.totalGross - expenseReduction,
+      creditAmount: 0,
+      description: `Salaries and Wages — ${payroll.runNumber}`,
+    });
+
+    // Cr each statutory/loan deduction to its own payable.
+    for (const [code, amount] of payableByCode) {
+      const key = PAYROLL_DEDUCTION_KEY[code] ?? 'payroll.other_payable';
+      const acct = await this.requireMapping(
+        organizationId,
+        key,
+        `Payroll deduction (${code})`,
+        ref,
+      );
+      lines.push({
+        chartOfAccountId: acct.id,
+        debitAmount: 0,
+        creditAmount: amount,
+        description: `${code} withheld — ${payroll.runNumber}`,
+      });
+    }
+
+    // Cr Net Pay Payable.
+    lines.push({
+      chartOfAccountId: netPayable.id,
+      debitAmount: 0,
+      creditAmount: payroll.totalNet,
+      description: `Net pay payable — ${payroll.runNumber}`,
+    });
+
+    this.assertBalanced(lines, ref);
     return this.createAutoJev(tx, {
       organizationId,
       userId,
@@ -357,20 +436,7 @@ export class AutoJevService {
       sourceTable: 'payroll_runs',
       sourceId: payroll.id,
       particulars: `Payroll ${payroll.runNumber} — Salaries and Wages`,
-      lines: [
-        {
-          chartOfAccountId: salaryExpense.id,
-          debitAmount: payroll.totalGross,
-          creditAmount: 0,
-          description: `Salaries Expense — ${payroll.runNumber}`,
-        },
-        {
-          chartOfAccountId: payrollPayable.id,
-          debitAmount: 0,
-          creditAmount: payroll.totalGross,
-          description: `Salaries Payable — ${payroll.runNumber}`,
-        },
-      ],
+      lines,
     });
   }
 

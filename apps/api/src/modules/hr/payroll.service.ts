@@ -1,14 +1,25 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
-import { runAudited } from '../budgeting/audit-actor.util';
 import { AutoJevService } from '../accounting/auto-jev.service';
+import { runAudited } from '../budgeting/audit-actor.util';
+
 import type {
-  CreatePayrollPeriodDto, LockPayrollPeriodDto,
-  CreatePayrollRunDto, ComputePayrollDto,
-  ApprovePayrollDto, PayPayrollDto, VoidPayrollDto,
-  PayrollRunQueryDto, PayrollPeriodQueryDto,
+  CreatePayrollPeriodDto,
+  LockPayrollPeriodDto,
+  CreatePayrollRunDto,
+  ComputePayrollDto,
+  ApprovePayrollDto,
+  PayPayrollDto,
+  VoidPayrollDto,
+  PayrollRunQueryDto,
+  PayrollPeriodQueryDto,
 } from './dto/payroll.dto';
 
 const WORKING_DAYS_PER_MONTH = 22;
@@ -67,7 +78,8 @@ export class PayrollService {
       where: { id: periodId, organizationId: orgId },
     });
     if (!period) throw new NotFoundException('Payroll period not found');
-    if (period.version !== dto.expectedVersion) throw new ConflictException('Modified concurrently — reload.');
+    if (period.version !== dto.expectedVersion)
+      throw new ConflictException('Modified concurrently — reload.');
 
     return runAudited(this.prisma, userId, (tx) =>
       tx.payrollPeriod.update({
@@ -87,7 +99,9 @@ export class PayrollService {
     return this.prisma.payrollRun.findMany({
       where,
       include: {
-        payrollPeriod: { select: { id: true, name: true, startDate: true, endDate: true, payDate: true } },
+        payrollPeriod: {
+          select: { id: true, name: true, startDate: true, endDate: true, payDate: true },
+        },
         creator: { select: { id: true, username: true } },
         approver: { select: { id: true, username: true } },
         _count: { select: { items: true } },
@@ -106,7 +120,15 @@ export class PayrollService {
         voider: { select: { id: true, username: true } },
         items: {
           include: {
-            employee: { select: { id: true, employeeNumber: true, firstName: true, lastName: true, basicSalary: true } },
+            employee: {
+              select: {
+                id: true,
+                employeeNumber: true,
+                firstName: true,
+                lastName: true,
+                basicSalary: true,
+              },
+            },
             details: { orderBy: { detailType: 'asc' } },
           },
           orderBy: { employee: { lastName: 'asc' } },
@@ -140,7 +162,9 @@ export class PayrollService {
           updatedBy: userId,
         },
         include: {
-          payrollPeriod: { select: { id: true, name: true, startDate: true, endDate: true, payDate: true } },
+          payrollPeriod: {
+            select: { id: true, name: true, startDate: true, endDate: true, payDate: true },
+          },
         },
       }),
     );
@@ -152,7 +176,8 @@ export class PayrollService {
       include: { payrollPeriod: true },
     });
     if (!run) throw new NotFoundException('Payroll run not found');
-    if (run.version !== dto.expectedVersion) throw new ConflictException('Modified concurrently — reload.');
+    if (run.version !== dto.expectedVersion)
+      throw new ConflictException('Modified concurrently — reload.');
     if (run.status !== 'draft' && run.status !== 'computed') {
       throw new BadRequestException('Can only compute a draft or re-compute a computed run');
     }
@@ -190,7 +215,9 @@ export class PayrollService {
       let runTotalNet = new Prisma.Decimal(0);
 
       for (const emp of employees) {
-        const monthlySalary = emp.basicSalary ? new Prisma.Decimal(emp.basicSalary.toString()) : new Prisma.Decimal(0);
+        const monthlySalary = emp.basicSalary
+          ? new Prisma.Decimal(emp.basicSalary.toString())
+          : new Prisma.Decimal(0);
         const dailyRate = monthlySalary.div(WORKING_DAYS_PER_MONTH);
         const hourlyRate = dailyRate.div(HOURS_PER_DAY);
 
@@ -221,8 +248,12 @@ export class PayrollService {
             daysWorked = daysWorked.add(1);
           }
           totalLateHours = totalLateHours.add(new Prisma.Decimal(dtr.hoursLate.toString()));
-          totalUndertimeHours = totalUndertimeHours.add(new Prisma.Decimal(dtr.hoursUndertime.toString()));
-          totalOvertimeHours = totalOvertimeHours.add(new Prisma.Decimal(dtr.hoursOvertime.toString()));
+          totalUndertimeHours = totalUndertimeHours.add(
+            new Prisma.Decimal(dtr.hoursUndertime.toString()),
+          );
+          totalOvertimeHours = totalOvertimeHours.add(
+            new Prisma.Decimal(dtr.hoursOvertime.toString()),
+          );
         }
 
         // Calculate base pay
@@ -280,7 +311,12 @@ export class PayrollService {
         });
 
         let totalDeductionAmt = new Prisma.Decimal(0);
-        const deductionDetails: Array<{ code: string; name: string; amount: Prisma.Decimal; employerShare: Prisma.Decimal }> = [];
+        const deductionDetails: Array<{
+          code: string;
+          name: string;
+          amount: Prisma.Decimal;
+          employerShare: Prisma.Decimal;
+        }> = [];
 
         for (const ed of empDeductions) {
           let eeAmt: Prisma.Decimal;
@@ -311,7 +347,10 @@ export class PayrollService {
         }
 
         // Add DTR-based deductions to total
-        totalDeductionAmt = totalDeductionAmt.add(lateDeduction).add(undertimeDeduction).add(absentDeduction);
+        totalDeductionAmt = totalDeductionAmt
+          .add(lateDeduction)
+          .add(undertimeDeduction)
+          .add(absentDeduction);
 
         const netPay = grossPay.sub(totalDeductionAmt);
 
@@ -368,22 +407,46 @@ export class PayrollService {
         // DTR-based deduction details
         if (lateDeduction.gt(0)) {
           await tx.payrollItemDetail.create({
-            data: { payrollItemId: item.id, detailType: 'deduction', referenceCode: 'LATE', referenceName: 'Late Deduction', amount: lateDeduction.toDecimalPlaces(2) },
+            data: {
+              payrollItemId: item.id,
+              detailType: 'deduction',
+              referenceCode: 'LATE',
+              referenceName: 'Late Deduction',
+              amount: lateDeduction.toDecimalPlaces(2),
+            },
           });
         }
         if (undertimeDeduction.gt(0)) {
           await tx.payrollItemDetail.create({
-            data: { payrollItemId: item.id, detailType: 'deduction', referenceCode: 'UNDERTIME', referenceName: 'Undertime Deduction', amount: undertimeDeduction.toDecimalPlaces(2) },
+            data: {
+              payrollItemId: item.id,
+              detailType: 'deduction',
+              referenceCode: 'UNDERTIME',
+              referenceName: 'Undertime Deduction',
+              amount: undertimeDeduction.toDecimalPlaces(2),
+            },
           });
         }
         if (absentDeduction.gt(0)) {
           await tx.payrollItemDetail.create({
-            data: { payrollItemId: item.id, detailType: 'deduction', referenceCode: 'ABSENT', referenceName: 'Absent Deduction', amount: absentDeduction.toDecimalPlaces(2) },
+            data: {
+              payrollItemId: item.id,
+              detailType: 'deduction',
+              referenceCode: 'ABSENT',
+              referenceName: 'Absent Deduction',
+              amount: absentDeduction.toDecimalPlaces(2),
+            },
           });
         }
         if (overtimePay.gt(0)) {
           await tx.payrollItemDetail.create({
-            data: { payrollItemId: item.id, detailType: 'allowance', referenceCode: 'OT', referenceName: 'Overtime Pay', amount: overtimePay.toDecimalPlaces(2) },
+            data: {
+              payrollItemId: item.id,
+              detailType: 'allowance',
+              referenceCode: 'OT',
+              referenceName: 'Overtime Pay',
+              amount: overtimePay.toDecimalPlaces(2),
+            },
           });
         }
 
@@ -405,7 +468,9 @@ export class PayrollService {
           version: { increment: 1 },
         },
         include: {
-          payrollPeriod: { select: { id: true, name: true, startDate: true, endDate: true, payDate: true } },
+          payrollPeriod: {
+            select: { id: true, name: true, startDate: true, endDate: true, payDate: true },
+          },
           _count: { select: { items: true } },
         },
       });
@@ -417,8 +482,10 @@ export class PayrollService {
       where: { id: runId, organizationId: orgId },
     });
     if (!run) throw new NotFoundException('Payroll run not found');
-    if (run.version !== dto.expectedVersion) throw new ConflictException('Modified concurrently — reload.');
-    if (run.status !== 'computed') throw new BadRequestException('Only computed runs can be approved');
+    if (run.version !== dto.expectedVersion)
+      throw new ConflictException('Modified concurrently — reload.');
+    if (run.status !== 'computed')
+      throw new BadRequestException('Only computed runs can be approved');
 
     return runAudited(this.prisma, userId, (tx) =>
       tx.payrollRun.update({
@@ -440,8 +507,10 @@ export class PayrollService {
       include: { payrollPeriod: { select: { payDate: true } } },
     });
     if (!run) throw new NotFoundException('Payroll run not found');
-    if (run.version !== dto.expectedVersion) throw new ConflictException('Modified concurrently — reload.');
-    if (run.status !== 'approved') throw new BadRequestException('Only approved runs can be marked as paid');
+    if (run.version !== dto.expectedVersion)
+      throw new ConflictException('Modified concurrently — reload.');
+    if (run.status !== 'approved')
+      throw new BadRequestException('Only approved runs can be marked as paid');
 
     return runAudited(this.prisma, userId, async (tx) => {
       const updated = await tx.payrollRun.update({
@@ -459,7 +528,6 @@ export class PayrollService {
         runNumber: run.runNumber,
         payDate: run.payrollPeriod.payDate,
         totalGross: Number(run.totalGross),
-        totalDeductions: Number(run.totalDeductions),
         totalNet: Number(run.totalNet),
       });
 
@@ -472,7 +540,8 @@ export class PayrollService {
       where: { id: runId, organizationId: orgId },
     });
     if (!run) throw new NotFoundException('Payroll run not found');
-    if (run.version !== dto.expectedVersion) throw new ConflictException('Modified concurrently — reload.');
+    if (run.version !== dto.expectedVersion)
+      throw new ConflictException('Modified concurrently — reload.');
     if (run.status === 'voided') throw new BadRequestException('Already voided');
     if (run.status === 'paid') throw new BadRequestException('Cannot void a paid run');
 

@@ -35,6 +35,14 @@ const DEFAULT_MAPPINGS: Record<string, string> = {
   'inventory.ppe': '1-06-05-990', // Other Machinery and Equipment (default)
   'expense.expendable': '5-02-03-010', // Office Supplies Expenses
   'expense.semi_expendable': '5-02-03-010', // Office Supplies Expenses (default)
+  // Payroll cycle — salary expense, statutory payables, net pay payable
+  'payroll.salaries_expense': '5-01-01-010', // Salaries and Wages - Regular
+  'payroll.net_payable': '2-01-01-020', // Due to Officers and Employees
+  'payroll.due_bir': '2-02-01-010-01', // Due to BIR - Withholding Tax on Compensation
+  'payroll.due_gsis': '2-02-01-020-01', // Due to GSIS - Life and Retirement Premium
+  'payroll.due_philhealth': '2-02-01-040', // Due to PhilHealth
+  'payroll.due_pagibig': '2-02-01-030-01', // Due to Pag-IBIG - Premium
+  'payroll.other_payable': '2-05-01-990', // Other Payables (fallback)
 };
 
 async function main() {
