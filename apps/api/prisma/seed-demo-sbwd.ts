@@ -601,9 +601,20 @@ async function main() {
   // being blocked. Extend this table as more modules are integrated (payroll,
   // inventory, etc.). Keys must match those resolved in AutoJevService.
   const POSTING_MAPPINGS: Record<string, string> = {
+    // Disbursement cycle
     'cash.in_bank': '1-01-02-020-02', // Cash in Bank - LC, DBP Current Account
     'ap.accounts_payable': '2-01-01-010', // Accounts Payable
     'ap.due_to_bir': '2-02-01-010-02', // Due to BIR - Expanded Withholding Tax
+    // Revenue cycle (billing + collections)
+    'ar.trade_receivable': '1-03-01-010', // Accounts Receivable
+    'cash.collecting_officer': '1-01-01-010', // Cash - Collecting Officer
+    'revenue.water_sales': '4-02-02-160', // Sales Revenue (Water Sales)
+    'revenue.environmental': '4-02-02-990-04', // Other Business Income - Other Water Revenue (default)
+    'revenue.sewer': '4-02-02-990-04', // Other Business Income - Other Water Revenue (default)
+    'revenue.maintenance': '4-02-02-990-04', // Other Business Income - Other Water Revenue (default)
+    'revenue.other': '4-02-02-990-04', // Other Business Income - Other Water Revenue (default)
+    'income.penalty': '4-02-02-230', // Fines and Penalties - Business Income
+    'contra.discount': '4-02-02-161', // Sales Discount (contra-revenue)
   };
   for (const [mappingKey, code] of Object.entries(POSTING_MAPPINGS)) {
     const chartOfAccountId = coaId[code];

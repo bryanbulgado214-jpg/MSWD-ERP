@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { AutoJevService } from '../accounting/auto-jev.service';
 import { runAudited } from '../budgeting/audit-actor.util';
 
 const SENIOR_DISCOUNT_PERCENT = 5;
@@ -9,13 +10,24 @@ const PWD_DISCOUNT_PERCENT = 5;
 
 @Injectable()
 export class BillService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly autoJev: AutoJevService,
+  ) {}
 
   async findByPeriod(orgId: string, billingPeriodId: string) {
     return this.prisma.bill.findMany({
       where: { organizationId: orgId, billingPeriodId },
       include: {
-        consumer: { select: { id: true, accountNumber: true, firstName: true, lastName: true, consumerType: true } },
+        consumer: {
+          select: {
+            id: true,
+            accountNumber: true,
+            firstName: true,
+            lastName: true,
+            consumerType: true,
+          },
+        },
         meterReading: { select: { id: true, readingDate: true } },
       },
       orderBy: { consumer: { accountNumber: 'asc' } },
@@ -39,13 +51,27 @@ export class BillService {
       include: {
         consumer: {
           select: {
-            id: true, accountNumber: true, firstName: true, middleName: true, lastName: true,
-            address: true, barangay: true, consumerType: true, isSeniorCitizen: true, isPwd: true,
+            id: true,
+            accountNumber: true,
+            firstName: true,
+            middleName: true,
+            lastName: true,
+            address: true,
+            barangay: true,
+            consumerType: true,
+            isSeniorCitizen: true,
+            isPwd: true,
           },
         },
         billingPeriod: { select: { id: true, name: true, billingMonth: true, billingYear: true } },
         meterReading: {
-          select: { id: true, readingDate: true, previousReading: true, currentReading: true, consumption: true },
+          select: {
+            id: true,
+            readingDate: true,
+            previousReading: true,
+            currentReading: true,
+            consumption: true,
+          },
         },
         charges: { orderBy: { sortOrder: 'asc' } },
         creator: { select: { id: true, username: true } },
@@ -61,7 +87,9 @@ export class BillService {
     });
     if (!period) throw new NotFoundException('Billing period not found.');
     if (period.status !== 'billing' && period.status !== 'reading')
-      throw new BadRequestException('Billing period must be in "reading" or "billing" status to generate bills.');
+      throw new BadRequestException(
+        'Billing period must be in "reading" or "billing" status to generate bills.',
+      );
 
     const readings = await this.prisma.meterReading.findMany({
       where: {
@@ -71,7 +99,13 @@ export class BillService {
       },
       include: {
         consumer: {
-          select: { id: true, accountNumber: true, consumerType: true, isSeniorCitizen: true, isPwd: true },
+          select: {
+            id: true,
+            accountNumber: true,
+            consumerType: true,
+            isSeniorCitizen: true,
+            isPwd: true,
+          },
         },
       },
     });
@@ -94,7 +128,7 @@ export class BillService {
       include: { tiers: { orderBy: { sortOrder: 'asc' } } },
     });
 
-    const rateByType = new Map<string, typeof rateSchedules[number]>();
+    const rateByType = new Map<string, (typeof rateSchedules)[number]>();
     for (const rs of rateSchedules) {
       const existing = rateByType.get(rs.consumerType);
       if (!existing || new Date(rs.effectiveDate) > new Date(existing.effectiveDate)) {
@@ -114,6 +148,7 @@ export class BillService {
     }
 
     const results: Array<{ consumerId: string; billNumber: string; totalAmount: number }> = [];
+    const createdBillIds: string[] = [];
 
     await runAudited(this.prisma, userId, async (tx) => {
       for (const reading of unbilledReadings) {
@@ -135,23 +170,47 @@ export class BillService {
         }
         const discountAmount = calc.waterCharge * (discountPercent / 100);
 
-        const totalAmount = calc.waterCharge + calc.environmentalFee + calc.sewerCharge
-          + calc.maintenanceFee - discountAmount;
+        const totalAmount =
+          calc.waterCharge +
+          calc.environmentalFee +
+          calc.sewerCharge +
+          calc.maintenanceFee -
+          discountAmount;
 
         const billNumber = `BILL-${String(nextNum).padStart(7, '0')}`;
         nextNum++;
 
         const charges: Prisma.BillChargeCreateManyBillInput[] = [
-          { chargeType: 'water', description: `Water charge (${consumption} cu.m.)`, amount: calc.waterCharge, sortOrder: 1 },
+          {
+            chargeType: 'water',
+            description: `Water charge (${consumption} cu.m.)`,
+            amount: calc.waterCharge,
+            sortOrder: 1,
+          },
         ];
         if (calc.environmentalFee > 0) {
-          charges.push({ chargeType: 'environmental', description: 'Environmental fee', amount: calc.environmentalFee, sortOrder: 2 });
+          charges.push({
+            chargeType: 'environmental',
+            description: 'Environmental fee',
+            amount: calc.environmentalFee,
+            sortOrder: 2,
+          });
         }
         if (calc.sewerCharge > 0) {
-          charges.push({ chargeType: 'sewer', description: 'Sewer charge', amount: calc.sewerCharge, sortOrder: 3 });
+          charges.push({
+            chargeType: 'sewer',
+            description: 'Sewer charge',
+            amount: calc.sewerCharge,
+            sortOrder: 3,
+          });
         }
         if (calc.maintenanceFee > 0) {
-          charges.push({ chargeType: 'maintenance', description: 'Maintenance fee', amount: calc.maintenanceFee, sortOrder: 4 });
+          charges.push({
+            chargeType: 'maintenance',
+            description: 'Maintenance fee',
+            amount: calc.maintenanceFee,
+            sortOrder: 4,
+          });
         }
         if (discountAmount > 0) {
           charges.push({
@@ -162,7 +221,8 @@ export class BillService {
           });
         }
 
-        await tx.bill.create({
+        const createdBill = await tx.bill.create({
+          select: { id: true },
           data: {
             organizationId: orgId,
             billNumber,
@@ -189,6 +249,7 @@ export class BillService {
             charges: { createMany: { data: charges } },
           },
         });
+        createdBillIds.push(createdBill.id);
 
         results.push({ consumerId: reading.consumerId, billNumber, totalAmount });
       }
@@ -199,6 +260,15 @@ export class BillService {
           data: { status: 'billing', updatedBy: userId, version: { increment: 1 } },
         });
       }
+
+      // Post the accrual: Dr A/R, Cr revenue by charge type (arrears excluded).
+      const billingDate = new Date(Date.UTC(period.billingYear, period.billingMonth, 0));
+      await this.autoJev.onBillsGenerated(tx, orgId, userId, {
+        billingPeriodId,
+        billIds: createdBillIds,
+        billingDate,
+        periodLabel: period.name,
+      });
     });
 
     return { generated: results.length, bills: results };

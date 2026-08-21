@@ -436,6 +436,218 @@ export class AutoJevService {
     });
   }
 
+  /**
+   * Water billing (accrual) — one summarized JEV per generated batch of bills.
+   * Recognizes the current period's charges as revenue and a receivable:
+   *   Dr Accounts Receivable (current charges net of discount)
+   *   Dr Discounts (contra-revenue)
+   *   Cr Water Sales / Environmental / Sewer / Maintenance / Penalty / Other
+   * Arrears are NOT re-recognized — they already sit in A/R from prior periods.
+   */
+  async onBillsGenerated(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    userId: string,
+    args: { billingPeriodId: string; billIds: string[]; billingDate: Date; periodLabel: string },
+  ) {
+    if (args.billIds.length === 0) return null;
+    const label = args.periodLabel;
+
+    const agg = await tx.bill.aggregate({
+      where: { id: { in: args.billIds } },
+      _sum: {
+        waterCharge: true,
+        environmentalFee: true,
+        sewerCharge: true,
+        maintenanceFee: true,
+        penaltyAmount: true,
+        discountAmount: true,
+        otherCharges: true,
+      },
+    });
+    const water = Number(agg._sum.waterCharge ?? 0);
+    const env = Number(agg._sum.environmentalFee ?? 0);
+    const sewer = Number(agg._sum.sewerCharge ?? 0);
+    const maint = Number(agg._sum.maintenanceFee ?? 0);
+    const penalty = Number(agg._sum.penaltyAmount ?? 0);
+    const discount = Number(agg._sum.discountAmount ?? 0);
+    const other = Number(agg._sum.otherCharges ?? 0);
+
+    const revenueTotal = water + env + sewer + maint + penalty + other;
+    if (revenueTotal <= 0) return null;
+    const arDebit = revenueTotal - discount; // current new receivable (arrears excluded)
+
+    const ref = `Billing ${label}`;
+    const lines: Array<{
+      chartOfAccountId: string;
+      debitAmount: number;
+      creditAmount: number;
+      description: string;
+    }> = [];
+
+    const ar = await this.requireMapping(
+      organizationId,
+      'ar.trade_receivable',
+      'Accounts Receivable',
+      ref,
+    );
+    lines.push({
+      chartOfAccountId: ar.id,
+      debitAmount: arDebit,
+      creditAmount: 0,
+      description: `Water bills receivable — ${label}`,
+    });
+
+    if (discount > 0) {
+      const disc = await this.requireMapping(organizationId, 'contra.discount', 'Discounts', ref);
+      lines.push({
+        chartOfAccountId: disc.id,
+        debitAmount: discount,
+        creditAmount: 0,
+        description: `Senior/PWD discounts — ${label}`,
+      });
+    }
+
+    const revenues: Array<{ amt: number; key: string; name: string }> = [
+      { amt: water, key: 'revenue.water_sales', name: 'Water Sales Revenue' },
+      { amt: env, key: 'revenue.environmental', name: 'Environmental Charges' },
+      { amt: sewer, key: 'revenue.sewer', name: 'Sewerage Charges' },
+      { amt: maint, key: 'revenue.maintenance', name: 'Maintenance Fees' },
+      { amt: penalty, key: 'income.penalty', name: 'Penalty Income' },
+      { amt: other, key: 'revenue.other', name: 'Other Service Income' },
+    ];
+    for (const r of revenues) {
+      if (r.amt <= 0) continue;
+      const acct = await this.requireMapping(organizationId, r.key, r.name, ref);
+      lines.push({
+        chartOfAccountId: acct.id,
+        debitAmount: 0,
+        creditAmount: r.amt,
+        description: `${r.name} — ${label}`,
+      });
+    }
+
+    this.assertBalanced(lines, ref);
+    return this.createAutoJev(tx, {
+      organizationId,
+      userId,
+      jevDate: args.billingDate,
+      sourceType: 'billing',
+      sourceTable: 'billing_periods',
+      sourceId: args.billingPeriodId,
+      particulars: `Water billing register — ${label}`,
+      lines,
+    });
+  }
+
+  /**
+   * Collection of a water bill (Official Receipt): Dr Cash-Collecting Officers,
+   * Cr Accounts Receivable. A later remittance step deposits it to the bank.
+   */
+  async onPaymentReceived(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    userId: string,
+    payment: { id: string; orNumber: string; paymentDate: Date; totalAmount: number },
+  ) {
+    if (payment.totalAmount <= 0) return null;
+    const ref = `OR ${payment.orNumber}`;
+    const cash = await this.requireMapping(
+      organizationId,
+      'cash.collecting_officer',
+      'Cash - Collecting Officers',
+      ref,
+    );
+    const ar = await this.requireMapping(
+      organizationId,
+      'ar.trade_receivable',
+      'Accounts Receivable',
+      ref,
+    );
+    return this.createAutoJev(tx, {
+      organizationId,
+      userId,
+      jevDate: payment.paymentDate,
+      sourceType: 'collection',
+      sourceTable: 'payments',
+      sourceId: payment.id,
+      particulars: `Collection — ${ref}`,
+      lines: [
+        {
+          chartOfAccountId: cash.id,
+          debitAmount: payment.totalAmount,
+          creditAmount: 0,
+          description: `Cash collection — ${ref}`,
+        },
+        {
+          chartOfAccountId: ar.id,
+          debitAmount: 0,
+          creditAmount: payment.totalAmount,
+          description: `A/R settled — ${ref}`,
+        },
+      ],
+    });
+  }
+
+  /**
+   * Void of a collection — reverses the original entry: Dr A/R, Cr Cash-CO.
+   */
+  async onPaymentVoided(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    userId: string,
+    payment: { id: string; orNumber: string; totalAmount: number; voidDate: Date },
+  ) {
+    if (payment.totalAmount <= 0) return null;
+    const ref = `void OR ${payment.orNumber}`;
+    const cash = await this.requireMapping(
+      organizationId,
+      'cash.collecting_officer',
+      'Cash - Collecting Officers',
+      ref,
+    );
+    const ar = await this.requireMapping(
+      organizationId,
+      'ar.trade_receivable',
+      'Accounts Receivable',
+      ref,
+    );
+    return this.createAutoJev(tx, {
+      organizationId,
+      userId,
+      jevDate: payment.voidDate,
+      sourceType: 'collection',
+      sourceTable: 'payments',
+      sourceId: payment.id,
+      particulars: `Void collection — OR ${payment.orNumber}`,
+      lines: [
+        {
+          chartOfAccountId: ar.id,
+          debitAmount: payment.totalAmount,
+          creditAmount: 0,
+          description: `A/R reinstated (void) — OR ${payment.orNumber}`,
+        },
+        {
+          chartOfAccountId: cash.id,
+          debitAmount: 0,
+          creditAmount: payment.totalAmount,
+          description: `Cash reversal (void) — OR ${payment.orNumber}`,
+        },
+      ],
+    });
+  }
+
+  private assertBalanced(lines: Array<{ debitAmount: number; creditAmount: number }>, ref: string) {
+    const totalDebit = lines.reduce((s, l) => s + l.debitAmount, 0);
+    const totalCredit = lines.reduce((s, l) => s + l.creditAmount, 0);
+    if (Math.abs(totalDebit - totalCredit) > 0.005) {
+      throw new Error(
+        `${ref} produces an unbalanced entry ` +
+          `(debit ${totalDebit.toFixed(2)} ≠ credit ${totalCredit.toFixed(2)}).`,
+      );
+    }
+  }
+
   private async resolveByCode(
     tx: Prisma.TransactionClient,
     organizationId: string,

@@ -2772,6 +2772,8 @@ enum JevSourceType {
   work_order
   depreciation
   disposal
+  billing
+  collection
 
   @@map("jev_source_type")
 }

@@ -1,11 +1,20 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { PrismaService } from '../../database/prisma.service';
+import { AutoJevService } from '../accounting/auto-jev.service';
 import { runAudited } from '../budgeting/audit-actor.util';
 
 @Injectable()
 export class PaymentService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly autoJev: AutoJevService,
+  ) {}
 
   async findByConsumer(orgId: string, consumerId: string) {
     return this.prisma.payment.findMany({
@@ -46,8 +55,14 @@ export class PaymentService {
       include: {
         consumer: {
           select: {
-            id: true, accountNumber: true, firstName: true, middleName: true, lastName: true,
-            address: true, barangay: true, consumerType: true,
+            id: true,
+            accountNumber: true,
+            firstName: true,
+            middleName: true,
+            lastName: true,
+            address: true,
+            barangay: true,
+            consumerType: true,
           },
         },
         cashier: { select: { id: true, username: true } },
@@ -57,7 +72,12 @@ export class PaymentService {
           include: {
             bill: {
               select: {
-                id: true, billNumber: true, totalAmount: true, amountPaid: true, balance: true, status: true,
+                id: true,
+                billNumber: true,
+                totalAmount: true,
+                amountPaid: true,
+                balance: true,
+                status: true,
                 billingPeriod: { select: { id: true, name: true } },
               },
             },
@@ -176,18 +196,33 @@ export class PaymentService {
         });
       }
 
+      // Post the collection: Dr Cash-Collecting Officers, Cr A/R.
+      await this.autoJev.onPaymentReceived(tx, orgId, userId, {
+        id: payment.id,
+        orNumber: payment.orNumber,
+        paymentDate: payment.paymentDate,
+        totalAmount: Number(payment.totalAmount),
+      });
+
       return payment;
     });
   }
 
-  async voidPayment(orgId: string, userId: string, paymentId: string, expectedVersion: number, voidReason: string) {
+  async voidPayment(
+    orgId: string,
+    userId: string,
+    paymentId: string,
+    expectedVersion: number,
+    voidReason: string,
+  ) {
     const payment = await this.prisma.payment.findFirst({
       where: { id: paymentId, organizationId: orgId },
       include: { allocations: true },
     });
     if (!payment) throw new NotFoundException('Payment not found.');
     if (payment.status === 'voided') throw new BadRequestException('Payment is already voided.');
-    if (payment.version !== expectedVersion) throw new ConflictException('Payment was modified — please reload.');
+    if (payment.version !== expectedVersion)
+      throw new ConflictException('Payment was modified — please reload.');
 
     return runAudited(this.prisma, userId, async (tx) => {
       for (const alloc of payment.allocations) {
@@ -208,7 +243,7 @@ export class PaymentService {
         });
       }
 
-      return tx.payment.update({
+      const voided = await tx.payment.update({
         where: { id: paymentId },
         data: {
           status: 'voided',
@@ -219,6 +254,16 @@ export class PaymentService {
           version: { increment: 1 },
         },
       });
+
+      // Reverse the collection: Dr A/R, Cr Cash-Collecting Officers.
+      await this.autoJev.onPaymentVoided(tx, orgId, userId, {
+        id: payment.id,
+        orNumber: payment.orNumber,
+        totalAmount: Number(payment.totalAmount),
+        voidDate: new Date(),
+      });
+
+      return voided;
     });
   }
 
