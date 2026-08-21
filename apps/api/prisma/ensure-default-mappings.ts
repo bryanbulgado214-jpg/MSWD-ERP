@@ -35,6 +35,7 @@ const DEFAULT_MAPPINGS: Record<string, string> = {
   'inventory.ppe': '1-06-05-990', // Other Machinery and Equipment (default)
   'expense.expendable': '5-02-03-010', // Office Supplies Expenses
   'expense.semi_expendable': '5-02-03-010', // Office Supplies Expenses (default)
+  'expense.repairs_maintenance': '5-02-13-030', // Repairs and Maintenance - Infrastructure Assets
   // Payroll cycle — salary expense, statutory payables, net pay payable
   'payroll.salaries_expense': '5-01-01-010', // Salaries and Wages - Regular
   'payroll.net_payable': '2-01-01-020', // Due to Officers and Employees

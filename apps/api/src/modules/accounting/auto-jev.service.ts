@@ -448,21 +448,59 @@ export class AutoJevService {
       id: string;
       woNumber: string;
       verifiedAt: Date;
-      materialsCost: number;
     },
   ) {
-    const expenseAccount = await this.resolve(organizationId, 'expense.repairs_maintenance');
-    const inventoryAccount = await this.resolve(organizationId, 'inventory.office_supplies');
+    const ref = `WO ${wo.woNumber}`;
 
-    if (!expenseAccount || !inventoryAccount) {
-      this.logger.warn(
-        `Skipping auto-JEV for WO ${wo.woNumber}: missing account mappings (expense.repairs_maintenance or inventory.office_supplies).`,
-      );
-      return null;
+    // Materials consumed on the work order — Cr each item's inventory account,
+    // Dr Repairs & Maintenance expense.
+    const materials = await tx.workOrderMaterial.findMany({
+      where: { workOrderId: wo.id },
+      select: {
+        totalCost: true,
+        inventoryItem: { select: { accountCode: true, classification: true } },
+      },
+    });
+    const inventoryByAccount = new Map<string, number>();
+    let total = 0;
+    for (const m of materials) {
+      const cost = Number(m.totalCost);
+      if (cost <= 0) continue;
+      const acct = await this.resolveInventoryAccount(tx, organizationId, m.inventoryItem, ref);
+      inventoryByAccount.set(acct.id, (inventoryByAccount.get(acct.id) ?? 0) + cost);
+      total += cost;
+    }
+    if (total <= 0) return null;
+
+    const expenseAccount = await this.requireMapping(
+      organizationId,
+      'expense.repairs_maintenance',
+      'Repairs and Maintenance',
+      ref,
+    );
+
+    const lines: Array<{
+      chartOfAccountId: string;
+      debitAmount: number;
+      creditAmount: number;
+      description: string;
+    }> = [];
+    lines.push({
+      chartOfAccountId: expenseAccount.id,
+      debitAmount: total,
+      creditAmount: 0,
+      description: `Repairs & Maintenance — ${wo.woNumber}`,
+    });
+    for (const [chartOfAccountId, amount] of inventoryByAccount) {
+      lines.push({
+        chartOfAccountId,
+        debitAmount: 0,
+        creditAmount: amount,
+        description: `Inventory consumed — ${wo.woNumber}`,
+      });
     }
 
-    if (wo.materialsCost <= 0) return null;
-
+    this.assertBalanced(lines, ref);
     return this.createAutoJev(tx, {
       organizationId,
       userId,
@@ -471,20 +509,7 @@ export class AutoJevService {
       sourceTable: 'work_orders',
       sourceId: wo.id,
       particulars: `WO ${wo.woNumber} — Materials used for field operations`,
-      lines: [
-        {
-          chartOfAccountId: expenseAccount.id,
-          debitAmount: wo.materialsCost,
-          creditAmount: 0,
-          description: `Repairs & Maintenance Expense — ${wo.woNumber}`,
-        },
-        {
-          chartOfAccountId: inventoryAccount.id,
-          debitAmount: 0,
-          creditAmount: wo.materialsCost,
-          description: `Inventory consumed — ${wo.woNumber}`,
-        },
-      ],
+      lines,
     });
   }
 

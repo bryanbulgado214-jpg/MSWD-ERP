@@ -9,6 +9,7 @@ import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { AutoJevService } from '../accounting/auto-jev.service';
+import { runAudited } from '../budgeting/audit-actor.util';
 
 @Injectable()
 export class WorkOrderService {
@@ -60,15 +61,26 @@ export class WorkOrderService {
     const wo = await this.prisma.workOrder.findFirst({
       where: { id, organizationId },
       include: {
-        consumer: { select: { id: true, firstName: true, lastName: true, accountNumber: true, address: true } },
+        consumer: {
+          select: { id: true, firstName: true, lastName: true, accountNumber: true, address: true },
+        },
         meter: { select: { id: true, serialNumber: true, brand: true } },
-        assignee: { select: { id: true, firstName: true, lastName: true, position: { select: { title: true } } } },
+        assignee: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            position: { select: { title: true } },
+          },
+        },
         verifier: { select: { id: true, username: true } },
         creator: { select: { id: true, username: true } },
         updater: { select: { id: true, username: true } },
         materials: {
           include: {
-            inventoryItem: { select: { id: true, itemCode: true, description: true, unitOfMeasure: true } },
+            inventoryItem: {
+              select: { id: true, itemCode: true, description: true, unitOfMeasure: true },
+            },
           },
           orderBy: { createdAt: 'asc' },
         },
@@ -110,7 +122,7 @@ export class WorkOrderService {
         woNumber,
         type: dto.type as never,
         ...(dto.priority ? { priority: dto.priority as never } : {}),
-        status: hasAssignee ? 'assigned' as never : 'pending' as never,
+        status: hasAssignee ? ('assigned' as never) : ('pending' as never),
         title: dto.title,
         ...(dto.description ? { description: dto.description } : {}),
         ...(dto.consumerId ? { consumerId: dto.consumerId } : {}),
@@ -118,7 +130,9 @@ export class WorkOrderService {
         ...(dto.location ? { location: dto.location } : {}),
         ...(dto.scheduledDate ? { scheduledDate: new Date(dto.scheduledDate) } : {}),
         ...(dto.assignedTo ? { assignedTo: dto.assignedTo, assignedAt: new Date() } : {}),
-        ...(dto.estimatedDurationHrs != null ? { estimatedDurationHrs: dto.estimatedDurationHrs } : {}),
+        ...(dto.estimatedDurationHrs != null
+          ? { estimatedDurationHrs: dto.estimatedDurationHrs }
+          : {}),
         createdBy: userId,
         updatedBy: userId,
       },
@@ -158,7 +172,9 @@ export class WorkOrderService {
         ...(dto.meterId ? { meterId: dto.meterId } : {}),
         ...(dto.location ? { location: dto.location } : {}),
         ...(dto.scheduledDate ? { scheduledDate: new Date(dto.scheduledDate) } : {}),
-        ...(dto.estimatedDurationHrs != null ? { estimatedDurationHrs: dto.estimatedDurationHrs } : {}),
+        ...(dto.estimatedDurationHrs != null
+          ? { estimatedDurationHrs: dto.estimatedDurationHrs }
+          : {}),
         updatedBy: userId,
         version: { increment: 1 },
       },
@@ -263,7 +279,7 @@ export class WorkOrderService {
       throw new BadRequestException('Can only verify completed work orders');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    return runAudited(this.prisma, userId, async (tx) => {
       const updated = await tx.workOrder.update({
         where: { id },
         data: {
@@ -275,19 +291,14 @@ export class WorkOrderService {
         },
       });
 
-      const materialsCost = Number(wo.materialsCost);
-      if (materialsCost > 0) {
-        try {
-          await this.autoJevService.onWorkOrderVerified(tx, organizationId, userId, {
-            id: wo.id,
-            woNumber: wo.woNumber,
-            verifiedAt: new Date(),
-            materialsCost,
-          });
-        } catch (err) {
-          this.logger.warn(`Auto-JEV failed for WO ${wo.woNumber}: ${err}`);
-        }
-      }
+      // Post the material consumption to the ledger inside the same transaction.
+      // A missing posting account blocks verification rather than silently
+      // skipping the entry.
+      await this.autoJevService.onWorkOrderVerified(tx, organizationId, userId, {
+        id: wo.id,
+        woNumber: wo.woNumber,
+        verifiedAt: new Date(),
+      });
 
       return updated;
     });
@@ -317,12 +328,7 @@ export class WorkOrderService {
     });
   }
 
-  async addNote(
-    organizationId: string,
-    userId: string,
-    workOrderId: string,
-    note: string,
-  ) {
+  async addNote(organizationId: string, userId: string, workOrderId: string, note: string) {
     await this.findOneOrThrow(organizationId, workOrderId);
 
     return this.prisma.workOrderNote.create({
@@ -349,7 +355,9 @@ export class WorkOrderService {
   ) {
     const wo = await this.findOneOrThrow(organizationId, workOrderId);
     if (!['assigned', 'in_progress'].includes(wo.status)) {
-      throw new BadRequestException('Can only add materials to assigned or in-progress work orders');
+      throw new BadRequestException(
+        'Can only add materials to assigned or in-progress work orders',
+      );
     }
 
     const item = await this.prisma.inventoryItem.findFirst({
@@ -378,7 +386,9 @@ export class WorkOrderService {
           ...(dto.notes ? { notes: dto.notes } : {}),
         },
         include: {
-          inventoryItem: { select: { id: true, itemCode: true, description: true, unitOfMeasure: true } },
+          inventoryItem: {
+            select: { id: true, itemCode: true, description: true, unitOfMeasure: true },
+          },
         },
       });
 
@@ -390,9 +400,7 @@ export class WorkOrderService {
         },
       });
 
-      this.logger.log(
-        `Deducted ${dto.quantityUsed} of ${item.itemCode} for WO ${wo.woNumber}`,
-      );
+      this.logger.log(`Deducted ${dto.quantityUsed} of ${item.itemCode} for WO ${wo.woNumber}`);
 
       return material;
     });
@@ -401,7 +409,9 @@ export class WorkOrderService {
   async removeMaterial(organizationId: string, workOrderId: string, materialId: string) {
     const wo = await this.findOneOrThrow(organizationId, workOrderId);
     if (!['assigned', 'in_progress'].includes(wo.status)) {
-      throw new BadRequestException('Can only remove materials from assigned or in-progress work orders');
+      throw new BadRequestException(
+        'Can only remove materials from assigned or in-progress work orders',
+      );
     }
 
     const material = await this.prisma.workOrderMaterial.findFirst({
