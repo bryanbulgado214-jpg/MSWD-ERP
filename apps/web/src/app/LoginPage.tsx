@@ -7,6 +7,7 @@ import './login.css';
 const ROLE_HINTS: Record<string, string> = {
   'sbwd.admin': 'Administrator — full system access, user & role management',
   'sbwd.accountant': 'Accountant — prepares JEVs, views ledgers & statements',
+  'sbwd.teller': 'Teller — collects payments & issues OR (Collection screens)',
   'sbwd.cashier': 'Cashier — disburses: assigns check #, prints, releases',
   'sbwd.gm': 'General Manager — dedicated check-void approver',
 };
@@ -47,6 +48,18 @@ export function LoginPage() {
       setSubmitting(false);
     }
   }
+
+  // Password-less quick-login is a DEV convenience only. Expose it on localhost
+  // or a private LAN — but NEVER over a public tunnel / public IP, where anyone
+  // with the URL could otherwise sign in as an admin with a single click.
+  const host = window.location.hostname;
+  const showQuickLogin =
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === '::1' ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host);
 
   return (
     <div className="login-page">
@@ -91,23 +104,25 @@ export function LoginPage() {
           </button>
         </form>
 
-        <div className="login-quick">
-          <p className="login-quick-label">Quick login (dev only)</p>
-          <div className="login-quick-buttons">
-            {Object.entries(ROLE_HINTS).map(([user, hint]) => (
-              <button
-                key={user}
-                type="button"
-                className="login-quick-btn"
-                disabled={submitting}
-                onClick={() => quickLogin(user)}
-              >
-                <strong>{user}</strong>
-                <span>{hint}</span>
-              </button>
-            ))}
+        {showQuickLogin && (
+          <div className="login-quick">
+            <p className="login-quick-label">Quick login (dev only)</p>
+            <div className="login-quick-buttons">
+              {Object.entries(ROLE_HINTS).map(([user, hint]) => (
+                <button
+                  key={user}
+                  type="button"
+                  className="login-quick-btn"
+                  disabled={submitting}
+                  onClick={() => quickLogin(user)}
+                >
+                  <strong>{user}</strong>
+                  <span>{hint}</span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
