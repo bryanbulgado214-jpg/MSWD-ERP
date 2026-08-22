@@ -114,7 +114,9 @@ export default function PrintOrPage() {
   const totalNum =
     typeof payment.totalAmount === 'string' ? parseFloat(payment.totalAmount) : payment.totalAmount;
   const amountInWords = numberToWords(totalNum);
-  const consumerName = `${payment.consumer.lastName}, ${payment.consumer.firstName}`;
+  const consumerName = payment.consumer
+    ? `${payment.consumer.lastName}, ${payment.consumer.firstName}`
+    : (payment.payerName ?? 'Walk-in');
 
   return (
     <div className="bill-print-page">
@@ -159,11 +161,11 @@ export default function PrintOrPage() {
         <div className="bill-print-info">
           <div className="bill-print-info__group">
             <span className="bill-print-info__label">Account No:</span>
-            <span>{payment.consumer.accountNumber}</span>
+            <span>{payment.consumer?.accountNumber ?? '—'}</span>
           </div>
           <div className="bill-print-info__group">
             <span className="bill-print-info__label">Address:</span>
-            <span>{payment.consumer.address}</span>
+            <span>{payment.consumer?.address ?? '—'}</span>
           </div>
         </div>
 

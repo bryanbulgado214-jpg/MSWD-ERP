@@ -499,9 +499,13 @@ export default function PaymentPage() {
                   </td>
                   <td>{new Date(p.paymentDate).toLocaleDateString()}</td>
                   <td>
-                    <Link to={`/billing/consumers/${p.consumerId}`} className="bill-table__link">
-                      {p.consumer.accountNumber} — {p.consumer.lastName}, {p.consumer.firstName}
-                    </Link>
+                    {p.consumer ? (
+                      <Link to={`/billing/consumers/${p.consumerId}`} className="bill-table__link">
+                        {p.consumer.accountNumber} — {p.consumer.lastName}, {p.consumer.firstName}
+                      </Link>
+                    ) : (
+                      (p.payerName ?? 'Walk-in')
+                    )}
                   </td>
                   <td className="bill-text-mono" style={{ fontWeight: 600 }}>
                     {formatPeso(p.totalAmount)}

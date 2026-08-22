@@ -223,7 +223,8 @@ export interface PaymentAllocation {
 export interface PaymentListItem {
   id: string;
   orNumber: string;
-  consumerId: string;
+  consumerId: string | null;
+  payerName?: string | null;
   paymentDate: string;
   totalAmount: string;
   paymentMethod: PaymentMethod;
@@ -235,7 +236,7 @@ export interface PaymentListItem {
   voidReason: string | null;
   createdAt: string;
   version: number;
-  consumer: ConsumerRef;
+  consumer: ConsumerRef | null;
   cashier: UserRef | null;
   allocations: PaymentAllocation[];
 }
@@ -243,13 +244,16 @@ export interface PaymentListItem {
 export interface Payment extends PaymentListItem {
   checkDate: string | null;
   bankName: string | null;
+  applicationRef?: string | null;
   updatedAt: string;
-  consumer: ConsumerRef & {
-    middleName: string | null;
-    address: string;
-    barangay: string | null;
-    consumerType: ConsumerType;
-  };
+  consumer:
+    | (ConsumerRef & {
+        middleName: string | null;
+        address: string;
+        barangay: string | null;
+        consumerType: ConsumerType;
+      })
+    | null;
   voider: UserRef | null;
   creator: UserRef | null;
 }

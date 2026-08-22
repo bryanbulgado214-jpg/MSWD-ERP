@@ -83,20 +83,26 @@ export default function PaymentDetailPage() {
 
       <div className="bill-detail-grid">
         <div className="bill-detail-item">
-          <span className="bill-detail-label">Consumer</span>
+          <span className="bill-detail-label">{p.consumer ? 'Consumer' : 'Payer'}</span>
           <span className="bill-detail-value">
-            <Link to={`/billing/consumers/${p.consumer.id}`} className="bill-table__link">
-              {p.consumer.accountNumber} — {p.consumer.lastName}, {p.consumer.firstName}
-            </Link>
+            {p.consumer ? (
+              <Link to={`/billing/consumers/${p.consumer.id}`} className="bill-table__link">
+                {p.consumer.accountNumber} — {p.consumer.lastName}, {p.consumer.firstName}
+              </Link>
+            ) : (
+              (p.payerName ?? 'Walk-in')
+            )}
           </span>
         </div>
-        <div className="bill-detail-item">
-          <span className="bill-detail-label">Address</span>
-          <span className="bill-detail-value">
-            {p.consumer.address}
-            {p.consumer.barangay ? `, ${p.consumer.barangay}` : ''}
-          </span>
-        </div>
+        {p.consumer && (
+          <div className="bill-detail-item">
+            <span className="bill-detail-label">Address</span>
+            <span className="bill-detail-value">
+              {p.consumer.address}
+              {p.consumer.barangay ? `, ${p.consumer.barangay}` : ''}
+            </span>
+          </div>
+        )}
         <div className="bill-detail-item">
           <span className="bill-detail-label">Payment Date</span>
           <span className="bill-detail-value">{new Date(p.paymentDate).toLocaleDateString()}</span>

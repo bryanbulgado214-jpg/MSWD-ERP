@@ -59,7 +59,9 @@ export default function PrintInvoicePage() {
     month: 'long',
     day: 'numeric',
   });
-  const consumerName = `${payment.consumer.lastName}, ${payment.consumer.firstName}`;
+  const consumerName = payment.consumer
+    ? `${payment.consumer.lastName}, ${payment.consumer.firstName}`
+    : (payment.payerName ?? 'Walk-in');
   // The allocation lines cover principal only; any excess of the total over the
   // principal is the 10% late-payment penalty, shown as its own line so the
   // invoice reconciles to the amount collected.
@@ -123,16 +125,18 @@ export default function PrintInvoicePage() {
           </div>
           <div className="bill-print-info__group">
             <span className="bill-print-info__label">Account No:</span>
-            <span>{payment.consumer.accountNumber}</span>
+            <span>{payment.consumer?.accountNumber ?? '—'}</span>
           </div>
         </div>
 
-        <div className="bill-print-info">
-          <div className="bill-print-info__group">
-            <span className="bill-print-info__label">Address:</span>
-            <span>{payment.consumer.address}</span>
+        {payment.consumer && (
+          <div className="bill-print-info">
+            <div className="bill-print-info__group">
+              <span className="bill-print-info__label">Address:</span>
+              <span>{payment.consumer.address}</span>
+            </div>
           </div>
-        </div>
+        )}
 
         <table className="bill-print-table">
           <thead>
