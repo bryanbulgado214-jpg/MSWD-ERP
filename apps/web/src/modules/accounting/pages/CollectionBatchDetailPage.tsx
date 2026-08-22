@@ -1,16 +1,25 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
+import { useAuth } from '../../../app/auth';
 import {
   AccountingApiError,
-  finalizeCollectionBatch,
+  approveCollectionBatch,
   getCollectionBatch,
+  postCollectionBatch,
   recordCollectionDeposit,
+  rejectCollectionBatch,
+  reverseCollectionBatch,
+  reviewCollectionBatch,
 } from '../api';
 import type { CollectionBatchDetail } from '../types';
 
 import { AccountingSubNav } from './AccountingSubNav';
 import './accounting.css';
+
+function fmtWhen(v: string | null) {
+  return v ? new Date(v).toLocaleString('en-PH') : '—';
+}
 
 function formatPeso(value: string | number): string {
   const num = typeof value === 'string' ? parseFloat(value) : value;
@@ -41,6 +50,7 @@ function Card({ label, value, accent }: { label: string; value: string; accent?:
 
 export default function CollectionBatchDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { hasPermission } = useAuth();
   const [detail, setDetail] = useState<CollectionBatchDetail | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -48,6 +58,11 @@ export default function CollectionBatchDetailPage() {
   const [depDate, setDepDate] = useState('2026-08-23');
   const [depAmount, setDepAmount] = useState('');
   const [depSlip, setDepSlip] = useState('');
+
+  const canReview = hasPermission('collections.accounting.review');
+  const canApprove = hasPermission('collections.accounting.approve');
+  const canPost = hasPermission('collections.accounting.post');
+  const canReverse = hasPermission('collections.accounting.reverse');
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -62,20 +77,35 @@ export default function CollectionBatchDetailPage() {
     load();
   }, [load]);
 
-  async function finalize() {
+  async function run(fn: () => Promise<unknown>, ok: string) {
     if (!id) return;
     setBusy(true);
     setError('');
     setNotice('');
     try {
-      await finalizeCollectionBatch(id);
-      setNotice('Finalized — the collection JEV has been posted to the general ledger.');
+      await fn();
+      setNotice(ok);
       await load();
     } catch (e) {
-      setError(e instanceof AccountingApiError ? e.message : 'Failed to finalize.');
+      setError(e instanceof AccountingApiError ? e.message : 'Action failed.');
     } finally {
       setBusy(false);
     }
+  }
+
+  function reject() {
+    const reason = window.prompt('Reason for rejecting this batch?');
+    if (reason?.trim()) run(() => rejectCollectionBatch(id!, reason.trim()), 'Batch rejected.');
+  }
+  function reverse() {
+    const reason = window.prompt(
+      'Reason for reversing this posted batch? A reversing JEV will be posted.',
+    );
+    if (reason?.trim())
+      run(
+        () => reverseCollectionBatch(id!, reason.trim()),
+        'Reversed — a reversing JEV was posted.',
+      );
   }
 
   async function deposit() {
@@ -123,12 +153,7 @@ export default function CollectionBatchDetailPage() {
     parseFloat(batch.onlineAmount) +
     parseFloat(batch.bankTransferAmount) +
     parseFloat(batch.otherAmount);
-  const canFinalize =
-    batch.status !== 'posted' &&
-    !batch.jevId &&
-    entry.balanced &&
-    entry.unmappedTypes.length === 0 &&
-    entry.totalDebit > 0;
+  const entryReady = entry.balanced && entry.unmappedTypes.length === 0 && entry.totalDebit > 0;
 
   return (
     <div className="acct-page">
@@ -218,23 +243,121 @@ export default function CollectionBatchDetailPage() {
         </table>
       </div>
 
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}>
-        {batch.jevId ? (
-          <Link to={`/accounting/jev/${batch.jevId}`} className="acct-btn acct-btn--primary">
-            View posted JEV →
-          </Link>
-        ) : (
+      <div
+        style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}
+      >
+        {batch.status === 'for_review' && (
+          <>
+            <button
+              type="button"
+              className="acct-btn acct-btn--primary"
+              onClick={() => run(() => reviewCollectionBatch(id!), 'Marked as reviewed.')}
+              disabled={busy || !canReview}
+            >
+              Mark Reviewed
+            </button>
+            {canReview && (
+              <button type="button" className="acct-btn" onClick={reject} disabled={busy}>
+                Reject
+              </button>
+            )}
+          </>
+        )}
+        {batch.status === 'reviewed' && (
+          <>
+            <button
+              type="button"
+              className="acct-btn acct-btn--primary"
+              onClick={() => run(() => approveCollectionBatch(id!), 'Approved for posting.')}
+              disabled={busy || !canApprove}
+            >
+              Approve
+            </button>
+            {canReview && (
+              <button type="button" className="acct-btn" onClick={reject} disabled={busy}>
+                Reject
+              </button>
+            )}
+          </>
+        )}
+        {batch.status === 'approved' && (
+          <>
+            <button
+              type="button"
+              className="acct-btn acct-btn--primary"
+              onClick={() =>
+                run(() => postCollectionBatch(id!), 'Posted — the collection JEV is in the GL.')
+              }
+              disabled={busy || !canPost || !entryReady}
+              title={entryReady ? '' : 'Batch must be balanced and fully mapped to post.'}
+            >
+              {busy ? 'Posting…' : 'Post to GL'}
+            </button>
+            {canReview && (
+              <button type="button" className="acct-btn" onClick={reject} disabled={busy}>
+                Reject
+              </button>
+            )}
+          </>
+        )}
+        {batch.status === 'posted' && canReverse && (
           <button
             type="button"
-            className="acct-btn acct-btn--primary"
-            onClick={finalize}
-            disabled={busy || !canFinalize}
-            title={canFinalize ? '' : 'Batch must be balanced and fully mapped to finalize.'}
+            className="acct-btn acct-btn--danger"
+            onClick={reverse}
+            disabled={busy}
           >
-            {busy ? 'Posting…' : 'Finalize & Post to GL'}
+            Reverse Posting
           </button>
         )}
+        {batch.status === 'rejected' && (
+          <span style={{ color: '#b42318', fontSize: 13 }}>
+            Rejected{batch.rejectedReason ? ` — ${batch.rejectedReason}` : ''}. Re-consolidate the
+            day from the batches list to retry.
+          </span>
+        )}
+        {batch.status === 'reversed' && (
+          <span style={{ color: '#b54708', fontSize: 13 }}>
+            Reversed{batch.remarks ? ` — ${batch.remarks}` : ''}.
+          </span>
+        )}
       </div>
+
+      {detail.jevs.length > 0 && (
+        <div style={{ marginTop: 10, fontSize: 13 }}>
+          Journal entries:{' '}
+          {detail.jevs.map((j, i) => (
+            <span key={j.id}>
+              {i > 0 && ' · '}
+              <Link to={`/accounting/jev/${j.id}`} className="acct-link">
+                {j.jevNumber}
+              </Link>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <h3 className="acct-section-title">Approval History</h3>
+      <table className="acct-table" style={{ maxWidth: 480 }}>
+        <tbody>
+          <tr>
+            <td>Consolidated</td>
+            <td>{fmtWhen(batch.preparedAt)}</td>
+          </tr>
+          <tr>
+            <td>Reviewed</td>
+            <td>{fmtWhen(batch.reviewedAt)}</td>
+          </tr>
+          <tr>
+            <td>Approved</td>
+            <td>{fmtWhen(batch.approvedAt)}</td>
+          </tr>
+          <tr>
+            <td>Posted</td>
+            <td>{fmtWhen(batch.postedAt)}</td>
+          </tr>
+        </tbody>
+      </table>
 
       {detail.deposit && (
         <>

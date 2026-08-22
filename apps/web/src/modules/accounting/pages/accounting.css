@@ -476,3 +476,13 @@
   background: #fef3f2;
   color: #b42318;
 }
+
+.acct-btn--danger {
+  background: #fef3f2;
+  border-color: #fecdca;
+  color: #b42318;
+}
+.acct-btn--danger:hover {
+  background: #fee4e2;
+  border-color: #fda29b;
+}

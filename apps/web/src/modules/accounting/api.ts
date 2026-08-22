@@ -1114,8 +1114,32 @@ export async function consolidateCollectionBatch(date: string): Promise<Collecti
   return res.json();
 }
 
-export async function finalizeCollectionBatch(id: string): Promise<CollectionBatch> {
-  const res = await authFetchMutate(`/accounting/collection-batches/${id}/finalize`, 'POST');
+export async function reviewCollectionBatch(id: string): Promise<CollectionBatch> {
+  const res = await authFetchMutate(`/accounting/collection-batches/${id}/review`, 'POST');
+  return res.json();
+}
+
+export async function approveCollectionBatch(id: string): Promise<CollectionBatch> {
+  const res = await authFetchMutate(`/accounting/collection-batches/${id}/approve`, 'POST');
+  return res.json();
+}
+
+export async function postCollectionBatch(id: string): Promise<CollectionBatch> {
+  const res = await authFetchMutate(`/accounting/collection-batches/${id}/post`, 'POST');
+  return res.json();
+}
+
+export async function rejectCollectionBatch(id: string, reason: string): Promise<CollectionBatch> {
+  const res = await authFetchMutate(`/accounting/collection-batches/${id}/reject`, 'POST', {
+    reason,
+  });
+  return res.json();
+}
+
+export async function reverseCollectionBatch(id: string, reason: string): Promise<CollectionBatch> {
+  const res = await authFetchMutate(`/accounting/collection-batches/${id}/reverse`, 'POST', {
+    reason,
+  });
   return res.json();
 }
 

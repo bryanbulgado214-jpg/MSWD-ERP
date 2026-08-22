@@ -70,7 +70,7 @@ export class CollectionBatchService {
     const existing = await this.prisma.collectionAccountingBatch.findFirst({
       where: { organizationId: orgId, collectionDate: date },
     });
-    if (existing && existing.status === 'posted') {
+    if (existing && (existing.status === 'posted' || existing.status === 'reversed')) {
       return existing;
     }
 
@@ -169,21 +169,126 @@ export class CollectionBatchService {
     });
     const deposit =
       batch.status === 'posted' ? await this.deposits.summaryForBatch(orgId, id) : null;
-    return { batch, entry, payments, deposit };
+    // Every JEV tied to this batch — the collection posting and any reversal.
+    const jevs = await this.prisma.journalEntryVoucher.findMany({
+      where: { organizationId: orgId, sourceTable: 'collection_accounting_batches', sourceId: id },
+      select: { id: true, jevNumber: true, particulars: true, jevDate: true, status: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return { batch, entry, payments, deposit, jevs };
+  }
+
+  /** Maker-checker step: mark a consolidated batch as reviewed. */
+  async review(orgId: string, userId: string, id: string) {
+    const batch = await this.load(orgId, id);
+    if (batch.status !== 'for_review') {
+      throw new BadRequestException(
+        `Only a "for review" batch can be reviewed (is ${batch.status}).`,
+      );
+    }
+    return runAudited(this.prisma, userId, (tx) =>
+      tx.collectionAccountingBatch.update({
+        where: { id },
+        data: { status: 'reviewed', reviewedBy: userId, reviewedAt: new Date() },
+      }),
+    );
+  }
+
+  /** Maker-checker step: approve a reviewed batch for posting. */
+  async approve(orgId: string, userId: string, id: string) {
+    const batch = await this.load(orgId, id);
+    if (batch.status !== 'reviewed') {
+      throw new BadRequestException(`Only a reviewed batch can be approved (is ${batch.status}).`);
+    }
+    return runAudited(this.prisma, userId, (tx) =>
+      tx.collectionAccountingBatch.update({
+        where: { id },
+        data: { status: 'approved', approvedBy: userId, approvedAt: new Date() },
+      }),
+    );
+  }
+
+  /** Reject a batch back out of the workflow with a reason. */
+  async reject(orgId: string, userId: string, id: string, reason: string) {
+    const batch = await this.load(orgId, id);
+    if (!['for_review', 'reviewed', 'approved'].includes(batch.status)) {
+      throw new BadRequestException(`Cannot reject a batch that is ${batch.status}.`);
+    }
+    if (!reason?.trim()) throw new BadRequestException('A rejection reason is required.');
+    return runAudited(this.prisma, userId, (tx) =>
+      tx.collectionAccountingBatch.update({
+        where: { id },
+        data: { status: 'rejected', rejectedReason: reason.trim() },
+      }),
+    );
   }
 
   /**
-   * FINALIZE: validate and auto-post the summarized collection JEV, then lock the
-   * batch. Idempotent — a batch already posted is refused, and the post happens
-   * in one transaction so a retry can never create a duplicate JEV.
+   * Reverse a posted batch: post a reversing JEV (debits and credits swapped) and
+   * mark the batch reversed. The original JEV is never altered or deleted.
    */
-  async finalize(orgId: string, userId: string, id: string) {
+  async reverse(orgId: string, userId: string, id: string, reason: string) {
+    const batch = await this.load(orgId, id);
+    if (batch.status !== 'posted' || !batch.jevId) {
+      throw new BadRequestException('Only a posted batch can be reversed.');
+    }
+    if (!reason?.trim()) throw new BadRequestException('A reversal reason is required.');
+    const original = await this.prisma.journalEntryVoucher.findUniqueOrThrow({
+      where: { id: batch.jevId },
+      include: { lines: true },
+    });
+    return runAudited(this.prisma, userId, async (tx) => {
+      const fresh = await tx.collectionAccountingBatch.findUniqueOrThrow({ where: { id } });
+      if (fresh.status !== 'posted') {
+        throw new ConflictException('Batch is no longer posted.');
+      }
+      const rev = await this.autoJev.createAutoJev(tx, {
+        organizationId: orgId,
+        userId,
+        jevDate: batch.collectionDate,
+        sourceType: 'collection',
+        sourceTable: 'collection_accounting_batches',
+        sourceId: batch.id,
+        particulars: `Reversal of ${original.jevNumber} — ${batch.batchNumber}: ${reason.trim()}`,
+        lines: original.lines.map((l) => ({
+          chartOfAccountId: l.chartOfAccountId,
+          debitAmount: Number(l.creditAmount),
+          creditAmount: Number(l.debitAmount),
+          description: `Reversal — ${batch.batchNumber}`,
+        })),
+      });
+      if (!rev) {
+        throw new BadRequestException('No open accounting period for the reversal — cannot post.');
+      }
+      return tx.collectionAccountingBatch.update({
+        where: { id },
+        data: { status: 'reversed', remarks: reason.trim() },
+      });
+    });
+  }
+
+  private async load(orgId: string, id: string) {
     const batch = await this.prisma.collectionAccountingBatch.findFirst({
       where: { id, organizationId: orgId },
     });
     if (!batch) throw new NotFoundException('Collection batch not found.');
+    return batch;
+  }
+
+  /**
+   * POST: validate and auto-post the summarized collection JEV for an APPROVED
+   * batch, then lock it. Idempotent — an already-posted batch is refused and the
+   * post runs in one transaction so a retry can never create a duplicate JEV.
+   */
+  async post(orgId: string, userId: string, id: string) {
+    const batch = await this.load(orgId, id);
     if (batch.status === 'posted' || batch.jevId) {
       throw new ConflictException('This batch has already been posted to the GL.');
+    }
+    if (batch.status !== 'approved') {
+      throw new BadRequestException(
+        `A batch must be approved before posting (is ${batch.status}).`,
+      );
     }
 
     const entry = await this.computeEntry(orgId, id);

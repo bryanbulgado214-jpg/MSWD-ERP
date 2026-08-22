@@ -568,8 +568,12 @@ export interface CollectionBatch {
   totalCollections: string;
   voidedReceiptCount: number;
   jevId: string | null;
-  postedAt: string | null;
+  rejectedReason: string | null;
+  remarks: string | null;
   preparedAt: string | null;
+  reviewedAt: string | null;
+  approvedAt: string | null;
+  postedAt: string | null;
 }
 
 export interface CollectionEntryLine {
@@ -616,6 +620,13 @@ export interface CollectionBatchDetail {
     consumer: { accountNumber: string; firstName: string; lastName: string } | null;
   }>;
   deposit: DepositSummary | null;
+  jevs: Array<{
+    id: string;
+    jevNumber: string;
+    particulars: string;
+    jevDate: string;
+    status: string;
+  }>;
 }
 
 export interface ReconCard {

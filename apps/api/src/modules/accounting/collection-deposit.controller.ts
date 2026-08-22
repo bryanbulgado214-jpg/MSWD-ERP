@@ -39,7 +39,7 @@ export class CollectionDepositController {
   constructor(private readonly service: CollectionDepositService) {}
 
   @Post()
-  @RequirePermissions('accounting.coa.manage')
+  @RequirePermissions('collections.accounting.post')
   record(@CurrentUser() user: AuthenticatedUser, @Body() dto: RecordDepositDto) {
     return this.service.record(user.organizationId, user.userId, dto);
   }
