@@ -130,13 +130,14 @@ export class PaymentService {
     });
     if (!consumer) throw new NotFoundException('Consumer not found.');
 
-    const allocationTotal = data.allocations.reduce((sum, a) => sum + a.amountApplied, 0);
-    if (Math.abs(allocationTotal - data.totalAmount) > 0.01) {
-      throw new BadRequestException(
-        `Total amount (${data.totalAmount}) does not match allocation sum (${allocationTotal}).`,
-      );
-    }
+    const principalTotal = data.allocations.reduce((sum, a) => sum + a.amountApplied, 0);
 
+    // A bill past its due date carries a one-time 10% penalty (non-compounding)
+    // on the principal being collected. It is a surcharge on top of principal —
+    // credited to Penalty Income, never reducing the receivable — so we accrue
+    // it here and require the client's totalAmount to equal principal + penalty.
+    const paymentDate = new Date(data.paymentDate);
+    let interestTotal = 0;
     for (const alloc of data.allocations) {
       const bill = await this.prisma.bill.findFirst({
         where: { id: alloc.billId, organizationId: orgId, consumerId: data.consumerId },
@@ -148,6 +149,16 @@ export class PaymentService {
           `Payment of ${alloc.amountApplied} exceeds balance of ${currentBalance} on bill ${bill.billNumber}.`,
         );
       }
+      if (bill.dueDate && new Date(bill.dueDate) < paymentDate) {
+        interestTotal += Math.round(alloc.amountApplied * 0.1 * 100) / 100;
+      }
+    }
+
+    if (Math.abs(principalTotal + interestTotal - data.totalAmount) > 0.01) {
+      throw new BadRequestException(
+        `Total amount (${data.totalAmount}) must equal principal (${principalTotal.toFixed(2)}) ` +
+          `plus the 10% penalty on overdue bills (${interestTotal.toFixed(2)}).`,
+      );
     }
 
     return runAudited(this.prisma, userId, async (tx) => {
@@ -196,12 +207,14 @@ export class PaymentService {
         });
       }
 
-      // Post the collection: Dr Cash-Collecting Officers, Cr A/R.
+      // Post the collection: Dr Cash-Collecting Officers, Cr A/R (principal),
+      // Cr Penalty Income (the 10% overdue penalty portion).
       await this.autoJev.onPaymentReceived(tx, orgId, userId, {
         id: payment.id,
         orNumber: payment.orNumber,
         paymentDate: payment.paymentDate,
         totalAmount: Number(payment.totalAmount),
+        interestAmount: interestTotal,
       });
 
       return payment;
@@ -255,12 +268,17 @@ export class PaymentService {
         },
       });
 
-      // Reverse the collection: Dr A/R, Cr Cash-Collecting Officers.
+      // Reverse the collection: Dr A/R (principal) + Dr Penalty Income
+      // (penalty), Cr Cash-Collecting Officers. The penalty portion is whatever
+      // the original total exceeded the principal allocated to bills.
+      const principalTotal = payment.allocations.reduce((s, a) => s + Number(a.amountApplied), 0);
+      const interestTotal = Number(payment.totalAmount) - principalTotal;
       await this.autoJev.onPaymentVoided(tx, orgId, userId, {
         id: payment.id,
         orNumber: payment.orNumber,
         totalAmount: Number(payment.totalAmount),
         voidDate: new Date(),
+        interestAmount: interestTotal > 0.005 ? interestTotal : 0,
       });
 
       return voided;
@@ -268,16 +286,24 @@ export class PaymentService {
   }
 
   async getNextOrNumber(orgId: string) {
-    const last = await this.prisma.payment.findFirst({
-      where: { organizationId: orgId },
-      orderBy: { orNumber: 'desc' },
+    // Only auto-number within our own "OR-#######" series. Foreign OR formats
+    // (e.g. migrated/seed "SMP-OR-0001") are deliberately ignored: mixing them in
+    // — as the old lexicographic "take the last row and +1 its suffix" did — could
+    // suggest an OR number that already exists (SMP-OR-0003 sorts above OR-0000004,
+    // so its suffix 3 yielded a duplicate OR-0000004). Taking the true numeric max
+    // of the OR- series guarantees the suggestion is free.
+    const rows = await this.prisma.payment.findMany({
+      where: { organizationId: orgId, orNumber: { startsWith: 'OR-' } },
       select: { orNumber: true },
     });
-    let nextNum = 1;
-    if (last) {
-      const match = last.orNumber.match(/\d+$/);
-      if (match) nextNum = parseInt(match[0], 10) + 1;
+    let maxNum = 0;
+    for (const { orNumber } of rows) {
+      const match = orNumber.match(/^OR-(\d+)$/);
+      if (match) {
+        const n = parseInt(match[1]!, 10);
+        if (n > maxNum) maxNum = n;
+      }
     }
-    return { nextOrNumber: `OR-${String(nextNum).padStart(7, '0')}` };
+    return { nextOrNumber: `OR-${String(maxNum + 1).padStart(7, '0')}` };
   }
 }

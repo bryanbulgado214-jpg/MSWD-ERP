@@ -696,9 +696,22 @@ export class AutoJevService {
     tx: Prisma.TransactionClient,
     organizationId: string,
     userId: string,
-    payment: { id: string; orNumber: string; paymentDate: Date; totalAmount: number },
+    payment: {
+      id: string;
+      orNumber: string;
+      paymentDate: Date;
+      totalAmount: number;
+      // Portion of totalAmount that is a 10% late-payment penalty on overdue
+      // bills; credited to Penalty Income instead of A/R. Defaults to 0.
+      interestAmount?: number;
+    },
   ) {
     if (payment.totalAmount <= 0) return null;
+    const interest =
+      payment.interestAmount && payment.interestAmount > 0.005 ? payment.interestAmount : 0;
+    // Credit A/R with total minus interest so the entry is always exactly
+    // balanced regardless of per-bill penalty rounding.
+    const arCredit = payment.totalAmount - interest;
     const ref = `OR ${payment.orNumber}`;
     const cash = await this.requireMapping(
       organizationId,
@@ -712,6 +725,34 @@ export class AutoJevService {
       'Accounts Receivable',
       ref,
     );
+    const lines = [
+      {
+        chartOfAccountId: cash.id,
+        debitAmount: payment.totalAmount,
+        creditAmount: 0,
+        description: `Cash collection — ${ref}`,
+      },
+      {
+        chartOfAccountId: ar.id,
+        debitAmount: 0,
+        creditAmount: arCredit,
+        description: `A/R settled — ${ref}`,
+      },
+    ];
+    if (interest > 0) {
+      const penalty = await this.requireMapping(
+        organizationId,
+        'income.penalty',
+        'Penalty Income',
+        ref,
+      );
+      lines.push({
+        chartOfAccountId: penalty.id,
+        debitAmount: 0,
+        creditAmount: interest,
+        description: `Penalty income — 10% on overdue bills — ${ref}`,
+      });
+    }
     return this.createAutoJev(tx, {
       organizationId,
       userId,
@@ -720,20 +761,7 @@ export class AutoJevService {
       sourceTable: 'payments',
       sourceId: payment.id,
       particulars: `Collection — ${ref}`,
-      lines: [
-        {
-          chartOfAccountId: cash.id,
-          debitAmount: payment.totalAmount,
-          creditAmount: 0,
-          description: `Cash collection — ${ref}`,
-        },
-        {
-          chartOfAccountId: ar.id,
-          debitAmount: 0,
-          creditAmount: payment.totalAmount,
-          description: `A/R settled — ${ref}`,
-        },
-      ],
+      lines,
     });
   }
 
@@ -744,9 +772,20 @@ export class AutoJevService {
     tx: Prisma.TransactionClient,
     organizationId: string,
     userId: string,
-    payment: { id: string; orNumber: string; totalAmount: number; voidDate: Date },
+    payment: {
+      id: string;
+      orNumber: string;
+      totalAmount: number;
+      voidDate: Date;
+      // Penalty portion of the original collection to reverse out of Penalty
+      // Income (the rest reinstates A/R). Defaults to 0.
+      interestAmount?: number;
+    },
   ) {
     if (payment.totalAmount <= 0) return null;
+    const interest =
+      payment.interestAmount && payment.interestAmount > 0.005 ? payment.interestAmount : 0;
+    const arReinstate = payment.totalAmount - interest;
     const ref = `void OR ${payment.orNumber}`;
     const cash = await this.requireMapping(
       organizationId,
@@ -760,6 +799,34 @@ export class AutoJevService {
       'Accounts Receivable',
       ref,
     );
+    const lines = [
+      {
+        chartOfAccountId: ar.id,
+        debitAmount: arReinstate,
+        creditAmount: 0,
+        description: `A/R reinstated (void) — OR ${payment.orNumber}`,
+      },
+    ];
+    if (interest > 0) {
+      const penalty = await this.requireMapping(
+        organizationId,
+        'income.penalty',
+        'Penalty Income',
+        ref,
+      );
+      lines.push({
+        chartOfAccountId: penalty.id,
+        debitAmount: interest,
+        creditAmount: 0,
+        description: `Penalty income reversed (void) — OR ${payment.orNumber}`,
+      });
+    }
+    lines.push({
+      chartOfAccountId: cash.id,
+      debitAmount: 0,
+      creditAmount: payment.totalAmount,
+      description: `Cash reversal (void) — OR ${payment.orNumber}`,
+    });
     return this.createAutoJev(tx, {
       organizationId,
       userId,
@@ -768,20 +835,7 @@ export class AutoJevService {
       sourceTable: 'payments',
       sourceId: payment.id,
       particulars: `Void collection — OR ${payment.orNumber}`,
-      lines: [
-        {
-          chartOfAccountId: ar.id,
-          debitAmount: payment.totalAmount,
-          creditAmount: 0,
-          description: `A/R reinstated (void) — OR ${payment.orNumber}`,
-        },
-        {
-          chartOfAccountId: cash.id,
-          debitAmount: 0,
-          creditAmount: payment.totalAmount,
-          description: `Cash reversal (void) — OR ${payment.orNumber}`,
-        },
-      ],
+      lines,
     });
   }
 

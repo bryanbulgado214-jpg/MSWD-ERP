@@ -15,6 +15,7 @@ import MeterReadingPage from './pages/MeterReadingPage';
 import MeterRegistryPage from './pages/MeterRegistryPage';
 import PaymentDetailPage from './pages/PaymentDetailPage';
 import PaymentPage from './pages/PaymentPage';
+import PrintInvoicePage from './pages/PrintInvoicePage';
 import PrintOrPage from './pages/PrintOrPage';
 import PrintSoaPage from './pages/PrintSoaPage';
 import RateSchedulePage from './pages/RateSchedulePage';
@@ -39,4 +40,5 @@ export const billingRoutes: RouteObject[] = [
   { path: '/billing/reports', element: <BillingReportsPage /> },
   { path: '/billing/print/soa', element: <PrintSoaPage /> },
   { path: '/billing/print/or/:id', element: <PrintOrPage /> },
+  { path: '/billing/print/invoice/:id', element: <PrintInvoicePage /> },
 ];

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
@@ -33,6 +33,7 @@ function formatPeso(val: number) {
   return (val || 0).toLocaleString('en-PH', { style: 'currency', currency: 'PHP' });
 }
 const today = () => new Date().toISOString().slice(0, 10);
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
  * Collection hub for the teller: search a consumer by account number or name,
@@ -47,7 +48,6 @@ export default function CollectionPage() {
   const [selected, setSelected] = useState<ConsumerListItem | null>(null);
   const [ledger, setLedger] = useState<Ledger | null>(null);
   const [unpaid, setUnpaid] = useState<UnpaidBill[]>([]);
-  const [allocations, setAllocations] = useState<Map<string, number>>(new Map());
 
   const [orNumber, setOrNumber] = useState('');
   const [paymentDate, setPaymentDate] = useState(today());
@@ -57,10 +57,23 @@ export default function CollectionPage() {
   const [bankName, setBankName] = useState('');
   const [referenceNumber, setReferenceNumber] = useState('');
   const [remarks, setRemarks] = useState('');
+  // Cash handed over by the customer; drives change + how far the waterfall reaches.
+  const [tendered, setTendered] = useState('');
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  // Post-payment receipt prompt: when set, a modal offers to print the invoice.
+  const [receipt, setReceipt] = useState<{
+    id: string;
+    orNumber: string;
+    amount: number;
+    tendered: number;
+    change: number;
+  } | null>(null);
+  // The Accept Payment panel is a floating window, opened by "Collect Payment".
+  const [showCollect, setShowCollect] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getConsumers('status=active')
@@ -84,9 +97,6 @@ export default function CollectionPage() {
     const [led, bills] = await Promise.all([getConsumerLedger(c.id), getUnpaidBills(c.id)]);
     setLedger(led as Ledger);
     setUnpaid(bills);
-    const auto = new Map<string, number>();
-    for (const b of bills) auto.set(b.id, Number(b.balance));
-    setAllocations(auto);
     if (resetForm) {
       setPaymentDate(today());
       setMethod('cash');
@@ -95,6 +105,7 @@ export default function CollectionPage() {
       setBankName('');
       setReferenceNumber('');
       setRemarks('');
+      setTendered('');
       try {
         const { nextOrNumber } = await getNextOrNumber();
         setOrNumber(nextOrNumber);
@@ -120,42 +131,107 @@ export default function CollectionPage() {
     setSelected(null);
     setLedger(null);
     setUnpaid([]);
-    setAllocations(new Map());
+    setShowCollect(false);
     setSearch('');
     setError('');
+    setSuccess('');
   }
 
-  function setAlloc(billId: string, amount: number) {
-    setAllocations((prev) => {
-      const next = new Map(prev);
-      if (amount <= 0) next.delete(billId);
-      else next.set(billId, amount);
-      return next;
+  // Start a fresh collection for another customer: wipe the account/ledger and
+  // put the cursor back in the search box, ready for the next name or number.
+  function startNew() {
+    clearSelection();
+    setTimeout(() => searchRef.current?.focus(), 0);
+  }
+
+  // A bill past its due date carries a one-time, non-compounding 10% penalty on
+  // the principal being collected (mirrors the server rule). "Overdue" is judged
+  // as of the payment date on the form.
+  const paymentDateObj = new Date(paymentDate);
+  function isOverdue(b: UnpaidBill) {
+    return b.dueDate ? new Date(b.dueDate) < paymentDateObj : false;
+  }
+  function amountDue(b: UnpaidBill) {
+    const bal = Number(b.balance);
+    return bal + (isOverdue(b) ? round2(bal * 0.1) : 0);
+  }
+  const totalDue = unpaid.reduce((s, b) => s + amountDue(b), 0);
+
+  function openCollect() {
+    // Prefill tender with the full amount due — the common exact-payment case.
+    setTendered(totalDue > 0 ? totalDue.toFixed(2) : '');
+    setError('');
+    setShowCollect(true);
+  }
+
+  // Waterfall the tendered cash across bills OLDEST FIRST: each overdue bill must
+  // clear its principal + 10% penalty before any money reaches a newer bill. A
+  // short payment settles the earliest deficiencies and leaves the rest open.
+  const collect = useMemo(() => {
+    const tenderNum = parseFloat(tendered);
+    const hasTender = !isNaN(tenderNum) && tenderNum > 0;
+    // Amount we actually apply never exceeds what is owed (the rest is change).
+    let budget = hasTender ? Math.min(tenderNum, totalDue) : 0;
+    const lines = unpaid.map((b) => {
+      const balance = Number(b.balance);
+      const overdue = isOverdue(b);
+      const fullPenalty = overdue ? round2(balance * 0.1) : 0;
+      const due = balance + fullPenalty;
+      let principalPaid = 0;
+      let penaltyPaid = 0;
+      if (budget > 0.005) {
+        if (budget >= due - 0.005) {
+          // Enough to clear this bill entirely.
+          principalPaid = balance;
+          penaltyPaid = fullPenalty;
+          budget = round2(budget - due);
+        } else if (overdue) {
+          // Partial on an overdue bill: split so penalty stays 10% of principal.
+          principalPaid = Math.min(balance, round2(budget / 1.1));
+          penaltyPaid = round2(principalPaid * 0.1);
+          budget = 0;
+        } else {
+          principalPaid = Math.min(balance, round2(budget));
+          penaltyPaid = 0;
+          budget = 0;
+        }
+      }
+      return {
+        bill: b,
+        balance,
+        overdue,
+        fullPenalty,
+        due,
+        principalPaid,
+        penaltyPaid,
+        applied: round2(principalPaid + penaltyPaid),
+      };
     });
-  }
-
-  const totalPayment = Array.from(allocations.values()).reduce((s, v) => s + v, 0);
+    const totalApplied = round2(lines.reduce((s, l) => s + l.principalPaid + l.penaltyPaid, 0));
+    const change = hasTender ? Math.max(0, round2(tenderNum - totalApplied)) : 0;
+    const shortfall = round2(totalDue - totalApplied);
+    return { lines, totalApplied, change, hasTender, tenderNum, shortfall };
+  }, [unpaid, tendered, paymentDate]);
 
   async function record(e: React.FormEvent) {
     e.preventDefault();
     if (!selected) return;
-    if (allocations.size === 0) {
-      setError('Enter an amount against at least one bill.');
+    const allocs = collect.lines
+      .filter((l) => l.principalPaid > 0)
+      .map((l) => ({ billId: l.bill.id, amountApplied: l.principalPaid }));
+    if (allocs.length === 0 || collect.totalApplied <= 0) {
+      setError('Enter an amount tendered to apply against the outstanding bills.');
       return;
     }
     setSaving(true);
     setError('');
     setSuccess('');
     try {
-      const allocs = Array.from(allocations.entries()).map(([billId, amountApplied]) => ({
-        billId,
-        amountApplied,
-      }));
-      await createPayment({
+      const created = await createPayment({
         orNumber,
         consumerId: selected.id,
         paymentDate,
-        totalAmount: totalPayment,
+        totalAmount: collect.totalApplied,
         paymentMethod: method,
         ...(method === 'check' && checkNumber ? { checkNumber } : {}),
         ...(method === 'check' && checkDate ? { checkDate } : {}),
@@ -166,8 +242,18 @@ export default function CollectionPage() {
         ...(remarks ? { remarks } : {}),
         allocations: allocs,
       });
-      setSuccess(`Payment ${orNumber} recorded — ${formatPeso(totalPayment)}.`);
-      await loadFor(selected, true); // refresh ledger + remaining bills + next OR
+      setSuccess(`Payment ${created.orNumber} recorded — ${formatPeso(collect.totalApplied)}.`);
+      // Close the collect window, refresh ledger + remaining bills + next OR,
+      // then prompt to print the invoice.
+      setShowCollect(false);
+      await loadFor(selected, true);
+      setReceipt({
+        id: created.id,
+        orNumber: created.orNumber,
+        amount: collect.totalApplied,
+        tendered: collect.hasTender ? collect.tenderNum : collect.totalApplied,
+        change: collect.change,
+      });
     } catch (err) {
       setError(err instanceof BillingApiError ? err.message : 'Failed to record payment.');
     } finally {
@@ -186,19 +272,46 @@ export default function CollectionPage() {
         <>
           <div className="bill-field" style={{ maxWidth: 460 }}>
             <label>Account number or name</label>
-            <input
-              autoFocus
-              placeholder="Type an account number or name…"
-              value={
-                selected
-                  ? `${selected.accountNumber} — ${selected.lastName}, ${selected.firstName}`
-                  : search
-              }
-              onChange={(e) => {
-                if (selected) clearSelection();
-                setSearch(e.target.value);
-              }}
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                ref={searchRef}
+                autoFocus
+                placeholder="Type an account number or name…"
+                value={
+                  selected
+                    ? `${selected.accountNumber} — ${selected.lastName}, ${selected.firstName}`
+                    : search
+                }
+                onChange={(e) => {
+                  if (selected) clearSelection();
+                  setSearch(e.target.value);
+                }}
+                style={{ paddingRight: 32, width: '100%' }}
+              />
+              {(selected || search.length > 0) && (
+                <button
+                  type="button"
+                  aria-label="Clear"
+                  title="Clear"
+                  onClick={startNew}
+                  style={{
+                    position: 'absolute',
+                    right: 6,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    fontSize: 20,
+                    lineHeight: 1,
+                    color: '#98a2b3',
+                    padding: '0 4px',
+                  }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
           </div>
 
           {!selected && matches.length > 0 && (
@@ -295,6 +408,24 @@ export default function CollectionPage() {
                   >
                     {ledger ? formatPeso(ledger.balance) : '…'}
                   </div>
+                  {unpaid.length > 0 ? (
+                    <button
+                      type="button"
+                      className="bill-btn bill-btn--primary"
+                      style={{ marginTop: 8, fontSize: 13, padding: '6px 14px' }}
+                      onClick={openCollect}
+                    >
+                      Collect Payment
+                    </button>
+                  ) : (
+                    ledger && (
+                      <div
+                        style={{ marginTop: 8, fontSize: 12, color: '#067647', fontWeight: 600 }}
+                      >
+                        Fully paid — nothing to collect
+                      </div>
+                    )
+                  )}
                 </div>
               </div>
 
@@ -318,7 +449,9 @@ export default function CollectionPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {ledger.ledger.map((en, i) => (
+                      {/* Latest first for viewing convenience; each row still
+                          shows the running balance as of that date. */}
+                      {[...ledger.ledger].reverse().map((en, i) => (
                         <tr key={i}>
                           <td>{new Date(en.date).toLocaleDateString('en-PH')}</td>
                           <td className="bill-text-mono">{en.reference}</td>
@@ -342,142 +475,366 @@ export default function CollectionPage() {
                 </div>
               )}
 
-              {/* Accept payment */}
-              <h3 className="bill-section-title">Accept Payment</h3>
-              {unpaid.length === 0 ? (
-                <div className="bill-empty">No unpaid bills — nothing to collect.</div>
-              ) : (
-                <form className="bill-form" onSubmit={record}>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table className="bill-table">
-                      <thead>
-                        <tr>
-                          <th>Bill #</th>
-                          <th>Period</th>
-                          <th style={{ textAlign: 'right' }}>Balance</th>
-                          <th>Due</th>
-                          <th style={{ width: 130 }}>Amount to Pay</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {unpaid.map((b) => (
-                          <tr key={b.id}>
-                            <td className="bill-text-mono">{b.billNumber}</td>
-                            <td>{b.billingPeriod.name}</td>
-                            <td
-                              className="bill-text-mono"
-                              style={{ textAlign: 'right', fontWeight: 600 }}
-                            >
-                              {formatPeso(Number(b.balance))}
-                            </td>
-                            <td>{new Date(b.dueDate).toLocaleDateString('en-PH')}</td>
-                            <td>
-                              <input
-                                type="number"
-                                step="0.01"
-                                min={0}
-                                max={Number(b.balance)}
-                                value={allocations.get(b.id) ?? ''}
-                                onChange={(e) => setAlloc(b.id, parseFloat(e.target.value) || 0)}
-                                style={{ width: 110, padding: '4px 8px' }}
-                              />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr style={{ fontWeight: 700 }}>
-                          <td colSpan={4} style={{ textAlign: 'right' }}>
-                            Total Payment:
-                          </td>
-                          <td className="bill-text-mono">{formatPeso(totalPayment)}</td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                    <div className="bill-field">
-                      <label>OR Number *</label>
-                      <input
-                        required
-                        className="bill-text-mono"
-                        value={orNumber}
-                        onChange={(e) => setOrNumber(e.target.value)}
-                      />
-                    </div>
-                    <div className="bill-field">
-                      <label>Payment Date *</label>
-                      <input
-                        type="date"
-                        required
-                        value={paymentDate}
-                        onChange={(e) => setPaymentDate(e.target.value)}
-                      />
-                    </div>
-                    <div className="bill-field">
-                      <label>Method *</label>
-                      <select value={method} onChange={(e) => setMethod(e.target.value)}>
-                        <option value="cash">Cash</option>
-                        <option value="check">Check</option>
-                        <option value="online">Online</option>
-                        <option value="bank_deposit">Bank Deposit</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {method === 'check' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                      <div className="bill-field">
-                        <label>Check Number</label>
-                        <input
-                          value={checkNumber}
-                          onChange={(e) => setCheckNumber(e.target.value)}
-                        />
-                      </div>
-                      <div className="bill-field">
-                        <label>Check Date</label>
-                        <input
-                          type="date"
-                          value={checkDate}
-                          onChange={(e) => setCheckDate(e.target.value)}
-                        />
-                      </div>
-                      <div className="bill-field">
-                        <label>Bank Name</label>
-                        <input value={bankName} onChange={(e) => setBankName(e.target.value)} />
-                      </div>
-                    </div>
-                  )}
-                  {(method === 'online' || method === 'bank_deposit') && (
-                    <div className="bill-field" style={{ maxWidth: 320 }}>
-                      <label>Reference Number</label>
-                      <input
-                        value={referenceNumber}
-                        onChange={(e) => setReferenceNumber(e.target.value)}
-                      />
-                    </div>
-                  )}
-
-                  <div className="bill-field" style={{ maxWidth: 420 }}>
-                    <label>Remarks</label>
-                    <input value={remarks} onChange={(e) => setRemarks(e.target.value)} />
-                  </div>
-
-                  <div className="bill-form-actions">
-                    <button type="button" className="bill-btn" onClick={clearSelection}>
-                      Done
-                    </button>
-                    <button
-                      type="submit"
-                      className="bill-btn bill-btn--primary"
-                      disabled={saving || totalPayment <= 0}
+              {/* Accept Payment — floating window opened by "Collect Payment". */}
+              {showCollect && unpaid.length > 0 && (
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  style={{
+                    position: 'fixed',
+                    inset: 0,
+                    background: 'rgba(16,24,40,0.55)',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    justifyContent: 'center',
+                    zIndex: 40,
+                    overflowY: 'auto',
+                    padding: '40px 16px',
+                  }}
+                  onMouseDown={(e) => {
+                    if (e.target === e.currentTarget) setShowCollect(false);
+                  }}
+                >
+                  <div
+                    style={{
+                      background: '#fff',
+                      borderRadius: 12,
+                      padding: 24,
+                      width: 820,
+                      maxWidth: '95vw',
+                      boxShadow: '0 20px 48px rgba(16,24,40,0.28)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: 12,
+                      }}
                     >
-                      {saving ? 'Recording…' : `Record Payment (${formatPeso(totalPayment)})`}
-                    </button>
+                      <h3 style={{ margin: 0 }}>
+                        Accept Payment —{' '}
+                        <span style={{ fontWeight: 600 }}>
+                          {selected.lastName}, {selected.firstName}
+                        </span>
+                      </h3>
+                      <button
+                        type="button"
+                        className="bill-btn"
+                        style={{ padding: '2px 10px', fontSize: 16, lineHeight: 1 }}
+                        aria-label="Close"
+                        onClick={() => setShowCollect(false)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <form className="bill-form" onSubmit={record}>
+                      <p style={{ margin: '0 0 8px', fontSize: 12, color: '#667085' }}>
+                        Payment is applied to the oldest bills first. Each overdue bill must clear
+                        its principal and 10% penalty before any goes to a newer bill.
+                      </p>
+                      <div style={{ overflowX: 'auto' }}>
+                        <table className="bill-table">
+                          <thead>
+                            <tr>
+                              <th>Bill #</th>
+                              <th>Period</th>
+                              <th>Due</th>
+                              <th style={{ textAlign: 'right' }}>Balance</th>
+                              <th style={{ textAlign: 'right' }}>Penalty (10%)</th>
+                              <th style={{ textAlign: 'right' }}>Amount Due</th>
+                              <th style={{ textAlign: 'right' }}>Applied</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {collect.lines.map((l) => (
+                              <tr key={l.bill.id}>
+                                <td className="bill-text-mono">{l.bill.billNumber}</td>
+                                <td>{l.bill.billingPeriod.name}</td>
+                                <td style={{ color: l.overdue ? '#b42318' : undefined }}>
+                                  {new Date(l.bill.dueDate).toLocaleDateString('en-PH')}
+                                  {l.overdue && (
+                                    <span style={{ fontSize: 11, fontWeight: 600 }}>
+                                      {' '}
+                                      · overdue
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="bill-text-mono" style={{ textAlign: 'right' }}>
+                                  {formatPeso(l.balance)}
+                                </td>
+                                <td className="bill-text-mono" style={{ textAlign: 'right' }}>
+                                  {l.fullPenalty > 0 ? formatPeso(l.fullPenalty) : '—'}
+                                </td>
+                                <td
+                                  className="bill-text-mono"
+                                  style={{ textAlign: 'right', fontWeight: 600 }}
+                                >
+                                  {formatPeso(l.due)}
+                                </td>
+                                <td
+                                  className="bill-text-mono"
+                                  style={{
+                                    textAlign: 'right',
+                                    fontWeight: 600,
+                                    color: l.applied > 0 ? '#067647' : '#98a2b3',
+                                  }}
+                                >
+                                  {l.applied > 0 ? formatPeso(l.applied) : '—'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot>
+                            <tr style={{ fontWeight: 700 }}>
+                              <td colSpan={5} style={{ textAlign: 'right' }}>
+                                Total Amount Due:
+                              </td>
+                              <td className="bill-text-mono" style={{ textAlign: 'right' }}>
+                                {formatPeso(totalDue)}
+                              </td>
+                              <td className="bill-text-mono" style={{ textAlign: 'right' }}>
+                                {formatPeso(collect.totalApplied)}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+
+                      {/* Cash tendered + change */}
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '1fr 1fr 1fr',
+                          gap: 12,
+                          alignItems: 'end',
+                          background: '#f9fafb',
+                          border: '1px solid #eaecf0',
+                          borderRadius: 8,
+                          padding: 12,
+                        }}
+                      >
+                        <div className="bill-field" style={{ margin: 0 }}>
+                          <label>Amount Tendered</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min={0}
+                            inputMode="decimal"
+                            value={tendered}
+                            onChange={(e) => setTendered(e.target.value)}
+                            style={{ fontSize: 16 }}
+                          />
+                        </div>
+                        <div>
+                          <div
+                            style={{ fontSize: 11, color: '#475467', textTransform: 'uppercase' }}
+                          >
+                            Amount Applied
+                          </div>
+                          <div className="bill-text-mono" style={{ fontSize: 18, fontWeight: 700 }}>
+                            {formatPeso(collect.totalApplied)}
+                          </div>
+                        </div>
+                        <div>
+                          <div
+                            style={{ fontSize: 11, color: '#475467', textTransform: 'uppercase' }}
+                          >
+                            Change
+                          </div>
+                          <div
+                            className="bill-text-mono"
+                            style={{ fontSize: 18, fontWeight: 700, color: '#067647' }}
+                          >
+                            {formatPeso(collect.change)}
+                          </div>
+                        </div>
+                      </div>
+                      {collect.shortfall > 0.005 && collect.totalApplied > 0 && (
+                        <div style={{ fontSize: 12, color: '#b54708', marginTop: 6 }}>
+                          Short payment — {formatPeso(collect.shortfall)} will remain outstanding on
+                          the newer bills.
+                        </div>
+                      )}
+
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '1fr 1fr 1fr',
+                          gap: 12,
+                          marginTop: 12,
+                        }}
+                      >
+                        <div className="bill-field">
+                          <label>OR Number *</label>
+                          <input
+                            required
+                            className="bill-text-mono"
+                            value={orNumber}
+                            onChange={(e) => setOrNumber(e.target.value)}
+                          />
+                        </div>
+                        <div className="bill-field">
+                          <label>Payment Date *</label>
+                          <input
+                            type="date"
+                            required
+                            value={paymentDate}
+                            onChange={(e) => setPaymentDate(e.target.value)}
+                          />
+                        </div>
+                        <div className="bill-field">
+                          <label>Method *</label>
+                          <select value={method} onChange={(e) => setMethod(e.target.value)}>
+                            <option value="cash">Cash</option>
+                            <option value="check">Check</option>
+                            <option value="online">Online</option>
+                            <option value="bank_deposit">Bank Deposit</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {method === 'check' && (
+                        <div
+                          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}
+                        >
+                          <div className="bill-field">
+                            <label>Check Number</label>
+                            <input
+                              value={checkNumber}
+                              onChange={(e) => setCheckNumber(e.target.value)}
+                            />
+                          </div>
+                          <div className="bill-field">
+                            <label>Check Date</label>
+                            <input
+                              type="date"
+                              value={checkDate}
+                              onChange={(e) => setCheckDate(e.target.value)}
+                            />
+                          </div>
+                          <div className="bill-field">
+                            <label>Bank Name</label>
+                            <input value={bankName} onChange={(e) => setBankName(e.target.value)} />
+                          </div>
+                        </div>
+                      )}
+                      {(method === 'online' || method === 'bank_deposit') && (
+                        <div className="bill-field" style={{ maxWidth: 320 }}>
+                          <label>Reference Number</label>
+                          <input
+                            value={referenceNumber}
+                            onChange={(e) => setReferenceNumber(e.target.value)}
+                          />
+                        </div>
+                      )}
+
+                      <div className="bill-field" style={{ maxWidth: 420 }}>
+                        <label>Remarks</label>
+                        <input value={remarks} onChange={(e) => setRemarks(e.target.value)} />
+                      </div>
+
+                      <div className="bill-form-actions">
+                        <button
+                          type="button"
+                          className="bill-btn"
+                          onClick={() => setShowCollect(false)}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="bill-btn bill-btn--primary"
+                          disabled={saving || collect.totalApplied <= 0}
+                        >
+                          {saving
+                            ? 'Recording…'
+                            : `Record Payment (${formatPeso(collect.totalApplied)})`}
+                        </button>
+                      </div>
+                    </form>
                   </div>
-                </form>
+                </div>
               )}
+            </div>
+          )}
+
+          {/* Post-payment prompt: print the invoice or return to the ledger. */}
+          {receipt && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(16,24,40,0.55)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 50,
+              }}
+            >
+              <div
+                style={{
+                  background: '#fff',
+                  borderRadius: 12,
+                  padding: 28,
+                  width: 400,
+                  maxWidth: '90vw',
+                  boxShadow: '0 20px 48px rgba(16,24,40,0.28)',
+                  textAlign: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: '50%',
+                    background: '#ecfdf3',
+                    color: '#067647',
+                    fontSize: 30,
+                    lineHeight: '52px',
+                    margin: '0 auto 12px',
+                  }}
+                >
+                  ✓
+                </div>
+                <h3 style={{ margin: '0 0 4px', fontSize: 18 }}>Payment Recorded</h3>
+                <p style={{ color: '#475467', margin: 0 }}>
+                  OR <span className="bill-text-mono">{receipt.orNumber}</span> —{' '}
+                  <strong>{formatPeso(receipt.amount)}</strong>
+                </p>
+                {receipt.change > 0.005 && (
+                  <p style={{ color: '#475467', margin: '6px 0 0', fontSize: 13 }}>
+                    Tendered {formatPeso(receipt.tendered)} · Change{' '}
+                    <strong style={{ color: '#067647' }}>{formatPeso(receipt.change)}</strong>
+                  </p>
+                )}
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 10,
+                    justifyContent: 'center',
+                    marginTop: 22,
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="bill-btn bill-btn--primary"
+                    onClick={() => {
+                      window.open(`/billing/print/invoice/${receipt.id}`, '_blank', 'noopener');
+                      setReceipt(null);
+                    }}
+                  >
+                    Print Invoice
+                  </button>
+                  <button type="button" className="bill-btn" onClick={() => setReceipt(null)}>
+                    Done
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </>
