@@ -181,7 +181,7 @@ export class BillingReportService {
     // Voided payments are excluded — they net to zero.
     const rows: Array<{
       date: Date;
-      type: 'bill' | 'payment';
+      type: 'bill' | 'penalty' | 'payment';
       reference: string;
       particulars: string;
       charges: number;
@@ -201,6 +201,21 @@ export class BillingReportService {
     }
     for (const p of payments) {
       if (p.status !== 'valid') continue;
+      // The penalty portion of a payment (total minus principal applied to bills)
+      // is booked as its own charge on the same date, so the running balance does
+      // not dip below the receivable when a payment carries a 10% late penalty.
+      const principalApplied = p.allocations.reduce((s, a) => s + Number(a.amountApplied), 0);
+      const penaltyCollected = Math.round((Number(p.totalAmount) - principalApplied) * 100) / 100;
+      if (penaltyCollected > 0.005) {
+        rows.push({
+          date: p.paymentDate,
+          type: 'penalty',
+          reference: p.orNumber,
+          particulars: 'Late-payment penalty (10%)',
+          charges: penaltyCollected,
+          payments: 0,
+        });
+      }
       rows.push({
         date: p.paymentDate,
         type: 'payment',
@@ -210,11 +225,28 @@ export class BillingReportService {
         payments: Number(p.totalAmount),
       });
     }
-    // Chronological; on the same date a bill is charged before a payment settles it.
-    rows.sort(
-      (a, b) =>
-        a.date.getTime() - b.date.getTime() || (a.type === b.type ? 0 : a.type === 'bill' ? -1 : 1),
-    );
+    // Accrue the 10% penalty still owed on each unpaid, overdue bill so the ledger
+    // balance equals the total the customer must tender to settle (principal +
+    // penalty) — matching the Collection screen's outstanding balance and the
+    // Accept Payment window.
+    const now = new Date();
+    for (const b of bills) {
+      const bal = Number(b.balance);
+      if (bal > 0.005 && b.dueDate && new Date(b.dueDate) < now) {
+        rows.push({
+          date: b.dueDate,
+          type: 'penalty',
+          reference: b.billNumber,
+          particulars: `Late-payment penalty (10%) — ${b.billingPeriod.name}`,
+          charges: Math.round(bal * 0.1 * 100) / 100,
+          payments: 0,
+        });
+      }
+    }
+    // Chronological; on the same date order bill charge → penalty charge → payment.
+    const rank = (t: 'bill' | 'penalty' | 'payment') =>
+      t === 'bill' ? 0 : t === 'penalty' ? 1 : 2;
+    rows.sort((a, b) => a.date.getTime() - b.date.getTime() || rank(a.type) - rank(b.type));
     let running = 0;
     const ledger = rows.map((r) => {
       running = Math.round((running + r.charges - r.payments) * 100) / 100;
@@ -232,7 +264,9 @@ export class BillingReportService {
       consumer,
       totalBilled,
       totalPaid,
-      balance: totalBilled - totalPaid,
+      // Penalty-inclusive amount due: the ledger's final running balance, which
+      // now carries the accrued 10% late penalties on overdue bills.
+      balance: running,
       ledger,
       bills: bills.map((b) => ({
         id: b.id,
