@@ -237,6 +237,8 @@ export class PaymentService {
 
     return runAudited(this.prisma, userId, async (tx) => {
       for (const alloc of payment.allocations) {
+        // Non-bill allocations (fees/deposits) have no receivable to reinstate.
+        if (!alloc.billId) continue;
         const bill = await tx.bill.findUniqueOrThrow({ where: { id: alloc.billId } });
         const newPaid = Math.max(0, Number(bill.amountPaid) - Number(alloc.amountApplied));
         const newBalance = Number(bill.totalAmount) + Number(bill.penaltyAmount) - newPaid;

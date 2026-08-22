@@ -53,12 +53,17 @@ export class BillingReportService {
       payments: payments.map((p) => ({
         orNumber: p.orNumber,
         paymentDate: p.paymentDate,
-        consumer: `${p.consumer.accountNumber} — ${p.consumer.lastName}, ${p.consumer.firstName}`,
-        consumerType: p.consumer.consumerType,
+        consumer: p.consumer
+          ? `${p.consumer.accountNumber} — ${p.consumer.lastName}, ${p.consumer.firstName}`
+          : (p.payerName ?? 'Walk-in'),
+        consumerType: p.consumer?.consumerType ?? null,
         amount: p.totalAmount,
         method: p.paymentMethod,
         cashier: p.cashier?.username ?? '',
-        bills: p.allocations.map((a) => a.bill.billNumber).join(', '),
+        bills: p.allocations
+          .map((a) => a.bill?.billNumber)
+          .filter(Boolean)
+          .join(', '),
       })),
     };
   }
@@ -290,7 +295,7 @@ export class BillingReportService {
         paymentMethod: p.paymentMethod,
         status: p.status,
         allocations: p.allocations.map((a) => ({
-          billNumber: a.bill.billNumber,
+          billNumber: a.bill?.billNumber ?? null,
           amountApplied: a.amountApplied,
         })),
       })),

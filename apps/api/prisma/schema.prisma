@@ -3687,10 +3687,17 @@ model Payment {
   id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId  String        @map("organization_id") @db.Uuid
   orNumber        String        @map("or_number") @db.VarChar(20)
-  consumerId      String        @map("consumer_id") @db.Uuid
+  // Null for a non-consumer collection (e.g. a walk-in applicant paying a
+  // registration fee or guaranty deposit before an account exists). payerName /
+  // applicationRef identify such a payer; it can be linked to a consumer later.
+  consumerId      String?       @map("consumer_id") @db.Uuid
+  payerName       String?       @map("payer_name") @db.VarChar(150)
+  applicationRef  String?       @map("application_ref") @db.VarChar(50)
   paymentDate     DateTime      @map("payment_date") @db.Date
   totalAmount     Decimal       @map("total_amount") @db.Decimal(18, 2)
   paymentMethod   PaymentMethod @default(cash) @map("payment_method")
+  tellerSessionId String?       @map("teller_session_id") @db.Uuid
+  collectionBatchId String?     @map("collection_batch_id") @db.Uuid
   checkNumber     String?       @map("check_number") @db.VarChar(50)
   checkDate       DateTime?     @map("check_date") @db.Date
   bankName        String?       @map("bank_name") @db.VarChar(100)
@@ -3708,7 +3715,7 @@ model Payment {
   version         Int           @default(1)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  consumer     Consumer     @relation(fields: [consumerId], references: [id], onDelete: Restrict)
+  consumer     Consumer?    @relation(fields: [consumerId], references: [id], onDelete: Restrict)
   cashier      User?        @relation("PaymentsCashier", fields: [cashierId], references: [id], onDelete: SetNull)
   voider       User?        @relation("PaymentsVoidedBy", fields: [voidedBy], references: [id], onDelete: SetNull)
   creator      User?        @relation("PaymentsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
@@ -3721,23 +3728,206 @@ model Payment {
   @@index([consumerId])
   @@index([paymentDate])
   @@index([status])
+  @@index([tellerSessionId])
+  @@index([collectionBatchId])
   @@map("payments")
 }
 
-/// Maps a payment to one or more bills it covers.
+/// Maps a payment to what it settles: a specific bill (water-bill A/R), and/or a
+/// collection type (a fee, deposit, or other component). billId is null for a
+/// non-bill collection (e.g. a walk-in registration fee or guaranty deposit).
 model PaymentAllocation {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  paymentId     String   @map("payment_id") @db.Uuid
-  billId        String   @map("bill_id") @db.Uuid
-  amountApplied Decimal  @map("amount_applied") @db.Decimal(18, 2)
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId        String   @map("payment_id") @db.Uuid
+  billId           String?  @map("bill_id") @db.Uuid
+  collectionTypeId String?  @map("collection_type_id") @db.Uuid
+  amountApplied    Decimal  @map("amount_applied") @db.Decimal(18, 2)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  bill    Bill    @relation(fields: [billId], references: [id], onDelete: Restrict)
+  bill    Bill?   @relation(fields: [billId], references: [id], onDelete: Restrict)
 
   @@index([paymentId])
   @@index([billId])
+  @@index([collectionTypeId])
   @@map("payment_allocations")
+}
+
+enum CollectionNature {
+  receivable_settlement
+  income
+  liability
+
+  @@map("collection_nature")
+}
+
+enum TellerSessionStatus {
+  open
+  closed
+  remitted
+  accepted
+
+  @@map("teller_session_status")
+}
+
+enum CollectionBatchStatus {
+  open
+  closed
+  for_review
+  reviewed
+  approved
+  posted
+  rejected
+  reversed
+
+  @@map("collection_batch_status")
+}
+
+enum DepositStatus {
+  not_deposited
+  partially_deposited
+  fully_deposited
+  verified
+
+  @@map("deposit_status")
+}
+
+/// Configurable catalog of collection components and the GL account each posts
+/// to. Nature drives the accounting treatment: receivable_settlement credits
+/// A/R (the charge was already recognized at billing); income / liability
+/// recognize new income or a liability at the point of collection. A null
+/// glAccountId means the type is unmapped and blocks posting until configured.
+model CollectionType {
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String           @map("organization_id") @db.Uuid
+  code             String           @db.VarChar(40)
+  name             String           @db.VarChar(120)
+  nature           CollectionNature
+  glAccountId      String?          @map("gl_account_id") @db.Uuid
+  requiresConsumer Boolean          @default(false) @map("requires_consumer")
+  isSystem         Boolean          @default(false) @map("is_system")
+  isActive         Boolean          @default(true) @map("is_active")
+  sortOrder        Int              @default(0) @map("sort_order")
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy        String?          @map("created_by") @db.Uuid
+  updatedBy        String?          @map("updated_by") @db.Uuid
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("collection_types")
+}
+
+/// A teller's collection session for a day. Opened when the teller starts
+/// accepting payments, closed at end-of-day (producing the Teller Daily
+/// Collection & Remittance Report), then remitted to and accepted by a cashier.
+model TellerSession {
+  id                    String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId        String              @map("organization_id") @db.Uuid
+  tellerId              String              @map("teller_id") @db.Uuid
+  sessionNumber         String              @map("session_number") @db.VarChar(30)
+  collectionDate        DateTime            @map("collection_date") @db.Date
+  status                TellerSessionStatus @default(open)
+  openedAt              DateTime            @default(now()) @map("opened_at") @db.Timestamptz(6)
+  closedAt              DateTime?           @map("closed_at") @db.Timestamptz(6)
+  beginningOrNumber     String?             @map("beginning_or_number") @db.VarChar(20)
+  endingOrNumber        String?             @map("ending_or_number") @db.VarChar(20)
+  transactionCount      Int                 @default(0) @map("transaction_count")
+  cashAmount            Decimal             @default(0) @map("cash_amount") @db.Decimal(18, 2)
+  checkAmount           Decimal             @default(0) @map("check_amount") @db.Decimal(18, 2)
+  electronicAmount      Decimal             @default(0) @map("electronic_amount") @db.Decimal(18, 2)
+  otherAmount           Decimal             @default(0) @map("other_amount") @db.Decimal(18, 2)
+  totalCollections      Decimal             @default(0) @map("total_collections") @db.Decimal(18, 2)
+  voidedReceiptCount    Int                 @default(0) @map("voided_receipt_count")
+  expectedRemittance    Decimal             @default(0) @map("expected_remittance") @db.Decimal(18, 2)
+  actualCashRemitted    Decimal             @default(0) @map("actual_cash_remitted") @db.Decimal(18, 2)
+  actualChecksRemitted  Decimal             @default(0) @map("actual_checks_remitted") @db.Decimal(18, 2)
+  totalActualRemittance Decimal             @default(0) @map("total_actual_remittance") @db.Decimal(18, 2)
+  shortageOverage       Decimal             @default(0) @map("shortage_overage") @db.Decimal(18, 2)
+  remittedAt            DateTime?           @map("remitted_at") @db.Timestamptz(6)
+  receivedByCashierId   String?             @map("received_by_cashier_id") @db.Uuid
+  receivedAt            DateTime?           @map("received_at") @db.Timestamptz(6)
+  collectionBatchId     String?             @map("collection_batch_id") @db.Uuid
+  remarks               String?
+  createdAt             DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, sessionNumber])
+  @@index([organizationId])
+  @@index([tellerId])
+  @@index([collectionDate])
+  @@index([status])
+  @@map("teller_sessions")
+}
+
+/// Cashier's consolidated daily collection batch — the unit Accounting reviews
+/// and that FINALIZE posts to the GL as one summarized collection JEV.
+model CollectionAccountingBatch {
+  id                 String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId     String                @map("organization_id") @db.Uuid
+  batchNumber        String                @map("batch_number") @db.VarChar(30)
+  collectionDate     DateTime              @map("collection_date") @db.Date
+  cashierId          String                @map("cashier_id") @db.Uuid
+  status             CollectionBatchStatus @default(open)
+  beginningOrNumber  String?               @map("beginning_or_number") @db.VarChar(20)
+  endingOrNumber     String?               @map("ending_or_number") @db.VarChar(20)
+  transactionCount   Int                   @default(0) @map("transaction_count")
+  grossCollections   Decimal               @default(0) @map("gross_collections") @db.Decimal(18, 2)
+  cashAmount         Decimal               @default(0) @map("cash_amount") @db.Decimal(18, 2)
+  checkAmount        Decimal               @default(0) @map("check_amount") @db.Decimal(18, 2)
+  bankTransferAmount Decimal               @default(0) @map("bank_transfer_amount") @db.Decimal(18, 2)
+  onlineAmount       Decimal               @default(0) @map("online_amount") @db.Decimal(18, 2)
+  otherAmount        Decimal               @default(0) @map("other_amount") @db.Decimal(18, 2)
+  totalCollections   Decimal               @default(0) @map("total_collections") @db.Decimal(18, 2)
+  voidedReceiptCount Int                   @default(0) @map("voided_receipt_count")
+  preparedBy         String?               @map("prepared_by") @db.Uuid
+  preparedAt         DateTime?             @map("prepared_at") @db.Timestamptz(6)
+  reviewedBy         String?               @map("reviewed_by") @db.Uuid
+  reviewedAt         DateTime?             @map("reviewed_at") @db.Timestamptz(6)
+  approvedBy         String?               @map("approved_by") @db.Uuid
+  approvedAt         DateTime?             @map("approved_at") @db.Timestamptz(6)
+  postedBy           String?               @map("posted_by") @db.Uuid
+  postedAt           DateTime?             @map("posted_at") @db.Timestamptz(6)
+  jevId              String?               @map("jev_id") @db.Uuid
+  rejectedReason     String?               @map("rejected_reason")
+  remarks            String?
+  createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, batchNumber])
+  @@index([organizationId])
+  @@index([cashierId])
+  @@index([collectionDate])
+  @@index([status])
+  @@map("collection_accounting_batches")
+}
+
+/// Bank deposit of a collection batch's physical cash/checks, posted on the
+/// following banking day as Dr Cash in Bank / Cr Cash - Collecting Officer.
+model CollectionDeposit {
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String        @map("organization_id") @db.Uuid
+  collectionBatchId String?       @map("collection_batch_id") @db.Uuid
+  bankAccountId     String?       @map("bank_account_id") @db.Uuid
+  depositSlipNumber String?       @map("deposit_slip_number") @db.VarChar(50)
+  depositDate       DateTime      @map("deposit_date") @db.Date
+  depositAmount     Decimal       @default(0) @map("deposit_amount") @db.Decimal(18, 2)
+  verifiedAmount    Decimal       @default(0) @map("verified_amount") @db.Decimal(18, 2)
+  bankReference     String?       @map("bank_reference") @db.VarChar(100)
+  depositedBy       String?       @map("deposited_by") @db.Uuid
+  verifiedBy        String?       @map("verified_by") @db.Uuid
+  verifiedAt        DateTime?     @map("verified_at") @db.Timestamptz(6)
+  status            DepositStatus @default(not_deposited)
+  jevId             String?       @map("jev_id") @db.Uuid
+  remarks           String?
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([organizationId])
+  @@index([collectionBatchId])
+  @@index([depositDate])
+  @@index([status])
+  @@map("collection_deposits")
 }
 
 /// Disconnection/reconnection workflow.
