@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import * as dotenv from 'dotenv';
 
 import { AutoJevService } from '../src/modules/accounting/auto-jev.service';
+import { CollectionBatchService } from '../src/modules/accounting/collection-batch.service';
 import { BillService } from '../src/modules/billing/bill.service';
 import { PaymentService } from '../src/modules/billing/payment.service';
 
@@ -16,6 +17,8 @@ const autoJev = new AutoJevService(prisma as any);
 const billService = new BillService(prisma as any, autoJev);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const paymentService = new PaymentService(prisma as any, autoJev);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const collectionBatchService = new CollectionBatchService(prisma as any, autoJev);
 
 const RATE_NAME = 'SMP Residential Rate';
 const CONSUMERS: Array<{
@@ -223,16 +226,30 @@ async function wipe(organizationId: string) {
     select: { id: true },
   });
   const payids = payments.map((p) => p.id);
+  const batches = await prisma.collectionAccountingBatch.findMany({
+    where: { organizationId },
+    select: { id: true },
+  });
+  const batchIds = batches.map((b) => b.id);
   const jevs = await prisma.journalEntryVoucher.findMany({
     where: {
-      sourceId: { in: [...pids, ...payids] },
-      sourceTable: { in: ['billing_periods', 'payments'] },
+      OR: [
+        {
+          sourceId: { in: [...pids, ...payids, ...batchIds] },
+          sourceTable: { in: ['billing_periods', 'payments', 'collection_accounting_batches'] },
+        },
+        // Daily summary vouchers carry no single sourceId — clear the org's.
+        { organizationId, sourceTable: { in: ['daily_collection', 'daily_penalty'] } },
+      ],
     },
     select: { id: true },
   });
   const jevids = jevs.map((j) => j.id);
   await prisma.jevLine.deleteMany({ where: { jevId: { in: jevids } } });
   await prisma.journalEntryVoucher.deleteMany({ where: { id: { in: jevids } } });
+  await prisma.collectionDeposit.deleteMany({ where: { organizationId } });
+  await prisma.collectionAccountingBatch.deleteMany({ where: { organizationId } });
+  await prisma.tellerSession.deleteMany({ where: { organizationId } });
   await prisma.payment.deleteMany({ where: { id: { in: payids } } });
   await prisma.bill.deleteMany({ where: { consumerId: { in: cids } } });
   await prisma.meterReading.deleteMany({ where: { consumerId: { in: cids } } });
@@ -445,6 +462,22 @@ async function main() {
   // Cr Penalty Income auto-JEV that the ledger references.
   const { accrued } = await billService.accruePenalties(org.id, user.id, new Date('2026-08-22'));
   console.log(`Accrued 10% penalty on ${accrued} overdue bill(s).`);
+
+  // Collections no longer post a GL entry at receipt time — they post when the
+  // Cashier finalizes the daily batch. Consolidate each collection day into a
+  // "for review" batch so the Accounting → Collection Batches screen has real
+  // batches to review and FINALIZE (which auto-posts the daily collection JEV).
+  const dates = await prisma.payment.findMany({
+    where: { organizationId: org.id, consumerId: { in: Object.values(consumerByAcct) } },
+    distinct: ['paymentDate'],
+    select: { paymentDate: true },
+    orderBy: { paymentDate: 'asc' },
+  });
+  for (const { paymentDate } of dates) {
+    const d = paymentDate.toISOString().slice(0, 10);
+    await collectionBatchService.consolidate(org.id, user.id, d);
+  }
+  console.log(`Consolidated ${dates.length} daily collection batch(es) — ready to finalize.`);
 
   console.log('\nSample billing data seeded. Open Billing → Consumers → (consumer) → Print SOA:');
   for (const c of CONSUMERS)

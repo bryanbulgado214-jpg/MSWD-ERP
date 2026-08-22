@@ -11,6 +11,8 @@ import { ChartOfAccountController } from './chart-of-account.controller';
 import { ChartOfAccountService } from './chart-of-account.service';
 import { CheckController } from './check.controller';
 import { CheckService } from './check.service';
+import { CollectionBatchController } from './collection-batch.controller';
+import { CollectionBatchService } from './collection-batch.service';
 import { CollectionTypeController } from './collection-type.controller';
 import { CollectionTypeService } from './collection-type.service';
 import { AccountingDashboardController } from './dashboard.controller';
@@ -39,6 +41,7 @@ import { AccountingReportsService } from './reports.service';
     BankController,
     AccountMappingController,
     CollectionTypeController,
+    CollectionBatchController,
     JevController,
     GlController,
     CheckController,
@@ -56,6 +59,7 @@ import { AccountingReportsService } from './reports.service';
     BankService,
     AccountMappingService,
     CollectionTypeService,
+    CollectionBatchService,
     JevService,
     AutoJevService,
     GlService,

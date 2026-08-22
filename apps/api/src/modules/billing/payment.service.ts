@@ -206,15 +206,9 @@ export class PaymentService {
         });
       }
 
-      // Post the collection: Dr Cash-Collecting Officers, Cr A/R. Any penalty was
-      // already recognised as income when it accrued, so it just settles A/R.
-      await this.autoJev.onPaymentReceived(tx, orgId, userId, {
-        id: payment.id,
-        orNumber: payment.orNumber,
-        paymentDate: payment.paymentDate,
-        totalAmount: Number(payment.totalAmount),
-      });
-
+      // No GL entry at collection time — the receipt updates only the customer
+      // subledger. The day's collections post to the GL as one summarized JEV
+      // when the Cashier FINALIZEs the daily collection batch.
       return payment;
     });
   }
