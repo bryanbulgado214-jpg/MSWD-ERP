@@ -14,6 +14,7 @@ import type {
   CollectionBatch,
   CollectionBatchDetail,
   CollectionReconciliation,
+  CollectionReport,
   ApAgingResult,
   CashActivityResult,
   CreateDisbursementInput,
@@ -1131,5 +1132,17 @@ export async function recordCollectionDeposit(dto: {
 
 export async function getCollectionReconciliation(): Promise<CollectionReconciliation> {
   const res = await authFetch('/accounting/collections/reconciliation');
+  return res.json();
+}
+
+export async function getCollectionReport(
+  kind: string,
+  from?: string,
+  to?: string,
+): Promise<CollectionReport> {
+  const qs = new URLSearchParams({ kind });
+  if (from) qs.set('from', from);
+  if (to) qs.set('to', to);
+  const res = await authFetch(`/accounting/collections/reports?${qs.toString()}`);
   return res.json();
 }

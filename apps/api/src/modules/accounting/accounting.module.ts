@@ -17,6 +17,8 @@ import { CollectionDepositController } from './collection-deposit.controller';
 import { CollectionDepositService } from './collection-deposit.service';
 import { CollectionReconciliationController } from './collection-reconciliation.controller';
 import { CollectionReconciliationService } from './collection-reconciliation.service';
+import { CollectionReportsController } from './collection-reports.controller';
+import { CollectionReportsService } from './collection-reports.service';
 import { CollectionTypeController } from './collection-type.controller';
 import { CollectionTypeService } from './collection-type.service';
 import { AccountingDashboardController } from './dashboard.controller';
@@ -48,6 +50,7 @@ import { AccountingReportsService } from './reports.service';
     CollectionBatchController,
     CollectionDepositController,
     CollectionReconciliationController,
+    CollectionReportsController,
     JevController,
     GlController,
     CheckController,
@@ -68,6 +71,7 @@ import { AccountingReportsService } from './reports.service';
     CollectionBatchService,
     CollectionDepositService,
     CollectionReconciliationService,
+    CollectionReportsService,
     JevService,
     AutoJevService,
     GlService,

@@ -638,3 +638,16 @@ export interface CollectionReconciliation {
     deposited: number;
   };
 }
+
+export interface ReportColumn {
+  key: string;
+  label: string;
+  kind?: 'money' | 'number' | 'date' | 'text';
+  align?: 'right';
+}
+export interface CollectionReport {
+  title: string;
+  columns: ReportColumn[];
+  rows: Array<Record<string, unknown>>;
+  totals?: Record<string, number>;
+}

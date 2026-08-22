@@ -44,6 +44,11 @@ export const ACCOUNTING_LINKS: AccountingLink[] = [
     visible: has('accounting.read'),
   },
   {
+    to: '/accounting/collections/reports',
+    label: 'Collection Reports',
+    visible: has('accounting.read'),
+  },
+  {
     to: '/accounting/disbursements',
     label: 'Disbursement Vouchers',
     visible: has('accounting.dv.read'),
