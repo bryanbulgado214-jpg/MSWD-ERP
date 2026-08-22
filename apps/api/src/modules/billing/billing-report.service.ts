@@ -187,17 +187,28 @@ export class BillingReportService {
       charges: number;
       payments: number;
     }> = [];
-    // JEV numbers for accrued-penalty postings (sourceTable 'bills'), keyed by
-    // bill id, so each penalty line references its auto-JEV.
-    const penaltyJevs = await this.prisma.journalEntryVoucher.findMany({
-      where: {
-        organizationId: orgId,
-        sourceTable: 'bills',
-        sourceId: { in: bills.map((b) => b.id) },
-      },
-      select: { sourceId: true, jevNumber: true },
-    });
-    const penaltyJevByBill = new Map(penaltyJevs.map((j) => [j.sourceId, j.jevNumber]));
+    // Penalties post as one daily voucher (sourceTable 'daily_penalty'), so a
+    // bill's penalty line references the voucher for its penalty date.
+    const penaltyDates = [
+      ...new Set(
+        bills
+          .filter((b) => Number(b.penaltyAmount) > 0.005 && b.penaltyDate)
+          .map((b) => b.penaltyDate.toISOString().slice(0, 10)),
+      ),
+    ];
+    const penaltyJevs = penaltyDates.length
+      ? await this.prisma.journalEntryVoucher.findMany({
+          where: {
+            organizationId: orgId,
+            sourceTable: 'daily_penalty',
+            jevDate: { in: penaltyDates.map((d) => new Date(d)) },
+          },
+          select: { jevDate: true, jevNumber: true },
+        })
+      : [];
+    const penaltyJevByDate = new Map(
+      penaltyJevs.map((j) => [j.jevDate.toISOString().slice(0, 10), j.jevNumber]),
+    );
 
     for (const b of bills) {
       rows.push({
@@ -217,7 +228,7 @@ export class BillingReportService {
         rows.push({
           date: b.penaltyDate,
           type: 'penalty',
-          reference: penaltyJevByBill.get(b.id) ?? b.billNumber,
+          reference: penaltyJevByDate.get(b.penaltyDate.toISOString().slice(0, 10)) ?? b.billNumber,
           particulars: `Late-payment penalty (10%) — ${b.billingPeriod.name}`,
           charges: penalty,
           payments: 0,

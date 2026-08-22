@@ -701,7 +701,8 @@ export class AutoJevService {
     penalty: { billId: string; billNumber: string; amount: number; accrualDate: Date },
   ) {
     if (penalty.amount <= 0.005) return null;
-    const ref = `bill ${penalty.billNumber}`;
+    const day = penalty.accrualDate.toISOString().slice(0, 10);
+    const ref = `penalty accruals ${day}`;
     const ar = await this.requireMapping(
       organizationId,
       'ar.trade_receivable',
@@ -714,28 +715,17 @@ export class AutoJevService {
       'Penalty Income',
       ref,
     );
-    return this.createAutoJev(tx, {
+    // One voucher for all penalties accruing on this date, not one per bill.
+    return this.postToDailyJev(tx, {
       organizationId,
       userId,
       jevDate: penalty.accrualDate,
       sourceType: 'billing',
-      sourceTable: 'bills',
-      sourceId: penalty.billId,
-      particulars: `Late-payment penalty (10%) — ${penalty.billNumber}`,
-      lines: [
-        {
-          chartOfAccountId: ar.id,
-          debitAmount: penalty.amount,
-          creditAmount: 0,
-          description: `Penalty receivable — ${ref}`,
-        },
-        {
-          chartOfAccountId: income.id,
-          debitAmount: 0,
-          creditAmount: penalty.amount,
-          description: `Penalty income — ${ref}`,
-        },
-      ],
+      sourceTable: 'daily_penalty',
+      particulars: `Late-payment penalties (10%) — ${day}`,
+      debit: { accountId: ar.id, description: 'Penalty receivable — daily accrual' },
+      credit: { accountId: income.id, description: 'Penalty income — daily accrual' },
+      amount: penalty.amount,
     });
   }
 
@@ -752,18 +742,11 @@ export class AutoJevService {
       orNumber: string;
       paymentDate: Date;
       totalAmount: number;
-      // Portion of totalAmount that is a 10% late-payment penalty on overdue
-      // bills; credited to Penalty Income instead of A/R. Defaults to 0.
-      interestAmount?: number;
     },
   ) {
     if (payment.totalAmount <= 0) return null;
-    const interest =
-      payment.interestAmount && payment.interestAmount > 0.005 ? payment.interestAmount : 0;
-    // Credit A/R with total minus interest so the entry is always exactly
-    // balanced regardless of per-bill penalty rounding.
-    const arCredit = payment.totalAmount - interest;
-    const ref = `OR ${payment.orNumber}`;
+    const day = payment.paymentDate.toISOString().slice(0, 10);
+    const ref = `collections ${day}`;
     const cash = await this.requireMapping(
       organizationId,
       'cash.collecting_officer',
@@ -776,43 +759,18 @@ export class AutoJevService {
       'Accounts Receivable',
       ref,
     );
-    const lines = [
-      {
-        chartOfAccountId: cash.id,
-        debitAmount: payment.totalAmount,
-        creditAmount: 0,
-        description: `Cash collection — ${ref}`,
-      },
-      {
-        chartOfAccountId: ar.id,
-        debitAmount: 0,
-        creditAmount: arCredit,
-        description: `A/R settled — ${ref}`,
-      },
-    ];
-    if (interest > 0) {
-      const penalty = await this.requireMapping(
-        organizationId,
-        'income.penalty',
-        'Penalty Income',
-        ref,
-      );
-      lines.push({
-        chartOfAccountId: penalty.id,
-        debitAmount: 0,
-        creditAmount: interest,
-        description: `Penalty income — 10% on overdue bills — ${ref}`,
-      });
-    }
-    return this.createAutoJev(tx, {
+    // One collection voucher for the whole day's receipts, not one per OR. Any
+    // penalty was recognised when it accrued, so a collection only settles A/R.
+    return this.postToDailyJev(tx, {
       organizationId,
       userId,
       jevDate: payment.paymentDate,
       sourceType: 'collection',
-      sourceTable: 'payments',
-      sourceId: payment.id,
-      particulars: `Collection — ${ref}`,
-      lines,
+      sourceTable: 'daily_collection',
+      particulars: `Daily collections — ${day}`,
+      debit: { accountId: cash.id, description: 'Cash collections for the day' },
+      credit: { accountId: ar.id, description: 'A/R settled — daily collections' },
+      amount: payment.totalAmount,
     });
   }
 
@@ -962,6 +920,110 @@ export class AutoJevService {
     return this.requireMapping(organizationId, key, `Inventory (${item.classification})`, docRef);
   }
 
+  /**
+   * Roll a balanced two-account amount into ONE per-day summary voucher: the
+   * first hit of the day creates it (with a JEV number), later hits add to its
+   * running Dr/Cr totals. Used so a day of collections — or of penalty accruals —
+   * posts as a single voucher instead of one per receipt / per bill. The daily
+   * voucher carries no single sourceId; it is located by (sourceTable, jevDate).
+   */
+  private async postToDailyJev(
+    tx: Prisma.TransactionClient,
+    args: {
+      organizationId: string;
+      userId: string;
+      jevDate: Date;
+      sourceType: string;
+      sourceTable: string;
+      particulars: string;
+      debit: { accountId: string; description: string };
+      credit: { accountId: string; description: string };
+      amount: number;
+    },
+  ) {
+    if (args.amount <= 0.005) return null;
+    const amount = Math.round(args.amount * 100) / 100;
+    const day = new Date(
+      Date.UTC(
+        args.jevDate.getUTCFullYear(),
+        args.jevDate.getUTCMonth(),
+        args.jevDate.getUTCDate(),
+      ),
+    );
+    const existing = await tx.journalEntryVoucher.findFirst({
+      where: { organizationId: args.organizationId, sourceTable: args.sourceTable, jevDate: day },
+      include: { lines: true },
+    });
+    if (existing) {
+      const dr = existing.lines.find((l) => l.chartOfAccountId === args.debit.accountId);
+      const cr = existing.lines.find((l) => l.chartOfAccountId === args.credit.accountId);
+      if (dr) {
+        await tx.jevLine.update({
+          where: { id: dr.id },
+          data: { debitAmount: Number(dr.debitAmount) + amount },
+        });
+      } else {
+        await tx.jevLine.create({
+          data: {
+            jevId: existing.id,
+            chartOfAccountId: args.debit.accountId,
+            debitAmount: amount,
+            creditAmount: 0,
+            description: args.debit.description,
+          },
+        });
+      }
+      if (cr) {
+        await tx.jevLine.update({
+          where: { id: cr.id },
+          data: { creditAmount: Number(cr.creditAmount) + amount },
+        });
+      } else {
+        await tx.jevLine.create({
+          data: {
+            jevId: existing.id,
+            chartOfAccountId: args.credit.accountId,
+            debitAmount: 0,
+            creditAmount: amount,
+            description: args.credit.description,
+          },
+        });
+      }
+      await tx.journalEntryVoucher.update({
+        where: { id: existing.id },
+        data: {
+          totalDebit: Number(existing.totalDebit) + amount,
+          totalCredit: Number(existing.totalCredit) + amount,
+          updatedBy: args.userId,
+        },
+      });
+      return { id: existing.id, jevNumber: existing.jevNumber };
+    }
+    return this.createAutoJev(tx, {
+      organizationId: args.organizationId,
+      userId: args.userId,
+      jevDate: day,
+      sourceType: args.sourceType,
+      sourceTable: args.sourceTable,
+      sourceId: null,
+      particulars: args.particulars,
+      lines: [
+        {
+          chartOfAccountId: args.debit.accountId,
+          debitAmount: amount,
+          creditAmount: 0,
+          description: args.debit.description,
+        },
+        {
+          chartOfAccountId: args.credit.accountId,
+          debitAmount: 0,
+          creditAmount: amount,
+          description: args.credit.description,
+        },
+      ],
+    });
+  }
+
   async createAutoJev(
     tx: Prisma.TransactionClient,
     data: {
@@ -970,7 +1032,7 @@ export class AutoJevService {
       jevDate: Date;
       sourceType: string;
       sourceTable: string;
-      sourceId: string;
+      sourceId: string | null;
       particulars: string;
       fundSourceId?: string;
       responsibilityCenterId?: string;
