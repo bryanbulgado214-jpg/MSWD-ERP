@@ -1,8 +1,11 @@
 import type { RouteObject } from 'react-router-dom';
 
 import BillDetailPage from './pages/BillDetailPage';
-import BillListPage from './pages/BillListPage';
+import BillingDashboardPage from './pages/BillingDashboardPage';
 import BillingPeriodPage from './pages/BillingPeriodPage';
+import BillingReportsPage from './pages/BillingReportsPage';
+import BillListPage from './pages/BillListPage';
+import CollectionPage from './pages/CollectionPage';
 import ConsumerDetailPage from './pages/ConsumerDetailPage';
 import ConsumerListPage from './pages/ConsumerListPage';
 import DisconnectionDetailPage from './pages/DisconnectionDetailPage';
@@ -12,8 +15,6 @@ import MeterReadingPage from './pages/MeterReadingPage';
 import MeterRegistryPage from './pages/MeterRegistryPage';
 import PaymentDetailPage from './pages/PaymentDetailPage';
 import PaymentPage from './pages/PaymentPage';
-import BillingDashboardPage from './pages/BillingDashboardPage';
-import BillingReportsPage from './pages/BillingReportsPage';
 import PrintOrPage from './pages/PrintOrPage';
 import PrintSoaPage from './pages/PrintSoaPage';
 import RateSchedulePage from './pages/RateSchedulePage';
@@ -21,6 +22,7 @@ import RateSchedulePage from './pages/RateSchedulePage';
 export const billingRoutes: RouteObject[] = [
   { path: '/billing', element: <BillingDashboardPage /> },
   { path: '/billing/dashboard', element: <BillingDashboardPage /> },
+  { path: '/billing/collection', element: <CollectionPage /> },
   { path: '/billing/consumers', element: <ConsumerListPage /> },
   { path: '/billing/consumers/:id', element: <ConsumerDetailPage /> },
   { path: '/billing/meters', element: <MeterRegistryPage /> },
