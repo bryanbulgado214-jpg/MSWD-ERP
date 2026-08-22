@@ -508,7 +508,9 @@ export default function PaymentPage() {
                   </td>
                   <td>{p.paymentMethod.replace('_', ' ')}</td>
                   <td className="bill-text-mono">
-                    {p.allocations.map((a) => a.bill.billNumber).join(', ')}
+                    {p.allocations
+                      .map((a) => a.bill?.billNumber ?? a.collectionTypeName ?? '—')
+                      .join(', ')}
                   </td>
                   <td>
                     <span className={`bill-badge bill-badge--${p.status}`}>{p.status}</span>

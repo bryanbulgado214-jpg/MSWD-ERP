@@ -146,9 +146,9 @@ export default function PrintInvoicePage() {
           <tbody>
             {payment.allocations.map((a) => (
               <tr key={a.id}>
-                <td className="bp-center">{a.bill.billNumber}</td>
-                <td className="bp-center">{a.bill.billingPeriod?.name ?? '—'}</td>
-                <td>Water service charge</td>
+                <td className="bp-center">{a.bill?.billNumber ?? '—'}</td>
+                <td className="bp-center">{a.bill?.billingPeriod?.name ?? '—'}</td>
+                <td>{a.bill ? 'Water service charge' : (a.collectionTypeName ?? 'Collection')}</td>
                 <td className="bp-right">{formatPeso(a.amountApplied)}</td>
               </tr>
             ))}

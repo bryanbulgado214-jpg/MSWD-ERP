@@ -92,7 +92,29 @@ export class PaymentService {
       },
     });
     if (!payment) throw new NotFoundException('Payment not found.');
-    return payment;
+
+    // Attach the collection-type name to non-bill allocations (fees/deposits) so
+    // receipts/invoices can describe them. collectionTypeId has no relation, so
+    // resolve the names in a single follow-up query.
+    const typeIds = [
+      ...new Set(
+        payment.allocations.map((a) => a.collectionTypeId).filter((x): x is string => !!x),
+      ),
+    ];
+    const types = typeIds.length
+      ? await this.prisma.collectionType.findMany({
+          where: { id: { in: typeIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const typeName = new Map(types.map((t) => [t.id, t.name]));
+    return {
+      ...payment,
+      allocations: payment.allocations.map((a) => ({
+        ...a,
+        collectionTypeName: a.collectionTypeId ? (typeName.get(a.collectionTypeId) ?? null) : null,
+      })),
+    };
   }
 
   async getUnpaidBills(orgId: string, consumerId: string) {
@@ -210,6 +232,111 @@ export class PaymentService {
       // subledger. The day's collections post to the GL as one summarized JEV
       // when the Cashier FINALIZEs the daily collection batch.
       return payment;
+    });
+  }
+
+  /** Active, non-system collection types a teller can collect at the counter. */
+  async listCollectibleTypes(orgId: string) {
+    return this.prisma.collectionType.findMany({
+      where: { organizationId: orgId, isActive: true, isSystem: false },
+      orderBy: { sortOrder: 'asc' },
+      select: { id: true, code: true, name: true, nature: true, requiresConsumer: true },
+    });
+  }
+
+  /**
+   * Collect a non-bill payment — registration/installation/reconnection/relocation
+   * fees, guaranty deposits, advances, etc. The payer may be a walk-in (no account)
+   * or a linked consumer. No receivable is touched and no GL entry posts here; the
+   * receipt joins the day's collection batch and posts when the Cashier finalizes.
+   */
+  async createOtherCollection(
+    orgId: string,
+    userId: string,
+    data: {
+      orNumber: string;
+      consumerId?: string;
+      payerName?: string;
+      applicationRef?: string;
+      paymentDate: string;
+      totalAmount: number;
+      paymentMethod: string;
+      checkNumber?: string;
+      checkDate?: string;
+      bankName?: string;
+      referenceNumber?: string;
+      remarks?: string;
+      allocations: Array<{ collectionTypeId: string; amountApplied: number }>;
+    },
+  ) {
+    const existing = await this.prisma.payment.findFirst({
+      where: { organizationId: orgId, orNumber: data.orNumber },
+    });
+    if (existing) throw new ConflictException(`OR Number "${data.orNumber}" already exists.`);
+
+    if (!data.allocations.length) {
+      throw new BadRequestException('Add at least one collection line.');
+    }
+    const allocTotal = data.allocations.reduce((s, a) => s + a.amountApplied, 0);
+    if (Math.abs(allocTotal - data.totalAmount) > 0.01) {
+      throw new BadRequestException(
+        `Total amount (${data.totalAmount}) does not match the line total (${allocTotal}).`,
+      );
+    }
+
+    const typeIds = [...new Set(data.allocations.map((a) => a.collectionTypeId))];
+    const types = await this.prisma.collectionType.findMany({
+      where: { organizationId: orgId, id: { in: typeIds }, isActive: true },
+      select: { id: true, name: true, requiresConsumer: true },
+    });
+    const typeById = new Map(types.map((t) => [t.id, t]));
+    for (const a of data.allocations) {
+      const t = typeById.get(a.collectionTypeId);
+      if (!t) throw new BadRequestException('Unknown or inactive collection type.');
+      if (a.amountApplied <= 0) throw new BadRequestException('Line amounts must be positive.');
+      if (t.requiresConsumer && !data.consumerId) {
+        throw new BadRequestException(`${t.name} must be linked to a consumer account.`);
+      }
+    }
+
+    if (data.consumerId) {
+      const consumer = await this.prisma.consumer.findFirst({
+        where: { id: data.consumerId, organizationId: orgId },
+      });
+      if (!consumer) throw new NotFoundException('Consumer not found.');
+    } else if (!data.payerName?.trim()) {
+      throw new BadRequestException('Enter the payer name for a walk-in collection.');
+    }
+
+    return runAudited(this.prisma, userId, async (tx) => {
+      return tx.payment.create({
+        data: {
+          organizationId: orgId,
+          orNumber: data.orNumber,
+          paymentDate: new Date(data.paymentDate),
+          totalAmount: data.totalAmount,
+          paymentMethod: data.paymentMethod as 'cash' | 'check' | 'online' | 'bank_deposit',
+          ...(data.consumerId ? { consumerId: data.consumerId } : {}),
+          ...(data.payerName ? { payerName: data.payerName.trim() } : {}),
+          ...(data.applicationRef ? { applicationRef: data.applicationRef } : {}),
+          ...(data.checkNumber ? { checkNumber: data.checkNumber } : {}),
+          ...(data.checkDate ? { checkDate: new Date(data.checkDate) } : {}),
+          ...(data.bankName ? { bankName: data.bankName } : {}),
+          ...(data.referenceNumber ? { referenceNumber: data.referenceNumber } : {}),
+          ...(data.remarks ? { remarks: data.remarks } : {}),
+          cashierId: userId,
+          createdBy: userId,
+          updatedBy: userId,
+          allocations: {
+            createMany: {
+              data: data.allocations.map((a) => ({
+                collectionTypeId: a.collectionTypeId,
+                amountApplied: a.amountApplied,
+              })),
+            },
+          },
+        },
+      });
     });
   }
 

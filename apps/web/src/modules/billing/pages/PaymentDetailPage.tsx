@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 
 import { BillingApiError, getPayment } from '../api';
 import type { Payment } from '../types';
+
 import BillingSubNav from './BillingSubNav';
 import './billing.css';
 
@@ -25,11 +26,28 @@ export default function PaymentDetailPage() {
     if (!id) return;
     getPayment(id)
       .then((data) => setState({ status: 'loaded', data }))
-      .catch((err) => setState({ status: 'error', message: err instanceof BillingApiError ? err.message : 'Failed.' }));
+      .catch((err) =>
+        setState({
+          status: 'error',
+          message: err instanceof BillingApiError ? err.message : 'Failed.',
+        }),
+      );
   }, [id]);
 
-  if (state.status === 'loading') return <div className="bill-page"><BillingSubNav /><p>Loading...</p></div>;
-  if (state.status === 'error') return <div className="bill-page"><BillingSubNav /><div className="bill-error">{state.message}</div></div>;
+  if (state.status === 'loading')
+    return (
+      <div className="bill-page">
+        <BillingSubNav />
+        <p>Loading...</p>
+      </div>
+    );
+  if (state.status === 'error')
+    return (
+      <div className="bill-page">
+        <BillingSubNav />
+        <div className="bill-error">{state.message}</div>
+      </div>
+    );
 
   const p = state.data;
 
@@ -37,12 +55,22 @@ export default function PaymentDetailPage() {
     <div className="bill-page">
       <BillingSubNav />
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-        <Link to="/billing/payments" className="bill-btn" style={{ padding: '4px 10px', fontSize: '12px' }}>
+        <Link
+          to="/billing/payments"
+          className="bill-btn"
+          style={{ padding: '4px 10px', fontSize: '12px' }}
+        >
           &larr; Back
         </Link>
         <h1 style={{ margin: 0 }}>Payment {p.orNumber}</h1>
         <span className={`bill-badge bill-badge--${p.status}`}>{p.status}</span>
-        <Link to={`/billing/print/or/${p.id}`} className="bill-btn bill-btn--secondary" style={{ marginLeft: 'auto', fontSize: '12px', padding: '6px 14px' }}>Print OR</Link>
+        <Link
+          to={`/billing/print/or/${p.id}`}
+          className="bill-btn bill-btn--secondary"
+          style={{ marginLeft: 'auto', fontSize: '12px', padding: '6px 14px' }}
+        >
+          Print OR
+        </Link>
       </div>
 
       {p.status === 'voided' && p.voidReason && (
@@ -64,7 +92,10 @@ export default function PaymentDetailPage() {
         </div>
         <div className="bill-detail-item">
           <span className="bill-detail-label">Address</span>
-          <span className="bill-detail-value">{p.consumer.address}{p.consumer.barangay ? `, ${p.consumer.barangay}` : ''}</span>
+          <span className="bill-detail-value">
+            {p.consumer.address}
+            {p.consumer.barangay ? `, ${p.consumer.barangay}` : ''}
+          </span>
         </div>
         <div className="bill-detail-item">
           <span className="bill-detail-label">Payment Date</span>
@@ -72,7 +103,10 @@ export default function PaymentDetailPage() {
         </div>
         <div className="bill-detail-item">
           <span className="bill-detail-label">Total Amount</span>
-          <span className="bill-detail-value bill-text-mono" style={{ fontSize: '18px', fontWeight: 700, color: '#039855' }}>
+          <span
+            className="bill-detail-value bill-text-mono"
+            style={{ fontSize: '18px', fontWeight: 700, color: '#039855' }}
+          >
             {formatPeso(p.totalAmount)}
           </span>
         </div>
@@ -125,19 +159,30 @@ export default function PaymentDetailPage() {
           {p.allocations.map((a) => (
             <tr key={a.id}>
               <td>
-                <Link to={`/billing/bills/${a.bill.id}`} className="bill-table__link bill-text-mono">
-                  {a.bill.billNumber}
-                </Link>
+                {a.bill ? (
+                  <Link
+                    to={`/billing/bills/${a.bill.id}`}
+                    className="bill-table__link bill-text-mono"
+                  >
+                    {a.bill.billNumber}
+                  </Link>
+                ) : (
+                  (a.collectionTypeName ?? 'Collection')
+                )}
               </td>
-              <td>{a.bill.billingPeriod?.name ?? '—'}</td>
-              <td className="bill-text-mono" style={{ textAlign: 'right' }}>{formatPeso(a.amountApplied)}</td>
+              <td>{a.bill?.billingPeriod?.name ?? '—'}</td>
+              <td className="bill-text-mono" style={{ textAlign: 'right' }}>
+                {formatPeso(a.amountApplied)}
+              </td>
             </tr>
           ))}
         </tbody>
         <tfoot>
           <tr style={{ fontWeight: 700, borderTop: '2px solid #d0d5dd' }}>
             <td colSpan={2}>Total</td>
-            <td className="bill-text-mono" style={{ textAlign: 'right' }}>{formatPeso(p.totalAmount)}</td>
+            <td className="bill-text-mono" style={{ textAlign: 'right' }}>
+              {formatPeso(p.totalAmount)}
+            </td>
           </tr>
         </tfoot>
       </table>

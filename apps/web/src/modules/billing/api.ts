@@ -2,6 +2,7 @@ import type {
   Bill,
   BillListItem,
   BillingPeriod,
+  CollectibleType,
   Consumer,
   ConsumerArrears,
   ConsumerListItem,
@@ -381,9 +382,7 @@ export async function getBill(id: string): Promise<Bill> {
   return res.json();
 }
 
-export async function generateBills(
-  billingPeriodId: string,
-): Promise<{
+export async function generateBills(billingPeriodId: string): Promise<{
   generated: number;
   bills: Array<{ consumerId: string; billNumber: string; totalAmount: number }>;
 }> {
@@ -513,5 +512,29 @@ export async function getConsumerLedger(consumerId: string): Promise<unknown> {
 export async function getBillingSummary(billingPeriodId?: string): Promise<unknown> {
   const qs = billingPeriodId ? `?billingPeriodId=${billingPeriodId}` : '';
   const res = await authFetch(`/billing/reports/billing-summary${qs}`);
+  return res.json();
+}
+
+export async function getCollectibleTypes(): Promise<CollectibleType[]> {
+  const res = await authFetch('/billing/payments/collection-types');
+  return res.json();
+}
+
+export async function createOtherCollection(data: {
+  orNumber: string;
+  consumerId?: string;
+  payerName?: string;
+  applicationRef?: string;
+  paymentDate: string;
+  totalAmount: number;
+  paymentMethod: string;
+  checkNumber?: string;
+  checkDate?: string;
+  bankName?: string;
+  referenceNumber?: string;
+  remarks?: string;
+  allocations: Array<{ collectionTypeId: string; amountApplied: number }>;
+}): Promise<Payment> {
+  const res = await authFetchMutate('/billing/payments/other', 'POST', data);
   return res.json();
 }

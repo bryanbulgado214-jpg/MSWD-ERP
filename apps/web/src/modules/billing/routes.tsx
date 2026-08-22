@@ -13,6 +13,7 @@ import DisconnectionPage from './pages/DisconnectionPage';
 import MeterDetailPage from './pages/MeterDetailPage';
 import MeterReadingPage from './pages/MeterReadingPage';
 import MeterRegistryPage from './pages/MeterRegistryPage';
+import OtherCollectionPage from './pages/OtherCollectionPage';
 import PaymentDetailPage from './pages/PaymentDetailPage';
 import PaymentPage from './pages/PaymentPage';
 import PrintInvoicePage from './pages/PrintInvoicePage';
@@ -24,6 +25,7 @@ export const billingRoutes: RouteObject[] = [
   { path: '/billing', element: <BillingDashboardPage /> },
   { path: '/billing/dashboard', element: <BillingDashboardPage /> },
   { path: '/billing/collection', element: <CollectionPage /> },
+  { path: '/billing/other-collection', element: <OtherCollectionPage /> },
   { path: '/billing/consumers', element: <ConsumerListPage /> },
   { path: '/billing/consumers/:id', element: <ConsumerDetailPage /> },
   { path: '/billing/meters', element: <MeterRegistryPage /> },

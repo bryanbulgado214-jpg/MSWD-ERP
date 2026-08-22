@@ -191,8 +191,8 @@ export default function PrintOrPage() {
           <tbody>
             {payment.allocations.map((a) => (
               <tr key={a.id}>
-                <td className="bp-center">{a.bill.billNumber}</td>
-                <td className="bp-center">{a.bill.billingPeriod?.name ?? '—'}</td>
+                <td className="bp-center">{a.bill?.billNumber ?? a.collectionTypeName ?? '—'}</td>
+                <td className="bp-center">{a.bill?.billingPeriod?.name ?? '—'}</td>
                 <td className="bp-right">{formatPeso(a.amountApplied)}</td>
               </tr>
             ))}

@@ -24,6 +24,11 @@ const LINKS: Array<{
     visible: hasAny('billing.read', 'billing.reports'),
   },
   { to: '/billing/collection', label: 'Collection', visible: has('billing.payment.collect') },
+  {
+    to: '/billing/other-collection',
+    label: 'Other Collection',
+    visible: has('billing.payment.collect'),
+  },
   { to: '/billing/consumers', label: 'Consumers', visible: has('billing.read') },
   { to: '/billing/meters', label: 'Meters', visible: has('billing.read') },
   { to: '/billing/rate-schedules', label: 'Rate Schedules', visible: has('billing.read') },

@@ -5,7 +5,8 @@ import { RequirePermissions } from '../../common/decorators/require-permissions.
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
-import { CreatePaymentDto, VoidPaymentDto } from './dto/payment.dto';
+
+import { CreateOtherCollectionDto, CreatePaymentDto, VoidPaymentDto } from './dto/payment.dto';
 import { PaymentService } from './payment.service';
 
 @Controller('billing/payments')
@@ -15,10 +16,7 @@ export class PaymentController {
 
   @Get()
   @RequirePermissions('billing.read')
-  find(
-    @CurrentUser() user: AuthenticatedUser,
-    @Query('consumerId') consumerId?: string,
-  ) {
+  find(@CurrentUser() user: AuthenticatedUser, @Query('consumerId') consumerId?: string) {
     if (consumerId) return this.paymentService.findByConsumer(user.organizationId, consumerId);
     return this.paymentService.findRecent(user.organizationId);
   }
@@ -31,11 +29,20 @@ export class PaymentController {
 
   @Get('unpaid-bills')
   @RequirePermissions('billing.payment.collect')
-  unpaidBills(
-    @CurrentUser() user: AuthenticatedUser,
-    @Query('consumerId') consumerId: string,
-  ) {
+  unpaidBills(@CurrentUser() user: AuthenticatedUser, @Query('consumerId') consumerId: string) {
     return this.paymentService.getUnpaidBills(user.organizationId, consumerId);
+  }
+
+  @Get('collection-types')
+  @RequirePermissions('billing.payment.collect')
+  collectionTypes(@CurrentUser() user: AuthenticatedUser) {
+    return this.paymentService.listCollectibleTypes(user.organizationId);
+  }
+
+  @Post('other')
+  @RequirePermissions('billing.payment.collect')
+  createOther(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateOtherCollectionDto) {
+    return this.paymentService.createOtherCollection(user.organizationId, user.userId, dto);
   }
 
   @Get(':id')
@@ -57,6 +64,12 @@ export class PaymentController {
     @Param('id') id: string,
     @Body() dto: VoidPaymentDto,
   ) {
-    return this.paymentService.voidPayment(user.organizationId, user.userId, id, dto.expectedVersion, dto.voidReason);
+    return this.paymentService.voidPayment(
+      user.organizationId,
+      user.userId,
+      id,
+      dto.expectedVersion,
+      dto.voidReason,
+    );
   }
 }

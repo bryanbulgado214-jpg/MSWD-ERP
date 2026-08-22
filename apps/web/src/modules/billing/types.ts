@@ -204,7 +204,9 @@ export type PaymentStatus = 'valid' | 'voided';
 export interface PaymentAllocation {
   id: string;
   paymentId: string;
-  billId: string;
+  billId: string | null;
+  collectionTypeId?: string | null;
+  collectionTypeName?: string | null;
   amountApplied: string;
   bill: {
     id: string;
@@ -215,7 +217,7 @@ export interface PaymentAllocation {
     balance?: string;
     status?: BillStatus;
     billingPeriod?: { id: string; name: string };
-  };
+  } | null;
 }
 
 export interface PaymentListItem {
@@ -349,4 +351,12 @@ export interface RateSchedule {
   tiers: RateTier[];
   creator: UserRef | null;
   updater?: UserRef | null;
+}
+
+export interface CollectibleType {
+  id: string;
+  code: string;
+  name: string;
+  nature: 'receivable_settlement' | 'income' | 'liability';
+  requiresConsumer: boolean;
 }
