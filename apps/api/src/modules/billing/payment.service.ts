@@ -9,6 +9,12 @@ import { PrismaService } from '../../database/prisma.service';
 import { AutoJevService } from '../accounting/auto-jev.service';
 import { runAudited } from '../budgeting/audit-actor.util';
 
+// The 10% late penalty accrues on the 25th of the bill's due month: a customer
+// has the first 24 days to pay; an unpaid bill is penalized on the 25th onward.
+export function penaltyDateFor(dueDate: Date): Date {
+  return new Date(Date.UTC(dueDate.getUTCFullYear(), dueDate.getUTCMonth(), 25));
+}
+
 @Injectable()
 export class PaymentService {
   constructor(
@@ -130,14 +136,16 @@ export class PaymentService {
     });
     if (!consumer) throw new NotFoundException('Consumer not found.');
 
-    const principalTotal = data.allocations.reduce((sum, a) => sum + a.amountApplied, 0);
+    // A bill's balance already includes any 10% late penalty accrued on the 25th
+    // (booked to A/R by the accrual JEV), so a collection simply settles A/R —
+    // the total tendered equals the sum applied across bills.
+    const allocationTotal = data.allocations.reduce((sum, a) => sum + a.amountApplied, 0);
+    if (Math.abs(allocationTotal - data.totalAmount) > 0.01) {
+      throw new BadRequestException(
+        `Total amount (${data.totalAmount}) does not match allocation sum (${allocationTotal}).`,
+      );
+    }
 
-    // A bill past its due date carries a one-time 10% penalty (non-compounding)
-    // on the principal being collected. It is a surcharge on top of principal —
-    // credited to Penalty Income, never reducing the receivable — so we accrue
-    // it here and require the client's totalAmount to equal principal + penalty.
-    const paymentDate = new Date(data.paymentDate);
-    let interestTotal = 0;
     for (const alloc of data.allocations) {
       const bill = await this.prisma.bill.findFirst({
         where: { id: alloc.billId, organizationId: orgId, consumerId: data.consumerId },
@@ -149,16 +157,6 @@ export class PaymentService {
           `Payment of ${alloc.amountApplied} exceeds balance of ${currentBalance} on bill ${bill.billNumber}.`,
         );
       }
-      if (bill.dueDate && new Date(bill.dueDate) < paymentDate) {
-        interestTotal += Math.round(alloc.amountApplied * 0.1 * 100) / 100;
-      }
-    }
-
-    if (Math.abs(principalTotal + interestTotal - data.totalAmount) > 0.01) {
-      throw new BadRequestException(
-        `Total amount (${data.totalAmount}) must equal principal (${principalTotal.toFixed(2)}) ` +
-          `plus the 10% penalty on overdue bills (${interestTotal.toFixed(2)}).`,
-      );
     }
 
     return runAudited(this.prisma, userId, async (tx) => {
@@ -192,7 +190,8 @@ export class PaymentService {
       for (const alloc of data.allocations) {
         const bill = await tx.bill.findUniqueOrThrow({ where: { id: alloc.billId } });
         const newPaid = Number(bill.amountPaid) + alloc.amountApplied;
-        const newBalance = Number(bill.totalAmount) - newPaid;
+        // Owed = principal + accrued penalty − paid.
+        const newBalance = Number(bill.totalAmount) + Number(bill.penaltyAmount) - newPaid;
         const newStatus = newBalance <= 0.01 ? 'paid' : 'partial';
 
         await tx.bill.update({
@@ -207,14 +206,13 @@ export class PaymentService {
         });
       }
 
-      // Post the collection: Dr Cash-Collecting Officers, Cr A/R (principal),
-      // Cr Penalty Income (the 10% overdue penalty portion).
+      // Post the collection: Dr Cash-Collecting Officers, Cr A/R. Any penalty was
+      // already recognised as income when it accrued, so it just settles A/R.
       await this.autoJev.onPaymentReceived(tx, orgId, userId, {
         id: payment.id,
         orNumber: payment.orNumber,
         paymentDate: payment.paymentDate,
         totalAmount: Number(payment.totalAmount),
-        interestAmount: interestTotal,
       });
 
       return payment;
@@ -241,7 +239,7 @@ export class PaymentService {
       for (const alloc of payment.allocations) {
         const bill = await tx.bill.findUniqueOrThrow({ where: { id: alloc.billId } });
         const newPaid = Math.max(0, Number(bill.amountPaid) - Number(alloc.amountApplied));
-        const newBalance = Number(bill.totalAmount) - newPaid;
+        const newBalance = Number(bill.totalAmount) + Number(bill.penaltyAmount) - newPaid;
         const newStatus = newPaid <= 0.01 ? 'unpaid' : 'partial';
 
         await tx.bill.update({
@@ -268,17 +266,13 @@ export class PaymentService {
         },
       });
 
-      // Reverse the collection: Dr A/R (principal) + Dr Penalty Income
-      // (penalty), Cr Cash-Collecting Officers. The penalty portion is whatever
-      // the original total exceeded the principal allocated to bills.
-      const principalTotal = payment.allocations.reduce((s, a) => s + Number(a.amountApplied), 0);
-      const interestTotal = Number(payment.totalAmount) - principalTotal;
+      // Reverse the collection: Dr A/R, Cr Cash-Collecting Officers. Any penalty
+      // stays accrued on the reinstated bill balance (its own JEV is untouched).
       await this.autoJev.onPaymentVoided(tx, orgId, userId, {
         id: payment.id,
         orNumber: payment.orNumber,
         totalAmount: Number(payment.totalAmount),
         voidDate: new Date(),
-        interestAmount: interestTotal > 0.005 ? interestTotal : 0,
       });
 
       return voided;

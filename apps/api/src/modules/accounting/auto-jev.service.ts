@@ -689,6 +689,57 @@ export class AutoJevService {
   }
 
   /**
+   * Accrual of the one-time 10% late penalty on an overdue, unpaid bill (posted
+   * on the 25th of its due month): Dr Accounts Receivable, Cr Penalty Income. The
+   * penalty is recognised as earned when it falls due, so a later collection just
+   * settles the (now larger) receivable.
+   */
+  async onPenaltyAccrued(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    userId: string,
+    penalty: { billId: string; billNumber: string; amount: number; accrualDate: Date },
+  ) {
+    if (penalty.amount <= 0.005) return null;
+    const ref = `bill ${penalty.billNumber}`;
+    const ar = await this.requireMapping(
+      organizationId,
+      'ar.trade_receivable',
+      'Accounts Receivable',
+      ref,
+    );
+    const income = await this.requireMapping(
+      organizationId,
+      'income.penalty',
+      'Penalty Income',
+      ref,
+    );
+    return this.createAutoJev(tx, {
+      organizationId,
+      userId,
+      jevDate: penalty.accrualDate,
+      sourceType: 'billing',
+      sourceTable: 'bills',
+      sourceId: penalty.billId,
+      particulars: `Late-payment penalty (10%) — ${penalty.billNumber}`,
+      lines: [
+        {
+          chartOfAccountId: ar.id,
+          debitAmount: penalty.amount,
+          creditAmount: 0,
+          description: `Penalty receivable — ${ref}`,
+        },
+        {
+          chartOfAccountId: income.id,
+          debitAmount: 0,
+          creditAmount: penalty.amount,
+          description: `Penalty income — ${ref}`,
+        },
+      ],
+    });
+  }
+
+  /**
    * Collection of a water bill (Official Receipt): Dr Cash-Collecting Officers,
    * Cr Accounts Receivable. A later remittance step deposits it to the bank.
    */

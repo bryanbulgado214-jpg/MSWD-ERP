@@ -15,6 +15,58 @@ export class BillService {
     private readonly autoJev: AutoJevService,
   ) {}
 
+  /**
+   * Accrue the one-time 10% late penalty on every bill whose penalty date has
+   * arrived (the 25th of its due month) and is still owing but not yet penalised.
+   * Each accrual folds the penalty into the bill balance and posts a JEV
+   * (Dr A/R, Cr Penalty Income). Idempotent — a bill with a penalty is skipped.
+   *
+   * `asOf` defaults to now; pass a fixed date to accrue as of a billing cut-off.
+   */
+  async accruePenalties(orgId: string, userId: string, asOf: Date = new Date()) {
+    const bills = await this.prisma.bill.findMany({
+      where: {
+        organizationId: orgId,
+        status: { in: ['unpaid', 'partial'] },
+        penaltyAmount: 0,
+        penaltyDate: { lte: asOf },
+      },
+      select: {
+        id: true,
+        billNumber: true,
+        totalAmount: true,
+        amountPaid: true,
+        penaltyDate: true,
+      },
+    });
+
+    let accrued = 0;
+    for (const b of bills) {
+      const owed = Number(b.totalAmount) - Number(b.amountPaid);
+      if (owed <= 0.005) continue;
+      const penalty = Math.round(owed * 0.1 * 100) / 100;
+      await runAudited(this.prisma, userId, async (tx) => {
+        await tx.bill.update({
+          where: { id: b.id },
+          data: {
+            penaltyAmount: penalty,
+            balance: owed + penalty,
+            updatedBy: userId,
+            version: { increment: 1 },
+          },
+        });
+        await this.autoJev.onPenaltyAccrued(tx, orgId, userId, {
+          billId: b.id,
+          billNumber: b.billNumber,
+          amount: penalty,
+          accrualDate: b.penaltyDate,
+        });
+      });
+      accrued++;
+    }
+    return { accrued };
+  }
+
   async findByPeriod(orgId: string, billingPeriodId: string) {
     return this.prisma.bill.findMany({
       where: { organizationId: orgId, billingPeriodId },

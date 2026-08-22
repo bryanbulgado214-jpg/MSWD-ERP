@@ -1,7 +1,15 @@
-export type ConsumerType = 'residential' | 'commercial' | 'industrial' | 'government' | 'institutional';
+export type ConsumerType =
+  'residential' | 'commercial' | 'industrial' | 'government' | 'institutional';
 export type ConsumerStatus = 'active' | 'inactive' | 'disconnected' | 'closed';
 export type MeterStatus = 'active' | 'inactive' | 'condemned' | 'for_repair';
-export type MeterSize = 'half_inch' | 'three_quarter_inch' | 'one_inch' | 'one_half_inch' | 'two_inch' | 'three_inch' | 'four_inch';
+export type MeterSize =
+  | 'half_inch'
+  | 'three_quarter_inch'
+  | 'one_inch'
+  | 'one_half_inch'
+  | 'two_inch'
+  | 'three_inch'
+  | 'four_inch';
 
 export interface UserRef {
   id: string;
@@ -83,7 +91,9 @@ export interface Meter extends MeterListItem {
   notes: string | null;
   version: number;
   updatedAt: string;
-  consumerMeters: Array<ConsumerMeterAssignment & { consumer: ConsumerRef & { status: ConsumerStatus } }>;
+  consumerMeters: Array<
+    ConsumerMeterAssignment & { consumer: ConsumerRef & { status: ConsumerStatus } }
+  >;
   updater: UserRef | null;
 }
 
@@ -177,7 +187,13 @@ export interface Bill extends BillListItem {
     isPwd: boolean;
   };
   billingPeriod: { id: string; name: string; billingMonth: number; billingYear: number };
-  meterReading: { id: string; readingDate: string; previousReading: string; currentReading: string; consumption: string } | null;
+  meterReading: {
+    id: string;
+    readingDate: string;
+    previousReading: string;
+    currentReading: string;
+    consumption: string;
+  } | null;
   charges: BillCharge[];
   creator: UserRef | null;
 }
@@ -190,7 +206,16 @@ export interface PaymentAllocation {
   paymentId: string;
   billId: string;
   amountApplied: string;
-  bill: { id: string; billNumber: string; billingPeriodId?: string; totalAmount?: string; amountPaid?: string; balance?: string; status?: BillStatus; billingPeriod?: { id: string; name: string } };
+  bill: {
+    id: string;
+    billNumber: string;
+    billingPeriodId?: string;
+    totalAmount?: string;
+    amountPaid?: string;
+    balance?: string;
+    status?: BillStatus;
+    billingPeriod?: { id: string; name: string };
+  };
 }
 
 export interface PaymentListItem {
@@ -233,6 +258,7 @@ export interface UnpaidBill {
   consumerId: string;
   totalAmount: string;
   amountPaid: string;
+  penaltyAmount: string;
   balance: string;
   dueDate: string;
   status: BillStatus;
@@ -240,7 +266,8 @@ export interface UnpaidBill {
   billingPeriod: { id: string; name: string };
 }
 
-export type DisconnectionStatus = 'notice_issued' | 'served' | 'disconnected' | 'cancelled' | 'reconnected';
+export type DisconnectionStatus =
+  'notice_issued' | 'served' | 'disconnected' | 'cancelled' | 'reconnected';
 
 export interface DisconnectionOrderListItem {
   id: string;

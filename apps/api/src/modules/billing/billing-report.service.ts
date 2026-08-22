@@ -187,6 +187,18 @@ export class BillingReportService {
       charges: number;
       payments: number;
     }> = [];
+    // JEV numbers for accrued-penalty postings (sourceTable 'bills'), keyed by
+    // bill id, so each penalty line references its auto-JEV.
+    const penaltyJevs = await this.prisma.journalEntryVoucher.findMany({
+      where: {
+        organizationId: orgId,
+        sourceTable: 'bills',
+        sourceId: { in: bills.map((b) => b.id) },
+      },
+      select: { sourceId: true, jevNumber: true },
+    });
+    const penaltyJevByBill = new Map(penaltyJevs.map((j) => [j.sourceId, j.jevNumber]));
+
     for (const b of bills) {
       rows.push({
         // The billing period's month-end (matches the accrual date) — not the
@@ -198,24 +210,22 @@ export class BillingReportService {
         charges: Number(b.totalAmount),
         payments: 0,
       });
-    }
-    for (const p of payments) {
-      if (p.status !== 'valid') continue;
-      // The penalty portion of a payment (total minus principal applied to bills)
-      // is booked as its own charge on the same date, so the running balance does
-      // not dip below the receivable when a payment carries a 10% late penalty.
-      const principalApplied = p.allocations.reduce((s, a) => s + Number(a.amountApplied), 0);
-      const penaltyCollected = Math.round((Number(p.totalAmount) - principalApplied) * 100) / 100;
-      if (penaltyCollected > 0.005) {
+      // Penalty accrued on the 25th (Dr A/R, Cr Penalty Income): its own charge,
+      // dated at the penalty date and referencing the accrual JEV.
+      const penalty = Number(b.penaltyAmount);
+      if (penalty > 0.005) {
         rows.push({
-          date: p.paymentDate,
+          date: b.penaltyDate,
           type: 'penalty',
-          reference: p.orNumber,
-          particulars: 'Late-payment penalty (10%)',
-          charges: penaltyCollected,
+          reference: penaltyJevByBill.get(b.id) ?? b.billNumber,
+          particulars: `Late-payment penalty (10%) — ${b.billingPeriod.name}`,
+          charges: penalty,
           payments: 0,
         });
       }
+    }
+    for (const p of payments) {
+      if (p.status !== 'valid') continue;
       rows.push({
         date: p.paymentDate,
         type: 'payment',
@@ -224,24 +234,6 @@ export class BillingReportService {
         charges: 0,
         payments: Number(p.totalAmount),
       });
-    }
-    // Accrue the 10% penalty still owed on each unpaid, overdue bill so the ledger
-    // balance equals the total the customer must tender to settle (principal +
-    // penalty) — matching the Collection screen's outstanding balance and the
-    // Accept Payment window.
-    const now = new Date();
-    for (const b of bills) {
-      const bal = Number(b.balance);
-      if (bal > 0.005 && b.dueDate && new Date(b.dueDate) < now) {
-        rows.push({
-          date: b.dueDate,
-          type: 'penalty',
-          reference: b.billNumber,
-          particulars: `Late-payment penalty (10%) — ${b.billingPeriod.name}`,
-          charges: Math.round(bal * 0.1 * 100) / 100,
-          payments: 0,
-        });
-      }
     }
     // Chronological; on the same date order bill charge → penalty charge → payment.
     const rank = (t: 'bill' | 'penalty' | 'payment') =>

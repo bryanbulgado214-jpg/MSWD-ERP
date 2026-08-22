@@ -144,18 +144,9 @@ export default function CollectionPage() {
     setTimeout(() => searchRef.current?.focus(), 0);
   }
 
-  // A bill past its due date carries a one-time, non-compounding 10% penalty on
-  // the principal being collected (mirrors the server rule). "Overdue" is judged
-  // as of the payment date on the form.
-  const paymentDateObj = new Date(paymentDate);
-  function isOverdue(b: UnpaidBill) {
-    return b.dueDate ? new Date(b.dueDate) < paymentDateObj : false;
-  }
-  function amountDue(b: UnpaidBill) {
-    const bal = Number(b.balance);
-    return bal + (isOverdue(b) ? round2(bal * 0.1) : 0);
-  }
-  const totalDue = unpaid.reduce((s, b) => s + amountDue(b), 0);
+  // Each bill's balance already includes any 10% late penalty accrued on the 25th
+  // (booked to A/R by the server). The amount due is simply that balance.
+  const totalDue = unpaid.reduce((s, b) => s + Number(b.balance), 0);
 
   function openCollect() {
     // Prefill tender with the full amount due — the common exact-payment case.
@@ -164,9 +155,9 @@ export default function CollectionPage() {
     setShowCollect(true);
   }
 
-  // Waterfall the tendered cash across bills OLDEST FIRST: each overdue bill must
-  // clear its principal + 10% penalty before any money reaches a newer bill. A
-  // short payment settles the earliest deficiencies and leaves the rest open.
+  // Waterfall the tendered cash across bills OLDEST FIRST: each bill's balance
+  // (principal + any accrued penalty) must clear before money reaches a newer
+  // bill. A short payment settles the earliest deficiencies and leaves the rest.
   const collect = useMemo(() => {
     const tenderNum = parseFloat(tendered);
     const hasTender = !isNaN(tenderNum) && tenderNum > 0;
@@ -174,51 +165,26 @@ export default function CollectionPage() {
     let budget = hasTender ? Math.min(tenderNum, totalDue) : 0;
     const lines = unpaid.map((b) => {
       const balance = Number(b.balance);
-      const overdue = isOverdue(b);
-      const fullPenalty = overdue ? round2(balance * 0.1) : 0;
-      const due = balance + fullPenalty;
-      let principalPaid = 0;
-      let penaltyPaid = 0;
+      const penalty = Number(b.penaltyAmount);
+      let applied = 0;
       if (budget > 0.005) {
-        if (budget >= due - 0.005) {
-          // Enough to clear this bill entirely.
-          principalPaid = balance;
-          penaltyPaid = fullPenalty;
-          budget = round2(budget - due);
-        } else if (overdue) {
-          // Partial on an overdue bill: split so penalty stays 10% of principal.
-          principalPaid = Math.min(balance, round2(budget / 1.1));
-          penaltyPaid = round2(principalPaid * 0.1);
-          budget = 0;
-        } else {
-          principalPaid = Math.min(balance, round2(budget));
-          penaltyPaid = 0;
-          budget = 0;
-        }
+        applied = Math.min(balance, round2(budget));
+        budget = round2(budget - applied);
       }
-      return {
-        bill: b,
-        balance,
-        overdue,
-        fullPenalty,
-        due,
-        principalPaid,
-        penaltyPaid,
-        applied: round2(principalPaid + penaltyPaid),
-      };
+      return { bill: b, balance, penalty, applied };
     });
-    const totalApplied = round2(lines.reduce((s, l) => s + l.principalPaid + l.penaltyPaid, 0));
+    const totalApplied = round2(lines.reduce((s, l) => s + l.applied, 0));
     const change = hasTender ? Math.max(0, round2(tenderNum - totalApplied)) : 0;
     const shortfall = round2(totalDue - totalApplied);
     return { lines, totalApplied, change, hasTender, tenderNum, shortfall };
-  }, [unpaid, tendered, paymentDate]);
+  }, [unpaid, tendered, totalDue]);
 
   async function record(e: React.FormEvent) {
     e.preventDefault();
     if (!selected) return;
     const allocs = collect.lines
-      .filter((l) => l.principalPaid > 0)
-      .map((l) => ({ billId: l.bill.id, amountApplied: l.principalPaid }));
+      .filter((l) => l.applied > 0)
+      .map((l) => ({ billId: l.bill.id, amountApplied: l.applied }));
     if (allocs.length === 0 || collect.totalApplied <= 0) {
       setError('Enter an amount tendered to apply against the outstanding bills.');
       return;
@@ -532,8 +498,8 @@ export default function CollectionPage() {
 
                     <form className="bill-form" onSubmit={record}>
                       <p style={{ margin: '0 0 8px', fontSize: 12, color: '#667085' }}>
-                        Payment is applied to the oldest bills first. Each overdue bill must clear
-                        its principal and 10% penalty before any goes to a newer bill.
+                        Payment applies to the oldest bills first. A bill&apos;s amount due already
+                        includes any 10% late penalty accrued on the 25th of its due month.
                       </p>
                       <div style={{ overflowX: 'auto' }}>
                         <table className="bill-table">
@@ -542,7 +508,6 @@ export default function CollectionPage() {
                               <th>Bill #</th>
                               <th>Period</th>
                               <th>Due</th>
-                              <th style={{ textAlign: 'right' }}>Balance</th>
                               <th style={{ textAlign: 'right' }}>Penalty (10%)</th>
                               <th style={{ textAlign: 'right' }}>Amount Due</th>
                               <th style={{ textAlign: 'right' }}>Applied</th>
@@ -553,26 +518,23 @@ export default function CollectionPage() {
                               <tr key={l.bill.id}>
                                 <td className="bill-text-mono">{l.bill.billNumber}</td>
                                 <td>{l.bill.billingPeriod.name}</td>
-                                <td style={{ color: l.overdue ? '#b42318' : undefined }}>
+                                <td style={{ color: l.penalty > 0 ? '#b42318' : undefined }}>
                                   {new Date(l.bill.dueDate).toLocaleDateString('en-PH')}
-                                  {l.overdue && (
+                                  {l.penalty > 0 && (
                                     <span style={{ fontSize: 11, fontWeight: 600 }}>
                                       {' '}
-                                      · overdue
+                                      · penalized
                                     </span>
                                   )}
                                 </td>
                                 <td className="bill-text-mono" style={{ textAlign: 'right' }}>
-                                  {formatPeso(l.balance)}
-                                </td>
-                                <td className="bill-text-mono" style={{ textAlign: 'right' }}>
-                                  {l.fullPenalty > 0 ? formatPeso(l.fullPenalty) : '—'}
+                                  {l.penalty > 0 ? formatPeso(l.penalty) : '—'}
                                 </td>
                                 <td
                                   className="bill-text-mono"
                                   style={{ textAlign: 'right', fontWeight: 600 }}
                                 >
-                                  {formatPeso(l.due)}
+                                  {formatPeso(l.balance)}
                                 </td>
                                 <td
                                   className="bill-text-mono"
@@ -589,7 +551,7 @@ export default function CollectionPage() {
                           </tbody>
                           <tfoot>
                             <tr style={{ fontWeight: 700 }}>
-                              <td colSpan={5} style={{ textAlign: 'right' }}>
+                              <td colSpan={4} style={{ textAlign: 'right' }}>
                                 Total Amount Due:
                               </td>
                               <td className="bill-text-mono" style={{ textAlign: 'right' }}>
