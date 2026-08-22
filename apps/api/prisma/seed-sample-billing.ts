@@ -5,6 +5,7 @@ import * as dotenv from 'dotenv';
 
 import { AutoJevService } from '../src/modules/accounting/auto-jev.service';
 import { CollectionBatchService } from '../src/modules/accounting/collection-batch.service';
+import { CollectionDepositService } from '../src/modules/accounting/collection-deposit.service';
 import { BillService } from '../src/modules/billing/bill.service';
 import { PaymentService } from '../src/modules/billing/payment.service';
 
@@ -18,7 +19,13 @@ const billService = new BillService(prisma as any, autoJev);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const paymentService = new PaymentService(prisma as any, autoJev);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const collectionBatchService = new CollectionBatchService(prisma as any, autoJev);
+const collectionDepositService = new CollectionDepositService(prisma as any, autoJev);
+const collectionBatchService = new CollectionBatchService(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  prisma as any,
+  autoJev,
+  collectionDepositService,
+);
 
 const RATE_NAME = 'SMP Residential Rate';
 const CONSUMERS: Array<{

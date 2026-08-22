@@ -580,6 +580,22 @@ export interface CollectionEntryLine {
   credit: number;
 }
 
+export interface DepositSummary {
+  physicalCollectible: number;
+  deposited: number;
+  undeposited: number;
+  depositStatus: 'not_deposited' | 'partially_deposited' | 'fully_deposited' | 'verified';
+  deposits: Array<{
+    id: string;
+    depositDate: string;
+    depositAmount: string;
+    depositSlipNumber: string | null;
+    bankReference: string | null;
+    status: string;
+    jevId: string | null;
+  }>;
+}
+
 export interface CollectionBatchDetail {
   batch: CollectionBatch;
   entry: {
@@ -599,4 +615,26 @@ export interface CollectionBatchDetail {
     payerName: string | null;
     consumer: { accountNumber: string; firstName: string; lastName: string } | null;
   }>;
+  deposit: DepositSummary | null;
+}
+
+export interface ReconCard {
+  left: number;
+  right: number;
+  difference: number;
+  balanced: boolean;
+  note?: string;
+  undeposited?: number;
+}
+
+export interface CollectionReconciliation {
+  arSubledgerVsGl: ReconCard;
+  collectionsVsDeposits: ReconCard;
+  cashInCustody: ReconCard;
+  context: {
+    collectionsPosted: number;
+    unpostedCollections: number;
+    physicalCollections: number;
+    deposited: number;
+  };
 }

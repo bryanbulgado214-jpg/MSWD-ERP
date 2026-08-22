@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
-import { AccountingApiError, finalizeCollectionBatch, getCollectionBatch } from '../api';
+import {
+  AccountingApiError,
+  finalizeCollectionBatch,
+  getCollectionBatch,
+  recordCollectionDeposit,
+} from '../api';
 import type { CollectionBatchDetail } from '../types';
 
 import { AccountingSubNav } from './AccountingSubNav';
@@ -40,6 +45,9 @@ export default function CollectionBatchDetailPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  const [depDate, setDepDate] = useState('2026-08-23');
+  const [depAmount, setDepAmount] = useState('');
+  const [depSlip, setDepSlip] = useState('');
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -65,6 +73,29 @@ export default function CollectionBatchDetailPage() {
       await load();
     } catch (e) {
       setError(e instanceof AccountingApiError ? e.message : 'Failed to finalize.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deposit() {
+    if (!id) return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await recordCollectionDeposit({
+        collectionBatchId: id,
+        depositDate: depDate,
+        depositAmount: parseFloat(depAmount),
+        ...(depSlip ? { depositSlipNumber: depSlip } : {}),
+      });
+      setNotice('Deposit recorded — Dr Cash in Bank / Cr Cash - Collecting Officer posted.');
+      setDepAmount('');
+      setDepSlip('');
+      await load();
+    } catch (e) {
+      setError(e instanceof AccountingApiError ? e.message : 'Failed to record deposit.');
     } finally {
       setBusy(false);
     }
@@ -204,6 +235,124 @@ export default function CollectionBatchDetailPage() {
           </button>
         )}
       </div>
+
+      {detail.deposit && (
+        <>
+          <h3 className="acct-section-title">Bank Deposit</h3>
+          <div className="acct-stats">
+            <Card
+              label="Physical Collectible"
+              value={formatPeso(detail.deposit.physicalCollectible)}
+            />
+            <Card label="Deposited" value={formatPeso(detail.deposit.deposited)} />
+            <Card
+              label="Undeposited"
+              value={formatPeso(detail.deposit.undeposited)}
+              accent={detail.deposit.undeposited > 0.005 ? '#b54708' : '#067647'}
+            />
+            <Card
+              label="Status"
+              value={
+                {
+                  not_deposited: 'Not Deposited',
+                  partially_deposited: 'Partially Deposited',
+                  fully_deposited: 'Fully Deposited',
+                  verified: 'Verified',
+                }[detail.deposit.depositStatus] ?? detail.deposit.depositStatus
+              }
+            />
+          </div>
+
+          {detail.deposit.deposits.length > 0 && (
+            <div style={{ overflowX: 'auto', marginTop: 10 }}>
+              <table className="acct-table">
+                <thead>
+                  <tr>
+                    <th>Deposit Date</th>
+                    <th>Slip #</th>
+                    <th style={{ textAlign: 'right' }}>Amount</th>
+                    <th>JEV</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detail.deposit.deposits.map((d) => (
+                    <tr key={d.id}>
+                      <td>{new Date(d.depositDate).toLocaleDateString('en-PH')}</td>
+                      <td className="acct-mono">{d.depositSlipNumber ?? '—'}</td>
+                      <td className="acct-mono" style={{ textAlign: 'right' }}>
+                        {formatPeso(d.depositAmount)}
+                      </td>
+                      <td>
+                        {d.jevId ? (
+                          <Link to={`/accounting/jev/${d.jevId}`} className="acct-link">
+                            View →
+                          </Link>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {detail.deposit.undeposited > 0.005 && (
+            <div
+              style={{
+                display: 'flex',
+                gap: 10,
+                alignItems: 'flex-end',
+                flexWrap: 'wrap',
+                marginTop: 10,
+                background: '#f9fafb',
+                border: '1px solid #eaecf0',
+                borderRadius: 8,
+                padding: 12,
+              }}
+            >
+              <label style={{ fontSize: 12, color: '#475467' }}>
+                Deposit date
+                <input
+                  type="date"
+                  value={depDate}
+                  onChange={(e) => setDepDate(e.target.value)}
+                  style={{ display: 'block', marginTop: 2 }}
+                />
+              </label>
+              <label style={{ fontSize: 12, color: '#475467' }}>
+                Amount
+                <input
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  placeholder={String(detail.deposit.undeposited)}
+                  value={depAmount}
+                  onChange={(e) => setDepAmount(e.target.value)}
+                  style={{ display: 'block', marginTop: 2, width: 130 }}
+                />
+              </label>
+              <label style={{ fontSize: 12, color: '#475467' }}>
+                Deposit slip #
+                <input
+                  value={depSlip}
+                  onChange={(e) => setDepSlip(e.target.value)}
+                  style={{ display: 'block', marginTop: 2 }}
+                />
+              </label>
+              <button
+                type="button"
+                className="acct-btn acct-btn--primary"
+                onClick={deposit}
+                disabled={busy || !(parseFloat(depAmount) > 0)}
+              >
+                {busy ? 'Posting…' : 'Record Deposit'}
+              </button>
+            </div>
+          )}
+        </>
+      )}
 
       <h3 className="acct-section-title">Source Receipts ({payments.length})</h3>
       <div style={{ overflowX: 'auto' }}>

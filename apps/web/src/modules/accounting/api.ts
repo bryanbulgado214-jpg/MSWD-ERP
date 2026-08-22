@@ -13,6 +13,7 @@ import type {
   CoaImportPreviewResult,
   CollectionBatch,
   CollectionBatchDetail,
+  CollectionReconciliation,
   ApAgingResult,
   CashActivityResult,
   CreateDisbursementInput,
@@ -1114,5 +1115,21 @@ export async function consolidateCollectionBatch(date: string): Promise<Collecti
 
 export async function finalizeCollectionBatch(id: string): Promise<CollectionBatch> {
   const res = await authFetchMutate(`/accounting/collection-batches/${id}/finalize`, 'POST');
+  return res.json();
+}
+
+export async function recordCollectionDeposit(dto: {
+  collectionBatchId: string;
+  depositDate: string;
+  depositAmount: number;
+  depositSlipNumber?: string;
+  bankReference?: string;
+}): Promise<{ id: string }> {
+  const res = await authFetchMutate('/accounting/collection-deposits', 'POST', dto);
+  return res.json();
+}
+
+export async function getCollectionReconciliation(): Promise<CollectionReconciliation> {
+  const res = await authFetch('/accounting/collections/reconciliation');
   return res.json();
 }

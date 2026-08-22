@@ -12,6 +12,7 @@ import ChartOfAccountsPage from './pages/ChartOfAccountsPage';
 import CheckRegisterPage from './pages/CheckRegisterPage';
 import CollectionBatchDetailPage from './pages/CollectionBatchDetailPage';
 import CollectionBatchesPage from './pages/CollectionBatchesPage';
+import CollectionReconciliationPage from './pages/CollectionReconciliationPage';
 import DisbursementDetailPage from './pages/DisbursementDetailPage';
 import DisbursementListPage from './pages/DisbursementListPage';
 import JevDetailPage from './pages/JevDetailPage';
@@ -37,6 +38,7 @@ export const accountingRoutes: RouteObject[] = [
   { path: '/accounting/mappings', element: <AccountMappingsPage /> },
   { path: '/accounting/collection-batches', element: <CollectionBatchesPage /> },
   { path: '/accounting/collection-batches/:id', element: <CollectionBatchDetailPage /> },
+  { path: '/accounting/collections/reconciliation', element: <CollectionReconciliationPage /> },
   { path: '/accounting/jev', element: <JevListPage /> },
   { path: '/accounting/jev/new', element: <JevDetailPage /> },
   { path: '/accounting/jev/:id/print', element: <PrintJevPage /> },

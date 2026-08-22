@@ -9,6 +9,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
 
 import { AutoJevService } from './auto-jev.service';
+import { CollectionDepositService } from './collection-deposit.service';
 
 // Money is accumulated in integer centavos to avoid floating-point drift, then
 // converted back to a 2-decimal number only at the edges.
@@ -35,6 +36,7 @@ export class CollectionBatchService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly autoJev: AutoJevService,
+    private readonly deposits: CollectionDepositService,
   ) {}
 
   async list(orgId: string, filters: { status?: string; dateFrom?: string; dateTo?: string }) {
@@ -165,7 +167,9 @@ export class CollectionBatchService {
       },
       orderBy: { orNumber: 'asc' },
     });
-    return { batch, entry, payments };
+    const deposit =
+      batch.status === 'posted' ? await this.deposits.summaryForBatch(orgId, id) : null;
+    return { batch, entry, payments, deposit };
   }
 
   /**
