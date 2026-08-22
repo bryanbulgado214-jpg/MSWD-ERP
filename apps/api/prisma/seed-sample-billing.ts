@@ -18,15 +18,125 @@ const billService = new BillService(prisma as any, autoJev);
 const paymentService = new PaymentService(prisma as any, autoJev);
 
 const RATE_NAME = 'SMP Residential Rate';
-const CONSUMERS = [
-  { acct: 'SMP-0001', first: 'Juan', last: 'Dela Cruz', senior: false, mtr: 'SMP-MTR-0001' },
-  { acct: 'SMP-0002', first: 'Maria', last: 'Santos', senior: true, mtr: 'SMP-MTR-0002' },
-  { acct: 'SMP-0003', first: 'Pedro', last: 'Reyes', senior: false, mtr: 'SMP-MTR-0003' },
+const CONSUMERS: Array<{
+  acct: string;
+  first: string;
+  last: string;
+  senior: boolean;
+  mtr: string;
+  addr: string;
+}> = [
+  {
+    acct: 'SMP-0001',
+    first: 'Juan',
+    last: 'Dela Cruz',
+    senior: false,
+    mtr: 'SMP-MTR-0001',
+    addr: 'Poblacion, Siquijor',
+  },
+  {
+    acct: 'SMP-0002',
+    first: 'Maria',
+    last: 'Santos',
+    senior: true,
+    mtr: 'SMP-MTR-0002',
+    addr: 'Poblacion, Siquijor',
+  },
+  {
+    acct: 'SMP-0003',
+    first: 'Pedro',
+    last: 'Reyes',
+    senior: false,
+    mtr: 'SMP-MTR-0003',
+    addr: 'Poblacion, Siquijor',
+  },
+  {
+    acct: 'SMP-0004',
+    first: 'Ana',
+    last: 'Villanueva',
+    senior: false,
+    mtr: 'SMP-MTR-0004',
+    addr: 'Caipilan, Siquijor',
+  },
+  {
+    acct: 'SMP-0005',
+    first: 'Jose',
+    last: 'Ramos',
+    senior: false,
+    mtr: 'SMP-MTR-0005',
+    addr: 'Luyang, Siquijor',
+  },
+  {
+    acct: 'SMP-0006',
+    first: 'Rosa',
+    last: 'Aquino',
+    senior: true,
+    mtr: 'SMP-MTR-0006',
+    addr: 'Pangi, Siquijor',
+  },
+  {
+    acct: 'SMP-0007',
+    first: 'Mark',
+    last: 'Torres',
+    senior: false,
+    mtr: 'SMP-MTR-0007',
+    addr: 'Tebjong, Siquijor',
+  },
+  {
+    acct: 'SMP-0008',
+    first: 'Liza',
+    last: 'Gonzales',
+    senior: false,
+    mtr: 'SMP-MTR-0008',
+    addr: 'Dumanhog, Siquijor',
+  },
+  {
+    acct: 'SMP-0009',
+    first: 'Ben',
+    last: 'Castro',
+    senior: false,
+    mtr: 'SMP-MTR-0009',
+    addr: 'Canal, Siquijor',
+  },
+  {
+    acct: 'SMP-0010',
+    first: 'Grace',
+    last: 'Flores',
+    senior: false,
+    mtr: 'SMP-MTR-0010',
+    addr: 'Cang-apa, Siquijor',
+  },
+  {
+    acct: 'SMP-0011',
+    first: 'Danilo',
+    last: 'Mendoza',
+    senior: true,
+    mtr: 'SMP-MTR-0011',
+    addr: 'Cang-alwang, Siquijor',
+  },
+  {
+    acct: 'SMP-0012',
+    first: 'Carmen',
+    last: 'Diaz',
+    senior: false,
+    mtr: 'SMP-MTR-0012',
+    addr: 'Tambisan, Siquijor',
+  },
+  {
+    acct: 'SMP-0013',
+    first: 'Elmer',
+    last: 'Bautista',
+    senior: false,
+    mtr: 'SMP-MTR-0013',
+    addr: 'Tulapos, Siquijor',
+  },
 ];
+// Billing cut-off is 8/22/2026 (the demo "today"). Only periods that have ended
+// by then are billed — August (period-end 8/31) has not arrived yet, so no
+// August bill is posted. Penalty falls due on the 25th of each bill's due month.
 const PERIODS = [
-  { name: 'SMP June 2026', month: 6, due: '2026-07-15', pen: '2026-07-31' },
-  { name: 'SMP July 2026', month: 7, due: '2026-08-15', pen: '2026-08-31' },
-  { name: 'SMP August 2026', month: 8, due: '2026-09-15', pen: '2026-09-30' },
+  { name: 'SMP June 2026', month: 6, due: '2026-07-15', pen: '2026-07-25' },
+  { name: 'SMP July 2026', month: 7, due: '2026-08-15', pen: '2026-08-25' },
 ];
 // Cumulative meter readings per consumer per period.
 const READINGS: Record<string, Array<{ prev: number; cur: number }>> = {
@@ -44,6 +154,56 @@ const READINGS: Record<string, Array<{ prev: number; cur: number }>> = {
     { prev: 0, cur: 20 },
     { prev: 20, cur: 45 },
     { prev: 45, cur: 70 },
+  ],
+  'SMP-0004': [
+    { prev: 0, cur: 15 },
+    { prev: 15, cur: 33 },
+    { prev: 33, cur: 53 },
+  ],
+  'SMP-0005': [
+    { prev: 0, cur: 10 },
+    { prev: 10, cur: 22 },
+    { prev: 22, cur: 36 },
+  ],
+  'SMP-0006': [
+    { prev: 0, cur: 8 },
+    { prev: 8, cur: 17 },
+    { prev: 17, cur: 27 },
+  ],
+  'SMP-0007': [
+    { prev: 0, cur: 22 },
+    { prev: 22, cur: 47 },
+    { prev: 47, cur: 67 },
+  ],
+  'SMP-0008': [
+    { prev: 0, cur: 12 },
+    { prev: 12, cur: 24 },
+    { prev: 24, cur: 36 },
+  ],
+  'SMP-0009': [
+    { prev: 0, cur: 30 },
+    { prev: 30, cur: 62 },
+    { prev: 62, cur: 90 },
+  ],
+  'SMP-0010': [
+    { prev: 0, cur: 14 },
+    { prev: 14, cur: 30 },
+    { prev: 30, cur: 48 },
+  ],
+  'SMP-0011': [
+    { prev: 0, cur: 9 },
+    { prev: 9, cur: 20 },
+    { prev: 20, cur: 33 },
+  ],
+  'SMP-0012': [
+    { prev: 0, cur: 16 },
+    { prev: 16, cur: 31 },
+    { prev: 31, cur: 48 },
+  ],
+  'SMP-0013': [
+    { prev: 0, cur: 16 },
+    { prev: 16, cur: 30 },
+    { prev: 30, cur: 42 },
   ],
 };
 
@@ -125,7 +285,7 @@ async function main() {
         accountNumber: c.acct,
         firstName: c.first,
         lastName: c.last,
-        address: 'Poblacion, Siquijor',
+        address: c.addr,
         consumerType: 'residential',
         status: 'active',
         isSeniorCitizen: c.senior,
@@ -227,6 +387,64 @@ async function main() {
     paymentMethod: 'cash',
     allocations: [{ billId: c2June.id, amountApplied: 100 }],
   });
+
+  // Payment scenarios for the additional consumers. Every seeded payment is
+  // dated BEFORE its bill's due date, so no penalty is charged at seed time —
+  // any bill left unpaid is now overdue and will accrue the 10% penalty when the
+  // teller collects, which is what these are for. Amount "full" pays the current
+  // balance (handles the senior-citizen discount); a number is a partial payment.
+  const PAY_PLANS: Record<
+    string,
+    Array<{ period: string; amount: number | 'full'; date: string }>
+  > = {
+    // SMP-0004 Villanueva — nothing paid (all three bills open).
+    'SMP-0005': [{ period: 'June', amount: 'full', date: '2026-07-10' }], // July + Aug open
+    'SMP-0006': [
+      { period: 'June', amount: 'full', date: '2026-07-12' },
+      { period: 'July', amount: 'full', date: '2026-08-08' },
+    ], // senior; only Aug open (not yet due)
+    'SMP-0007': [{ period: 'June', amount: 300, date: '2026-07-09' }], // partial June, rest open
+    'SMP-0008': [
+      { period: 'June', amount: 'full', date: '2026-07-10' },
+      { period: 'July', amount: 'full', date: '2026-08-05' },
+    ], // fully settled
+    // SMP-0009 Castro — nothing paid (high usage, large overdue balance).
+    'SMP-0010': [
+      { period: 'June', amount: 'full', date: '2026-07-09' },
+      { period: 'July', amount: 'full', date: '2026-08-08' },
+    ], // fully settled
+    // SMP-0011 Mendoza — senior, nothing paid.
+    'SMP-0012': [
+      { period: 'June', amount: 'full', date: '2026-07-11' },
+      { period: 'July', amount: 'full', date: '2026-08-06' },
+    ], // Aug open
+    'SMP-0013': [{ period: 'June', amount: 200, date: '2026-07-10' }], // partial June, rest open
+  };
+
+  let orSeq = 4;
+  for (const acct of Object.keys(PAY_PLANS)) {
+    const bills = await billsOf(acct);
+    for (const plan of PAY_PLANS[acct]!) {
+      const bill = bills.find((b) => b.billingPeriod.name.includes(plan.period));
+      if (!bill) continue;
+      const amount = plan.amount === 'full' ? Number(bill.balance) : plan.amount;
+      if (amount <= 0) continue;
+      await paymentService.create(org.id, user.id, {
+        orNumber: `SMP-OR-${String(orSeq++).padStart(4, '0')}`,
+        consumerId: consumerByAcct[acct]!,
+        paymentDate: plan.date,
+        totalAmount: amount,
+        paymentMethod: 'cash',
+        allocations: [{ billId: bill.id, amountApplied: amount }],
+      });
+    }
+  }
+
+  // Accrue the 10% penalty on bills whose penalty date (the 25th) has passed as
+  // of the 8/22/2026 cut-off and are still owing — each posts a Dr A/R,
+  // Cr Penalty Income auto-JEV that the ledger references.
+  const { accrued } = await billService.accruePenalties(org.id, user.id, new Date('2026-08-22'));
+  console.log(`Accrued 10% penalty on ${accrued} overdue bill(s).`);
 
   console.log('\nSample billing data seeded. Open Billing → Consumers → (consumer) → Print SOA:');
   for (const c of CONSUMERS)
