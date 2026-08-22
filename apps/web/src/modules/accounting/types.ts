@@ -544,3 +544,59 @@ export interface ApAgingResult {
   brackets: ApAgingBracket[];
   rows: ApAgingRow[];
 }
+
+// ── Collection Accounting Batches ──
+
+export type CollectionBatchStatus =
+  'open' | 'closed' | 'for_review' | 'reviewed' | 'approved' | 'posted' | 'rejected' | 'reversed';
+
+export interface CollectionBatch {
+  id: string;
+  batchNumber: string;
+  collectionDate: string;
+  cashierId: string;
+  status: CollectionBatchStatus;
+  beginningOrNumber: string | null;
+  endingOrNumber: string | null;
+  transactionCount: number;
+  grossCollections: string;
+  cashAmount: string;
+  checkAmount: string;
+  bankTransferAmount: string;
+  onlineAmount: string;
+  otherAmount: string;
+  totalCollections: string;
+  voidedReceiptCount: number;
+  jevId: string | null;
+  postedAt: string | null;
+  preparedAt: string | null;
+}
+
+export interface CollectionEntryLine {
+  chartOfAccountId: string;
+  accountCode: string;
+  accountName: string;
+  debit: number;
+  credit: number;
+}
+
+export interface CollectionBatchDetail {
+  batch: CollectionBatch;
+  entry: {
+    lines: CollectionEntryLine[];
+    totalDebit: number;
+    totalCredit: number;
+    balanced: boolean;
+    unmappedTypes: Array<{ id: string; name: string }>;
+  };
+  payments: Array<{
+    id: string;
+    orNumber: string;
+    paymentDate: string;
+    totalAmount: string;
+    paymentMethod: string;
+    status: string;
+    payerName: string | null;
+    consumer: { accountNumber: string; firstName: string; lastName: string } | null;
+  }>;
+}

@@ -415,3 +415,64 @@
   color: var(--mswd-blue);
   margin-top: 8px;
 }
+
+/* ── Collection Batches page ── */
+.acct-page__intro {
+  color: #475467;
+  font-size: 13px;
+  max-width: 720px;
+  margin: 4px 0 14px;
+}
+.acct-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mswd-navy, #101828);
+  margin: 20px 0 8px;
+}
+.acct-link {
+  color: var(--mswd-navy, #175cd3);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+}
+.acct-link:hover {
+  text-decoration: underline;
+}
+.acct-mono {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+}
+.acct-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+.acct-stat {
+  background: #fff;
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.acct-stat__label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #667085;
+}
+.acct-stat__value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--mswd-navy, #101828);
+  margin-top: 2px;
+}
+.acct-badge--open {
+  background: #eff8ff;
+  color: #175cd3;
+}
+.acct-badge--reviewed {
+  background: #f4f3ff;
+  color: #5925dc;
+}
+.acct-badge--rejected {
+  background: #fef3f2;
+  color: #b42318;
+}

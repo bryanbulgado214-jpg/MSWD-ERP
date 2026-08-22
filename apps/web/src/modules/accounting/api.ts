@@ -11,6 +11,8 @@ import type {
   ChartOfAccount,
   CoaImportConfirmResult,
   CoaImportPreviewResult,
+  CollectionBatch,
+  CollectionBatchDetail,
   ApAgingResult,
   CashActivityResult,
   CreateDisbursementInput,
@@ -1089,5 +1091,28 @@ export async function getApAging(): Promise<ApAgingResult> {
 export async function getCashActivity(params?: string): Promise<CashActivityResult> {
   const qs = params ? `?${params}` : '';
   const res = await authFetch(`/accounting/reports/cash-activity${qs}`);
+  return res.json();
+}
+
+// ── Collection Accounting Batches ──
+
+export async function getCollectionBatches(params?: string): Promise<CollectionBatch[]> {
+  const qs = params ? `?${params}` : '';
+  const res = await authFetch(`/accounting/collection-batches${qs}`);
+  return res.json();
+}
+
+export async function getCollectionBatch(id: string): Promise<CollectionBatchDetail> {
+  const res = await authFetch(`/accounting/collection-batches/${id}`);
+  return res.json();
+}
+
+export async function consolidateCollectionBatch(date: string): Promise<CollectionBatch> {
+  const res = await authFetchMutate('/accounting/collection-batches/consolidate', 'POST', { date });
+  return res.json();
+}
+
+export async function finalizeCollectionBatch(id: string): Promise<CollectionBatch> {
+  const res = await authFetchMutate(`/accounting/collection-batches/${id}/finalize`, 'POST');
   return res.json();
 }

@@ -34,6 +34,11 @@ export const ACCOUNTING_LINKS: AccountingLink[] = [
   },
   { to: '/accounting/jev', label: 'Journal Entries', visible: has('accounting.read') },
   {
+    to: '/accounting/collection-batches',
+    label: 'Collection Batches',
+    visible: has('accounting.read'),
+  },
+  {
     to: '/accounting/disbursements',
     label: 'Disbursement Vouchers',
     visible: has('accounting.dv.read'),
