@@ -106,6 +106,10 @@ export const MODULE_GATES = {
     'accounting.period.manage',
     'accounting.reports',
     'accounting.reconcile',
+    // The collection cashier reaches the Accounting module for the collection
+    // batches, reconciliation, and cashier reports without the broad
+    // accounting.read — the sub-nav then shows only those collection screens.
+    'collections.accounting.view',
   ],
   reports: [
     // Accounting reporting outputs (GL / Trial Balance / Financial Statements /
@@ -118,6 +122,9 @@ export const MODULE_GATES = {
     'procurement.read',
     'budgeting.read',
     'billing.reports',
+    // Cashier's read-only view of the teller's billing reports also surfaces
+    // under the Reports module.
+    'billing.reports.view',
     'asset.reports',
   ],
 } as const;

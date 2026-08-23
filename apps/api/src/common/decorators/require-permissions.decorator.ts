@@ -11,6 +11,17 @@ export const PERMISSIONS_KEY = 'requiredPermissions';
 export const RequirePermissions = (...permissions: string[]) =>
   SetMetadata(PERMISSIONS_KEY, permissions);
 
+export const ANY_PERMISSIONS_KEY = 'requiredAnyPermissions';
+
+/** Use as `@RequireAnyPermissions('billing.reports', 'billing.reports.view')`.
+ * The user must hold AT LEAST ONE of the listed codes (logical OR) — for
+ * surfaces two different roles reach through different permissions (e.g. a
+ * teller's own reports vs. a cashier's read-only view of them). May be combined
+ * with `@RequirePermissions` on the same route, in which case both the ALL-of
+ * and the any-of conditions must be satisfied. */
+export const RequireAnyPermissions = (...permissions: string[]) =>
+  SetMetadata(ANY_PERMISSIONS_KEY, permissions);
+
 export const AUTH_ONLY_KEY = 'authenticatedOnly';
 
 /**

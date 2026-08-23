@@ -8,7 +8,11 @@ import { Reflector } from '@nestjs/core';
 
 import { PrismaService } from '../../database/prisma.service';
 import type { AuthenticatedUser } from '../../modules/auth/jwt.strategy';
-import { AUTH_ONLY_KEY, PERMISSIONS_KEY } from '../decorators/require-permissions.decorator';
+import {
+  ANY_PERMISSIONS_KEY,
+  AUTH_ONLY_KEY,
+  PERMISSIONS_KEY,
+} from '../decorators/require-permissions.decorator';
 
 import { getGrantedPermissionCodes } from './get-granted-permission-codes';
 
@@ -47,7 +51,13 @@ export class PermissionsGuard implements CanActivate {
       PERMISSIONS_KEY,
       targets,
     );
-    if (!required || required.length === 0) {
+    const requiredAny = this.reflector.getAllAndOverride<string[] | undefined>(
+      ANY_PERMISSIONS_KEY,
+      targets,
+    );
+    const hasAll = !!required && required.length > 0;
+    const hasAny = !!requiredAny && requiredAny.length > 0;
+    if (!hasAll && !hasAny) {
       // FAIL CLOSED. A route behind this guard that declares no permission
       // requirement is a misconfiguration (a forgotten @RequirePermissions).
       // Deny it rather than silently exposing it to any authenticated user.
@@ -56,9 +66,18 @@ export class PermissionsGuard implements CanActivate {
     }
 
     const granted = await getGrantedPermissionCodes(this.prisma, user.userId);
-    const missing = required.filter((code) => !granted.has(code));
-    if (missing.length > 0) {
-      throw new ForbiddenException(`Missing required permission(s): ${missing.join(', ')}`);
+
+    // ALL-of: every listed code must be granted.
+    if (hasAll) {
+      const missing = required!.filter((code) => !granted.has(code));
+      if (missing.length > 0) {
+        throw new ForbiddenException(`Missing required permission(s): ${missing.join(', ')}`);
+      }
+    }
+
+    // ANY-of: at least one listed code must be granted.
+    if (hasAny && !requiredAny!.some((code) => granted.has(code))) {
+      throw new ForbiddenException(`Requires one of: ${requiredAny!.join(', ')}`);
     }
     return true;
   }

@@ -24,7 +24,9 @@ type ReportType = 'collection' | 'aging' | 'ledger' | 'summary';
 
 export default function BillingReportsPage() {
   const { hasPermission } = useAuth();
-  if (!hasPermission('billing.reports')) {
+  const canRun = hasPermission('billing.reports');
+  const canView = canRun || hasPermission('billing.reports.view');
+  if (!canView) {
     return (
       <div className="bill-page">
         <BillingSubNav />
@@ -108,6 +110,23 @@ export default function BillingReportsPage() {
     <div className="bill-page">
       <BillingSubNav />
       <h1>Billing Reports</h1>
+
+      {!canRun && (
+        <div
+          className="bill-note"
+          style={{
+            background: '#eff8ff',
+            border: '1px solid #b2ddff',
+            color: '#175cd3',
+            borderRadius: 8,
+            padding: '8px 12px',
+            fontSize: 13,
+            marginBottom: 12,
+          }}
+        >
+          Read-only view of the teller's reports.
+        </div>
+      )}
 
       <div className="bill-toolbar">
         <select

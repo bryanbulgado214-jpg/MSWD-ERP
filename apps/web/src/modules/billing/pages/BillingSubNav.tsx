@@ -37,7 +37,11 @@ const LINKS: Array<{
   { to: '/billing/bills', label: 'Bills', visible: has('billing.read') },
   { to: '/billing/payments', label: 'Payments', visible: has('billing.read') },
   { to: '/billing/disconnections', label: 'Disconnections', visible: has('billing.read') },
-  { to: '/billing/reports', label: 'Reports', visible: has('billing.reports') },
+  {
+    to: '/billing/reports',
+    label: 'Reports',
+    visible: hasAny('billing.reports', 'billing.reports.view'),
+  },
 ];
 
 export default function BillingSubNav() {

@@ -18,8 +18,15 @@ export interface AccountingLink {
 }
 
 const has = (code: string) => (p: Set<string>) => p.has(code);
+const hasAny =
+  (...codes: string[]) =>
+  (p: Set<string>) =>
+    codes.some((c) => p.has(c));
 // A cashier holds check.read but not the broad accounting.read.
 const isCashier = (p: Set<string>) => p.has('accounting.check.read') && !p.has('accounting.read');
+// The collection screens open to full accounting staff and to the collection
+// cashier (collections.accounting.view) without the broad accounting.read.
+const canCollections = hasAny('accounting.read', 'collections.accounting.view');
 
 export const ACCOUNTING_LINKS: AccountingLink[] = [
   // Cashier's landing — a cashiering dashboard (checks + DVs only).
@@ -36,17 +43,17 @@ export const ACCOUNTING_LINKS: AccountingLink[] = [
   {
     to: '/accounting/collection-batches',
     label: 'Collection Batches',
-    visible: has('accounting.read'),
+    visible: canCollections,
   },
   {
     to: '/accounting/collections/reconciliation',
     label: 'Collections Reconciliation',
-    visible: has('accounting.read'),
+    visible: canCollections,
   },
   {
     to: '/accounting/collections/reports',
     label: 'Collection Reports',
-    visible: has('accounting.read'),
+    visible: canCollections,
   },
   {
     to: '/accounting/disbursements',
