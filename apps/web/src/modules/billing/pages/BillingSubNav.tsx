@@ -24,7 +24,6 @@ const LINKS: Array<{
     visible: hasAny('billing.read', 'billing.reports'),
   },
   { to: '/billing/collection', label: 'Collection', visible: has('billing.payment.collect') },
-  { to: '/billing/session', label: 'My Session', visible: has('billing.session.manage') },
   {
     to: '/billing/remittances',
     label: 'Remittances',

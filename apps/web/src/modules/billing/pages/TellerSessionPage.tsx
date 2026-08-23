@@ -22,7 +22,13 @@ function peso(v: string | number) {
 
 const PENDING: TellerSession['status'][] = ['open', 'closed', 'remitted'];
 
-export default function TellerSessionPage() {
+export default function TellerSessionPage({
+  embedded = false,
+  onSessionChange,
+}: {
+  embedded?: boolean;
+  onSessionChange?: () => void;
+}) {
   const { hasPermission } = useAuth();
   const canManage = hasPermission('billing.session.manage');
 
@@ -64,6 +70,7 @@ export default function TellerSessionPage() {
     try {
       await fn();
       await load();
+      onSessionChange?.();
     } catch (e) {
       setError(e instanceof BillingApiError ? e.message : 'Action failed.');
     } finally {
@@ -72,10 +79,13 @@ export default function TellerSessionPage() {
   }
 
   if (!canManage) {
-    return (
+    const msg = <div className="bill-error">You do not have access to teller sessions.</div>;
+    return embedded ? (
+      msg
+    ) : (
       <div className="bill-page">
         <BillingSubNav />
-        <div className="bill-error">You do not have access to teller sessions.</div>
+        {msg}
       </div>
     );
   }
@@ -86,10 +96,8 @@ export default function TellerSessionPage() {
   const actualTotal = (parseFloat(actualCash) || 0) + (parseFloat(actualChecks) || 0);
   const variance = actualTotal - expected;
 
-  return (
-    <div className="bill-page">
-      <BillingSubNav />
-      <h1>My Collection Session</h1>
+  const inner = (
+    <>
       {error && <div className="bill-error">{error}</div>}
 
       {!session && (
@@ -298,6 +306,14 @@ export default function TellerSessionPage() {
           </table>
         </div>
       )}
+    </>
+  );
+  if (embedded) return inner;
+  return (
+    <div className="bill-page">
+      <BillingSubNav />
+      <h1>My Collection Session</h1>
+      {inner}
     </div>
   );
 }

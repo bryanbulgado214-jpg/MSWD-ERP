@@ -21,7 +21,6 @@ import PrintSoaPage from './pages/PrintSoaPage';
 import RateSchedulePage from './pages/RateSchedulePage';
 import RemittancesPage from './pages/RemittancesPage';
 import TellerDailyReportPage from './pages/TellerDailyReportPage';
-import TellerSessionPage from './pages/TellerSessionPage';
 
 export const billingRoutes: RouteObject[] = [
   { path: '/billing', element: <BillingDashboardPage /> },
@@ -31,7 +30,10 @@ export const billingRoutes: RouteObject[] = [
     path: '/billing/other-collection',
     element: <Navigate to="/billing/collection?tab=other" replace />,
   },
-  { path: '/billing/session', element: <TellerSessionPage /> },
+  {
+    path: '/billing/session',
+    element: <Navigate to="/billing/collection?tab=session" replace />,
+  },
   { path: '/billing/remittances', element: <RemittancesPage /> },
   { path: '/billing/consumers', element: <ConsumerListPage /> },
   { path: '/billing/consumers/:id', element: <ConsumerDetailPage /> },
