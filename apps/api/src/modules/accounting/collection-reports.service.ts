@@ -46,6 +46,10 @@ export class CollectionReportsService {
         return this.cashierAccountability(orgId, from, to);
       case 'exceptions':
         return this.exceptions(orgId, from, to);
+      case 'remittances':
+        return this.remittances(orgId, from, to);
+      case 'teller-accountability':
+        return this.tellerAccountability(orgId, from, to);
       default:
         throw new BadRequestException(`Unknown report "${kind}".`);
     }
@@ -596,6 +600,116 @@ export class CollectionReportsService {
       ],
       rows,
       totals: this.sum(rows, ['amount']),
+    };
+  }
+
+  /** Per-session teller remittance register — expected vs. actual with variance. */
+  private async remittances(orgId: string, from?: string, to?: string): Promise<Report> {
+    const collectionDate = this.range(from, to);
+    const sessions = await this.prisma.tellerSession.findMany({
+      where: {
+        organizationId: orgId,
+        status: { in: ['remitted', 'accepted'] },
+        ...(collectionDate ? { collectionDate } : {}),
+      },
+      orderBy: [{ collectionDate: 'desc' }, { sessionNumber: 'asc' }],
+    });
+    const names = await this.userNames([
+      ...sessions.map((s) => s.tellerId),
+      ...sessions.map((s) => s.receivedByCashierId),
+    ]);
+    const rows = sessions.map((s) => ({
+      collectionDate: s.collectionDate,
+      session: s.sessionNumber,
+      teller: names.get(s.tellerId) ?? '',
+      receipts: s.transactionCount,
+      expected: round2(Number(s.expectedRemittance)),
+      cash: round2(Number(s.actualCashRemitted)),
+      check: round2(Number(s.actualChecksRemitted)),
+      total: round2(Number(s.totalActualRemittance)),
+      shortOver: round2(Number(s.shortageOverage)),
+      status: s.status,
+      receivedBy: s.receivedByCashierId ? (names.get(s.receivedByCashierId) ?? '') : '',
+    }));
+    return {
+      title: 'Teller Remittance Register',
+      columns: [
+        { key: 'collectionDate', label: 'Date', kind: 'date' },
+        { key: 'session', label: 'Session #' },
+        { key: 'teller', label: 'Teller' },
+        { key: 'receipts', label: 'Receipts', kind: 'number', align: 'right' },
+        { key: 'expected', label: 'Expected', kind: 'money', align: 'right' },
+        { key: 'cash', label: 'Cash', kind: 'money', align: 'right' },
+        { key: 'check', label: 'Check', kind: 'money', align: 'right' },
+        { key: 'total', label: 'Total Remitted', kind: 'money', align: 'right' },
+        { key: 'shortOver', label: 'Short/Over', kind: 'money', align: 'right' },
+        { key: 'status', label: 'Status' },
+        { key: 'receivedBy', label: 'Received By' },
+      ],
+      rows,
+      totals: this.sum(rows, ['expected', 'cash', 'check', 'total', 'shortOver']),
+    };
+  }
+
+  /** Per-teller accountability across their remittances in the range. */
+  private async tellerAccountability(orgId: string, from?: string, to?: string): Promise<Report> {
+    const collectionDate = this.range(from, to);
+    const sessions = await this.prisma.tellerSession.findMany({
+      where: {
+        organizationId: orgId,
+        status: { in: ['remitted', 'accepted'] },
+        ...(collectionDate ? { collectionDate } : {}),
+      },
+      select: {
+        tellerId: true,
+        totalCollections: true,
+        expectedRemittance: true,
+        totalActualRemittance: true,
+        shortageOverage: true,
+      },
+    });
+    const acc = new Map<
+      string,
+      { sessions: number; collected: number; expected: number; remitted: number; shortOver: number }
+    >();
+    for (const s of sessions) {
+      const cur = acc.get(s.tellerId) ?? {
+        sessions: 0,
+        collected: 0,
+        expected: 0,
+        remitted: 0,
+        shortOver: 0,
+      };
+      cur.sessions += 1;
+      cur.collected += Number(s.totalCollections);
+      cur.expected += Number(s.expectedRemittance);
+      cur.remitted += Number(s.totalActualRemittance);
+      cur.shortOver += Number(s.shortageOverage);
+      acc.set(s.tellerId, cur);
+    }
+    const names = await this.userNames([...acc.keys()]);
+    const rows = [...acc.entries()]
+      .map(([tellerId, v]) => ({
+        teller: names.get(tellerId) ?? tellerId,
+        sessions: v.sessions,
+        collected: round2(v.collected),
+        expected: round2(v.expected),
+        remitted: round2(v.remitted),
+        shortOver: round2(v.shortOver),
+      }))
+      .sort((a, b) => b.collected - a.collected);
+    return {
+      title: 'Teller Accountability',
+      columns: [
+        { key: 'teller', label: 'Teller' },
+        { key: 'sessions', label: 'Sessions', kind: 'number', align: 'right' },
+        { key: 'collected', label: 'Collected', kind: 'money', align: 'right' },
+        { key: 'expected', label: 'Expected Remittance', kind: 'money', align: 'right' },
+        { key: 'remitted', label: 'Remitted', kind: 'money', align: 'right' },
+        { key: 'shortOver', label: 'Net Short/Over', kind: 'money', align: 'right' },
+      ],
+      rows,
+      totals: this.sum(rows, ['sessions', 'collected', 'expected', 'remitted', 'shortOver']),
     };
   }
 

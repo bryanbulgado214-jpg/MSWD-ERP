@@ -15,6 +15,8 @@ const REPORTS: Array<{ kind: string; label: string }> = [
   { kind: 'by-method', label: 'By Payment Method' },
   { kind: 'by-type', label: 'By Type' },
   { kind: 'cashier-accountability', label: 'Cashier Accountability' },
+  { kind: 'remittances', label: 'Teller Remittances' },
+  { kind: 'teller-accountability', label: 'Teller Accountability' },
   { kind: 'exceptions', label: 'Voided & Reversed' },
 ];
 
