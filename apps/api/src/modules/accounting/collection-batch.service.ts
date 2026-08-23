@@ -143,6 +143,18 @@ export class CollectionBatchService {
         where: { id: { in: payments.map((p) => p.id) } },
         data: { collectionBatchId: batch.id },
       });
+      // Link any accepted teller remittances for the day to this batch so the
+      // remittance trail joins the accounting record (no-op when tellers aren't
+      // used — the seed data has none).
+      await tx.tellerSession.updateMany({
+        where: {
+          organizationId: orgId,
+          collectionDate: date,
+          status: 'accepted',
+          collectionBatchId: null,
+        },
+        data: { collectionBatchId: batch.id },
+      });
       return batch;
     });
   }

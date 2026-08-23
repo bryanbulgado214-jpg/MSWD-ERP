@@ -181,6 +181,7 @@ export class PaymentService {
       }
     }
 
+    const tellerSessionId = await this.openSessionId(orgId, userId);
     return runAudited(this.prisma, userId, async (tx) => {
       const payment = await tx.payment.create({
         data: {
@@ -190,6 +191,7 @@ export class PaymentService {
           paymentDate: new Date(data.paymentDate),
           totalAmount: data.totalAmount,
           paymentMethod: data.paymentMethod as 'cash' | 'check' | 'online' | 'bank_deposit',
+          ...(tellerSessionId ? { tellerSessionId } : {}),
           ...(data.checkNumber ? { checkNumber: data.checkNumber } : {}),
           ...(data.checkDate ? { checkDate: new Date(data.checkDate) } : {}),
           ...(data.bankName ? { bankName: data.bankName } : {}),
@@ -233,6 +235,19 @@ export class PaymentService {
       // when the Cashier FINALIZEs the daily collection batch.
       return payment;
     });
+  }
+
+  /**
+   * The open teller session for whoever is collecting, so their receipts attach
+   * to their shift. Returns null when the collector has no open session (e.g. a
+   * cashier or admin collecting ad-hoc) — the receipt is then simply unsessioned.
+   */
+  private async openSessionId(orgId: string, userId: string): Promise<string | null> {
+    const s = await this.prisma.tellerSession.findFirst({
+      where: { organizationId: orgId, tellerId: userId, status: 'open' },
+      select: { id: true },
+    });
+    return s?.id ?? null;
   }
 
   /** Active, non-system collection types a teller can collect at the counter. */
@@ -308,6 +323,7 @@ export class PaymentService {
       throw new BadRequestException('Enter the payer name for a walk-in collection.');
     }
 
+    const tellerSessionId = await this.openSessionId(orgId, userId);
     return runAudited(this.prisma, userId, async (tx) => {
       return tx.payment.create({
         data: {
@@ -316,6 +332,7 @@ export class PaymentService {
           paymentDate: new Date(data.paymentDate),
           totalAmount: data.totalAmount,
           paymentMethod: data.paymentMethod as 'cash' | 'check' | 'online' | 'bank_deposit',
+          ...(tellerSessionId ? { tellerSessionId } : {}),
           ...(data.consumerId ? { consumerId: data.consumerId } : {}),
           ...(data.payerName ? { payerName: data.payerName.trim() } : {}),
           ...(data.applicationRef ? { applicationRef: data.applicationRef } : {}),

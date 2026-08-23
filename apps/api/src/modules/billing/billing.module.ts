@@ -20,6 +20,8 @@ import { PaymentController } from './payment.controller';
 import { PaymentService } from './payment.service';
 import { RateScheduleController } from './rate-schedule.controller';
 import { RateScheduleService } from './rate-schedule.service';
+import { TellerSessionController } from './teller-session.controller';
+import { TellerSessionService } from './teller-session.service';
 
 @Module({
   imports: [AccountingModule],
@@ -33,6 +35,7 @@ import { RateScheduleService } from './rate-schedule.service';
     PaymentController,
     DisconnectionController,
     BillingReportController,
+    TellerSessionController,
   ],
   providers: [
     ConsumerService,
@@ -44,6 +47,7 @@ import { RateScheduleService } from './rate-schedule.service';
     PaymentService,
     DisconnectionService,
     BillingReportService,
+    TellerSessionService,
   ],
   exports: [
     ConsumerService,
@@ -55,6 +59,7 @@ import { RateScheduleService } from './rate-schedule.service';
     PaymentService,
     DisconnectionService,
     BillingReportService,
+    TellerSessionService,
   ],
 })
 export class BillingModule {}
