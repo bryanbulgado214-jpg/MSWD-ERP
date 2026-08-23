@@ -11,6 +11,11 @@ const REPORTS: Array<{ kind: string; label: string }> = [
   { kind: 'register', label: 'Collection Register' },
   { kind: 'deposits', label: 'Deposit Register' },
   { kind: 'posting', label: 'Posting Register' },
+  { kind: 'undeposited', label: 'Undeposited Collections' },
+  { kind: 'by-method', label: 'By Payment Method' },
+  { kind: 'by-type', label: 'By Type' },
+  { kind: 'cashier-accountability', label: 'Cashier Accountability' },
+  { kind: 'exceptions', label: 'Voided & Reversed' },
 ];
 
 function fmtMoney(v: unknown) {
@@ -180,19 +185,24 @@ export default function CollectionReportsPage() {
                 {report.totals && (
                   <tfoot>
                     <tr style={{ fontWeight: 700 }}>
-                      {report.columns.map((c, i) => (
-                        <td
-                          key={c.key}
-                          className={c.key in (report.totals ?? {}) ? 'acct-mono' : undefined}
-                          style={c.align === 'right' ? { textAlign: 'right' } : undefined}
-                        >
-                          {i === 0
-                            ? 'TOTAL'
-                            : report.totals && c.key in report.totals
-                              ? fmtMoney(report.totals[c.key])
-                              : ''}
-                        </td>
-                      ))}
+                      {report.columns.map((c, i) => {
+                        const total = report.totals?.[c.key];
+                        return (
+                          <td
+                            key={c.key}
+                            className={total != null ? 'acct-mono' : undefined}
+                            style={c.align === 'right' ? { textAlign: 'right' } : undefined}
+                          >
+                            {i === 0
+                              ? 'TOTAL'
+                              : total != null
+                                ? c.kind === 'money'
+                                  ? fmtMoney(total)
+                                  : total.toLocaleString('en-PH')
+                                : ''}
+                          </td>
+                        );
+                      })}
                     </tr>
                   </tfoot>
                 )}
