@@ -372,6 +372,74 @@
   color: var(--mswd-text-mid);
 }
 
+/* ── Permission checklist ── */
+.admin-perm-hint {
+  font-size: 12px;
+  color: var(--mswd-text-mid);
+}
+
+.admin-perm-group__header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: none;
+  border: none;
+  border-bottom: 1px solid #eaecf0;
+  padding: 6px 2px;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+.admin-perm-group__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--mswd-navy);
+}
+.admin-perm-group__caret {
+  font-size: 10px;
+  color: var(--mswd-text-mid);
+  width: 12px;
+}
+.admin-perm-group__count {
+  font-size: 12px;
+  font-weight: 600;
+  color: #98a2b3;
+  background: #f2f4f7;
+  border-radius: 10px;
+  padding: 2px 10px;
+}
+.admin-perm-group__count--on {
+  color: #067647;
+  background: #e6f7ee;
+}
+
+.admin-perm-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  background: #f8f9fc;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.admin-perm-check:hover {
+  background: #f2f4f7;
+}
+.admin-perm-check--on {
+  background: #f0f6ff;
+  border-color: #d1e3ff;
+}
+.admin-perm-check input {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
 /* ── User chips ── */
 .admin-user-chips {
   display: flex;

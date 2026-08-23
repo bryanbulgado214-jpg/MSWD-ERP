@@ -7,15 +7,35 @@ import { getRole, listPermissions, addPermissionToRole, removePermissionFromRole
 import { AdminSubNav } from './AdminSubNav';
 import './admin.css';
 
+// Friendly module names + a nav-like ordering; unknown modules fall to the end.
+const MODULE_LABELS: Record<string, string> = {
+  core: 'Administration',
+  billing: 'Billing & Collection',
+  accounting: 'Accounting',
+  budgeting: 'Budgeting',
+  procurement: 'Procurement',
+  inventory: 'Inventory',
+  hr: 'HR & Payroll',
+  workorder: 'Work Orders',
+  complaint: 'Complaints',
+  asset: 'Assets',
+  reports: 'Reports',
+};
+const MODULE_ORDER = Object.keys(MODULE_LABELS);
+const moduleLabel = (m: string) => MODULE_LABELS[m] ?? m.charAt(0).toUpperCase() + m.slice(1);
+const moduleRank = (m: string) => {
+  const i = MODULE_ORDER.indexOf(m);
+  return i === -1 ? MODULE_ORDER.length : i;
+};
+
 export function RoleDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [role, setRole] = useState<RoleDetail | null>(null);
   const [allPerms, setAllPerms] = useState<PermissionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showAddPerm, setShowAddPerm] = useState(false);
-  const [selectedPermId, setSelectedPermId] = useState('');
-  const [filterModule, setFilterModule] = useState('');
+  const [pending, setPending] = useState<Set<string>>(new Set());
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   function load() {
     if (!id) return;
@@ -46,38 +66,49 @@ export function RoleDetailPage() {
       </div>
     );
 
-  const assignedPermIds = new Set(role.permissions.map((p) => p.id));
-  const availablePerms = allPerms.filter((p) => !assignedPermIds.has(p.id));
-  const modules = [...new Set(availablePerms.map((p) => p.module))].sort();
-  const filteredPerms = filterModule
-    ? availablePerms.filter((p) => p.module === filterModule)
-    : availablePerms;
+  // permId → assignmentId for the permissions this role currently holds.
+  const assigned = new Map(role.permissions.map((p) => [p.id, p.assignmentId]));
 
-  const permsByModule: Record<string, typeof role.permissions> = {};
-  for (const p of role.permissions) {
-    (permsByModule[p.module] ??= []).push(p);
+  // Every permission in the system, grouped by module (the full checklist).
+  const permsByModule: Record<string, PermissionItem[]> = {};
+  for (const p of allPerms) (permsByModule[p.module] ??= []).push(p);
+  for (const m of Object.keys(permsByModule)) {
+    permsByModule[m]!.sort((a, b) => a.code.localeCompare(b.code));
   }
+  const orderedModules = Object.keys(permsByModule).sort(
+    (a, b) => moduleRank(a) - moduleRank(b) || a.localeCompare(b),
+  );
 
-  async function handleAddPerm() {
-    if (!id || !selectedPermId) return;
-    try {
-      await addPermissionToRole(id, selectedPermId);
-      setShowAddPerm(false);
-      setSelectedPermId('');
-      load();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed');
-    }
-  }
-
-  async function handleRemovePerm(assignmentId: string) {
+  async function toggle(perm: PermissionItem, checked: boolean) {
     if (!id) return;
+    setPending((prev) => new Set(prev).add(perm.id));
+    setError('');
     try {
-      await removePermissionFromRole(id, assignmentId);
-      load();
+      if (checked) {
+        await addPermissionToRole(id, perm.id);
+      } else {
+        const assignmentId = role?.permissions.find((p) => p.id === perm.id)?.assignmentId;
+        if (assignmentId) await removePermissionFromRole(id, assignmentId);
+      }
+      setRole(await getRole(id));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed');
+      setError(err instanceof Error ? err.message : 'Failed to update permission.');
+    } finally {
+      setPending((prev) => {
+        const next = new Set(prev);
+        next.delete(perm.id);
+        return next;
+      });
     }
+  }
+
+  function toggleCollapse(mod: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(mod)) next.delete(mod);
+      else next.add(mod);
+      return next;
+    });
   }
 
   return (
@@ -106,97 +137,61 @@ export function RoleDetailPage() {
 
       <div className="admin-section">
         <div className="admin-section__header">
-          <h2 className="admin-section__title">Permissions ({role.permissions.length})</h2>
-          <button
-            type="button"
-            className="admin-btn admin-btn--primary admin-btn--sm"
-            onClick={() => setShowAddPerm(true)}
-          >
-            + Add Permission
-          </button>
+          <h2 className="admin-section__title">
+            Permissions ({role.permissions.length} of {allPerms.length})
+          </h2>
+          <span className="admin-perm-hint">Check to grant access · uncheck to revoke</span>
         </div>
 
-        {showAddPerm && (
-          <div className="admin-modal-overlay" onClick={() => setShowAddPerm(false)}>
-            <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-              <h2 className="admin-modal__title">Add Permission</h2>
-              <div className="admin-field" style={{ marginBottom: 8 }}>
-                <span className="admin-field__label">Filter by module</span>
-                <select
-                  className="admin-input"
-                  value={filterModule}
-                  onChange={(e) => {
-                    setFilterModule(e.target.value);
-                    setSelectedPermId('');
-                  }}
-                >
-                  <option value="">All modules</option>
-                  {modules.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="admin-field">
-                <span className="admin-field__label">Permission</span>
-                <select
-                  className="admin-input"
-                  value={selectedPermId}
-                  onChange={(e) => setSelectedPermId(e.target.value)}
-                >
-                  <option value="">Select...</option>
-                  {filteredPerms.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.code} — {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="admin-modal__actions">
-                <button type="button" className="admin-btn" onClick={() => setShowAddPerm(false)}>
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="admin-btn admin-btn--primary"
-                  disabled={!selectedPermId}
-                  onClick={handleAddPerm}
-                >
-                  Add
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {Object.keys(permsByModule)
-          .sort()
-          .map((mod) => (
+        {orderedModules.map((mod) => {
+          const perms = permsByModule[mod]!;
+          const grantedCount = perms.filter((p) => assigned.has(p.id)).length;
+          const isCollapsed = collapsed.has(mod);
+          return (
             <div key={mod} className="admin-perm-group">
-              <h3 className="admin-perm-group__title">{mod}</h3>
-              <div className="admin-perm-list">
-                {permsByModule[mod]?.map((p) => (
-                  <div key={p.assignmentId} className="admin-perm-item">
-                    <div>
-                      <span className="admin-perm-item__code">{p.code}</span>
-                      <span className="admin-perm-item__name">{p.name}</span>
-                    </div>
-                    <button
-                      type="button"
-                      className="admin-btn admin-btn--sm admin-btn--danger"
-                      onClick={() => handleRemovePerm(p.assignmentId)}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <button
+                type="button"
+                className="admin-perm-group__header"
+                onClick={() => toggleCollapse(mod)}
+              >
+                <span className="admin-perm-group__label">
+                  <span className="admin-perm-group__caret">{isCollapsed ? '▸' : '▾'}</span>
+                  {moduleLabel(mod)}
+                </span>
+                <span
+                  className={`admin-perm-group__count${grantedCount > 0 ? ' admin-perm-group__count--on' : ''}`}
+                >
+                  {grantedCount}/{perms.length}
+                </span>
+              </button>
+              {!isCollapsed && (
+                <div className="admin-perm-list">
+                  {perms.map((p) => {
+                    const checked = assigned.has(p.id);
+                    return (
+                      <label
+                        key={p.id}
+                        className={`admin-perm-check${checked ? ' admin-perm-check--on' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={pending.has(p.id)}
+                          onChange={(e) => toggle(p, e.target.checked)}
+                        />
+                        <span className="admin-perm-item__code">{p.code}</span>
+                        <span className="admin-perm-item__name">{p.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          ))}
+          );
+        })}
 
-        {role.permissions.length === 0 && (
-          <div className="admin-empty">No permissions assigned to this role.</div>
+        {allPerms.length === 0 && (
+          <div className="admin-empty">No permissions are defined in the system.</div>
         )}
       </div>
 
