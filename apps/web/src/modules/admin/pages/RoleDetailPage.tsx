@@ -28,6 +28,100 @@ const moduleRank = (m: string) => {
   return i === -1 ? MODULE_ORDER.length : i;
 };
 
+// Second level: the feature/area within a module, derived from the permission
+// code (module.area.action). collections.* codes keep their own prefix.
+const featureOf = (module: string, code: string): string => {
+  const t = code.split('.');
+  const first = t[0] ?? code;
+  return first !== module ? first : (t[1] ?? first);
+};
+const FEATURE_LABELS: Record<string, string> = {
+  read: 'General access',
+  reports: 'Reports',
+  reconcile: 'Reconciliation',
+  // accounting
+  bank: 'Bank Accounts',
+  check: 'Checks',
+  coa: 'Chart of Accounts',
+  collections: 'Collections & Remittance',
+  dv: 'Disbursement Vouchers',
+  jev: 'Journal Entries',
+  period: 'Periods',
+  // billing
+  bill: 'Bills',
+  consumer: 'Consumers',
+  disconnect: 'Disconnections',
+  meter: 'Meters',
+  payment: 'Payments',
+  rate: 'Rate Schedules',
+  reading: 'Meter Readings',
+  session: 'Teller Sessions',
+  // budgeting
+  cycle: 'Budget Cycles',
+  header: 'Budget Headers',
+  line: 'Budget Lines',
+  obligation: 'Obligations',
+  release: 'Allotment Releases',
+  reservation: 'Reservations',
+  version: 'Versions',
+  // complaint / workorder
+  assign: 'Assignment',
+  close: 'Closing',
+  create: 'Creation',
+  resolve: 'Resolution',
+  execute: 'Execution',
+  verify: 'Verification',
+  // core
+  audit: 'Audit Trail',
+  fiscal_period: 'Fiscal Periods',
+  organization: 'Organization Settings',
+  role: 'Roles',
+  user: 'Users',
+  // hr
+  attendance: 'Attendance',
+  employee: 'Employees',
+  leave: 'Leave',
+  payroll: 'Payroll',
+  salary: 'Salary',
+  // inventory
+  acknowledge: 'Acknowledgement',
+  dispose: 'Disposal',
+  ics: 'ICS',
+  issue: 'Issuance',
+  item: 'Items',
+  ledger: 'Ledger',
+  par: 'PAR',
+  physical_count: 'Physical Count',
+  property_card: 'Property Card',
+  receive: 'Receiving',
+  request: 'Requests',
+  ris: 'RIS',
+  stock_card: 'Stock Card',
+  transfer: 'Transfers',
+  // procurement
+  app: 'APP',
+  bac: 'BAC',
+  caf: 'CAF',
+  delegation: 'Delegation',
+  inspection: 'Inspection',
+  ors: 'ORS',
+  po: 'Purchase Orders',
+  ppmp: 'PPMP',
+  pr: 'Purchase Requests',
+  supplier: 'Suppliers',
+  // asset
+  category: 'Categories',
+  depreciation: 'Depreciation',
+};
+const featureLabel = (f: string) =>
+  FEATURE_LABELS[f] ??
+  f
+    .split('_')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+// General access sorts first within a module; the rest by label.
+const featureRank = (f: string) => (f === 'read' ? 0 : 1);
+
 export function RoleDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [role, setRole] = useState<RoleDetail | null>(null);
@@ -69,15 +163,24 @@ export function RoleDetailPage() {
   // permId → assignmentId for the permissions this role currently holds.
   const assigned = new Map(role.permissions.map((p) => [p.id, p.assignmentId]));
 
-  // Every permission in the system, grouped by module (the full checklist).
-  const permsByModule: Record<string, PermissionItem[]> = {};
-  for (const p of allPerms) (permsByModule[p.module] ??= []).push(p);
-  for (const m of Object.keys(permsByModule)) {
-    permsByModule[m]!.sort((a, b) => a.code.localeCompare(b.code));
+  // Every permission in the system, nested module → feature → permissions.
+  const tree: Record<string, Record<string, PermissionItem[]>> = {};
+  for (const p of allPerms) {
+    const f = featureOf(p.module, p.code);
+    ((tree[p.module] ??= {})[f] ??= []).push(p);
   }
-  const orderedModules = Object.keys(permsByModule).sort(
+  for (const m of Object.keys(tree)) {
+    for (const f of Object.keys(tree[m]!)) {
+      tree[m]![f]!.sort((a, b) => a.code.localeCompare(b.code));
+    }
+  }
+  const orderedModules = Object.keys(tree).sort(
     (a, b) => moduleRank(a) - moduleRank(b) || a.localeCompare(b),
   );
+  const orderedFeatures = (features: Record<string, PermissionItem[]>) =>
+    Object.keys(features).sort(
+      (a, b) => featureRank(a) - featureRank(b) || featureLabel(a).localeCompare(featureLabel(b)),
+    );
 
   async function toggle(perm: PermissionItem, checked: boolean) {
     if (!id) return;
@@ -144,8 +247,9 @@ export function RoleDetailPage() {
         </div>
 
         {orderedModules.map((mod) => {
-          const perms = permsByModule[mod]!;
-          const grantedCount = perms.filter((p) => assigned.has(p.id)).length;
+          const features = tree[mod]!;
+          const modPerms = Object.values(features).flat();
+          const grantedCount = modPerms.filter((p) => assigned.has(p.id)).length;
           const isCollapsed = collapsed.has(mod);
           return (
             <div key={mod} className="admin-perm-group">
@@ -161,27 +265,43 @@ export function RoleDetailPage() {
                 <span
                   className={`admin-perm-group__count${grantedCount > 0 ? ' admin-perm-group__count--on' : ''}`}
                 >
-                  {grantedCount}/{perms.length}
+                  {grantedCount}/{modPerms.length}
                 </span>
               </button>
               {!isCollapsed && (
-                <div className="admin-perm-list">
-                  {perms.map((p) => {
-                    const checked = assigned.has(p.id);
+                <div className="admin-perm-features">
+                  {orderedFeatures(features).map((f) => {
+                    const perms = features[f]!;
+                    const fGranted = perms.filter((p) => assigned.has(p.id)).length;
                     return (
-                      <label
-                        key={p.id}
-                        className={`admin-perm-check${checked ? ' admin-perm-check--on' : ''}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={pending.has(p.id)}
-                          onChange={(e) => toggle(p, e.target.checked)}
-                        />
-                        <span className="admin-perm-item__code">{p.code}</span>
-                        <span className="admin-perm-item__name">{p.name}</span>
-                      </label>
+                      <div key={f} className="admin-perm-feature">
+                        <div className="admin-perm-feature__title">
+                          {featureLabel(f)}
+                          <span className="admin-perm-feature__count">
+                            {fGranted}/{perms.length}
+                          </span>
+                        </div>
+                        <div className="admin-perm-list">
+                          {perms.map((p) => {
+                            const checked = assigned.has(p.id);
+                            return (
+                              <label
+                                key={p.id}
+                                className={`admin-perm-check${checked ? ' admin-perm-check--on' : ''}`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  disabled={pending.has(p.id)}
+                                  onChange={(e) => toggle(p, e.target.checked)}
+                                />
+                                <span className="admin-perm-item__code">{p.code}</span>
+                                <span className="admin-perm-item__name">{p.name}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
                     );
                   })}
                 </div>

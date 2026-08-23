@@ -440,6 +440,31 @@
   cursor: pointer;
 }
 
+.admin-perm-features {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+.admin-perm-feature {
+  padding-left: 18px;
+  border-left: 2px solid #eef0f4;
+}
+.admin-perm-feature__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mswd-text-mid);
+  margin: 0 0 6px;
+}
+.admin-perm-feature__count {
+  font-size: 11px;
+  font-weight: 600;
+  color: #98a2b3;
+}
+
 /* ── User chips ── */
 .admin-user-chips {
   display: flex;
