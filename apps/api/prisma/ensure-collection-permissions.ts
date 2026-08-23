@@ -10,13 +10,18 @@ const prisma = new PrismaClient();
 // Maker-checker permissions for the collection-accounting workflow.
 const PERMISSIONS: Array<{ code: string; name: string }> = [
   { code: 'collections.accounting.view', name: 'View collection batches & accounting' },
-  { code: 'collections.accounting.review', name: 'Review / consolidate collection batches' },
+  {
+    code: 'collections.accounting.consolidate',
+    name: "Consolidate / finalize the day's collections",
+  },
+  { code: 'collections.accounting.review', name: 'Review collection batches' },
   { code: 'collections.accounting.approve', name: 'Approve collection batches' },
   { code: 'collections.accounting.post', name: 'Post collection batches & deposits to GL' },
   { code: 'collections.accounting.reverse', name: 'Reverse posted collection batches' },
 ];
-// Which existing roles receive them (all five each). Segregation of duties is
-// enforced per-action at post time, not by withholding the permission.
+// Accounting staff hold the whole chain — consolidate through post/reverse. The
+// cashier is deliberately limited to consolidate only (see
+// ensure-cashier-collection-access): a cash custodian must not do bookkeeping.
 const ROLES_WITH_ALL = ['ADMIN', 'ACCOUNTANT'];
 
 async function main() {

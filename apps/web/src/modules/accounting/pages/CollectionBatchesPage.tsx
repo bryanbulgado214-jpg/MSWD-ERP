@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { useAuth } from '../../../app/auth';
 import { AccountingApiError, consolidateCollectionBatch, getCollectionBatches } from '../api';
 import type { CollectionBatch } from '../types';
 
@@ -36,6 +37,8 @@ type LoadState =
 
 export default function CollectionBatchesPage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canConsolidate = hasPermission('collections.accounting.consolidate');
   const [tab, setTab] = useState('for_review');
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [date, setDate] = useState('2026-08-22');
@@ -102,25 +105,27 @@ export default function CollectionBatchesPage({ embedded = false }: { embedded?:
             </button>
           ))}
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'flex-end' }}>
-          <label style={{ fontSize: 12, color: '#475467' }}>
-            Consolidate collection day
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              style={{ display: 'block', marginTop: 2 }}
-            />
-          </label>
-          <button
-            type="button"
-            className="acct-btn acct-btn--primary"
-            onClick={consolidate}
-            disabled={busy}
-          >
-            {busy ? 'Consolidating…' : 'Consolidate'}
-          </button>
-        </div>
+        {canConsolidate && (
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+            <label style={{ fontSize: 12, color: '#475467' }}>
+              Consolidate collection day
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                style={{ display: 'block', marginTop: 2 }}
+              />
+            </label>
+            <button
+              type="button"
+              className="acct-btn acct-btn--primary"
+              onClick={consolidate}
+              disabled={busy}
+            >
+              {busy ? 'Consolidating…' : 'Consolidate'}
+            </button>
+          </div>
+        )}
       </div>
 
       {notice && <div className="acct-success">{notice}</div>}

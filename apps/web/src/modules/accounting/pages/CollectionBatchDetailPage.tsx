@@ -421,7 +421,7 @@ export default function CollectionBatchDetailPage() {
             </div>
           )}
 
-          {detail.deposit.undeposited > 0.005 && (
+          {canPost && detail.deposit.undeposited > 0.005 && (
             <div
               style={{
                 display: 'flex',

@@ -47,7 +47,7 @@ export class CollectionBatchController {
   }
 
   @Post('consolidate')
-  @RequirePermissions('collections.accounting.review')
+  @RequirePermissions('collections.accounting.consolidate')
   consolidate(@CurrentUser() user: AuthenticatedUser, @Body() dto: ConsolidateDto) {
     return this.service.consolidate(user.organizationId, user.userId, dto.date);
   }

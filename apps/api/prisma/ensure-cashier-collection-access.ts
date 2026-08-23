@@ -35,9 +35,18 @@ const CASHIER_CODES = [
   'billing.payment.collect',
   'billing.reports.view',
   'collections.accounting.view',
+  // The cashier finalizes (consolidates) the day's collections but does NOT do
+  // the bookkeeping — review/approve/post/reverse stay with the accountant.
+  'collections.accounting.consolidate',
+];
+
+// Segregation of duties: a cash custodian must not post to the GL. Revoke these
+// from the cashier if an earlier build granted them.
+const CASHIER_REVOKE = [
   'collections.accounting.review',
   'collections.accounting.approve',
   'collections.accounting.post',
+  'collections.accounting.reverse',
 ];
 
 async function main() {
@@ -78,8 +87,17 @@ async function main() {
     grants++;
   }
 
+  // Revoke any bookkeeping permissions a prior build gave the cashier.
+  const revokePerms = await prisma.permission.findMany({
+    where: { code: { in: CASHIER_REVOKE } },
+    select: { id: true },
+  });
+  const revoked = await prisma.rolePermission.deleteMany({
+    where: { roleId: role.id, permissionId: { in: revokePerms.map((p) => p.id) } },
+  });
+
   console.log(
-    `Cashier collection access ensured: granted ${grants} permission(s) to SBWD CASHIER (${CASHIER_CODES.join(', ')}).`,
+    `Cashier collection access ensured: granted ${grants} permission(s), revoked ${revoked.count} bookkeeping permission(s) from SBWD CASHIER.`,
   );
 }
 
