@@ -83,7 +83,7 @@ export default function CollectionPage({ embedded = false }: { embedded?: boolea
 
   const matches = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (q.length < 2) return [];
+    if (q.length < 1) return [];
     return consumers
       .filter(
         (c) =>
@@ -314,7 +314,7 @@ export default function CollectionPage({ embedded = false }: { embedded?: boolea
               </tbody>
             </table>
           )}
-          {!selected && search.trim().length >= 2 && matches.length === 0 && (
+          {!selected && search.trim().length >= 1 && matches.length === 0 && (
             <div className="bill-empty">No matching consumer.</div>
           )}
 
