@@ -20,12 +20,17 @@ import PrintInvoicePage from './pages/PrintInvoicePage';
 import PrintOrPage from './pages/PrintOrPage';
 import PrintSoaPage from './pages/PrintSoaPage';
 import RateSchedulePage from './pages/RateSchedulePage';
+import RemittancesPage from './pages/RemittancesPage';
+import TellerDailyReportPage from './pages/TellerDailyReportPage';
+import TellerSessionPage from './pages/TellerSessionPage';
 
 export const billingRoutes: RouteObject[] = [
   { path: '/billing', element: <BillingDashboardPage /> },
   { path: '/billing/dashboard', element: <BillingDashboardPage /> },
   { path: '/billing/collection', element: <CollectionPage /> },
   { path: '/billing/other-collection', element: <OtherCollectionPage /> },
+  { path: '/billing/session', element: <TellerSessionPage /> },
+  { path: '/billing/remittances', element: <RemittancesPage /> },
   { path: '/billing/consumers', element: <ConsumerListPage /> },
   { path: '/billing/consumers/:id', element: <ConsumerDetailPage /> },
   { path: '/billing/meters', element: <MeterRegistryPage /> },
@@ -42,5 +47,6 @@ export const billingRoutes: RouteObject[] = [
   { path: '/billing/reports', element: <BillingReportsPage /> },
   { path: '/billing/print/soa', element: <PrintSoaPage /> },
   { path: '/billing/print/or/:id', element: <PrintOrPage /> },
+  { path: '/billing/print/session/:id', element: <TellerDailyReportPage /> },
   { path: '/billing/print/invoice/:id', element: <PrintInvoicePage /> },
 ];

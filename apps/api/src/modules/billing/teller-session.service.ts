@@ -51,7 +51,7 @@ export class TellerSessionService {
   }
 
   async list(orgId: string, filters: { status?: string; tellerId?: string; date?: string }) {
-    return this.prisma.tellerSession.findMany({
+    const sessions = await this.prisma.tellerSession.findMany({
       where: {
         organizationId: orgId,
         ...(filters.status ? { status: filters.status as never } : {}),
@@ -60,6 +60,15 @@ export class TellerSessionService {
       },
       orderBy: [{ openedAt: 'desc' }],
     });
+    const tellerIds = [...new Set(sessions.map((s) => s.tellerId))];
+    const tellers = tellerIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: tellerIds } },
+          select: { id: true, username: true },
+        })
+      : [];
+    const nameById = new Map(tellers.map((t) => [t.id, t.username]));
+    return sessions.map((s) => ({ ...s, tellerName: nameById.get(s.tellerId) ?? '' }));
   }
 
   async getDetail(orgId: string, id: string) {
@@ -149,10 +158,16 @@ export class TellerSessionService {
     }
     const { str, date } = today();
     return runAudited(this.prisma, tellerId, async (tx) => {
-      const seq = await tx.tellerSession.count({
-        where: { organizationId: orgId, collectionDate: date },
+      // Derive the next sequence from the highest existing suffix for the day —
+      // robust to gaps (a deleted session) that a plain count() would collide on.
+      const prefix = `TS-${str.replace(/-/g, '')}-`;
+      const last = await tx.tellerSession.findFirst({
+        where: { organizationId: orgId, sessionNumber: { startsWith: prefix } },
+        orderBy: { sessionNumber: 'desc' },
+        select: { sessionNumber: true },
       });
-      const sessionNumber = `TS-${str.replace(/-/g, '')}-${String(seq + 1).padStart(3, '0')}`;
+      const lastSeq = last ? parseInt(last.sessionNumber.slice(prefix.length), 10) || 0 : 0;
+      const sessionNumber = `${prefix}${String(lastSeq + 1).padStart(3, '0')}`;
       return tx.tellerSession.create({
         data: {
           organizationId: orgId,

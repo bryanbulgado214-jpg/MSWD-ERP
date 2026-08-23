@@ -15,6 +15,8 @@ import type {
   Payment,
   PaymentListItem,
   RateSchedule,
+  TellerSession,
+  TellerSessionDetail,
   UnpaidBill,
 } from './types';
 
@@ -536,5 +538,48 @@ export async function createOtherCollection(data: {
   allocations: Array<{ collectionTypeId: string; amountApplied: number }>;
 }): Promise<Payment> {
   const res = await authFetchMutate('/billing/payments/other', 'POST', data);
+  return res.json();
+}
+
+// ── Teller sessions / remittance ──
+
+export async function getCurrentSession(): Promise<TellerSession | null> {
+  const res = await authFetch('/billing/teller-sessions/current');
+  const text = await res.text();
+  return text ? (JSON.parse(text) as TellerSession) : null;
+}
+
+export async function listTellerSessions(params?: string): Promise<TellerSession[]> {
+  const res = await authFetch(`/billing/teller-sessions${params ? `?${params}` : ''}`);
+  return res.json();
+}
+
+export async function getTellerSession(id: string): Promise<TellerSessionDetail> {
+  const res = await authFetch(`/billing/teller-sessions/${id}`);
+  return res.json();
+}
+
+export async function openTellerSession(): Promise<TellerSession> {
+  const res = await authFetchMutate('/billing/teller-sessions/open', 'POST', {});
+  return res.json();
+}
+
+export async function closeTellerSession(id: string): Promise<TellerSession> {
+  const res = await authFetchMutate(`/billing/teller-sessions/${id}/close`, 'POST', {});
+  return res.json();
+}
+
+export async function remitTellerSession(
+  id: string,
+  data: { actualCashRemitted: number; actualChecksRemitted: number; remarks?: string },
+): Promise<TellerSession> {
+  const res = await authFetchMutate(`/billing/teller-sessions/${id}/remit`, 'POST', data);
+  return res.json();
+}
+
+export async function receiveTellerSession(id: string, remarks?: string): Promise<TellerSession> {
+  const res = await authFetchMutate(`/billing/teller-sessions/${id}/receive`, 'POST', {
+    ...(remarks ? { remarks } : {}),
+  });
   return res.json();
 }

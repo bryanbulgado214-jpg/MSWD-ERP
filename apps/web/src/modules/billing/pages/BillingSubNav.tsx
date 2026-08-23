@@ -29,6 +29,12 @@ const LINKS: Array<{
     label: 'Other Collection',
     visible: has('billing.payment.collect'),
   },
+  { to: '/billing/session', label: 'My Session', visible: has('billing.session.manage') },
+  {
+    to: '/billing/remittances',
+    label: 'Remittances',
+    visible: has('collections.remittance.receive'),
+  },
   { to: '/billing/consumers', label: 'Consumers', visible: has('billing.read') },
   { to: '/billing/meters', label: 'Meters', visible: has('billing.read') },
   { to: '/billing/rate-schedules', label: 'Rate Schedules', visible: has('billing.read') },

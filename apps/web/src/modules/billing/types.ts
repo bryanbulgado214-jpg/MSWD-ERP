@@ -364,3 +364,69 @@ export interface CollectibleType {
   nature: 'receivable_settlement' | 'income' | 'liability';
   requiresConsumer: boolean;
 }
+
+// ── Teller sessions / remittance ──
+
+export type TellerSessionStatus = 'open' | 'closed' | 'remitted' | 'accepted';
+
+export interface TellerSession {
+  id: string;
+  sessionNumber: string;
+  tellerId: string;
+  collectionDate: string;
+  status: TellerSessionStatus;
+  openedAt: string;
+  closedAt: string | null;
+  beginningOrNumber: string | null;
+  endingOrNumber: string | null;
+  transactionCount: number;
+  voidedReceiptCount: number;
+  cashAmount: string;
+  checkAmount: string;
+  electronicAmount: string;
+  otherAmount: string;
+  totalCollections: string;
+  expectedRemittance: string;
+  actualCashRemitted: string;
+  actualChecksRemitted: string;
+  totalActualRemittance: string;
+  shortageOverage: string;
+  remittedAt: string | null;
+  receivedByCashierId: string | null;
+  receivedAt: string | null;
+  collectionBatchId: string | null;
+  remarks: string | null;
+  tellerName?: string;
+}
+
+export interface TellerSessionLive {
+  transactionCount: number;
+  voidedReceiptCount: number;
+  beginningOrNumber: string | null;
+  endingOrNumber: string | null;
+  cashAmount: number;
+  checkAmount: number;
+  electronicAmount: number;
+  otherAmount: number;
+  totalCollections: number;
+  expectedRemittance: number;
+}
+
+export interface TellerSessionPayment {
+  id: string;
+  orNumber: string;
+  paymentDate: string;
+  totalAmount: string;
+  paymentMethod: string;
+  status: string;
+  payerName: string | null;
+  consumer: { accountNumber: string; firstName: string; lastName: string } | null;
+}
+
+export interface TellerSessionDetail {
+  session: TellerSession;
+  live: TellerSessionLive;
+  tellerName: string;
+  cashierName: string;
+  payments: TellerSessionPayment[];
+}
