@@ -1,11 +1,11 @@
-import type { RouteObject } from 'react-router-dom';
+import { Navigate, type RouteObject } from 'react-router-dom';
 
 import BillDetailPage from './pages/BillDetailPage';
 import BillingDashboardPage from './pages/BillingDashboardPage';
 import BillingPeriodPage from './pages/BillingPeriodPage';
 import BillingReportsPage from './pages/BillingReportsPage';
 import BillListPage from './pages/BillListPage';
-import CollectionPage from './pages/CollectionPage';
+import CollectionHubPage from './pages/CollectionHubPage';
 import ConsumerDetailPage from './pages/ConsumerDetailPage';
 import ConsumerListPage from './pages/ConsumerListPage';
 import DisconnectionDetailPage from './pages/DisconnectionDetailPage';
@@ -13,7 +13,6 @@ import DisconnectionPage from './pages/DisconnectionPage';
 import MeterDetailPage from './pages/MeterDetailPage';
 import MeterReadingPage from './pages/MeterReadingPage';
 import MeterRegistryPage from './pages/MeterRegistryPage';
-import OtherCollectionPage from './pages/OtherCollectionPage';
 import PaymentDetailPage from './pages/PaymentDetailPage';
 import PaymentPage from './pages/PaymentPage';
 import PrintInvoicePage from './pages/PrintInvoicePage';
@@ -27,8 +26,11 @@ import TellerSessionPage from './pages/TellerSessionPage';
 export const billingRoutes: RouteObject[] = [
   { path: '/billing', element: <BillingDashboardPage /> },
   { path: '/billing/dashboard', element: <BillingDashboardPage /> },
-  { path: '/billing/collection', element: <CollectionPage /> },
-  { path: '/billing/other-collection', element: <OtherCollectionPage /> },
+  { path: '/billing/collection', element: <CollectionHubPage /> },
+  {
+    path: '/billing/other-collection',
+    element: <Navigate to="/billing/collection?tab=other" replace />,
+  },
   { path: '/billing/session', element: <TellerSessionPage /> },
   { path: '/billing/remittances', element: <RemittancesPage /> },
   { path: '/billing/consumers', element: <ConsumerListPage /> },

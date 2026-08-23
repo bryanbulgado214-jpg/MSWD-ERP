@@ -31,7 +31,7 @@ interface Line {
  * only) or a linked consumer. Records a receipt that flows into the day's
  * collection batch and posts to the GL on Cashier finalize.
  */
-export default function OtherCollectionPage() {
+export default function OtherCollectionPage({ embedded = false }: { embedded?: boolean }) {
   const { hasPermission } = useAuth();
   const canCollect = hasPermission('billing.payment.collect');
 
@@ -179,10 +179,8 @@ export default function OtherCollectionPage() {
     }
   }
 
-  return (
-    <div className="bill-page">
-      <BillingSubNav />
-      <h1>Other Collection</h1>
+  const inner = (
+    <>
       <p style={{ color: '#667085', fontSize: 13, maxWidth: 720, margin: '0 0 12px' }}>
         Collect non-bill payments — registration, installation, reconnection, and relocation fees,
         guaranty deposits, and advances — from a walk-in or a linked consumer. Issues an OR that
@@ -495,6 +493,14 @@ export default function OtherCollectionPage() {
           </div>
         </div>
       )}
+    </>
+  );
+  if (embedded) return inner;
+  return (
+    <div className="bill-page">
+      <BillingSubNav />
+      <h1>Other Collection</h1>
+      {inner}
     </div>
   );
 }

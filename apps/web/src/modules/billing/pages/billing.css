@@ -521,3 +521,25 @@
   font-size: 13px;
 }
 .bill-link:hover { text-decoration: underline; }
+
+/* ── Horizontal tabs inside the Collection hub (Revenue / Other) ── */
+.bill-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1.5px solid #eaecf0;
+  margin-bottom: 20px;
+}
+.bill-tab {
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #667085;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1.5px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.bill-tab:hover { color: var(--mswd-navy); }
+.bill-tab--active { color: var(--mswd-blue); border-bottom-color: var(--mswd-blue); }

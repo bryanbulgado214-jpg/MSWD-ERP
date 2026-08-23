@@ -39,7 +39,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * Collection hub for the teller: search a consumer by account number or name,
  * see their account ledger, and accept payment — all on one screen.
  */
-export default function CollectionPage() {
+export default function CollectionPage({ embedded = false }: { embedded?: boolean }) {
   const { hasPermission } = useAuth();
   const canCollect = hasPermission('billing.payment.collect');
 
@@ -227,11 +227,8 @@ export default function CollectionPage() {
     }
   }
 
-  return (
-    <div className="bill-page">
-      <BillingSubNav />
-      <h1>Collection</h1>
-
+  const inner = (
+    <>
       {!canCollect ? (
         <div className="bill-empty">You do not have permission to accept payments.</div>
       ) : (
@@ -801,6 +798,14 @@ export default function CollectionPage() {
           )}
         </>
       )}
+    </>
+  );
+  if (embedded) return inner;
+  return (
+    <div className="bill-page">
+      <BillingSubNav />
+      <h1>Collection</h1>
+      {inner}
     </div>
   );
 }
