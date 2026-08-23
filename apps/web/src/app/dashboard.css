@@ -154,6 +154,11 @@
   color: #067647;
 }
 
+.dashboard__action-module--billing {
+  background: #fff6ed;
+  color: #b93815;
+}
+
 .dashboard__action-body {
   flex: 1;
   min-width: 0;

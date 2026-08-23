@@ -258,6 +258,46 @@ export class DashboardController {
       });
     }
 
+    // ── Teller remittances awaiting the cashier's acceptance ──
+    if (perms.has('collections.remittance.receive')) {
+      const remittances = await this.prisma.tellerSession.findMany({
+        where: { organizationId: orgId, status: 'remitted' },
+        orderBy: { remittedAt: 'asc' },
+        take: 20,
+      });
+      const tellerIds = [...new Set(remittances.map((s) => s.tellerId))];
+      const tellers = tellerIds.length
+        ? await this.prisma.user.findMany({
+            where: { id: { in: tellerIds } },
+            select: { id: true, username: true },
+          })
+        : [];
+      const nameById = new Map(tellers.map((t) => [t.id, t.username]));
+      for (const s of remittances) {
+        const teller = nameById.get(s.tellerId) ?? 'teller';
+        const so = Number(s.shortageOverage);
+        const soNote =
+          so === 0
+            ? ''
+            : ` — ${so > 0 ? 'overage' : 'shortage'} of ₱${Math.abs(so).toLocaleString('en-PH', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}`;
+        items.push({
+          id: s.id,
+          module: 'billing',
+          type: 'teller_remittance',
+          label: s.sessionNumber,
+          description: `Remittance from ${teller}${soNote}`,
+          amount: s.totalActualRemittance.toString(),
+          createdAt: (s.remittedAt ?? s.createdAt).toISOString(),
+          actionLabel: 'Receive',
+          link: '/billing/remittances',
+          createdBy: teller,
+        });
+      }
+    }
+
     return { items, total: items.length };
   }
 
