@@ -3848,6 +3848,8 @@ model TellerSession {
   receivedByCashierId   String?             @map("received_by_cashier_id") @db.Uuid
   receivedAt            DateTime?           @map("received_at") @db.Timestamptz(6)
   collectionBatchId     String?             @map("collection_batch_id") @db.Uuid
+  // Denomination breakdown of the cash remitted: { "1000": 2, "500": 3, ... }.
+  cashCount             Json?               @map("cash_count")
   remarks               String?
   createdAt             DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)

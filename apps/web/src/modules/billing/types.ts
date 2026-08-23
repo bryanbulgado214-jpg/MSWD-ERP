@@ -395,6 +395,7 @@ export interface TellerSession {
   receivedByCashierId: string | null;
   receivedAt: string | null;
   collectionBatchId: string | null;
+  cashCount: Record<string, number> | null;
   remarks: string | null;
   tellerName?: string;
 }

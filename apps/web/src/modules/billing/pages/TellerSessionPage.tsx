@@ -13,6 +13,7 @@ import {
 import type { TellerSession, TellerSessionDetail } from '../types';
 
 import BillingSubNav from './BillingSubNav';
+import { PESO_DENOMINATIONS, cashCountTotal, denomLabel } from './denominations';
 import './billing.css';
 
 function peso(v: string | number) {
@@ -37,8 +38,8 @@ export default function TellerSessionPage({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // Remittance form.
-  const [actualCash, setActualCash] = useState('');
+  // Remittance form. Cash is entered as a denomination count; checks as a lump.
+  const [counts, setCounts] = useState<Record<string, string>>({});
   const [actualChecks, setActualChecks] = useState('');
 
   const load = useCallback(async () => {
@@ -50,8 +51,9 @@ export default function TellerSessionPage({
       if (pending) {
         const d = await getTellerSession(pending.id);
         setDetail(d);
-        setActualCash(d.session.cashAmount);
         setActualChecks(d.session.checkAmount);
+        const cc = d.session.cashCount ?? {};
+        setCounts(Object.fromEntries(Object.entries(cc).map(([k, v]) => [k, String(v)])));
       } else {
         setDetail(null);
       }
@@ -92,9 +94,14 @@ export default function TellerSessionPage({
 
   const session = detail?.session ?? null;
   const live = detail?.live ?? null;
+  const numericCounts: Record<string, number> = {};
+  for (const [k, v] of Object.entries(counts)) numericCounts[k] = Number(v) || 0;
+  const cashTotal = cashCountTotal(numericCounts);
   const expected = session ? parseFloat(session.expectedRemittance) : 0;
-  const actualTotal = (parseFloat(actualCash) || 0) + (parseFloat(actualChecks) || 0);
+  const actualTotal = cashTotal + (parseFloat(actualChecks) || 0);
   const variance = actualTotal - expected;
+  const setQty = (d: number, v: string) =>
+    setCounts((prev) => ({ ...prev, [String(d)]: v.replace(/[^0-9]/g, '') }));
 
   const inner = (
     <>
@@ -181,58 +188,103 @@ export default function TellerSessionPage({
               <h3 className="bill-section-title" style={{ marginTop: 0 }}>
                 Remit to Cashier
               </h3>
-              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                <div className="bill-field" style={{ marginBottom: 0 }}>
-                  <label>Actual Cash</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={actualCash}
-                    onChange={(e) => setActualCash(e.target.value)}
-                  />
-                </div>
-                <div className="bill-field" style={{ marginBottom: 0 }}>
-                  <label>Actual Checks</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={actualChecks}
-                    onChange={(e) => setActualChecks(e.target.value)}
-                  />
-                </div>
-                <div style={{ fontSize: 13 }}>
-                  <div>
-                    Expected: <strong className="bill-text-mono">{peso(expected)}</strong>
+              <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                {/* Cash count sheet — the teller tallies physical cash by denomination */}
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#475467', marginBottom: 6 }}>
+                    CASH COUNT
                   </div>
-                  <div>
-                    Actual: <strong className="bill-text-mono">{peso(actualTotal)}</strong>
+                  <table className="bill-table" style={{ maxWidth: 300 }}>
+                    <thead>
+                      <tr>
+                        <th>Denomination</th>
+                        <th style={{ width: 70 }}>Qty</th>
+                        <th style={{ textAlign: 'right' }}>Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {PESO_DENOMINATIONS.map((d) => {
+                        const qty = numericCounts[String(d)] ?? 0;
+                        return (
+                          <tr key={d}>
+                            <td className="bill-text-mono">{denomLabel(d)}</td>
+                            <td>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={counts[String(d)] ?? ''}
+                                onChange={(e) => setQty(d, e.target.value)}
+                                style={{ width: 60, padding: '4px 6px' }}
+                              />
+                            </td>
+                            <td className="bill-text-mono" style={{ textAlign: 'right' }}>
+                              {peso((Math.round(d * 100) * qty) / 100)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ fontWeight: 700 }}>
+                        <td colSpan={2}>Total Cash</td>
+                        <td className="bill-text-mono" style={{ textAlign: 'right' }}>
+                          {peso(cashTotal)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div className="bill-field" style={{ marginBottom: 0 }}>
+                    <label>Checks Remitted</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={actualChecks}
+                      onChange={(e) => setActualChecks(e.target.value)}
+                      style={{ width: 160 }}
+                    />
                   </div>
-                  <div
-                    style={{
-                      color: Math.abs(variance) < 0.005 ? '#067647' : '#b42318',
-                      fontWeight: 600,
-                    }}
+                  <div style={{ fontSize: 13, lineHeight: 1.8 }}>
+                    <div>
+                      Expected: <strong className="bill-text-mono">{peso(expected)}</strong>
+                    </div>
+                    <div>
+                      Cash counted: <strong className="bill-text-mono">{peso(cashTotal)}</strong>
+                    </div>
+                    <div>
+                      Actual (cash + checks):{' '}
+                      <strong className="bill-text-mono">{peso(actualTotal)}</strong>
+                    </div>
+                    <div
+                      style={{
+                        color: Math.abs(variance) < 0.005 ? '#067647' : '#b42318',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {Math.abs(variance) < 0.005
+                        ? 'Balanced'
+                        : `${variance > 0 ? 'Overage' : 'Shortage'} ${peso(Math.abs(variance))}`}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="bill-btn bill-btn--primary"
+                    disabled={busy}
+                    onClick={() =>
+                      run(() =>
+                        remitTellerSession(session.id, {
+                          actualCashRemitted: cashTotal,
+                          actualChecksRemitted: parseFloat(actualChecks) || 0,
+                          cashCount: numericCounts,
+                        }),
+                      )
+                    }
                   >
-                    {variance === 0
-                      ? 'Balanced'
-                      : `${variance > 0 ? 'Overage' : 'Shortage'} ${peso(Math.abs(variance))}`}
-                  </div>
+                    {busy ? 'Remitting…' : 'Remit to Cashier'}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  className="bill-btn bill-btn--primary"
-                  disabled={busy}
-                  onClick={() =>
-                    run(() =>
-                      remitTellerSession(session.id, {
-                        actualCashRemitted: parseFloat(actualCash) || 0,
-                        actualChecksRemitted: parseFloat(actualChecks) || 0,
-                      }),
-                    )
-                  }
-                >
-                  {busy ? 'Remitting…' : 'Remit to Cashier'}
-                </button>
               </div>
             </div>
           )}

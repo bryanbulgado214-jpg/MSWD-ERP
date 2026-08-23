@@ -223,7 +223,12 @@ export class TellerSessionService {
     orgId: string,
     tellerId: string,
     id: string,
-    data: { actualCashRemitted: number; actualChecksRemitted: number; remarks?: string },
+    data: {
+      actualCashRemitted: number;
+      actualChecksRemitted: number;
+      remarks?: string;
+      cashCount?: Record<string, number>;
+    },
   ) {
     const session = await this.own(orgId, tellerId, id);
     if (session.status !== 'closed') {
@@ -243,6 +248,7 @@ export class TellerSessionService {
           totalActualRemittance: toPeso(totalCents),
           shortageOverage: toPeso(shortageCents),
           remittedAt: new Date(),
+          ...(data.cashCount ? { cashCount: data.cashCount } : {}),
           ...(data.remarks ? { remarks: data.remarks } : {}),
         },
       }),

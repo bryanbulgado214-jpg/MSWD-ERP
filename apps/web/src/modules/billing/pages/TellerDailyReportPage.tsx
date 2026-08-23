@@ -4,6 +4,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { GovLetterhead } from '../../../app/GovLetterhead';
 import { getTellerSession } from '../api';
 import type { TellerSessionDetail } from '../types';
+
+import { PESO_DENOMINATIONS, cashCountTotal, denomLabel, hasCashCount } from './denominations';
 import './print-billing.css';
 
 function peso(v: string | number) {
@@ -200,6 +202,41 @@ export default function TellerDailyReportPage() {
             </tr>
           </tbody>
         </table>
+
+        {/* Cash count sheet — the teller's denomination tally for the remittance */}
+        {hasCashCount(s.cashCount) && (
+          <table className="bill-print-table" style={{ marginTop: 12 }}>
+            <thead>
+              <tr>
+                <th>Cash Count</th>
+                <th style={{ textAlign: 'center' }}>Qty</th>
+                <th style={{ textAlign: 'right' }}>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {PESO_DENOMINATIONS.map((d) => {
+                const qty = Number(s.cashCount?.[String(d)]) || 0;
+                return (
+                  <tr key={d}>
+                    <td>{denomLabel(d)}</td>
+                    <td className="bp-center">{qty}</td>
+                    <td className="bp-right">{peso((Math.round(d * 100) * qty) / 100)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={2} style={{ fontWeight: 700 }}>
+                  Total Cash Counted
+                </td>
+                <td className="bp-right" style={{ fontWeight: 700 }}>
+                  {peso(cashCountTotal(s.cashCount))}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        )}
 
         <div className="bill-print-sig">
           <div className="bill-print-sig__col">

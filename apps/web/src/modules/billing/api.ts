@@ -571,7 +571,12 @@ export async function closeTellerSession(id: string): Promise<TellerSession> {
 
 export async function remitTellerSession(
   id: string,
-  data: { actualCashRemitted: number; actualChecksRemitted: number; remarks?: string },
+  data: {
+    actualCashRemitted: number;
+    actualChecksRemitted: number;
+    remarks?: string;
+    cashCount?: Record<string, number>;
+  },
 ): Promise<TellerSession> {
   const res = await authFetchMutate(`/billing/teller-sessions/${id}/remit`, 'POST', data);
   return res.json();

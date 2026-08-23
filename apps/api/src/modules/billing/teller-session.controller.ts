@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsNumber, IsObject, IsOptional, IsString, Min } from 'class-validator';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import {
@@ -24,6 +24,11 @@ class RemitDto {
   @IsOptional()
   @IsString()
   remarks?: string;
+
+  // Denomination → quantity, e.g. { "1000": 2, "500": 3 }.
+  @IsOptional()
+  @IsObject()
+  cashCount?: Record<string, number>;
 }
 
 class ReceiveDto {
