@@ -13,6 +13,9 @@ export interface AccountingLink {
   to: string;
   label: string;
   exact?: boolean;
+  // Extra path prefixes that also count as "active" (e.g. a detail route that
+  // lives under a different top-level path than the hub it belongs to).
+  also?: string[];
   group?: 'main' | 'setup';
   visible: (permissions: Set<string>) => boolean;
 }
@@ -41,18 +44,9 @@ export const ACCOUNTING_LINKS: AccountingLink[] = [
   },
   { to: '/accounting/jev', label: 'Journal Entries', visible: has('accounting.read') },
   {
-    to: '/accounting/collection-batches',
-    label: 'Collection Batches',
-    visible: canCollections,
-  },
-  {
-    to: '/accounting/collections/reconciliation',
-    label: 'Collections Reconciliation',
-    visible: canCollections,
-  },
-  {
-    to: '/accounting/collections/reports',
-    label: 'Collection Reports',
+    to: '/accounting/collections',
+    label: 'Collections',
+    also: ['/accounting/collection-batches'],
     visible: canCollections,
   },
   {
@@ -89,7 +83,9 @@ export function AccountingSubNav() {
   const setupLinks = links.filter((l) => l.group === 'setup');
 
   const renderLink = (link: AccountingLink) => {
-    const active = link.exact ? pathname === link.to : pathname.startsWith(link.to);
+    const active = link.exact
+      ? pathname === link.to
+      : pathname.startsWith(link.to) || (link.also ?? []).some((p) => pathname.startsWith(p));
     return (
       <Link
         key={link.to}

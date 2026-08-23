@@ -51,7 +51,7 @@ function toCsv(report: CollectionReport): string {
   return [header, ...lines].join('\r\n');
 }
 
-export default function CollectionReportsPage() {
+export default function CollectionReportsPage({ embedded = false }: { embedded?: boolean }) {
   const [kind, setKind] = useState('daily-summary');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -88,11 +88,8 @@ export default function CollectionReportsPage() {
     URL.revokeObjectURL(url);
   }
 
-  return (
-    <div className="acct-page">
-      <AccountingSubNav />
-      <h1>Collection Reports</h1>
-
+  const inner = (
+    <>
       <div
         className="acct-toolbar"
         style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}
@@ -214,6 +211,14 @@ export default function CollectionReportsPage() {
           </p>
         </>
       )}
+    </>
+  );
+  if (embedded) return inner;
+  return (
+    <div className="acct-page">
+      <AccountingSubNav />
+      <h1>Collection Reports</h1>
+      {inner}
     </div>
   );
 }

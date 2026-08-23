@@ -159,7 +159,7 @@ export default function CollectionBatchDetailPage() {
     <div className="acct-page">
       <AccountingSubNav />
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <Link to="/accounting/collection-batches" className="acct-link">
+        <Link to="/accounting/collections" className="acct-link">
           ← Batches
         </Link>
         <h1 style={{ margin: 0 }}>{batch.batchNumber}</h1>

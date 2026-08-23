@@ -486,3 +486,25 @@
   background: #fee4e2;
   border-color: #fda29b;
 }
+
+/* ── Horizontal sub-tabs inside the Collections hub ── */
+.acct-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1.5px solid #eaecf0;
+  margin-bottom: 20px;
+}
+.acct-tab {
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #667085;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1.5px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.acct-tab:hover { color: var(--mswd-navy); }
+.acct-tab--active { color: var(--mswd-blue); border-bottom-color: var(--mswd-blue); }

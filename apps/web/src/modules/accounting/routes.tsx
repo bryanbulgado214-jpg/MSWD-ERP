@@ -11,9 +11,7 @@ import CashierDashboardPage from './pages/CashierDashboardPage';
 import ChartOfAccountsPage from './pages/ChartOfAccountsPage';
 import CheckRegisterPage from './pages/CheckRegisterPage';
 import CollectionBatchDetailPage from './pages/CollectionBatchDetailPage';
-import CollectionBatchesPage from './pages/CollectionBatchesPage';
-import CollectionReconciliationPage from './pages/CollectionReconciliationPage';
-import CollectionReportsPage from './pages/CollectionReportsPage';
+import CollectionsHubPage from './pages/CollectionsHubPage';
 import DisbursementDetailPage from './pages/DisbursementDetailPage';
 import DisbursementListPage from './pages/DisbursementListPage';
 import JevDetailPage from './pages/JevDetailPage';
@@ -37,10 +35,22 @@ export const accountingRoutes: RouteObject[] = [
   { path: '/accounting/dashboard', element: <AccountingDashboardPage /> },
   { path: '/accounting/banks', element: <BanksPage /> },
   { path: '/accounting/mappings', element: <AccountMappingsPage /> },
-  { path: '/accounting/collection-batches', element: <CollectionBatchesPage /> },
+  { path: '/accounting/collections', element: <CollectionsHubPage /> },
   { path: '/accounting/collection-batches/:id', element: <CollectionBatchDetailPage /> },
-  { path: '/accounting/collections/reconciliation', element: <CollectionReconciliationPage /> },
-  { path: '/accounting/collections/reports', element: <CollectionReportsPage /> },
+  // The three former sidebar entries now live as sub-tabs of the Collections hub;
+  // keep the old URLs working as redirects.
+  {
+    path: '/accounting/collection-batches',
+    element: <Navigate to="/accounting/collections" replace />,
+  },
+  {
+    path: '/accounting/collections/reconciliation',
+    element: <Navigate to="/accounting/collections?tab=reconciliation" replace />,
+  },
+  {
+    path: '/accounting/collections/reports',
+    element: <Navigate to="/accounting/collections?tab=reports" replace />,
+  },
   { path: '/accounting/jev', element: <JevListPage /> },
   { path: '/accounting/jev/new', element: <JevDetailPage /> },
   { path: '/accounting/jev/:id/print', element: <PrintJevPage /> },

@@ -34,7 +34,7 @@ type LoadState =
   | { status: 'error'; message: string }
   | { status: 'loaded'; data: CollectionBatch[] };
 
-export default function CollectionBatchesPage() {
+export default function CollectionBatchesPage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const [tab, setTab] = useState('for_review');
   const [state, setState] = useState<LoadState>({ status: 'loading' });
@@ -78,10 +78,8 @@ export default function CollectionBatchesPage() {
     }
   }
 
-  return (
-    <div className="acct-page">
-      <AccountingSubNav />
-      <h1>Daily Collection Batches</h1>
+  const inner = (
+    <>
       <p className="acct-page__intro">
         Each day&apos;s receipts consolidate into one batch. Accounting reviews the proposed entry
         and <strong>finalizes</strong> — the system auto-posts a single summarized collection JEV to
@@ -189,6 +187,14 @@ export default function CollectionBatchesPage() {
             </table>
           </div>
         ))}
+    </>
+  );
+  if (embedded) return inner;
+  return (
+    <div className="acct-page">
+      <AccountingSubNav />
+      <h1>Daily Collection Batches</h1>
+      {inner}
     </div>
   );
 }

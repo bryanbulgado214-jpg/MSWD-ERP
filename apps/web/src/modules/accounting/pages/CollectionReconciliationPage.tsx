@@ -60,7 +60,7 @@ function Recon({
   );
 }
 
-export default function CollectionReconciliationPage() {
+export default function CollectionReconciliationPage({ embedded = false }: { embedded?: boolean }) {
   const [data, setData] = useState<CollectionReconciliation | null>(null);
   const [error, setError] = useState('');
 
@@ -72,10 +72,8 @@ export default function CollectionReconciliationPage() {
       );
   }, []);
 
-  return (
-    <div className="acct-page">
-      <AccountingSubNav />
-      <h1>Collections Reconciliation</h1>
+  const inner = (
+    <>
       <p className="acct-page__intro">
         Proves — as of now — that the receivable subledger ties to GL Accounts Receivable, that
         physical collections are fully deposited, and that the collecting officer&apos;s cash
@@ -110,6 +108,14 @@ export default function CollectionReconciliationPage() {
           />
         </div>
       )}
+    </>
+  );
+  if (embedded) return inner;
+  return (
+    <div className="acct-page">
+      <AccountingSubNav />
+      <h1>Collections Reconciliation</h1>
+      {inner}
     </div>
   );
 }
