@@ -508,3 +508,144 @@
 }
 .acct-tab:hover { color: var(--mswd-navy); }
 .acct-tab--active { color: var(--mswd-blue); border-bottom-color: var(--mswd-blue); }
+
+/* ── Accountant dashboard workspace ── */
+.acct-ws {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.acct-ws__cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 900px) {
+  .acct-ws__cols { grid-template-columns: 1fr; }
+}
+.acct-panel {
+  background: #fff;
+  border: 1px solid #eaecf0;
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+.acct-panel__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mswd-navy);
+  margin: 0 0 12px;
+}
+.acct-section-heading {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--mswd-navy);
+  margin: 4px 0 2px;
+}
+.acct-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: #98a2b3;
+  background: #f2f4f7;
+  border-radius: 10px;
+  padding: 1px 9px;
+}
+.acct-count--on { color: #b54708; background: #fff6ed; }
+.acct-btn--sm { padding: 4px 12px; font-size: 12px; }
+
+/* Pending actions */
+.acct-pending-list { display: flex; flex-direction: column; gap: 8px; }
+.acct-pending {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #f8f9fc;
+  border-radius: 8px;
+}
+.acct-pending__mod {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #eff8ff;
+  color: #175cd3;
+  white-space: nowrap;
+}
+.acct-pending__mod--billing { background: #fff6ed; color: #b93815; }
+.acct-pending__mod--accounting { background: #f4f3ff; color: #5925dc; }
+.acct-pending__body { flex: 1; min-width: 0; }
+.acct-pending__label { font-size: 13px; font-weight: 600; color: #101828; }
+.acct-pending__desc { font-size: 12px; color: #667085; }
+.acct-pending__amt {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Notepad */
+.acct-notes {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #101828;
+}
+.acct-notes:focus { outline: none; border-color: var(--mswd-blue); }
+
+/* Due dates */
+.acct-reminder-form { display: flex; gap: 6px; margin-bottom: 12px; }
+.acct-reminder-form input[type='text'],
+.acct-reminder-form input:not([type]) { flex: 1; min-width: 0; }
+.acct-reminder-form input {
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.acct-due-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.acct-due {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+  border-bottom: 1px solid #f2f4f7;
+}
+.acct-due:last-child { border-bottom: none; }
+.acct-due--done .acct-due__title { text-decoration: line-through; color: #98a2b3; }
+.acct-due__sys { color: #175cd3; font-size: 10px; }
+.acct-due__body { flex: 1; min-width: 0; }
+.acct-due__title { font-size: 13px; font-weight: 600; color: #101828; }
+.acct-due__meta { font-size: 11px; color: #667085; }
+.acct-due__badge {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #175cd3;
+  background: #eff8ff;
+  border-radius: 6px;
+  padding: 1px 6px;
+}
+.acct-due__del {
+  border: none;
+  background: none;
+  color: #98a2b3;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.acct-due__del:hover { color: #b42318; }

@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 
 import { AccountMappingController } from './account-mapping.controller';
 import { AccountMappingService } from './account-mapping.service';
+import { AccountingWorkspaceController } from './accounting-workspace.controller';
+import { AccountingWorkspaceService } from './accounting-workspace.service';
 import { AutoJevService } from './auto-jev.service';
 import { BankReconciliationController } from './bank-reconciliation.controller';
 import { BankReconciliationService } from './bank-reconciliation.service';
@@ -43,6 +45,7 @@ import { AccountingReportsService } from './reports.service';
 
 @Module({
   controllers: [
+    AccountingWorkspaceController,
     ChartOfAccountController,
     BankController,
     AccountMappingController,
@@ -64,6 +67,7 @@ import { AccountingReportsService } from './reports.service';
     PayeeController,
   ],
   providers: [
+    AccountingWorkspaceService,
     ChartOfAccountService,
     BankService,
     AccountMappingService,

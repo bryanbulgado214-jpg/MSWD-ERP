@@ -2,6 +2,9 @@ import type {
   AccountMapping,
   AccountingDashboardResult,
   AccountingPeriod,
+  AccountingWorkspace,
+  PendingActionItem,
+  WorkspaceReminder,
   Bank,
   BankAccount,
   BankReconciliationDetail,
@@ -78,7 +81,7 @@ async function authFetch(path: string): Promise<Response> {
 
 async function authFetchMutate(
   path: string,
-  method: 'POST' | 'PATCH' | 'DELETE',
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   body?: unknown,
 ): Promise<Response> {
   const token = getAccessToken();
@@ -1169,4 +1172,40 @@ export async function getCollectionReport(
   if (to) qs.set('to', to);
   const res = await authFetch(`/accounting/collections/reports?${qs.toString()}`);
   return res.json();
+}
+
+// ── Accountant dashboard workspace ──
+
+export async function getPendingActions(): Promise<{ items: PendingActionItem[]; total: number }> {
+  const res = await authFetch('/dashboard/pending-actions');
+  return res.json();
+}
+
+export async function getWorkspace(): Promise<AccountingWorkspace> {
+  const res = await authFetch('/accounting/workspace');
+  return res.json();
+}
+
+export async function saveWorkspaceNotes(
+  content: string,
+): Promise<{ content: string; notesUpdatedAt: string }> {
+  const res = await authFetchMutate('/accounting/workspace/notes', 'PUT', { content });
+  return res.json();
+}
+
+export async function addReminder(title: string, dueDate: string): Promise<WorkspaceReminder> {
+  const res = await authFetchMutate('/accounting/workspace/reminders', 'POST', { title, dueDate });
+  return res.json();
+}
+
+export async function updateReminder(
+  id: string,
+  data: { done?: boolean; title?: string; dueDate?: string },
+): Promise<WorkspaceReminder> {
+  const res = await authFetchMutate(`/accounting/workspace/reminders/${id}`, 'PATCH', data);
+  return res.json();
+}
+
+export async function deleteReminder(id: string): Promise<void> {
+  await authFetchMutate(`/accounting/workspace/reminders/${id}`, 'DELETE');
 }

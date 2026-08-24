@@ -258,6 +258,49 @@ export class DashboardController {
       });
     }
 
+    // ── Collection batches awaiting the accountant (review → approve → post) ──
+    const batchStages: Array<{ perm: string; status: string; type: string; action: string }> = [
+      {
+        perm: 'collections.accounting.review',
+        status: 'for_review',
+        type: 'collection_batch_review',
+        action: 'Review',
+      },
+      {
+        perm: 'collections.accounting.approve',
+        status: 'reviewed',
+        type: 'collection_batch_approve',
+        action: 'Approve',
+      },
+      {
+        perm: 'collections.accounting.post',
+        status: 'approved',
+        type: 'collection_batch_post',
+        action: 'Post to GL',
+      },
+    ];
+    for (const stage of batchStages) {
+      if (!perms.has(stage.perm)) continue;
+      const batches = await this.prisma.collectionAccountingBatch.findMany({
+        where: { organizationId: orgId, status: stage.status as never },
+        orderBy: { collectionDate: 'asc' },
+        take: 20,
+      });
+      for (const b of batches) {
+        items.push({
+          id: b.id,
+          module: 'accounting',
+          type: stage.type,
+          label: b.batchNumber,
+          description: `Collections for ${b.collectionDate.toISOString().slice(0, 10)} — ${b.transactionCount} receipt(s)`,
+          amount: b.totalCollections.toString(),
+          createdAt: (b.preparedAt ?? b.createdAt).toISOString(),
+          actionLabel: stage.action,
+          link: `/accounting/collection-batches/${b.id}`,
+        });
+      }
+    }
+
     // ── Teller remittances awaiting the cashier's acceptance ──
     if (perms.has('collections.remittance.receive')) {
       const remittances = await this.prisma.tellerSession.findMany({

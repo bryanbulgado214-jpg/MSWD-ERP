@@ -662,3 +662,38 @@ export interface CollectionReport {
   rows: Array<Record<string, unknown>>;
   totals?: Record<string, number>;
 }
+
+// ── Accountant dashboard workspace ──
+
+export interface PendingActionItem {
+  id: string;
+  module: string;
+  type: string;
+  label: string;
+  description: string;
+  amount: string;
+  createdAt: string;
+  actionLabel: string;
+  link: string;
+  createdBy?: string;
+}
+
+export interface WorkspaceReminder {
+  id: string;
+  title: string;
+  dueDate: string;
+  done: boolean;
+}
+
+export interface SystemDueDate {
+  label: string;
+  dueDate: string;
+  source: 'system';
+}
+
+export interface AccountingWorkspace {
+  notes: string;
+  notesUpdatedAt: string | null;
+  reminders: WorkspaceReminder[];
+  systemDueDates: SystemDueDate[];
+}

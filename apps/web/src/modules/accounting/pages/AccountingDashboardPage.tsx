@@ -5,6 +5,7 @@ import { useAuth } from '../../../app/auth';
 import { getAccountingDashboard } from '../api';
 import type { AccountingDashboardResult } from '../types';
 
+import AccountantWorkspace from './AccountantWorkspace';
 import { AccountingSubNav } from './AccountingSubNav';
 import './accounting.css';
 
@@ -77,6 +78,10 @@ export default function AccountingDashboardPage() {
           </span>
         )}
       </div>
+
+      <AccountantWorkspace />
+
+      <h2 className="acct-section-heading">Financial Snapshot</h2>
       <p style={{ color: '#667085', fontSize: 13, margin: '0 0 20px' }}>
         Every figure is computed live from posted journal-entry lines. Click any card to drill down.
       </p>

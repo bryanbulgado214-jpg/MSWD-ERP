@@ -4840,3 +4840,29 @@ model AssetTransfer {
   @@index([organizationId, status])
   @@map("asset_transfers")
 }
+
+/// Per-user free-text notepad shown on the Accounting Dashboard ("To-Do's").
+model UserNote {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  content        String   @default("")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, userId])
+  @@map("user_notes")
+}
+
+/// Per-user dated reminder shown under "Upcoming Due Dates".
+model UserReminder {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  title          String   @db.VarChar(200)
+  dueDate        DateTime @map("due_date") @db.Date
+  done           Boolean  @default(false)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([organizationId, userId])
+  @@map("user_reminders")
+}
