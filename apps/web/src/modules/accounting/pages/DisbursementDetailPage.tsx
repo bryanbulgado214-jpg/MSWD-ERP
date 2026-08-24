@@ -2,7 +2,20 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
-import { AccountingApiError, deleteDisbursement, getDisbursement } from '../api';
+import {
+  AccountingApiError,
+  addDvNote,
+  deleteDisbursement,
+  deleteDvAttachment,
+  deleteDvNote,
+  downloadDvAttachment,
+  getDisbursement,
+  getDvAttachments,
+  getDvNotes,
+  uploadDvAttachment,
+  type DvAttachment,
+  type DvNote,
+} from '../api';
 import type { DisbursementDetail } from '../types';
 
 import { AccountingSubNav } from './AccountingSubNav';
@@ -15,6 +28,20 @@ function formatPeso(value: string | number): string {
 }
 function fmtDate(d: string | null): string {
   return d ? new Date(d).toLocaleDateString('en-PH') : '—';
+}
+function fmtDateTime(d: string): string {
+  return new Date(d).toLocaleString('en-PH', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 const DV_TYPE_LABELS: Record<string, string> = {
@@ -72,12 +99,20 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 export default function DisbursementDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { permissions } = useAuth();
+  const { permissions, user } = useAuth();
   const canCreate = permissions.has('accounting.dv.create');
 
   const [dv, setDv] = useState<DisbursementDetail | null>(null);
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState(false);
+
+  // Notes & attachments
+  const [notes, setNotes] = useState<DvNote[]>([]);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
+  const [attachments, setAttachments] = useState<DvAttachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [sideError, setSideError] = useState('');
 
   useEffect(() => {
     if (!id) return;
@@ -86,7 +121,62 @@ export default function DisbursementDetailPage() {
       .catch((e) =>
         setError(e instanceof AccountingApiError ? e.message : 'Failed to load the voucher.'),
       );
+    getDvNotes(id)
+      .then(setNotes)
+      .catch(() => {});
+    getDvAttachments(id)
+      .then(setAttachments)
+      .catch(() => {});
   }, [id]);
+
+  async function submitNote() {
+    if (!id || !noteDraft.trim()) return;
+    setSavingNote(true);
+    setSideError('');
+    try {
+      setNotes(await addDvNote(id, noteDraft.trim()));
+      setNoteDraft('');
+    } catch (e) {
+      setSideError(e instanceof AccountingApiError ? e.message : 'Failed to add the note.');
+    } finally {
+      setSavingNote(false);
+    }
+  }
+
+  async function removeNote(noteId: string) {
+    if (!id) return;
+    try {
+      setNotes(await deleteDvNote(id, noteId));
+    } catch (e) {
+      setSideError(e instanceof AccountingApiError ? e.message : 'Failed to delete the note.');
+    }
+  }
+
+  async function onUploadFiles(files: FileList | null) {
+    if (!id || !files || files.length === 0) return;
+    setUploading(true);
+    setSideError('');
+    try {
+      for (const file of Array.from(files)) {
+        await uploadDvAttachment(id, file);
+      }
+      setAttachments(await getDvAttachments(id));
+    } catch (e) {
+      setSideError(e instanceof AccountingApiError ? e.message : 'Failed to upload the file.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function removeAttachment(attId: string) {
+    if (!id) return;
+    try {
+      await deleteDvAttachment(id, attId);
+      setAttachments(await getDvAttachments(id));
+    } catch (e) {
+      setSideError(e instanceof AccountingApiError ? e.message : 'Failed to delete the file.');
+    }
+  }
 
   async function handleDelete() {
     if (!dv) return;
@@ -296,12 +386,11 @@ export default function DisbursementDetailPage() {
             <thead>
               <tr>
                 <th>Account Title</th>
-                <th style={{ width: '16%' }}>UACS Code</th>
-                <th>Description</th>
-                <th className="acct-text-right" style={{ width: '15%' }}>
+                <th style={{ width: '18%' }}>UACS Code</th>
+                <th className="acct-text-right" style={{ width: '18%' }}>
                   Debit
                 </th>
-                <th className="acct-text-right" style={{ width: '15%' }}>
+                <th className="acct-text-right" style={{ width: '18%' }}>
                   Credit
                 </th>
               </tr>
@@ -311,7 +400,6 @@ export default function DisbursementDetailPage() {
                 <tr key={i}>
                   <td>{l.chartOfAccount.name}</td>
                   <td className="acct-text-mono">{l.chartOfAccount.accountCode}</td>
-                  <td style={{ color: '#667085' }}>{l.description ?? '—'}</td>
                   <td className="acct-text-right acct-text-mono">
                     {parseFloat(l.debitAmount) > 0 ? formatPeso(l.debitAmount) : ''}
                   </td>
@@ -321,7 +409,7 @@ export default function DisbursementDetailPage() {
                 </tr>
               ))}
               <tr style={{ fontWeight: 700, borderTop: '2px solid var(--mswd-navy)' }}>
-                <td colSpan={3} className="acct-text-right">
+                <td colSpan={2} className="acct-text-right">
                   Total
                 </td>
                 <td className="acct-text-right acct-text-mono">{formatPeso(jeTotalDebit)}</td>
@@ -363,6 +451,168 @@ export default function DisbursementDetailPage() {
         <Field label="Check Date" value={fmtDate(dv.checkDate)} />
         <Field label="Bank Name & Account" value={dv.bankName ?? '—'} />
         <Field label="JEV No." value={je?.jevNumber ?? '—'} />
+      </div>
+
+      {sideError && (
+        <div className="acct-error" style={{ marginTop: 16 }}>
+          {sideError}
+        </div>
+      )}
+
+      {/* ── Supporting Documents ── */}
+      <SectionTitle>
+        Supporting Documents
+        <span style={{ fontWeight: 400, color: '#667085' }}> ({attachments.length})</span>
+      </SectionTitle>
+      <label className="acct-btn acct-btn--sm" style={{ cursor: 'pointer' }}>
+        {uploading ? 'Uploading…' : '＋ Attach file'}
+        <input
+          type="file"
+          accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+          multiple
+          disabled={uploading}
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            void onUploadFiles(e.target.files);
+            e.target.value = '';
+          }}
+        />
+      </label>
+      <span style={{ fontSize: 12, color: '#667085', marginLeft: 10 }}>
+        PDF, PNG or JPEG · up to 10 MB
+      </span>
+      {attachments.length === 0 ? (
+        <div className="acct-empty" style={{ marginTop: 10 }}>
+          No supporting documents attached.
+        </div>
+      ) : (
+        <ul style={{ listStyle: 'none', padding: 0, margin: '12px 0 0' }}>
+          {attachments.map((a) => (
+            <li
+              key={a.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '8px 0',
+                borderBottom: '1px solid #eaecf0',
+              }}
+            >
+              <span style={{ fontSize: 18 }}>{a.mimeType === 'application/pdf' ? '📄' : '🖼️'}</span>
+              <button
+                type="button"
+                className="acct-table__link"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                onClick={() => id && void downloadDvAttachment(id, a.id, a.fileName)}
+              >
+                {a.fileName}
+              </button>
+              <span style={{ fontSize: 12, color: '#667085' }}>
+                {formatBytes(a.fileSizeBytes)}
+                {a.uploader ? ` · ${a.uploader.username}` : ''} · {fmtDateTime(a.createdAt)}
+              </span>
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={() => removeAttachment(a.id)}
+                  title="Remove"
+                  style={{
+                    marginLeft: 'auto',
+                    color: '#b42318',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  ×
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* ── Notes ── */}
+      <SectionTitle>
+        Notes
+        <span style={{ fontWeight: 400, color: '#667085' }}> ({notes.length})</span>
+      </SectionTitle>
+      {notes.length === 0 ? (
+        <div className="acct-empty">No notes yet — add one below.</div>
+      ) : (
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {notes.map((n) => (
+            <li
+              key={n.id}
+              style={{
+                padding: '10px 12px',
+                border: '1px solid #eaecf0',
+                borderRadius: 8,
+                marginBottom: 8,
+                background: '#fcfcfd',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                  fontSize: 12,
+                  color: '#667085',
+                  marginBottom: 4,
+                }}
+              >
+                <strong style={{ color: '#344054' }}>{n.author}</strong>
+                <span>
+                  {fmtDateTime(n.createdAt)}
+                  {n.authorId && user?.sub === n.authorId && (
+                    <button
+                      type="button"
+                      onClick={() => removeNote(n.id)}
+                      title="Delete your note"
+                      style={{
+                        marginLeft: 8,
+                        color: '#b42318',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </span>
+              </div>
+              <div style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{n.body}</div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div style={{ display: 'flex', gap: 10, marginTop: 12, alignItems: 'flex-start' }}>
+        <textarea
+          value={noteDraft}
+          onChange={(e) => setNoteDraft(e.target.value)}
+          placeholder="Add a note for the preparer / approver…"
+          rows={2}
+          maxLength={4000}
+          style={{
+            flex: 1,
+            padding: '8px 10px',
+            border: '1px solid #d0d5dd',
+            borderRadius: 6,
+            fontSize: 13,
+            fontFamily: 'inherit',
+            resize: 'vertical',
+          }}
+        />
+        <button
+          type="button"
+          className="acct-btn acct-btn--primary"
+          disabled={savingNote || !noteDraft.trim()}
+          onClick={submitNote}
+        >
+          {savingNote ? 'Adding…' : 'Add Note'}
+        </button>
       </div>
     </div>
   );

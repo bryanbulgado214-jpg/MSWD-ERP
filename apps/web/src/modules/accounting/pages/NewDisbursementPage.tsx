@@ -11,6 +11,7 @@ import {
   getChartOfAccounts,
   getDisbursement,
   updateDisbursement,
+  uploadDvAttachment,
 } from '../api';
 import { bankAccountLabel } from '../bank-account-label';
 import type { BankAccount, ChartOfAccount, CreateDisbursementInput } from '../types';
@@ -77,6 +78,8 @@ export default function NewDisbursementPage() {
   const [bankAccountId, setBankAccountId] = useState('');
   // Charge/deduction entry (the cash credit is added automatically from the bank)
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
+  // Supporting documents to attach once the DV is created.
+  const [attachFiles, setAttachFiles] = useState<File[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -199,7 +202,11 @@ export default function NewDisbursementPage() {
       if (isEdit && id) {
         await updateDisbursement(id, payload);
       } else {
-        await createDisbursement(payload);
+        const created = await createDisbursement(payload);
+        // Attach any supporting documents to the newly-created DV.
+        for (const file of attachFiles) {
+          await uploadDvAttachment(created.id, file);
+        }
       }
       // Always return to the register; the row's own Print/View actions take it
       // from there (previously a posted DV jumped straight to the printout).
@@ -536,6 +543,67 @@ export default function NewDisbursementPage() {
           )}
         </div>
         {/* End accounting entry */}
+
+        {/* Supporting documents (attached after the DV is created) */}
+        {!isEdit && (
+          <div style={{ marginTop: 16 }}>
+            <h2 style={{ fontSize: 15, margin: '0 0 6px' }}>Supporting Documents</h2>
+            <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>
+              Optionally attach receipts, invoices, or other supporting files (PDF, PNG, JPEG · up
+              to 10 MB each). They’re saved to the voucher when you create it.
+            </p>
+            <label className="acct-btn acct-btn--sm" style={{ cursor: 'pointer' }}>
+              ＋ Choose files
+              <input
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+                multiple
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  if (e.target.files)
+                    setAttachFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+            {attachFiles.length > 0 && (
+              <ul style={{ listStyle: 'none', padding: 0, margin: '10px 0 0' }}>
+                {attachFiles.map((f, i) => (
+                  <li
+                    key={`${f.name}-${i}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: '6px 0',
+                      fontSize: 13,
+                    }}
+                  >
+                    <span>{f.type === 'application/pdf' ? '📄' : '🖼️'}</span>
+                    <span>{f.name}</span>
+                    <span style={{ color: '#667085', fontSize: 12 }}>
+                      {(f.size / 1024).toFixed(1)} KB
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAttachFiles((prev) => prev.filter((_, j) => j !== i))}
+                      title="Remove"
+                      style={{
+                        marginLeft: 'auto',
+                        color: '#b42318',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
           {isEdit ? (

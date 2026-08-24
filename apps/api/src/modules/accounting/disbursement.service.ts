@@ -1,3 +1,7 @@
+import { randomUUID } from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
+
 import {
   BadRequestException,
   ConflictException,
@@ -14,6 +18,11 @@ import { dateRangeFilter } from './date-range-filter';
 import { CreateDisbursementDto } from './dto/disbursement.dto';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// Supporting documents attached to a DV live on disk under the API working dir;
+// the Attachment row keeps the relative path. (uploads/ is gitignored.)
+const DV_UPLOAD_SUBDIR = path.join('uploads', 'disbursements');
+const DV_ALLOWED_MIME = ['application/pdf', 'image/png', 'image/jpeg'];
 
 // Full detail for the register row-open and the Appendix 32 printout. Procurement
 // links are nullable — a non-procurement DV (travel, payroll, etc.) has none and
@@ -737,5 +746,166 @@ export class DisbursementService {
     const row = inserted[0];
     if (!row) throw new Error('Failed to generate DV number.');
     return pad(Number(row.next_number));
+  }
+
+  private async requireDv(orgId: string, id: string) {
+    const dv = await this.prisma.disbursementVoucher.findFirst({
+      where: { id, organizationId: orgId },
+      select: { id: true },
+    });
+    if (!dv) throw new NotFoundException('Disbursement voucher not found.');
+    return dv;
+  }
+
+  // ── Notes (collaborative comment thread on the DV) ──
+
+  async listNotes(orgId: string, id: string) {
+    await this.requireDv(orgId, id);
+    const notes = await this.prisma.comment.findMany({
+      where: {
+        organizationId: orgId,
+        commentableTable: 'disbursement_vouchers',
+        commentableId: id,
+        isDeleted: false,
+      },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        body: true,
+        createdAt: true,
+        createdBy: true,
+        author: { select: { username: true } },
+      },
+    });
+    return notes.map((n) => ({
+      id: n.id,
+      body: n.body,
+      createdAt: n.createdAt,
+      authorId: n.createdBy,
+      author: n.author?.username ?? 'Unknown',
+    }));
+  }
+
+  async addNote(orgId: string, id: string, userId: string, body: string) {
+    await this.requireDv(orgId, id);
+    const text = (body ?? '').trim();
+    if (!text) throw new BadRequestException('The note cannot be empty.');
+    if (text.length > 4000)
+      throw new BadRequestException('The note is too long (max 4000 characters).');
+    await this.prisma.comment.create({
+      data: {
+        organizationId: orgId,
+        commentableTable: 'disbursement_vouchers',
+        commentableId: id,
+        body: text,
+        createdBy: userId,
+      },
+    });
+    return this.listNotes(orgId, id);
+  }
+
+  async deleteNote(orgId: string, id: string, noteId: string, userId: string) {
+    await this.requireDv(orgId, id);
+    const note = await this.prisma.comment.findFirst({
+      where: {
+        id: noteId,
+        organizationId: orgId,
+        commentableTable: 'disbursement_vouchers',
+        commentableId: id,
+        isDeleted: false,
+      },
+      select: { id: true, createdBy: true },
+    });
+    if (!note) throw new NotFoundException('Note not found.');
+    // Only the author may remove their own note.
+    if (note.createdBy !== userId) {
+      throw new BadRequestException('You can only delete your own notes.');
+    }
+    await this.prisma.comment.update({ where: { id: noteId }, data: { isDeleted: true } });
+    return this.listNotes(orgId, id);
+  }
+
+  // ── Attachments (supporting documents) ──
+
+  async addAttachment(orgId: string, id: string, userId: string, file?: Express.Multer.File) {
+    await this.requireDv(orgId, id);
+    if (!file) throw new BadRequestException('No file uploaded.');
+    if (!DV_ALLOWED_MIME.includes(file.mimetype)) {
+      throw new BadRequestException('Only PDF, PNG, or JPEG files are allowed.');
+    }
+    const dir = path.join(process.cwd(), DV_UPLOAD_SUBDIR);
+    fs.mkdirSync(dir, { recursive: true });
+    const stored = `${randomUUID()}${path.extname(file.originalname)}`;
+    fs.writeFileSync(path.join(dir, stored), file.buffer);
+
+    const att = await this.prisma.attachment.create({
+      data: {
+        organizationId: orgId,
+        attachableTable: 'disbursement_vouchers',
+        attachableId: id,
+        fileName: file.originalname,
+        filePath: path.join(DV_UPLOAD_SUBDIR, stored),
+        mimeType: file.mimetype,
+        fileSizeBytes: BigInt(file.size),
+        uploadedBy: userId,
+      },
+      select: { id: true, fileName: true, mimeType: true, fileSizeBytes: true, createdAt: true },
+    });
+    return { ...att, fileSizeBytes: Number(att.fileSizeBytes) };
+  }
+
+  async listAttachments(orgId: string, id: string) {
+    await this.requireDv(orgId, id);
+    const atts = await this.prisma.attachment.findMany({
+      where: { organizationId: orgId, attachableTable: 'disbursement_vouchers', attachableId: id },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        fileName: true,
+        mimeType: true,
+        fileSizeBytes: true,
+        createdAt: true,
+        uploader: { select: { username: true } },
+      },
+    });
+    return atts.map((a) => ({ ...a, fileSizeBytes: Number(a.fileSizeBytes) }));
+  }
+
+  async getAttachmentFile(orgId: string, id: string, attId: string) {
+    await this.requireDv(orgId, id);
+    const att = await this.prisma.attachment.findFirst({
+      where: {
+        id: attId,
+        organizationId: orgId,
+        attachableTable: 'disbursement_vouchers',
+        attachableId: id,
+      },
+      select: { fileName: true, filePath: true, mimeType: true },
+    });
+    if (!att) throw new NotFoundException('Attachment not found.');
+    const abs = path.join(process.cwd(), att.filePath);
+    if (!fs.existsSync(abs)) throw new NotFoundException('The file is missing on the server.');
+    return { abs, fileName: att.fileName, mimeType: att.mimeType };
+  }
+
+  async deleteAttachment(orgId: string, id: string, attId: string) {
+    await this.requireDv(orgId, id);
+    const att = await this.prisma.attachment.findFirst({
+      where: {
+        id: attId,
+        organizationId: orgId,
+        attachableTable: 'disbursement_vouchers',
+        attachableId: id,
+      },
+      select: { id: true, filePath: true },
+    });
+    if (!att) throw new NotFoundException('Attachment not found.');
+    await this.prisma.attachment.delete({ where: { id: att.id } });
+    try {
+      fs.unlinkSync(path.join(process.cwd(), att.filePath));
+    } catch {
+      /* file already gone — ignore */
+    }
+    return { deleted: true };
   }
 }

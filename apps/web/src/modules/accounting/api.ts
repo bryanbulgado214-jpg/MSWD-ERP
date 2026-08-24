@@ -929,6 +929,92 @@ export async function deleteDisbursement(id: string): Promise<{ deleted: boolean
   return res.json();
 }
 
+// ── DV notes (collaborative comment thread) ──
+
+export interface DvNote {
+  id: string;
+  body: string;
+  createdAt: string;
+  authorId: string | null;
+  author: string;
+}
+
+export async function getDvNotes(id: string): Promise<DvNote[]> {
+  const res = await authFetch(`/accounting/disbursements/${id}/notes`);
+  return res.json();
+}
+
+export async function addDvNote(id: string, body: string): Promise<DvNote[]> {
+  const res = await authFetchMutate(`/accounting/disbursements/${id}/notes`, 'POST', { body });
+  return res.json();
+}
+
+export async function deleteDvNote(id: string, noteId: string): Promise<DvNote[]> {
+  const res = await authFetchMutate(`/accounting/disbursements/${id}/notes/${noteId}`, 'DELETE');
+  return res.json();
+}
+
+// ── DV attachments (supporting documents) ──
+
+export interface DvAttachment {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  createdAt: string;
+  uploader?: { username: string } | null;
+}
+
+export async function getDvAttachments(id: string): Promise<DvAttachment[]> {
+  const res = await authFetch(`/accounting/disbursements/${id}/attachments`);
+  return res.json();
+}
+
+export async function uploadDvAttachment(id: string, file: File): Promise<DvAttachment> {
+  const token = getAccessToken();
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch(`${API_BASE_URL}/accounting/disbursements/${id}/attachments`, {
+    method: 'POST',
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: fd,
+  });
+  if (!res.ok) {
+    throw new AccountingApiError(await extractErrorMessage(res, 'Upload failed.'), res.status);
+  }
+  return res.json();
+}
+
+export async function downloadDvAttachment(
+  id: string,
+  attId: string,
+  fileName: string,
+): Promise<void> {
+  const token = getAccessToken();
+  const res = await fetch(
+    `${API_BASE_URL}/accounting/disbursements/${id}/attachments/${attId}/download`,
+    { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } },
+  );
+  if (!res.ok) throw new AccountingApiError('Download failed.', res.status);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+export async function deleteDvAttachment(id: string, attId: string): Promise<{ deleted: boolean }> {
+  const res = await authFetchMutate(
+    `/accounting/disbursements/${id}/attachments/${attId}`,
+    'DELETE',
+  );
+  return res.json();
+}
+
 // ── Loans & Amortization ──
 
 export interface LoanSummary {

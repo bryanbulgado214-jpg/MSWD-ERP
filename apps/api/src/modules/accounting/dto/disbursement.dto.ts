@@ -14,6 +14,13 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+export class AddDvNoteDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(4000)
+  body!: string;
+}
+
 // Accounting-created DVs are non-procurement; procurement DVs originate from the
 // PR -> PO -> ORS chain in the procurement module.
 export const NON_PROCUREMENT_DV_TYPES = [
