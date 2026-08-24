@@ -1,18 +1,19 @@
 import { createBrowserRouter } from 'react-router-dom';
 
 import { accountingRoutes } from '../modules/accounting/routes';
-import assetRoutes from '../modules/asset/routes';
-import complaintRoutes from '../modules/complaints/routes';
-import { billingRoutes } from '../modules/billing/routes';
-import hrRoutes from '../modules/hr/routes';
-import workOrderRoutes from '../modules/workorders/routes';
 import { adminRoutes } from '../modules/admin/routes';
+import assetRoutes from '../modules/asset/routes';
+import { billingRoutes } from '../modules/billing/routes';
 import { budgetingRoutes } from '../modules/budgeting/routes';
+import complaintRoutes from '../modules/complaints/routes';
+import hrRoutes from '../modules/hr/routes';
 import { inventoryRoutes } from '../modules/inventory/routes';
 import { procurementRoutes } from '../modules/procurement/routes';
 import { reportsRoutes } from '../modules/reports/routes';
+import workOrderRoutes from '../modules/workorders/routes';
+
 import { AppLayout } from './AppLayout';
-import { DashboardPage } from './DashboardPage';
+import { HomeRoute } from './HomeRoute';
 import { LoginPage } from './LoginPage';
 import { NoAccessPage } from './NoAccessPage';
 import { RequireModule } from './RequireModule';
@@ -31,7 +32,7 @@ export const router = createBrowserRouter([
         children: [
           {
             path: '/',
-            element: <DashboardPage />,
+            element: <HomeRoute />,
           },
           {
             path: '/no-access',

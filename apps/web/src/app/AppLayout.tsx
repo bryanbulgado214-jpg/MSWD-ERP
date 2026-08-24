@@ -1,7 +1,7 @@
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from './auth';
-import { hasModuleAccess } from './module-access';
+import { hasModuleAccess, isAccountantHome } from './module-access';
 import { NotificationBell } from './NotificationBell';
 import './app-layout.css';
 
@@ -28,6 +28,8 @@ export function AppLayout() {
   if (!user) return <Navigate to="/login" replace />;
 
   const visibleLinks = MODULE_NAV.filter((mod) => hasModuleAccess(permissions, mod.module));
+  // The accountant's home is the Accounting Dashboard — hide the generic Home tab.
+  const showHome = !isAccountantHome(permissions);
 
   function handleLogout() {
     logout();
@@ -68,12 +70,14 @@ export function AppLayout() {
             ) : null}
           </Link>
           <div className="app-nav__links">
-            <Link
-              to="/"
-              className={`app-nav__link${location.pathname === '/' ? ' app-nav__link--active' : ''}`}
-            >
-              Home
-            </Link>
+            {showHome && (
+              <Link
+                to="/"
+                className={`app-nav__link${location.pathname === '/' ? ' app-nav__link--active' : ''}`}
+              >
+                Home
+              </Link>
+            )}
             {visibleLinks.map((link) => (
               <Link
                 key={link.to}

@@ -132,3 +132,12 @@ export const MODULE_GATES = {
 export function hasModuleAccess(permissions: Set<string>, mod: keyof typeof MODULE_GATES): boolean {
   return MODULE_GATES[mod].some((code) => permissions.has(code));
 }
+
+/**
+ * An accountant/bookkeeper (holds accounting.read) who is not an admin. Their
+ * home is the Accounting Dashboard, so the generic Home tab is hidden and "/"
+ * redirects there for them.
+ */
+export function isAccountantHome(permissions: Set<string>): boolean {
+  return permissions.has('accounting.read') && !hasModuleAccess(permissions, 'admin');
+}
