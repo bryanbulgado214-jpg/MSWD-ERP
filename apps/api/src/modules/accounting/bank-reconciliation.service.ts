@@ -436,18 +436,21 @@ export class BankReconciliationService {
     const unmatchedBankAmount = round2(unmatchedBankLines.reduce((s, b) => s + b.amount, 0));
     const unmatchedBookAmount = round2(unmatchedBookLines.reduce((s, b) => s + b.amount, 0));
 
-    // Adjusted-balance reconciliation (the figure that must be 0 to complete):
-    //   adjusted book = live GL cash + bank items not yet booked (unmatched bank)
-    //   adjusted bank = bank balance + book items not yet on the bank (unmatched book)
     // Book balance is the LIVE GL cash (not the stored snapshot) so "Add to
     // books" keeps the reconciliation stable.
     const bankBalance = Number(recon.bankBalance);
     const bookBalance = cashCoaId
       ? await this.glCashBalance(organizationId, cashCoaId, recon.reconciliationDate, fiscalYearId)
       : Number(recon.bookBalance);
+    // Adjusted balances (kept for reference on the report).
     const adjustedBook = round2(bookBalance + unmatchedBankAmount);
     const adjustedBank = round2(bankBalance + unmatchedBookAmount);
-    const difference = round2(adjustedBook - adjustedBank);
+    // Reconciliation progress, measured against the BOOK balance: the net of the
+    // book (GL cash) entries not yet matched to a bank transaction. It starts at
+    // the full book balance (nothing reconciled) and reaches zero only when every
+    // book entry is matched and every bank-only item has been added to the books.
+    const difference = round2(unmatchedBookAmount);
+    const fullyReconciled = unmatchedBank === 0 && unmatchedBook === 0;
 
     return {
       recon: {
@@ -476,8 +479,9 @@ export class BankReconciliationService {
         adjustedBook,
         adjustedBank,
         difference,
-        // A reconciliation ties out only when adjusted book = adjusted bank.
-        reconciled: Math.abs(difference) < 0.005 && bank.length > 0,
+        // Reconciled once every entry on both sides is matched (bank-only items
+        // are matched by "Add to books").
+        reconciled: fullyReconciled && bank.length > 0,
       },
     };
   }
@@ -854,17 +858,18 @@ export class BankReconciliationService {
       throw new ConflictException('Reconciliation was modified. Please refresh.');
     }
 
-    // A reconciliation can only be completed when it ties out — adjusted book
-    // must equal adjusted bank. Any remaining gap has to be matched or booked.
-    const { difference } = await this.computeBalances(this.prisma, id);
-    if (Math.abs(difference) >= 0.005) {
-      const money = new Intl.NumberFormat('en-PH', {
-        style: 'currency',
-        currency: 'PHP',
-      }).format(Math.abs(difference));
+    // A reconciliation can only be completed when every entry on both sides has
+    // been accounted for: each bank transaction matched to a book (GL cash) entry,
+    // and each bank-only item added to the books. Nothing may be left unmatched.
+    const { unmatchedBankCount, unmatchedBookCount } = await this.computeBalances(this.prisma, id);
+    if (unmatchedBankCount > 0 || unmatchedBookCount > 0) {
+      const parts: string[] = [];
+      if (unmatchedBankCount > 0) parts.push(`${unmatchedBankCount} bank transaction(s)`);
+      if (unmatchedBookCount > 0) parts.push(`${unmatchedBookCount} book entry(ies)`);
       throw new BadRequestException(
-        `Cannot complete — the adjusted book and bank balances still differ by ${money}. ` +
-          `Match or book the remaining items until the difference is zero.`,
+        `Cannot complete — ${parts.join(' and ')} still unreconciled. ` +
+          `Match every bank transaction to its book entry, and use "Add to books" for ` +
+          `bank-only items (charges, interest), until nothing remains.`,
       );
     }
 
@@ -983,6 +988,8 @@ export class BankReconciliationService {
     let bookBalance = Number(recon.bookBalance);
     let unmatchedBankSum = 0;
     let unmatchedBookSum = 0;
+    let unmatchedBankCount = 0;
+    let unmatchedBookCount = 0;
     if (cash) {
       const jevWhere = {
         organizationId: recon.organizationId,
@@ -999,13 +1006,16 @@ export class BankReconciliationService {
 
       const ub = await client.bankStatementLine.aggregate({
         _sum: { amount: true },
+        _count: { _all: true },
         where: { bankReconciliationId: reconId, matchGroupId: null },
       });
       unmatchedBankSum = Number(ub._sum.amount ?? 0);
+      unmatchedBankCount = ub._count._all;
       const bk = await client.jevLine.findMany({
         where: { chartOfAccountId: cash, matchGroupId: null, jev: jevWhere },
         select: { debitAmount: true, creditAmount: true },
       });
+      unmatchedBookCount = bk.length;
       unmatchedBookSum = bk.reduce(
         (s: number, l: { debitAmount: unknown; creditAmount: unknown }) =>
           s + Number(l.debitAmount) - Number(l.creditAmount),
@@ -1015,8 +1025,17 @@ export class BankReconciliationService {
     const bankBalance = Number(recon.bankBalance);
     const adjustedBook = round2(bookBalance + unmatchedBankSum);
     const adjustedBank = round2(bankBalance + unmatchedBookSum);
-    const difference = round2(adjustedBook - adjustedBank);
-    return { bookBalance, bankBalance, adjustedBook, adjustedBank, difference };
+    // Reconciliation progress = net book entries not yet matched to the bank.
+    const difference = round2(unmatchedBookSum);
+    return {
+      bookBalance,
+      bankBalance,
+      adjustedBook,
+      adjustedBank,
+      difference,
+      unmatchedBankCount,
+      unmatchedBookCount,
+    };
   }
 
   /** Recompute and persist the (live) balances/difference after a match change. */

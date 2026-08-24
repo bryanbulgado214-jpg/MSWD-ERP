@@ -909,10 +909,10 @@ function ReconciliationDetail({ id }: { id: string }) {
                 )}
           </div>
           <div style={{ fontSize: 12, color: '#667085' }}>
-            Difference {summary.reconciled ? '✓' : ''}
+            Book balance to reconcile {summary.reconciled ? '✓' : ''}
           </div>
           <div style={{ fontSize: 11, color: '#98a2b3', marginTop: 2 }}>
-            {summary.matched} matched · adj. book − adj. bank
+            {summary.matched} matched · net of unmatched book entries
           </div>
         </div>
       </div>
@@ -944,8 +944,8 @@ function ReconciliationDetail({ id }: { id: string }) {
             marginBottom: 16,
           }}
         >
-          ✓ Balanced — adjusted book equals adjusted bank. Click <strong>Reconcile</strong> to
-          finalize.
+          ✓ Fully reconciled — every entry on both sides is matched. Click{' '}
+          <strong>Reconcile</strong> to finalize.
         </div>
       )}
       {editable && !summary.reconciled && (
@@ -959,10 +959,11 @@ function ReconciliationDetail({ id }: { id: string }) {
             marginBottom: 16,
           }}
         >
-          <strong>Out of balance by {formatPeso(Math.abs(summary.difference))}.</strong> Adjusted
-          book {formatPeso(summary.adjustedBook)} vs adjusted bank{' '}
-          {formatPeso(summary.adjustedBank)}. Match or “Add to books” the remaining items until the
-          difference is zero — only then can this reconciliation be finalized.
+          <strong>{formatPeso(summary.difference)} of the book balance still to reconcile.</strong>{' '}
+          {summary.unmatchedBank + summary.unmatchedBook} item
+          {summary.unmatchedBank + summary.unmatchedBook === 1 ? '' : 's'} remaining — match each
+          bank transaction to its book entry, and use <strong>Add to books</strong> for bank-only
+          items (service charges, interest). Finalize once nothing is left unmatched.
         </div>
       )}
 
