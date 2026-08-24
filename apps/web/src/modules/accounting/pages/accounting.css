@@ -700,3 +700,17 @@
   padding: 0 4px;
 }
 .acct-due__del:hover { color: #b42318; }
+
+/* ── Locked (sticky) table headers across Accounting ── */
+/* The list wrappers use overflow-x:auto, which the browser coerces into a
+   vertical scroll container too — that would trap a sticky header. Let those
+   wrappers overflow so the column-header row can stick to the window instead. */
+.acct-page div:has(> .acct-table) {
+  overflow: visible !important;
+}
+.acct-table thead th {
+  position: sticky;
+  top: calc(var(--app-header-h, 74px) - 1px);
+  z-index: 5;
+  background: #f5f7fa;
+}
