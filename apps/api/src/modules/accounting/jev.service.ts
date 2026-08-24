@@ -545,6 +545,9 @@ export class JevService {
 
     const totalDebit = lines.reduce((s, l) => s + l.debitAmount, 0);
     const totalCredit = lines.reduce((s, l) => s + l.creditAmount, 0);
+    if (totalDebit <= 0 || totalCredit <= 0) {
+      throw new BadRequestException('A journal entry must have a non-zero amount.');
+    }
     const diff = Math.abs(totalDebit - totalCredit);
     if (diff > 0.005) {
       throw new BadRequestException(

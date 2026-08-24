@@ -1062,14 +1062,21 @@ export class AutoJevService {
       return null;
     }
 
+    const totalDebit = data.lines.reduce((s, l) => s + l.debitAmount, 0);
+    const totalCredit = data.lines.reduce((s, l) => s + l.creditAmount, 0);
+    // Never persist a zero-amount journal entry.
+    if (totalDebit <= 0 && totalCredit <= 0) {
+      this.logger.warn(
+        `Skipping auto-JEV for ${data.sourceTable}/${data.sourceId}: zero-amount entry.`,
+      );
+      return null;
+    }
+
     const jevNumber = await this.generateJevNumber(
       tx,
       data.organizationId,
       data.jevDate.getUTCFullYear(),
     );
-
-    const totalDebit = data.lines.reduce((s, l) => s + l.debitAmount, 0);
-    const totalCredit = data.lines.reduce((s, l) => s + l.creditAmount, 0);
 
     const jev = await tx.journalEntryVoucher.create({
       data: {

@@ -237,6 +237,9 @@ export class TellerSessionService {
       );
     }
     const totalCents = toCents(data.actualCashRemitted) + toCents(data.actualChecksRemitted);
+    if (totalCents <= 0) {
+      throw new BadRequestException('Remittance amount must be greater than zero.');
+    }
     const shortageCents = totalCents - toCents(session.expectedRemittance);
     return runAudited(this.prisma, tellerId, (tx) =>
       tx.tellerSession.update({

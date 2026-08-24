@@ -271,7 +271,8 @@ export default function TellerSessionPage({
                   <button
                     type="button"
                     className="bill-btn bill-btn--primary"
-                    disabled={busy}
+                    disabled={busy || actualTotal <= 0}
+                    title={actualTotal <= 0 ? 'Nothing to remit — the amount is zero.' : ''}
                     onClick={() =>
                       run(() =>
                         remitTellerSession(session.id, {
