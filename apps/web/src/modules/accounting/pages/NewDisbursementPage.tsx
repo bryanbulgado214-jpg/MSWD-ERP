@@ -19,6 +19,7 @@ import type { BankAccount, ChartOfAccount, CreateDisbursementInput } from '../ty
 import { AccountCombobox } from './AccountCombobox';
 import { AccountingSubNav } from './AccountingSubNav';
 import { PayeeCombobox } from './PayeeCombobox';
+import { WithholdingTaxAssistant, type WhtRow } from './WithholdingTaxAssistant';
 import './accounting.css';
 
 interface LineDraft {
@@ -80,6 +81,20 @@ export default function NewDisbursementPage() {
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
   // Supporting documents to attach once the DV is created.
   const [attachFiles, setAttachFiles] = useState<File[]>([]);
+  // Withholding-tax assistant panel.
+  const [showWht, setShowWht] = useState(false);
+
+  function applyWht(rows: WhtRow[]) {
+    setLines(
+      rows.map((r) => ({
+        chartOfAccountId: r.chartOfAccountId,
+        debitAmount: r.debit,
+        creditAmount: r.credit,
+        description: r.description,
+      })),
+    );
+    setShowWht(false);
+  }
 
   const load = useCallback(async () => {
     try {
@@ -405,6 +420,18 @@ export default function NewDisbursementPage() {
           )}
         </div>
         {/* End compact header */}
+
+        {/* Withholding-tax assistant */}
+        <div style={{ marginTop: 16 }}>
+          <button
+            type="button"
+            className="acct-btn acct-btn--sm"
+            onClick={() => setShowWht((v) => !v)}
+          >
+            {showWht ? 'Hide' : '🧮'} Withholding Tax Assistant
+          </button>
+          {showWht && <WithholdingTaxAssistant accounts={accounts} onApply={applyWht} />}
+        </div>
 
         {/* Accounting entry (charges + deductions) — the main working area */}
         <div
