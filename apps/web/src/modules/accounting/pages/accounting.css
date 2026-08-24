@@ -121,7 +121,9 @@
 }
 
 .acct-toolbar select,
-.acct-toolbar input[type="text"] {
+.acct-toolbar input[type="text"],
+.acct-toolbar input[type="search"],
+.acct-toolbar input[type="date"] {
   padding: 8px 12px;
   border: 1.5px solid #d0d5dd;
   border-radius: 6px;
@@ -132,6 +134,36 @@
 
 .acct-toolbar .acct-btn--primary {
   margin-left: auto;
+}
+
+/* Date-range filter group (JEV & DV lists). */
+.acct-daterange {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #475467;
+}
+.acct-daterange__label {
+  font-weight: 600;
+  color: #475467;
+}
+.acct-daterange__sep {
+  color: #98a2b3;
+}
+.acct-daterange__clear {
+  border: none;
+  background: none;
+  color: #b42318;
+  cursor: pointer;
+  font-size: 12px;
+  text-decoration: underline;
+  padding: 2px 4px;
+}
+.acct-daterange__clear:disabled {
+  color: #d0d5dd;
+  cursor: default;
+  text-decoration: none;
 }
 
 .acct-table {

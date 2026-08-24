@@ -10,6 +10,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
 
 import { AutoJevService } from './auto-jev.service';
+import { dateRangeFilter } from './date-range-filter';
 import { CreateDisbursementDto } from './dto/disbursement.dto';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -72,12 +73,23 @@ export class DisbursementService {
   ) {}
 
   /** Register of ALL disbursement vouchers in the org (procurement + non-procurement). */
-  async list(orgId: string, filters?: { status?: string; dvType?: string; withholding?: boolean }) {
+  async list(
+    orgId: string,
+    filters?: {
+      status?: string;
+      dvType?: string;
+      withholding?: boolean;
+      dateFrom?: string;
+      dateTo?: string;
+    },
+  ) {
     const where: Prisma.DisbursementVoucherWhereInput = { organizationId: orgId };
     if (filters?.status) where.status = filters.status as never;
     if (filters?.dvType) where.dvType = filters.dvType as never;
     // BIR Form 2307 register: only DVs that withheld a tax.
     if (filters?.withholding) where.taxAmount = { gt: 0 };
+    const dvDate = dateRangeFilter(filters?.dateFrom, filters?.dateTo);
+    if (dvDate) where.dvDate = dvDate;
 
     const dvs = await this.prisma.disbursementVoucher.findMany({
       where,

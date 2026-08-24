@@ -10,6 +10,7 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
 
+import { dateRangeFilter } from './date-range-filter';
 import { parseAmountQuery } from './parse-amount-query';
 
 const JEV_SELECT = {
@@ -66,7 +67,13 @@ export class JevService {
 
   async findAll(
     organizationId: string,
-    filters?: { status?: string; periodId?: string; search?: string },
+    filters?: {
+      status?: string;
+      periodId?: string;
+      search?: string;
+      dateFrom?: string;
+      dateTo?: string;
+    },
   ) {
     const search = filters?.search?.trim();
     let searchWhere = {};
@@ -80,11 +87,13 @@ export class JevService {
       if (amount !== null) or.push({ totalDebit: amount }, { totalCredit: amount });
       searchWhere = { OR: or };
     }
+    const jevDate = dateRangeFilter(filters?.dateFrom, filters?.dateTo);
     return this.prisma.journalEntryVoucher.findMany({
       where: {
         organizationId,
         ...(filters?.status ? { status: filters.status as any } : {}),
         ...(filters?.periodId ? { accountingPeriodId: filters.periodId } : {}),
+        ...(jevDate ? { jevDate } : {}),
         ...searchWhere,
       },
       select: JEV_SELECT,

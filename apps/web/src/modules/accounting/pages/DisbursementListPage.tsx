@@ -75,6 +75,8 @@ export default function DisbursementListPage() {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [typeFilter, setTypeFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [posting, setPosting] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -83,6 +85,8 @@ export default function DisbursementListPage() {
     try {
       const params = new URLSearchParams();
       if (typeFilter) params.set('dvType', typeFilter);
+      if (dateFrom) params.set('dateFrom', dateFrom);
+      if (dateTo) params.set('dateTo', dateTo);
       const data = await getDisbursements(params.toString());
       setState({ status: 'loaded', data });
     } catch (e) {
@@ -92,7 +96,7 @@ export default function DisbursementListPage() {
           e instanceof AccountingApiError ? e.message : 'Failed to load disbursement vouchers.',
       });
     }
-  }, [typeFilter]);
+  }, [typeFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     load();
@@ -157,6 +161,35 @@ export default function DisbursementListPage() {
           <option value="utility">Utility</option>
           <option value="other">Other</option>
         </select>
+        <span className="acct-daterange">
+          <span className="acct-daterange__label">Date</span>
+          <input
+            type="date"
+            value={dateFrom}
+            max={dateTo || undefined}
+            onChange={(e) => setDateFrom(e.target.value)}
+            aria-label="DV date from"
+          />
+          <span className="acct-daterange__sep">–</span>
+          <input
+            type="date"
+            value={dateTo}
+            min={dateFrom || undefined}
+            onChange={(e) => setDateTo(e.target.value)}
+            aria-label="DV date to"
+          />
+          <button
+            type="button"
+            className="acct-daterange__clear"
+            onClick={() => {
+              setDateFrom('');
+              setDateTo('');
+            }}
+            disabled={!dateFrom && !dateTo}
+          >
+            Clear
+          </button>
+        </span>
         <button
           type="button"
           className="acct-btn"

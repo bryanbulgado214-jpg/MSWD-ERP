@@ -32,11 +32,15 @@ export class DisbursementController {
     @Query('status') status?: string,
     @Query('dvType') dvType?: string,
     @Query('withholding') withholding?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
   ) {
     return this.disbursementService.list(user.organizationId, {
       ...(status ? { status } : {}),
       ...(dvType ? { dvType } : {}),
       ...(withholding === 'true' ? { withholding: true } : {}),
+      ...(dateFrom ? { dateFrom } : {}),
+      ...(dateTo ? { dateTo } : {}),
     });
   }
 

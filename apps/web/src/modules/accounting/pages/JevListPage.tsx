@@ -36,12 +36,16 @@ export default function JevListPage() {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') ?? '');
   const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   const load = useCallback(async () => {
     try {
       const params = new URLSearchParams();
       if (statusFilter) params.set('status', statusFilter);
       if (search) params.set('search', search);
+      if (dateFrom) params.set('dateFrom', dateFrom);
+      if (dateTo) params.set('dateTo', dateTo);
       const data = await getJevList(params.toString());
       setState({ status: 'loaded', data });
     } catch (e) {
@@ -50,7 +54,7 @@ export default function JevListPage() {
         message: e instanceof AccountingApiError ? e.message : 'Failed to load JEVs.',
       });
     }
-  }, [statusFilter, search]);
+  }, [statusFilter, search, dateFrom, dateTo]);
 
   useEffect(() => {
     load();
@@ -77,6 +81,35 @@ export default function JevListPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+        <span className="acct-daterange">
+          <span className="acct-daterange__label">Date</span>
+          <input
+            type="date"
+            value={dateFrom}
+            max={dateTo || undefined}
+            onChange={(e) => setDateFrom(e.target.value)}
+            aria-label="JEV date from"
+          />
+          <span className="acct-daterange__sep">–</span>
+          <input
+            type="date"
+            value={dateTo}
+            min={dateFrom || undefined}
+            onChange={(e) => setDateTo(e.target.value)}
+            aria-label="JEV date to"
+          />
+          <button
+            type="button"
+            className="acct-daterange__clear"
+            onClick={() => {
+              setDateFrom('');
+              setDateTo('');
+            }}
+            disabled={!dateFrom && !dateTo}
+          >
+            Clear
+          </button>
+        </span>
         {canCreate && (
           <button
             type="button"

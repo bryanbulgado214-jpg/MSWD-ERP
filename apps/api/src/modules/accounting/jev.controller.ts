@@ -31,11 +31,15 @@ export class JevController {
     @Query('status') status?: string,
     @Query('periodId') periodId?: string,
     @Query('search') search?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
   ) {
     return this.jevService.findAll(user.organizationId, {
       ...(status ? { status } : {}),
       ...(periodId ? { periodId } : {}),
       ...(search ? { search } : {}),
+      ...(dateFrom ? { dateFrom } : {}),
+      ...(dateTo ? { dateTo } : {}),
     });
   }
 
