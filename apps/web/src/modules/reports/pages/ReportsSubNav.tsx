@@ -235,13 +235,10 @@ export function ReportsSubNav() {
     [groups, pathname],
   );
 
-  // Exactly one category is open at a time; its reports fly out to the right.
-  // Defaults to (and follows navigation into) the group holding the current page,
-  // while still letting the user click any category open.
-  const [openGroup, setOpenGroup] = useState<string | null>(activeGroupLabel);
-  useEffect(() => {
-    if (activeGroupLabel) setOpenGroup(activeGroupLabel);
-  }, [activeGroupLabel]);
+  // The flyout is a transient menu: closed by default, opened by clicking a
+  // category, and closed again once the user picks a report (or clicks outside).
+  // The category holding the current page is highlighted even while closed.
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
 
   // Clicking anywhere outside the nav collapses the open category.
   const navRef = useRef<HTMLElement>(null);
@@ -265,7 +262,13 @@ export function ReportsSubNav() {
           >
             <button
               type="button"
-              className={`reports-subnav__group-label${open ? ' reports-subnav__group-label--open' : ''}`}
+              className={`reports-subnav__group-label${
+                open
+                  ? ' reports-subnav__group-label--open'
+                  : group.label === activeGroupLabel
+                    ? ' reports-subnav__group-label--active'
+                    : ''
+              }`}
               aria-expanded={open}
               onClick={() => setOpenGroup(open ? null : group.label)}
             >
@@ -279,6 +282,7 @@ export function ReportsSubNav() {
                     key={item.to}
                     to={item.to}
                     className={`reports-subnav__link${pathname.startsWith(item.to) ? ' reports-subnav__link--active' : ''}`}
+                    onClick={() => setOpenGroup(null)}
                   >
                     {item.label}
                   </Link>

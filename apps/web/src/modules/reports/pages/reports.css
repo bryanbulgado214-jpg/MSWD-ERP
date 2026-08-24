@@ -378,11 +378,11 @@
 
 /* ── Vertical left-sidebar sub-nav (matches Accounting; no horizontal scroll) ── */
 .reports-subnav {
+  /* Locked to the viewport on scroll; overflow stays visible so the category
+     flyout can extend past the sidebar. */
   position: fixed;
   left: max(24px, calc((100vw - 1200px) / 2 + 24px));
   top: calc(var(--app-header-h, 74px) + 26px);
-  max-height: calc(100vh - var(--app-header-h, 74px) - 44px);
-  overflow-y: auto;
   width: 150px;
   display: flex;
   flex-direction: column;
@@ -465,6 +465,8 @@
 }
 .reports-subnav__group-label:hover { background: #f2f4f7; color: #344054; }
 .reports-subnav__group-label--open { background: #eff4ff; color: #175cd3; }
+/* The category holding the current page, highlighted even when its flyout is closed. */
+.reports-subnav__group-label--active { color: #175cd3; }
 
 .reports-subnav__chevron {
   flex-shrink: 0;
