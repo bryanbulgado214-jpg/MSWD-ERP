@@ -414,7 +414,7 @@ async function main() {
           chartOfAccountId: cashAccountId,
           debitAmount: 0,
           creditAmount: net,
-          description: `Cash disbursement — DV ${dvNumber}`,
+          description: `Disbursement — ${s.payee}`,
         });
 
         const totalDebit = round2(lines.reduce((a, l) => a + l.debitAmount, 0));
