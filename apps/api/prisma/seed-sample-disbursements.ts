@@ -12,9 +12,15 @@ const prisma = new PrismaClient();
  * recurring monthly obligations (electricity, telecom, statutory remittances,
  * board per diem) plus scattered procurement, fuel, and reimbursements — with a
  * realistic spread of workflow statuses (older ones released, the most recent
- * still in draft / for-approval). Records only (no GL posting).
+ * still in draft / for-approval).
  *
- * Idempotent: clears the DV-2026-* range and re-creates it.
+ * Each DV also gets its accounting entry (Box B): Dr expense/payable by type,
+ * Cr Due-to-BIR for the withheld tax, Cr Cash in Bank for the net. A released DV
+ * posts the entry to the ledger; an in-progress DV holds a draft entry; a
+ * cancelled DV gets none.
+ *
+ * Idempotent: clears the DV-2026-* range and the JEVs it had posted, then
+ * re-creates them.
  */
 
 const MONTHS = [
