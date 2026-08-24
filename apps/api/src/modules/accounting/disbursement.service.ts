@@ -24,6 +24,19 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 const DV_UPLOAD_SUBDIR = path.join('uploads', 'disbursements');
 const DV_ALLOWED_MIME = ['application/pdf', 'image/png', 'image/jpeg'];
 
+// Withholding payables the WHT assistant credits — used to split a DV's entry
+// into the creditable EWT and the government business-tax withholding for the
+// BIR Form 2307. ATCs are best-effort prefills (the certificate is editable).
+const EWT_ACCOUNT_CODE = '2-02-01-010-02'; // Due to BIR - Expanded Withholding Tax
+const GMP_VAT_ACCOUNT_CODE = '2-02-01-010-04'; // Due to BIR - Withholding VAT on GMP (5%)
+const GMP_PCT_ACCOUNT_CODE = '2-02-01-010-03'; // Due to BIR - Withholding Percentage Tax on GMP (3%)
+const EWT_KINDS: Array<{ rate: number; nature: string; atc: string }> = [
+  { rate: 0.01, nature: 'Purchase of goods', atc: 'WC640' },
+  { rate: 0.02, nature: 'Purchase of services', atc: 'WC157' },
+  { rate: 0.05, nature: 'Rentals', atc: 'WC100' },
+  { rate: 0.1, nature: 'Professional / Talent fees', atc: 'WC010' },
+];
+
 // Full detail for the register row-open and the Appendix 32 printout. Procurement
 // links are nullable — a non-procurement DV (travel, payroll, etc.) has none and
 // carries a free-text payee instead.
@@ -275,6 +288,52 @@ export class DisbursementService {
         amount: Number(l.creditAmount),
       }));
 
+    // Structured withholding breakdown for the certificate's two sections. When
+    // the entry was built by the withholding-tax assistant it credits the known
+    // BIR payables — Expanded Withholding Tax (…-02), GMP VAT (…-04) or GMP
+    // percentage tax (…-03) — so the creditable EWT and the business-tax
+    // withholding can be split out, each certified on its own income-payment
+    // base (net of VAT for a VAT-registered payee), rather than lumping the
+    // gross-up amount into a single EWT line.
+    const creditOf = (code: string) => {
+      const l = lines.find(
+        (x) => x.chartOfAccount.accountCode === code && Number(x.creditAmount) > 0,
+      );
+      return l ? round2(Number(l.creditAmount)) : null;
+    };
+    const totalDebit = round2(
+      lines.filter((l) => Number(l.debitAmount) > 0).reduce((s, l) => s + Number(l.debitAmount), 0),
+    );
+    const ewtAmount = creditOf(EWT_ACCOUNT_CODE);
+    const gvatAmount = creditOf(GMP_VAT_ACCOUNT_CODE);
+    const pctAmount = creditOf(GMP_PCT_ACCOUNT_CODE);
+
+    let withholding: {
+      taxBase: number;
+      vatRegistered: boolean;
+      ewt: { rate: number; amount: number; nature: string; atc: string };
+      businessTax: { type: 'vat' | 'percentage'; rate: number; amount: number; atc: string } | null;
+    } | null = null;
+    if (ewtAmount !== null) {
+      const vatRegistered = gvatAmount !== null;
+      const taxBase = round2(vatRegistered ? totalDebit / 1.12 : totalDebit);
+      const rawRate = taxBase > 0 ? ewtAmount / taxBase : 0;
+      const match = EWT_KINDS.reduce((best, k) =>
+        Math.abs(k.rate - rawRate) < Math.abs(best.rate - rawRate) ? k : best,
+      );
+      withholding = {
+        taxBase,
+        vatRegistered,
+        ewt: { rate: match.rate, amount: ewtAmount, nature: match.nature, atc: match.atc },
+        businessTax:
+          gvatAmount !== null
+            ? { type: 'vat', rate: 0.05, amount: gvatAmount, atc: 'WV012' }
+            : pctAmount !== null
+              ? { type: 'percentage', rate: 0.03, amount: pctAmount, atc: 'WB080' }
+              : null,
+      };
+    }
+
     const settings = dv.organization.settings;
     return {
       dvNumber: dv.dvNumber,
@@ -296,6 +355,7 @@ export class DisbursementService {
       },
       incomeLines,
       withholdingLines,
+      withholding,
     };
   }
 

@@ -896,6 +896,15 @@ export interface Bir2307Data {
   payor: { name: string; tin: string; address: string };
   incomeLines: Bir2307Line[];
   withholdingLines: Bir2307Line[];
+  // Structured breakdown from the withholding-tax assistant (null for a
+  // manually-entered DV): the income-payment base and the split between the
+  // creditable EWT and the government business-tax withholding.
+  withholding: {
+    taxBase: number;
+    vatRegistered: boolean;
+    ewt: { rate: number; amount: number; nature: string; atc: string };
+    businessTax: { type: 'vat' | 'percentage'; rate: number; amount: number; atc: string } | null;
+  } | null;
 }
 
 /** Prefill data for BIR Form 2307 assembled from a disbursement voucher. */

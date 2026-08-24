@@ -65,27 +65,52 @@ function buildState(d: Bir2307Data): FormState {
   const monthInQuarter = dvDate.getMonth() % 3; // 0,1,2 → which month column
   const periodFrom = isoDate(new Date(y, q * 3, 1));
   const periodTo = isoDate(new Date(y, q * 3 + 3, 0));
-
-  // A single prefilled EWT row carrying the DV's income payment + tax withheld,
-  // placed in the correct month-of-quarter column. Remaining rows are blank.
-  const first = emptyRow();
-  first.nature = d.particulars;
-  first.total = money(d.incomePayment);
-  first.tax = money(d.taxWithheld);
   const col = (['m1', 'm2', 'm3'] as const)[monthInQuarter]!;
-  first[col] = money(d.incomePayment);
+
+  const w = d.withholding;
+  // With the withholding-tax assistant's breakdown, the income payment is the
+  // tax base (net of VAT for VAT-registered payees) and the tax splits into the
+  // creditable EWT (EWT section) and the government business-tax withholding
+  // (Business Tax section). Otherwise fall back to the DV's gross figures.
+  const ewtBase = w ? w.taxBase : d.incomePayment;
+  const ewtTax = w ? w.ewt.amount : d.taxWithheld;
+  const ewtRow = emptyRow();
+  ewtRow.nature = w ? w.ewt.nature : d.particulars;
+  ewtRow.atc = w ? w.ewt.atc : '';
+  ewtRow.total = money(ewtBase);
+  ewtRow.tax = money(ewtTax);
+  ewtRow[col] = money(ewtBase);
+
+  const btRows = Array.from({ length: 3 }, emptyRow);
+  let btTotalIncome = '';
+  let btTotalTax = '';
+  if (w?.businessTax) {
+    const bt = w.businessTax;
+    const btRow = emptyRow();
+    btRow.nature =
+      bt.type === 'vat'
+        ? 'Withholding VAT on government money payments (5%)'
+        : 'Withholding percentage tax on government money payments (3%)';
+    btRow.atc = bt.atc;
+    btRow.total = money(w.taxBase);
+    btRow.tax = money(bt.amount);
+    btRow[col] = money(w.taxBase);
+    btRows[0] = btRow;
+    btTotalIncome = money(w.taxBase);
+    btTotalTax = money(bt.amount);
+  }
 
   return {
     periodFrom,
     periodTo,
     payee: { tin: d.payee.tin, name: d.payee.name, address: d.payee.address, zip: '' },
     payor: { tin: d.payor.tin, name: d.payor.name, address: d.payor.address, zip: '' },
-    ewt: [first, ...Array.from({ length: 5 }, emptyRow)],
-    ewtTotalIncome: money(d.incomePayment),
-    ewtTotalTax: money(d.taxWithheld),
-    bt: Array.from({ length: 3 }, emptyRow),
-    btTotalIncome: '',
-    btTotalTax: '',
+    ewt: [ewtRow, ...Array.from({ length: 5 }, emptyRow)],
+    ewtTotalIncome: money(ewtBase),
+    ewtTotalTax: money(ewtTax),
+    bt: btRows,
+    btTotalIncome,
+    btTotalTax,
     payorSig: { name: '', accreditation: '', issueDate: '', expiryDate: '' },
     payeeSig: { name: d.payee.name, accreditation: '', issueDate: '', expiryDate: '' },
   };
