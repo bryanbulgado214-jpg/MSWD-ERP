@@ -620,6 +620,32 @@
   color: #101828;
 }
 .acct-notes:focus { outline: none; border-color: var(--mswd-blue); }
+.acct-notes[readonly] { background: #f8f9fc; cursor: default; }
+
+.acct-notes-saved {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: #ecfdf3;
+  color: #067647;
+  border: 1px solid #a6f4c5;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.acct-notes-saved__close {
+  border: none;
+  background: none;
+  color: #067647;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.acct-notes-saved__close:hover { color: #05603a; }
 
 /* Due dates */
 .acct-reminder-form { display: flex; gap: 6px; margin-bottom: 12px; }

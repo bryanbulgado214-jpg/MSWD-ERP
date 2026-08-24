@@ -50,8 +50,9 @@ export default function AccountantWorkspace() {
   const [pending, setPending] = useState<PendingActionItem[]>([]);
   const [ws, setWs] = useState<AccountingWorkspace | null>(null);
   const [notes, setNotes] = useState('');
-  const [notesDirty, setNotesDirty] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
+  const [notesSaved, setNotesSaved] = useState(false);
   const [error, setError] = useState('');
   const [rTitle, setRTitle] = useState('');
   const [rDate, setRDate] = useState('');
@@ -59,8 +60,6 @@ export default function AccountantWorkspace() {
   const loadWs = useCallback(async () => {
     const w = await getWorkspace();
     setWs(w);
-    setNotes(w.notes);
-    setNotesDirty(false);
   }, []);
 
   useEffect(() => {
@@ -72,13 +71,20 @@ export default function AccountantWorkspace() {
     );
   }, [loadWs]);
 
+  function startEditNotes() {
+    setNotes(ws?.notes ?? '');
+    setNotesSaved(false);
+    setEditingNotes(true);
+  }
+
   async function saveNotes() {
-    if (!notesDirty) return;
     setSavingNotes(true);
+    setError('');
     try {
       const r = await saveWorkspaceNotes(notes);
       setWs((w) => (w ? { ...w, notes: r.content, notesUpdatedAt: r.notesUpdatedAt } : w));
-      setNotesDirty(false);
+      setEditingNotes(false);
+      setNotesSaved(true);
     } catch (e) {
       setError(e instanceof AccountingApiError ? e.message : 'Failed to save notes.');
     } finally {
@@ -167,28 +173,52 @@ export default function AccountantWorkspace() {
       </section>
 
       <div className="acct-ws__cols">
-        {/* ── To-Do's notepad ── */}
+        {/* ── Notes ── */}
         <section className="acct-panel">
           <h3 className="acct-panel__title">
-            To-Do&apos;s
-            <button
-              type="button"
-              className="acct-btn acct-btn--sm"
-              onClick={saveNotes}
-              disabled={!notesDirty || savingNotes}
-            >
-              {savingNotes ? 'Saving…' : notesDirty ? 'Save' : 'Saved'}
-            </button>
+            Notes
+            <span style={{ display: 'flex', gap: 6 }}>
+              <button
+                type="button"
+                className="acct-btn acct-btn--sm"
+                onClick={startEditNotes}
+                disabled={editingNotes}
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                className="acct-btn acct-btn--sm acct-btn--primary"
+                onClick={saveNotes}
+                disabled={!editingNotes || savingNotes}
+              >
+                {savingNotes ? 'Saving…' : 'Save'}
+              </button>
+            </span>
           </h3>
+          {notesSaved && (
+            <div className="acct-notes-saved" role="status">
+              <span>✓ Your notes have been saved.</span>
+              <button
+                type="button"
+                className="acct-notes-saved__close"
+                onClick={() => setNotesSaved(false)}
+                aria-label="Dismiss"
+              >
+                ×
+              </button>
+            </div>
+          )}
           <textarea
             className="acct-notes"
-            value={notes}
-            onChange={(e) => {
-              setNotes(e.target.value);
-              setNotesDirty(true);
-            }}
-            onBlur={saveNotes}
-            placeholder="Jot down tasks, follow-ups, and reminders for yourself…"
+            value={editingNotes ? notes : (ws?.notes ?? '')}
+            readOnly={!editingNotes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder={
+              editingNotes
+                ? 'Jot down tasks, follow-ups, and reminders for yourself…'
+                : 'No notes yet — click Edit to add some.'
+            }
             rows={9}
           />
         </section>
