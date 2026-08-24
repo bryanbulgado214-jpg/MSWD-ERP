@@ -55,11 +55,11 @@ async function main() {
 
   const passwordHash = await bcrypt.hash('ChangeMe!2026', 12);
   const user = await prisma.user.upsert({
-    where: { organizationId_username: { organizationId: org.id, username: 'sbwd.teller' } },
+    where: { organizationId_username: { organizationId: org.id, username: 'demo.teller' } },
     update: { email: 'teller@sbwd.invalid', passwordHash, isActive: true },
     create: {
       organizationId: org.id,
-      username: 'sbwd.teller',
+      username: 'demo.teller',
       email: 'teller@sbwd.invalid',
       passwordHash,
       isActive: true,
@@ -76,7 +76,7 @@ async function main() {
     update: {},
     create: { userId: user.id, roleId: role.id, organizationalUnitId: rootUnit.id },
   });
-  console.log('Ensured sbwd.teller (TELLER role) — quick-login ready.');
+  console.log('Ensured demo.teller (TELLER role) — quick-login ready.');
 }
 
 main()

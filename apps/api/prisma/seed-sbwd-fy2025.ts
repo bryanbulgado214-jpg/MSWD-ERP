@@ -49,7 +49,7 @@ async function main() {
 
   const actor =
     (await prisma.user.findFirst({
-      where: { username: 'sbwd.accountant' },
+      where: { username: 'demo.accountant' },
       select: { id: true },
     })) ??
     (await prisma.user.findFirst({

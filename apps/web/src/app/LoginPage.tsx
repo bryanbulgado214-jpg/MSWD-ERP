@@ -5,11 +5,11 @@ import { useAuth } from './auth';
 import './login.css';
 
 const ROLE_HINTS: Record<string, string> = {
-  'sbwd.admin': 'Administrator — full system access, user & role management',
-  'sbwd.accountant': 'Accountant — prepares JEVs, views ledgers & statements',
-  'sbwd.teller': 'Teller — collects payments & issues OR (Collection screens)',
-  'sbwd.cashier': 'Cashier — disburses: assigns check #, prints, releases',
-  'sbwd.gm': 'General Manager — dedicated check-void approver',
+  'demo.admin': 'Administrator — full system access, user & role management',
+  'demo.accountant': 'Accountant — prepares JEVs, views ledgers & statements',
+  'demo.teller': 'Teller — collects payments & issues OR (Collection screens)',
+  'demo.cashier': 'Cashier — disburses: assigns check #, prints, releases',
+  'demo.gm': 'General Manager — dedicated check-void approver',
 };
 
 export function LoginPage() {

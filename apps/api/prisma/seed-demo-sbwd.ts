@@ -377,11 +377,11 @@ async function main() {
     return user;
   };
 
-  const adminUser = await mkUser('sbwd.admin', 'admin@sbwd.invalid', ['ADMIN', 'GENERAL_MANAGER']);
-  const accountantUser = await mkUser('sbwd.accountant', 'accountant@sbwd.invalid', ['ACCOUNTANT']);
-  const approverUser = await mkUser('sbwd.approver', 'approver@sbwd.invalid', ['ACCOUNTANT']);
-  const cashierUser = await mkUser('sbwd.cashier', 'cashier@sbwd.invalid', ['CASHIER']);
-  await mkUser('sbwd.gm', 'gm@sbwd.invalid', ['GENERAL_MANAGER']);
+  const adminUser = await mkUser('demo.admin', 'admin@sbwd.invalid', ['ADMIN', 'GENERAL_MANAGER']);
+  const accountantUser = await mkUser('demo.accountant', 'accountant@sbwd.invalid', ['ACCOUNTANT']);
+  const approverUser = await mkUser('demo.approver', 'approver@sbwd.invalid', ['ACCOUNTANT']);
+  const cashierUser = await mkUser('demo.cashier', 'cashier@sbwd.invalid', ['CASHIER']);
+  await mkUser('demo.gm', 'gm@sbwd.invalid', ['GENERAL_MANAGER']);
 
   // Three multi-device demo users — simple credentials, one JEV stage each.
   await mkUser('preparer', 'preparer@sbwd.invalid', ['JEV_PREPARER'], simpleHash);
@@ -1455,11 +1455,11 @@ async function main() {
   console.log(`  Fiscal year:   FY${FY_YEAR} with 12 monthly periods (all open)`);
   console.log(`  Posted JEVs:   ${jevCount} (${lineCount} lines) across Jan–Jun ${FY_YEAR}`);
   console.log('  Logins (password "ChangeMe!2026"):');
-  console.log('    sbwd.admin       — System Administrator / General Manager');
-  console.log('    sbwd.accountant  — Accountant (prepares JEVs & DVs)');
-  console.log('    sbwd.approver    — Accountant (reviews & posts JEVs — separation of duties)');
-  console.log('    sbwd.cashier     — Cashier (disburses: assigns check #, prints, releases)');
-  console.log('    sbwd.gm          — General Manager (dedicated check-void approver)');
+  console.log('    demo.admin       — System Administrator / General Manager');
+  console.log('    demo.accountant  — Accountant (prepares JEVs & DVs)');
+  console.log('    demo.approver    — Accountant (reviews & posts JEVs — separation of duties)');
+  console.log('    demo.cashier     — Cashier (disburses: assigns check #, prints, releases)');
+  console.log('    demo.gm          — General Manager (dedicated check-void approver)');
   console.log('  Multi-device workflow logins (password "demo1234"):');
   console.log('    preparer         — create + submit only  (403 on approve/post)');
   console.log('    reviewer         — approve only          (403 on create/post)');

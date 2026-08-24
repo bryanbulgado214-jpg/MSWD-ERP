@@ -272,7 +272,7 @@ async function wipe(organizationId: string) {
 async function main() {
   const org = await prisma.organization.findFirstOrThrow({ where: { code: 'SBWD' } });
   const user = await prisma.user.findFirstOrThrow({
-    where: { organizationId: org.id, username: 'sbwd.admin' },
+    where: { organizationId: org.id, username: 'demo.admin' },
     select: { id: true },
   });
 
