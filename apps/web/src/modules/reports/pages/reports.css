@@ -383,6 +383,8 @@
   position: fixed;
   left: max(24px, calc((100vw - 1200px) / 2 + 24px));
   top: calc(var(--app-header-h, 74px) + 26px);
+  /* Above page content so the category flyout is never covered (header is 100). */
+  z-index: 50;
   width: 150px;
   display: flex;
   flex-direction: column;
