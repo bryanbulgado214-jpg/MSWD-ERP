@@ -915,8 +915,11 @@ export class BankReconciliationService {
    * uncleared pool (match link + matcher + timestamp cleared). Reconciling
    * items and imported statement lines cascade away with the record;
    * attachment rows (polymorphic — no cascade FK) and their files are
-   * removed too. Posted "Add to books" journal entries are NOT deleted —
-   * they are real GL transactions and simply become unmatched again.
+   * removed too. The "Add to books" journal entries this reconciliation
+   * posted (bank charges, interest, etc.) are also reverted — they were
+   * created as part of this reconciliation, so undoing it removes them,
+   * leaving the ledger as it was before. Otherwise those entries would
+   * linger as unmatched book lines and get wrongly auto-matched next time.
    */
   async remove(organizationId: string, userId: string, id: string) {
     const recon = await this.prisma.bankReconciliation.findFirst({
@@ -930,6 +933,24 @@ export class BankReconciliationService {
       where: { matchGroup: { bankReconciliationId: id } },
     });
 
+    // "Add to books" JEVs are sourced from this reconciliation's statement lines
+    // (sourceTable='bank_statement_lines'); collect them so they can be reverted.
+    const stmtLineIds = (
+      await this.prisma.bankStatementLine.findMany({
+        where: { bankReconciliationId: id },
+        select: { id: true },
+      })
+    ).map((l) => l.id);
+    const addToBooksJevs = stmtLineIds.length
+      ? await this.prisma.journalEntryVoucher.count({
+          where: {
+            organizationId,
+            sourceTable: 'bank_statement_lines',
+            sourceId: { in: stmtLineIds },
+          },
+        })
+      : 0;
+
     // Grab attachment file paths up front for best-effort disk cleanup.
     const atts = await this.prisma.attachment.findMany({
       where: { organizationId, attachableTable: 'bank_reconciliations', attachableId: id },
@@ -940,6 +961,16 @@ export class BankReconciliationService {
       await tx.attachment.deleteMany({
         where: { organizationId, attachableTable: 'bank_reconciliations', attachableId: id },
       });
+      // Revert the "Add to books" journal entries (jev_lines cascade).
+      if (stmtLineIds.length) {
+        await tx.journalEntryVoucher.deleteMany({
+          where: {
+            organizationId,
+            sourceTable: 'bank_statement_lines',
+            sourceId: { in: stmtLineIds },
+          },
+        });
+      }
       // Cascades reconciling items, imported statement lines, and match groups.
       // Deleting the groups SetNulls jev_lines.match_group_id, so every book
       // line cleared by this recon returns to the uncleared pool automatically.
@@ -954,7 +985,7 @@ export class BankReconciliationService {
       }
     }
 
-    return { deleted: true, unmatchedBookLines };
+    return { deleted: true, unmatchedBookLines, revertedEntries: addToBooksJevs };
   }
 
   /**
