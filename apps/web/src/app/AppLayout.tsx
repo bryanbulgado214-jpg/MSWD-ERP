@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from './auth';
@@ -23,6 +24,7 @@ export function AppLayout() {
   const { user, organization, loading, logout, permissions } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchQ, setSearchQ] = useState('');
 
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
@@ -39,6 +41,15 @@ export function AppLayout() {
   function handleSwitchUser() {
     logout();
     navigate('/login');
+  }
+
+  function submitSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const v = searchQ.trim();
+    if (v) {
+      navigate(`/search?q=${encodeURIComponent(v)}`);
+      setSearchQ('');
+    }
   }
 
   return (
@@ -91,6 +102,17 @@ export function AppLayout() {
             </div>
           </div>
           <div className="app-nav__user">
+            <form className="app-nav__search" onSubmit={submitSearch} role="search">
+              <input
+                value={searchQ}
+                onChange={(e) => setSearchQ(e.target.value)}
+                placeholder="Search…"
+                aria-label="Quick search"
+              />
+              <button type="submit" aria-label="Search">
+                🔍
+              </button>
+            </form>
             <NotificationBell />
             <span className="app-nav__username">{user.username}</span>
             <button type="button" className="app-nav__btn" onClick={handleSwitchUser}>

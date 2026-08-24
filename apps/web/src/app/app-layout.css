@@ -290,3 +290,36 @@
 @media print {
   .app-demo-banner { background: #fff; color: #7a2e0e; }
 }
+
+/* ── Header quick-search box ── */
+.app-nav__search {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  padding: 0 4px 0 10px;
+  height: 32px;
+}
+.app-nav__search input {
+  border: none;
+  background: none;
+  color: #fff;
+  font-size: 13px;
+  font-family: inherit;
+  width: 150px;
+  outline: none;
+}
+.app-nav__search input::placeholder { color: rgba(255, 255, 255, 0.65); }
+.app-nav__search button {
+  border: none;
+  background: none;
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px 6px;
+  line-height: 1;
+}
+@media (max-width: 720px) {
+  .app-nav__search input { width: 92px; }
+}

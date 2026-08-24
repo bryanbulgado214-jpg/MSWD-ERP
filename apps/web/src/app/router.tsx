@@ -18,6 +18,7 @@ import { LoginPage } from './LoginPage';
 import { NoAccessPage } from './NoAccessPage';
 import { RequireModule } from './RequireModule';
 import { RootLayout } from './RootLayout';
+import { SearchResultsPage } from './SearchResultsPage';
 
 export const router = createBrowserRouter([
   {
@@ -33,6 +34,10 @@ export const router = createBrowserRouter([
           {
             path: '/',
             element: <HomeRoute />,
+          },
+          {
+            path: '/search',
+            element: <SearchResultsPage />,
           },
           {
             path: '/no-access',
