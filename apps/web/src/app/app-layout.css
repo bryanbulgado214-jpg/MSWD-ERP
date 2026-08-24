@@ -1,5 +1,18 @@
 @import '../modules/budgeting/mswd-tokens.css';
 
+:root {
+  /* Height of the sticky header (demo banner + nav) — referenced by the fixed
+     left sub-navs so they sit just below it. */
+  --app-header-h: 74px;
+}
+
+/* Lock the header (banner + nav) to the top on scroll. */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
 .app-nav {
   display: flex;
   align-items: center;

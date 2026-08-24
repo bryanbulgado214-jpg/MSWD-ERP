@@ -43,67 +43,69 @@ export function AppLayout() {
 
   return (
     <div className="app-layout">
-      <div className="app-demo-banner" role="note">
-        DEMONSTRATION DATA — NOT ACTUAL WATER DISTRICT RECORDS
-      </div>
-      <nav className="app-nav">
-        <div className="app-nav__left">
-          <Link
-            to="/"
-            className="app-nav__brand"
-            style={{
-              textDecoration: 'none',
-              color: 'inherit',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-            }}
-          >
-            <img
-              src="/aquabooks-mark.png"
-              alt=""
-              style={{ height: 30, width: 'auto', display: 'block' }}
-            />
-            AquaBooks
-            {organization?.name ? (
-              <span className="app-nav__org"> · {organization.name}</span>
-            ) : null}
-          </Link>
-          <div className="app-nav__links">
-            {showHome && (
-              <Link
-                to="/"
-                className={`app-nav__link${location.pathname === '/' ? ' app-nav__link--active' : ''}`}
-              >
-                Home
-              </Link>
-            )}
-            {visibleLinks.map((link) => (
-              <Link
-                key={link.to}
-                to={link.to}
-                className={`app-nav__link${location.pathname.startsWith(link.to) ? ' app-nav__link--active' : ''}`}
-              >
-                {link.label}
-              </Link>
-            ))}
+      <header className="app-header">
+        <div className="app-demo-banner" role="note">
+          DEMONSTRATION DATA — NOT ACTUAL WATER DISTRICT RECORDS
+        </div>
+        <nav className="app-nav">
+          <div className="app-nav__left">
+            <Link
+              to="/"
+              className="app-nav__brand"
+              style={{
+                textDecoration: 'none',
+                color: 'inherit',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <img
+                src="/aquabooks-mark.png"
+                alt=""
+                style={{ height: 30, width: 'auto', display: 'block' }}
+              />
+              AquaBooks
+              {organization?.name ? (
+                <span className="app-nav__org"> · {organization.name}</span>
+              ) : null}
+            </Link>
+            <div className="app-nav__links">
+              {showHome && (
+                <Link
+                  to="/"
+                  className={`app-nav__link${location.pathname === '/' ? ' app-nav__link--active' : ''}`}
+                >
+                  Home
+                </Link>
+              )}
+              {visibleLinks.map((link) => (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  className={`app-nav__link${location.pathname.startsWith(link.to) ? ' app-nav__link--active' : ''}`}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </div>
           </div>
-        </div>
-        <div className="app-nav__user">
-          <NotificationBell />
-          <span className="app-nav__username">{user.username}</span>
-          <button type="button" className="app-nav__btn" onClick={handleSwitchUser}>
-            Switch User
-          </button>
-          <button
-            type="button"
-            className="app-nav__btn app-nav__btn--logout"
-            onClick={handleLogout}
-          >
-            Logout
-          </button>
-        </div>
-      </nav>
+          <div className="app-nav__user">
+            <NotificationBell />
+            <span className="app-nav__username">{user.username}</span>
+            <button type="button" className="app-nav__btn" onClick={handleSwitchUser}>
+              Switch User
+            </button>
+            <button
+              type="button"
+              className="app-nav__btn app-nav__btn--logout"
+              onClick={handleLogout}
+            >
+              Logout
+            </button>
+          </div>
+        </nav>
+      </header>
       <main className="app-main">
         <Outlet />
       </main>

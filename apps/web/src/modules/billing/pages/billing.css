@@ -463,16 +463,19 @@
 
 /* ── Vertical left-sidebar sub-nav (matches Accounting; no horizontal scroll) ── */
 .bill-subnav {
-  position: absolute;
-  left: 24px;
-  top: 28px;
+  /* Locked to the viewport on scroll; left tracks the centered page gutter
+     (page max-width 1100 + 24px inset). */
+  position: fixed;
+  left: max(24px, calc((100vw - 1100px) / 2 + 24px));
+  top: calc(var(--app-header-h, 74px) + 26px);
   width: 178px;
+  max-height: calc(100vh - var(--app-header-h, 74px) - 44px);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 2px;
   margin: 0;
   border-bottom: none;
-  overflow: visible;
 }
 .bill-subnav__link {
   display: block;
@@ -498,6 +501,10 @@
   .bill-page { padding-left: 24px; min-height: 0; }
   .bill-subnav {
     position: static;
+    left: auto;
+    top: auto;
+    max-height: none;
+    overflow: visible;
     flex-direction: row;
     flex-wrap: wrap;
     margin-bottom: 16px;

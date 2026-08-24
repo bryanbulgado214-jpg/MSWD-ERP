@@ -526,9 +526,11 @@
 
 /* ── Vertical left-sidebar sub-nav (matches Accounting; no horizontal scroll) ── */
 .admin-subnav {
-  position: absolute;
-  left: 24px;
-  top: 28px;
+  position: fixed;
+  left: max(24px, calc((100vw - 1200px) / 2 + 24px));
+  top: calc(var(--app-header-h, 74px) + 26px);
+  max-height: calc(100vh - var(--app-header-h, 74px) - 44px);
+  overflow-y: auto;
   width: 178px;
   display: flex;
   flex-direction: column;
@@ -561,6 +563,10 @@
   .admin-page { padding-left: 24px; min-height: 0; }
   .admin-subnav {
     position: static;
+    left: auto;
+    top: auto;
+    max-height: none;
+    overflow: visible;
     flex-direction: row;
     flex-wrap: wrap;
     margin-bottom: 16px;

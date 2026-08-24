@@ -2,16 +2,19 @@
 
 /* ── Sub-navigation (vertical left sidebar) ── */
 .acct-subnav {
-  position: absolute;
-  left: 24px;
-  top: 28px;
+  /* Locked to the viewport so it stays put on scroll; left tracks the centered
+     page gutter (page max-width 1240 + 24px inset). */
+  position: fixed;
+  left: max(24px, calc((100vw - 1240px) / 2 + 24px));
+  top: calc(var(--app-header-h, 74px) + 26px);
   width: 178px;
+  max-height: calc(100vh - var(--app-header-h, 74px) - 44px);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 2px;
   margin: 0;
   border-bottom: none;
-  overflow: visible;
 }
 
 .acct-subnav__link {
@@ -91,6 +94,10 @@
   }
   .acct-subnav {
     position: static;
+    left: auto;
+    top: auto;
+    max-height: none;
+    overflow: visible;
     flex-direction: row;
     flex-wrap: wrap;
     margin-bottom: 16px;
