@@ -81,6 +81,14 @@ export interface CheckItem {
   bankName?: string;
   amount: number;
 }
+export interface GlLine {
+  glAccountId: string;
+  amount: number;
+}
+export interface GlLineDetail extends GlLine {
+  glAccountCode: string;
+  glAccountName: string;
+}
 export interface CashierEntry {
   id: string;
   collectorId: string;
@@ -88,9 +96,7 @@ export interface CashierEntry {
   collectionAreaId: string | null;
   collectionAreaName: string | null;
   collectionDate: string;
-  glAccountId: string;
-  glAccountCode: string;
-  glAccountName: string;
+  glLines: GlLineDetail[];
   orSeries: string;
   amount: number;
   totalRemittance: number;
@@ -125,9 +131,8 @@ export interface EntryInput {
   collectorId: string;
   collectionAreaId?: string;
   collectionDate: string;
-  glAccountId: string;
   orSeries: string;
-  totalRemittance: number;
+  glLines: GlLine[];
   checks?: CheckItem[];
   cashCount: Record<string, number>;
 }

@@ -3984,9 +3984,12 @@ model CashierCollectionEntry {
   collectorId      String   @map("collector_id") @db.Uuid
   collectionAreaId String?  @map("collection_area_id") @db.Uuid
   collectionDate   DateTime @map("collection_date") @db.Date
-  glAccountId      String   @map("gl_account_id") @db.Uuid
+  // Legacy single GL account (superseded by glLines; kept nullable).
+  glAccountId      String?  @map("gl_account_id") @db.Uuid
+  // GL breakdown of the remittance: [{ glAccountId, amount }].
+  glLines          Json?    @map("gl_lines")
   orSeries         String   @map("or_series") @db.VarChar(200)
-  // Cashier-declared total remittance per the teller's report (cash + checks).
+  // Cashier-declared total remittance per the teller's report (sum of glLines).
   amount           Decimal  @db.Decimal(18, 2)
   // Checks received from customers: [{ checkNumber, bankName, amount }].
   checks           Json?

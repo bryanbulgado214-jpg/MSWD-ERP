@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsDateString,
@@ -88,6 +89,15 @@ export class CheckItemDto {
   amount!: number;
 }
 
+export class GlLineDto {
+  @IsUUID()
+  glAccountId!: string;
+
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  amount!: number;
+}
+
 export class UpsertCashierEntryDto {
   @IsUUID()
   collectorId!: string;
@@ -99,18 +109,18 @@ export class UpsertCashierEntryDto {
   @IsDateString()
   collectionDate!: string;
 
-  @IsUUID()
-  glAccountId!: string;
-
   @IsString()
   @IsNotEmpty()
   @MaxLength(200)
   orSeries!: string;
 
-  // Cashier-declared total remittance per the teller's report (cash + checks).
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0.01)
-  totalRemittance!: number;
+  // GL breakdown of the remittance (one or more accounts). Their sum is the
+  // declared total remittance per the teller's report.
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => GlLineDto)
+  glLines!: GlLineDto[];
 
   // Checks received from customers (may be empty for an all-cash remittance).
   @IsArray()

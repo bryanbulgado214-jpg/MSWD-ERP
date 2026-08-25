@@ -47,13 +47,13 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 };
 
+type GlLineDraft = { glAccountId: string; amount: string };
 type Draft = {
   collectorId: string;
   collectionAreaId: string;
   collectionDate: string;
-  glAccountId: string;
   orSeries: string;
-  totalRemittance: string;
+  glLines: GlLineDraft[];
   checks: CheckItem[];
   cashCount: Record<string, number>;
 };
@@ -63,9 +63,8 @@ function emptyDraft(reportDate: string): Draft {
     collectorId: '',
     collectionAreaId: '',
     collectionDate: reportDate,
-    glAccountId: '',
     orSeries: '',
-    totalRemittance: '',
+    glLines: [{ glAccountId: '', amount: '' }],
     checks: [],
     cashCount: {},
   };
@@ -170,7 +169,6 @@ export default function CashierCollectionReportPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [glFilter, setGlFilter] = useState('');
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -201,16 +199,17 @@ export default function CashierCollectionReportPage() {
       collectorId: e.collectorId,
       collectionAreaId: e.collectionAreaId ?? '',
       collectionDate: e.collectionDate.slice(0, 10),
-      glAccountId: e.glAccountId,
       orSeries: e.orSeries,
-      totalRemittance: String(e.totalRemittance),
+      glLines: e.glLines.map((l) => ({ glAccountId: l.glAccountId, amount: String(l.amount) })),
       checks: e.checks ?? [],
       cashCount: e.cashCount ?? {},
     });
     setError('');
   }
 
-  const draftRemit = draft ? parseFloat(draft.totalRemittance) || 0 : 0;
+  const draftRemit = draft
+    ? Math.round(draft.glLines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0) * 100) / 100
+    : 0;
   const draftChecksTotal = draft
     ? draft.checks.reduce((s, c) => s + (Number(c.amount) || 0), 0)
     : 0;
@@ -220,8 +219,9 @@ export default function CashierCollectionReportPage() {
   const draftValid =
     !!draft &&
     !!draft.collectorId &&
-    !!draft.glAccountId &&
     !!draft.orSeries.trim() &&
+    draft.glLines.some((l) => l.glAccountId && (parseFloat(l.amount) || 0) > 0) &&
+    draft.glLines.every((l) => !l.glAccountId || (parseFloat(l.amount) || 0) > 0) &&
     draftRemit > 0 &&
     draftChecksTotal <= draftRemit + 0.005 &&
     draft.checks.every((c) => c.checkNumber.trim() && (Number(c.amount) || 0) > 0);
@@ -235,9 +235,10 @@ export default function CashierCollectionReportPage() {
         collectorId: draft.collectorId,
         ...(draft.collectionAreaId ? { collectionAreaId: draft.collectionAreaId } : {}),
         collectionDate: draft.collectionDate,
-        glAccountId: draft.glAccountId,
         orSeries: draft.orSeries.trim(),
-        totalRemittance: draftRemit,
+        glLines: draft.glLines
+          .filter((l) => l.glAccountId && (parseFloat(l.amount) || 0) > 0)
+          .map((l) => ({ glAccountId: l.glAccountId, amount: parseFloat(l.amount) || 0 })),
         checks: draft.checks
           .filter((c) => c.checkNumber.trim())
           .map((c) => ({
@@ -309,11 +310,6 @@ export default function CashierCollectionReportPage() {
       </div>
     );
   }
-
-  const glOptions = opts.glAccounts.filter((g) => {
-    const q = glFilter.trim().toLowerCase();
-    return !q || g.accountCode.toLowerCase().includes(q) || g.name.toLowerCase().includes(q);
-  });
 
   return (
     <div className="bill-page">
@@ -427,8 +423,13 @@ export default function CashierCollectionReportPage() {
                   <td>{e.collectionAreaName ?? '—'}</td>
                   <td>{fmtDate(e.collectionDate)}</td>
                   <td>
-                    <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{e.glAccountCode}</span>{' '}
-                    {e.glAccountName}
+                    {e.glLines.map((l, i) => (
+                      <div key={i} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                        <span style={{ fontFamily: 'monospace' }}>{l.glAccountCode}</span>{' '}
+                        {l.glAccountName}
+                        <span style={{ color: '#667085' }}> — {peso(l.amount)}</span>
+                      </div>
+                    ))}
                   </td>
                   <td>{e.orSeries}</td>
                   <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>{peso(e.amount)}</td>
@@ -562,56 +563,103 @@ export default function CashierCollectionReportPage() {
               />
             </div>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
-            <div style={{ flex: '1 1 320px' }}>
-              <label style={labelStyle}>GL account (collection recorded to) *</label>
-              <input
-                style={{ ...inputStyle, marginBottom: 4 }}
-                placeholder="Filter accounts by code or name…"
-                value={glFilter}
-                onChange={(e) => setGlFilter(e.target.value)}
-              />
-              <select
-                style={inputStyle}
-                size={1}
-                value={draft.glAccountId}
-                onChange={(e) => setDraft({ ...draft, glAccountId: e.target.value })}
-              >
-                <option value="">— Select GL account —</option>
-                {glOptions.slice(0, 100).map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.accountCode} — {g.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div style={{ flex: '1 1 260px' }}>
-              <label style={labelStyle}>OR series covered *</label>
-              <input
-                style={inputStyle}
-                placeholder="e.g. 2026-3822 to 2026-3827"
-                value={draft.orSeries}
-                onChange={(e) => setDraft({ ...draft, orSeries: e.target.value })}
-              />
-            </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={labelStyle}>OR series covered *</label>
+            <input
+              style={{ ...inputStyle, maxWidth: 340 }}
+              placeholder="e.g. 2026-3822 to 2026-3827"
+              value={draft.orSeries}
+              onChange={(e) => setDraft({ ...draft, orSeries: e.target.value })}
+            />
           </div>
 
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
-            <div style={{ flex: '0 0 220px' }}>
-              <label style={labelStyle}>Total remittance (per teller&apos;s report) *</label>
-              <input
-                style={inputStyle}
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0.00"
-                value={draft.totalRemittance}
-                onChange={(e) => setDraft({ ...draft, totalRemittance: e.target.value })}
-              />
-              <div style={{ fontSize: 11, color: '#667085', marginTop: 4 }}>
-                As reported by the teller. Verified against cash + checks below.
-              </div>
-            </div>
+          {/* GL breakdown — one or more accounts, auto-summing to the remittance */}
+          <div style={{ marginBottom: 12 }}>
+            <table className="bill-table" style={{ maxWidth: 620 }}>
+              <thead>
+                <tr>
+                  <th>GL account (collection recorded to) *</th>
+                  <th style={{ textAlign: 'right', width: 150 }}>Amount</th>
+                  <th style={{ width: 30 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {draft.glLines.map((l, i) => (
+                  <tr key={i}>
+                    <td>
+                      <select
+                        style={{ ...inputStyle, padding: '4px 6px' }}
+                        value={l.glAccountId}
+                        onChange={(e) => {
+                          const glLines = [...draft.glLines];
+                          glLines[i] = { ...glLines[i]!, glAccountId: e.target.value };
+                          setDraft({ ...draft, glLines });
+                        }}
+                      >
+                        <option value="">— Select GL account —</option>
+                        {opts.glAccounts.map((g) => (
+                          <option key={g.id} value={g.id}>
+                            {g.accountCode} — {g.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        style={{ ...inputStyle, padding: '4px 6px', textAlign: 'right' }}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={l.amount}
+                        onChange={(e) => {
+                          const glLines = [...draft.glLines];
+                          glLines[i] = { ...glLines[i]!, amount: e.target.value };
+                          setDraft({ ...draft, glLines });
+                        }}
+                      />
+                    </td>
+                    <td>
+                      {draft.glLines.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDraft({ ...draft, glLines: draft.glLines.filter((_, j) => j !== i) })
+                          }
+                          style={{
+                            color: '#b42318',
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                <tr style={{ fontWeight: 700, borderTop: '2px solid var(--mswd-navy, #0b2e63)' }}>
+                  <td style={{ textAlign: 'right' }}>
+                    Total remittance (per teller&apos;s report)
+                  </td>
+                  <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>
+                    {peso(draftRemit)}
+                  </td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+            <button
+              type="button"
+              className="bill-btn bill-btn--sm"
+              style={{ marginTop: 6 }}
+              onClick={() =>
+                setDraft({ ...draft, glLines: [...draft.glLines, { glAccountId: '', amount: '' }] })
+              }
+            >
+              + Add GL account
+            </button>
           </div>
 
           {/* Checks received from customers (multiple) */}

@@ -84,7 +84,12 @@ export default function CashierCollectionPrintPage() {
                 <td style={cell}>{e.collectorName}</td>
                 <td style={cell}>{e.collectionAreaName ?? '—'}</td>
                 <td style={cell}>
-                  {e.glAccountCode} — {e.glAccountName}
+                  {e.glLines.map((l, i) => (
+                    <div key={i}>
+                      {l.glAccountCode} — {l.glAccountName}
+                      {e.glLines.length > 1 ? ` (${peso(l.amount)})` : ''}
+                    </div>
+                  ))}
                 </td>
                 <td style={num}>{e.checksTotal ? peso(e.checksTotal) : '—'}</td>
                 <td style={num}>{peso(e.amount)}</td>
