@@ -7,6 +7,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
   MinLength,
@@ -92,6 +93,25 @@ export class UpdateJevDto {
 export class PostJevDto {
   @IsInt()
   expectedVersion!: number;
+}
+
+export class ClassifyLineDto {
+  @IsUUID()
+  lineId!: string;
+
+  @IsUUID()
+  chartOfAccountId!: string;
+}
+
+export class ClassifyJevLinesDto {
+  @IsInt()
+  expectedVersion!: number;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => ClassifyLineDto)
+  assignments!: ClassifyLineDto[];
 }
 
 export class VoidJevDto {

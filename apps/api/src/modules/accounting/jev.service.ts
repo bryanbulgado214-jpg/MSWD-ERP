@@ -52,6 +52,7 @@ const JEV_DETAIL_SELECT = {
       debitAmount: true,
       creditAmount: true,
       description: true,
+      pendingClassification: true,
       chartOfAccount: { select: { id: true, accountCode: true, name: true, accountType: true } },
     },
     orderBy: [
@@ -322,6 +323,7 @@ export class JevService {
   async approve(organizationId: string, id: string, userId: string, expectedVersion: number) {
     const jev = await this.prisma.journalEntryVoucher.findFirst({
       where: { id, organizationId },
+      include: { lines: { select: { pendingClassification: true } } },
     });
     if (!jev) throw new NotFoundException('JEV not found.');
     if (jev.status !== 'for_review') {
@@ -329,6 +331,11 @@ export class JevService {
     }
     if (jev.version !== expectedVersion) {
       throw new ConflictException('JEV was modified. Please refresh.');
+    }
+    if (jev.lines.some((l) => l.pendingClassification)) {
+      throw new BadRequestException(
+        'Assign a GL account to every unclassified "Other" line before approving.',
+      );
     }
     // Separation of duties: the preparer cannot approve their own entry.
     if (jev.createdBy && jev.createdBy === userId) {
@@ -358,7 +365,7 @@ export class JevService {
   async post(organizationId: string, id: string, userId: string, expectedVersion: number) {
     const jev = await this.prisma.journalEntryVoucher.findFirst({
       where: { id, organizationId },
-      include: { accountingPeriod: true },
+      include: { accountingPeriod: true, lines: { select: { pendingClassification: true } } },
     });
     if (!jev) throw new NotFoundException('JEV not found.');
     if (jev.status !== 'for_review' && jev.status !== 'approved') {
@@ -366,6 +373,11 @@ export class JevService {
     }
     if (jev.version !== expectedVersion) {
       throw new ConflictException('JEV was modified. Please refresh.');
+    }
+    if (jev.lines.some((l) => l.pendingClassification)) {
+      throw new BadRequestException(
+        'Assign a GL account to every unclassified "Other" line before posting.',
+      );
     }
     // Separation of duties: the person who prepared/created a JEV may not be
     // the one who posts it. Enforced server-side (not just in the UI) so it
@@ -399,6 +411,67 @@ export class JevService {
         select: JEV_DETAIL_SELECT,
       }),
     );
+  }
+
+  /**
+   * Assign real GL accounts to a JEV's unclassified ("Other" collection) lines
+   * while it is under review, before posting. Only lines currently flagged
+   * pendingClassification may be reassigned; amounts are untouched. This is the
+   * accountant's classification step for cashier collection reports.
+   */
+  async classifyLines(
+    organizationId: string,
+    id: string,
+    userId: string,
+    data: {
+      expectedVersion: number;
+      assignments: Array<{ lineId: string; chartOfAccountId: string }>;
+    },
+  ) {
+    const jev = await this.prisma.journalEntryVoucher.findFirst({
+      where: { id, organizationId },
+      include: { lines: { select: { id: true, pendingClassification: true } } },
+    });
+    if (!jev) throw new NotFoundException('JEV not found.');
+    if (jev.status !== 'for_review' && jev.status !== 'approved') {
+      throw new BadRequestException('Only JEVs under review can be classified.');
+    }
+    if (jev.version !== data.expectedVersion) {
+      throw new ConflictException('JEV was modified. Please refresh.');
+    }
+    if (!data.assignments.length) {
+      throw new BadRequestException('No account assignments provided.');
+    }
+
+    const pendingIds = new Set(jev.lines.filter((l) => l.pendingClassification).map((l) => l.id));
+    for (const a of data.assignments) {
+      if (!pendingIds.has(a.lineId)) {
+        throw new BadRequestException('One of the lines is not awaiting classification.');
+      }
+    }
+    // All assigned accounts must be real, postable accounts in this org.
+    const acctIds = [...new Set(data.assignments.map((a) => a.chartOfAccountId))];
+    const accts = await this.prisma.chartOfAccount.findMany({
+      where: { id: { in: acctIds }, organizationId, isHeader: false, isActive: true },
+      select: { id: true },
+    });
+    if (accts.length !== acctIds.length) {
+      throw new BadRequestException('Select a valid, postable GL account for each line.');
+    }
+
+    return runAudited(this.prisma, userId, async (tx) => {
+      for (const a of data.assignments) {
+        await tx.jevLine.update({
+          where: { id: a.lineId },
+          data: { chartOfAccountId: a.chartOfAccountId, pendingClassification: false },
+        });
+      }
+      return tx.journalEntryVoucher.update({
+        where: { id },
+        data: { updatedBy: userId, version: { increment: 1 } },
+        select: JEV_DETAIL_SELECT,
+      });
+    });
   }
 
   async void(

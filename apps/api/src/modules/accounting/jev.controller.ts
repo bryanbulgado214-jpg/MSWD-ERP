@@ -16,7 +16,14 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
 
-import { CreateJevDto, PostJevDto, ReverseJevDto, UpdateJevDto, VoidJevDto } from './dto/jev.dto';
+import {
+  ClassifyJevLinesDto,
+  CreateJevDto,
+  PostJevDto,
+  ReverseJevDto,
+  UpdateJevDto,
+  VoidJevDto,
+} from './dto/jev.dto';
 import { JevService } from './jev.service';
 
 @Controller('accounting/jev')
@@ -109,6 +116,16 @@ export class JevController {
     @Body() dto: PostJevDto,
   ) {
     return this.jevService.post(user.organizationId, id, user.userId, dto.expectedVersion);
+  }
+
+  @Patch(':id/classify')
+  @RequirePermissions('accounting.jev.approve')
+  classify(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ClassifyJevLinesDto,
+  ) {
+    return this.jevService.classifyLines(user.organizationId, id, user.userId, dto);
   }
 
   @Post(':id/void')

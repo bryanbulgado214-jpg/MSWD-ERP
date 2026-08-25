@@ -9,7 +9,12 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
 
-import { COLLECTION_TYPES, collectionTypeByKey } from './collection-types';
+import {
+  COLLECTION_HOLDING_DEFAULT_GL,
+  COLLECTION_HOLDING_MAPPING_KEY,
+  COLLECTION_TYPES,
+  collectionTypeByKey,
+} from './collection-types';
 import {
   CreateCashierReportDto,
   SubmitCashierReportDto,
@@ -19,17 +24,24 @@ import {
   UpsertCollectorDto,
 } from './dto/cashier-collection.dto';
 
-// PH peso denominations for the teller cash-count sheet (bills + coins).
-const PESO_DENOMINATIONS = [1000, 500, 200, 100, 50, 20, 10, 5, 1, 0.25];
+// PH peso denominations counted by quantity on the teller cash-count sheet.
+const PESO_DENOMINATIONS = [1000, 500, 200, 100, 50, 20, 10, 5, 1];
+// Assorted loose coins the teller enters as a single peso amount (not a count),
+// rather than tallying every centavo denomination.
+const OTHER_COINS_KEY = 'other';
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-/** Value of a denomination→quantity map, summed in centavos for safety. */
+/**
+ * Value of a cash-count map. Numeric-denomination keys are quantities; the
+ * special "other" key is a direct peso amount (loose coins). Summed in centavos.
+ */
 function cashCountTotal(count: Record<string, number> | null | undefined): number {
   if (!count) return 0;
-  const cents = PESO_DENOMINATIONS.reduce(
-    (s, d) => s + Math.round(d * 100) * (Number(count[String(d)]) || 0),
-    0,
-  );
+  const cents =
+    PESO_DENOMINATIONS.reduce(
+      (s, d) => s + Math.round(d * 100) * (Number(count[String(d)]) || 0),
+      0,
+    ) + Math.round((Number(count[OTHER_COINS_KEY]) || 0) * 100);
   return cents / 100;
 }
 
@@ -41,21 +53,25 @@ export interface CheckItem {
 export interface CollectionLine {
   collectionType: string;
   amount: number;
+  description?: string;
 }
 function checksTotal(checks: CheckItem[] | null | undefined): number {
   if (!Array.isArray(checks)) return 0;
   return round2(checks.reduce((s, c) => s + (Number(c.amount) || 0), 0));
 }
 
-/** Sum two denomination maps (for the combined cash-count summary). */
+/** Sum two cash-count maps (for the combined cash-count summary). */
 function addCashCounts(
   a: Record<string, number>,
   b: Record<string, number> | null | undefined,
 ): Record<string, number> {
   const out = { ...a };
-  if (b)
+  if (b) {
     for (const d of PESO_DENOMINATIONS)
       out[String(d)] = (out[String(d)] || 0) + (Number(b[String(d)]) || 0);
+    // "other" is a peso amount, not a count — add it (rounded) directly.
+    out[OTHER_COINS_KEY] = round2((out[OTHER_COINS_KEY] || 0) + (Number(b[OTHER_COINS_KEY]) || 0));
+  }
   return out;
 }
 
@@ -174,8 +190,9 @@ export class CashierCollectionService {
       this.listAreas(orgId, true),
       this.resolveCollectionGl(orgId),
     ]);
-    // The cashier picks a type of collection; each resolves to a GL account via
-    // the account mappings (shown for reference, and flagged when unmapped).
+    // The cashier picks a type of collection; standard types resolve to a GL
+    // account via the account mappings (shown for reference). "Other" carries no
+    // fixed GL — the accountant assigns it during review — and needs a description.
     const collectionTypes = COLLECTION_TYPES.map((t) => {
       const gl = collGl.get(t.key);
       return {
@@ -184,19 +201,18 @@ export class CashierCollectionService {
         glAccountCode: gl?.accountCode ?? null,
         glAccountName: gl?.name ?? null,
         mapped: !!gl,
+        requiresDescription: !!t.requiresDescription,
+        classifiedByAccountant: !!t.classifiedByAccountant,
       };
     });
     return { collectors, areas, collectionTypes, denominations: PESO_DENOMINATIONS };
   }
 
-  /** Resolve each collection type's mapped GL account (typeKey → account). */
+  /** Resolve each standard collection type's mapped GL account (typeKey → account). */
   private async resolveCollectionGl(orgId: string) {
+    const mappingKeys = COLLECTION_TYPES.map((t) => t.mappingKey).filter((k): k is string => !!k);
     const maps = await this.prisma.accountMapping.findMany({
-      where: {
-        organizationId: orgId,
-        mappingKey: { in: COLLECTION_TYPES.map((t) => t.mappingKey) },
-        isActive: true,
-      },
+      where: { organizationId: orgId, mappingKey: { in: mappingKeys }, isActive: true },
       select: {
         mappingKey: true,
         chartOfAccount: { select: { id: true, accountCode: true, name: true } },
@@ -205,10 +221,32 @@ export class CashierCollectionService {
     const byMappingKey = new Map(maps.map((m) => [m.mappingKey, m.chartOfAccount]));
     const out = new Map<string, { id: string; accountCode: string; name: string }>();
     for (const t of COLLECTION_TYPES) {
-      const gl = byMappingKey.get(t.mappingKey);
+      const gl = t.mappingKey ? byMappingKey.get(t.mappingKey) : undefined;
       if (gl) out.set(t.key, gl);
     }
     return out;
+  }
+
+  /**
+   * Resolve the holding/suspense account an unclassified "Other" collection
+   * credits until the accountant reclassifies it. Prefers the accountant's
+   * mapping, falling back to the default COA code.
+   */
+  private async resolveHoldingAccount(orgId: string) {
+    const mapped = await this.prisma.accountMapping.findFirst({
+      where: { organizationId: orgId, mappingKey: COLLECTION_HOLDING_MAPPING_KEY, isActive: true },
+      select: { chartOfAccount: { select: { id: true, accountCode: true, name: true } } },
+    });
+    if (mapped?.chartOfAccount) return mapped.chartOfAccount;
+    return this.prisma.chartOfAccount.findFirst({
+      where: {
+        organizationId: orgId,
+        accountCode: COLLECTION_HOLDING_DEFAULT_GL,
+        isHeader: false,
+        isActive: true,
+      },
+      select: { id: true, accountCode: true, name: true },
+    });
   }
 
   // ── Reports ──
@@ -305,11 +343,16 @@ export class CashierCollectionService {
       const glLines = ((e.glLines as CollectionLine[] | null) ?? []).map((l) => {
         const type = collectionTypeByKey.get(l.collectionType);
         const gl = collGl.get(l.collectionType);
+        // "Other" carries no fixed GL — the accountant assigns it on review.
+        const classifiedByAccountant = !!type?.classifiedByAccountant;
         return {
           collectionType: l.collectionType,
           collectionTypeLabel: type?.label ?? l.collectionType,
+          description: l.description ?? '',
           glAccountCode: gl?.accountCode ?? '',
-          glAccountName: gl?.name ?? '(unmapped)',
+          glAccountName:
+            gl?.name ?? (classifiedByAccountant ? 'To be classified by accountant' : '(unmapped)'),
+          classifiedByAccountant,
           amount: round2(Number(l.amount)),
         };
       });
@@ -440,13 +483,22 @@ export class CashierCollectionService {
     }
     if (!dto.lines?.length) throw new BadRequestException('Add at least one type of collection.');
     const lines: CollectionLine[] = dto.lines.map((l) => {
-      if (!collectionTypeByKey.has(l.collectionType)) {
+      const type = collectionTypeByKey.get(l.collectionType);
+      if (!type) {
         throw new BadRequestException('Select a valid type of collection.');
       }
       const amt = round2(Number(l.amount));
       if (amt <= 0)
         throw new BadRequestException('Each collection amount must be greater than zero.');
-      return { collectionType: l.collectionType, amount: amt };
+      const description = l.description?.trim();
+      if (type.requiresDescription && !description) {
+        throw new BadRequestException(`Describe the collection for "${type.label}".`);
+      }
+      return {
+        collectionType: l.collectionType,
+        amount: amt,
+        ...(description ? { description } : {}),
+      };
     });
     const amount = round2(lines.reduce((s, l) => s + l.amount, 0));
     if (amount <= 0)
@@ -605,25 +657,49 @@ export class CashierCollectionService {
     const cName = new Map(collectors.map((c) => [c.id, c.name]));
 
     const dateStr = report.reportDate.toISOString().slice(0, 10);
-    // Resolve each collection type to its mapped GL account (the accountant sets
-    // these in Accounting → Account Mappings).
+    // Resolve each standard collection type to its mapped GL account (the
+    // accountant sets these in Accounting → Account Mappings).
     const collGl = await this.resolveCollectionGl(orgId);
+    // Does any line need the holding account? Resolve it only if so.
+    const hasOther = report.entries.some((e) =>
+      ((e.glLines as CollectionLine[] | null) ?? []).some(
+        (l) => collectionTypeByKey.get(l.collectionType)?.classifiedByAccountant,
+      ),
+    );
+    const holding = hasOther ? await this.resolveHoldingAccount(orgId) : null;
+    if (hasOther && !holding) {
+      throw new BadRequestException(
+        'The holding account for unclassified "Other" collections is not configured. Set "Collection — Unclassified (holding)" in Accounting → Account Mappings.',
+      );
+    }
     // Cr each collection line across every teller entry (a remittance may split
     // across several types — water sales, new-connection fee, guaranty deposit, …).
+    // "Other" lines credit the holding account and are flagged for the accountant
+    // to reclassify before the JEV can be posted.
     const creditLines = report.entries.flatMap((e) =>
       ((e.glLines as CollectionLine[] | null) ?? []).map((l) => {
+        const type = collectionTypeByKey.get(l.collectionType);
+        const collector = cName.get(e.collectorId) ?? 'Collector';
+        if (type?.classifiedByAccountant) {
+          return {
+            chartOfAccountId: holding!.id,
+            debitAmount: 0,
+            creditAmount: round2(Number(l.amount)),
+            description: `Other — ${l.description ?? ''} (${collector}, OR ${e.orSeries})`.trim(),
+            pendingClassification: true,
+          };
+        }
         const gl = collGl.get(l.collectionType);
         if (!gl) {
-          const label = collectionTypeByKey.get(l.collectionType)?.label ?? l.collectionType;
           throw new BadRequestException(
-            `"${label}" has no GL account mapping. Set it in Accounting → Account Mappings, then submit.`,
+            `"${type?.label ?? l.collectionType}" has no GL account mapping. Set it in Accounting → Account Mappings, then submit.`,
           );
         }
         return {
           chartOfAccountId: gl.id,
           debitAmount: 0,
           creditAmount: round2(Number(l.amount)),
-          description: `${cName.get(e.collectorId) ?? 'Collector'} — OR ${e.orSeries}`,
+          description: `${collector} — OR ${e.orSeries}`,
         };
       }),
     );

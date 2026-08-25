@@ -3011,6 +3011,10 @@ model JevLine {
   description      String?
   subsidiaryRef    String?  @map("subsidiary_ref") @db.VarChar(255)
   subsidiaryRefId  String?  @map("subsidiary_ref_id") @db.Uuid
+  // The GL account is a temporary holding placeholder awaiting the accountant's
+  // classification (e.g. an "Other" cashier collection). The JEV cannot be
+  // posted while any line is still pending.
+  pendingClassification Boolean @default(false) @map("pending_classification")
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   // Bank-reconciliation match: this GL cash line belongs to a match group

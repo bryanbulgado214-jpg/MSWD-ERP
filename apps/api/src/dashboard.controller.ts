@@ -317,18 +317,22 @@ export class DashboardController {
           particulars: true,
           totalCredit: true,
           createdAt: true,
+          lines: { where: { pendingClassification: true }, select: { id: true } },
         },
       });
       for (const j of jevs) {
+        const needsClassification = j.lines.length > 0;
         items.push({
           id: j.id,
           module: 'accounting',
           type: 'collection_jev_review',
           label: j.jevNumber,
-          description: j.particulars,
+          description: needsClassification
+            ? `${j.particulars} — ${j.lines.length} "Other" line(s) need a GL account`
+            : j.particulars,
           amount: j.totalCredit.toString(),
           createdAt: j.createdAt.toISOString(),
-          actionLabel: 'Review JEV',
+          actionLabel: needsClassification ? 'Classify & Post' : 'Review JEV',
           link: `/accounting/jev/${j.id}`,
         });
       }

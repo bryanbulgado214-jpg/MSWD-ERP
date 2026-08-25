@@ -5,6 +5,7 @@ import { useAuth } from '../../../app/auth';
 import {
   AccountingApiError,
   approveJev,
+  classifyJevLines,
   createJev,
   getAccountingSettings,
   getChartOfAccounts,
@@ -70,6 +71,9 @@ export default function JevDetailPage() {
   const [showVoidForm, setShowVoidForm] = useState(false);
   const [reverseReason, setReverseReason] = useState('');
   const [showReverseForm, setShowReverseForm] = useState(false);
+  // Accountant's GL assignments for unclassified "Other" collection lines
+  // (lineId → chartOfAccountId).
+  const [classify, setClassify] = useState<Record<string, string>>({});
 
   // Form state
   const [jevDate, setJevDate] = useState(new Date().toISOString().slice(0, 10));
@@ -211,6 +215,28 @@ export default function JevDetailPage() {
       setJev(result);
     } catch (e) {
       setError(e instanceof AccountingApiError ? e.message : 'Failed to post.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleClassify() {
+    if (!jev) return;
+    const assignments = Object.entries(classify)
+      .filter(([, accountId]) => accountId)
+      .map(([lineId, chartOfAccountId]) => ({ lineId, chartOfAccountId }));
+    if (!assignments.length) return;
+    setSaving(true);
+    setError('');
+    try {
+      const result = await classifyJevLines(jev.id, {
+        expectedVersion: jev.version,
+        assignments,
+      });
+      setJev(result);
+      setClassify({});
+    } catch (e) {
+      setError(e instanceof AccountingApiError ? e.message : 'Failed to save classification.');
     } finally {
       setSaving(false);
     }
@@ -448,6 +474,12 @@ export default function JevDetailPage() {
       </div>
     );
 
+  // Unclassified "Other" collection lines the accountant must assign a GL to
+  // before this JEV can be approved or posted.
+  const pendingLines = jev.lines.filter((l) => l.pendingClassification);
+  const hasPending = pendingLines.length > 0;
+  const allPendingAssigned = pendingLines.every((l) => classify[l.id]);
+
   return (
     <div className="acct-page">
       <AccountingSubNav />
@@ -489,6 +521,28 @@ export default function JevDetailPage() {
       </div>
 
       {error && <div className="acct-error">{error}</div>}
+
+      {hasPending && (
+        <div
+          style={{
+            background: '#fffaeb',
+            border: '1px solid #fedf89',
+            padding: '12px 16px',
+            borderRadius: 8,
+            marginBottom: 20,
+            fontSize: 13,
+            color: '#b54708',
+          }}
+        >
+          <strong>
+            {pendingLines.length} “Other” collection line
+            {pendingLines.length > 1 ? 's need' : ' needs'} a GL account.
+          </strong>{' '}
+          The cashier could not determine the account. Assign the correct account to each line
+          below, then this JEV can be posted. It cannot be approved or posted while any line is
+          unclassified.
+        </div>
+      )}
 
       <div
         style={{
@@ -683,19 +737,55 @@ export default function JevDetailPage() {
             </tr>
           </thead>
           <tbody>
-            {jev.lines.map((line) => (
-              <tr key={line.id}>
-                <td className="acct-text-mono">{line.chartOfAccount.accountCode}</td>
-                <td>{line.chartOfAccount.name}</td>
-                <td style={{ color: '#667085', fontSize: 12 }}>{line.description || '—'}</td>
-                <td className="acct-text-right acct-text-mono">
-                  {Number(line.debitAmount) > 0 ? formatPeso(line.debitAmount) : ''}
-                </td>
-                <td className="acct-text-right acct-text-mono">
-                  {Number(line.creditAmount) > 0 ? formatPeso(line.creditAmount) : ''}
-                </td>
-              </tr>
-            ))}
+            {jev.lines.map((line) => {
+              const canClassify =
+                line.pendingClassification &&
+                canApprove &&
+                (jev.status === 'for_review' || jev.status === 'approved');
+              return (
+                <tr
+                  key={line.id}
+                  style={line.pendingClassification ? { background: '#fffaeb' } : undefined}
+                >
+                  <td className="acct-text-mono">
+                    {line.pendingClassification ? (
+                      <span title="Awaiting classification" style={{ color: '#b54708' }}>
+                        ⚠ —
+                      </span>
+                    ) : (
+                      line.chartOfAccount.accountCode
+                    )}
+                  </td>
+                  <td>
+                    {line.pendingClassification ? (
+                      canClassify ? (
+                        <div style={{ maxWidth: 320 }}>
+                          <AccountCombobox
+                            accounts={postableAccounts}
+                            value={classify[line.id] || ''}
+                            onChange={(id) => setClassify((c) => ({ ...c, [line.id]: id }))}
+                            placeholder="Assign GL account…"
+                          />
+                        </div>
+                      ) : (
+                        <span style={{ color: '#b54708', fontStyle: 'italic' }}>
+                          To be classified by the accountant
+                        </span>
+                      )
+                    ) : (
+                      line.chartOfAccount.name
+                    )}
+                  </td>
+                  <td style={{ color: '#667085', fontSize: 12 }}>{line.description || '—'}</td>
+                  <td className="acct-text-right acct-text-mono">
+                    {Number(line.debitAmount) > 0 ? formatPeso(line.debitAmount) : ''}
+                  </td>
+                  <td className="acct-text-right acct-text-mono">
+                    {Number(line.creditAmount) > 0 ? formatPeso(line.creditAmount) : ''}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
           <tfoot>
             <tr style={{ fontWeight: 700 }}>
@@ -714,13 +804,37 @@ export default function JevDetailPage() {
             Submit for Review
           </button>
         )}
+        {hasPending && canApprove && (jev.status === 'for_review' || jev.status === 'approved') && (
+          <button
+            className="acct-btn acct-btn--primary"
+            onClick={handleClassify}
+            disabled={saving || !allPendingAssigned}
+            title={
+              allPendingAssigned
+                ? 'Save the GL accounts you assigned to the "Other" lines'
+                : 'Assign a GL account to every "Other" line first'
+            }
+          >
+            {saving ? 'Saving…' : 'Save GL Classification'}
+          </button>
+        )}
         {jev.status === 'for_review' && canApprove && (
-          <button className="acct-btn acct-btn--primary" onClick={handleApprove} disabled={saving}>
+          <button
+            className="acct-btn acct-btn--primary"
+            onClick={handleApprove}
+            disabled={saving || hasPending}
+            title={hasPending ? 'Classify the "Other" lines first' : undefined}
+          >
             Approve JEV
           </button>
         )}
         {(jev.status === 'for_review' || jev.status === 'approved') && canPost && (
-          <button className="acct-btn acct-btn--primary" onClick={handlePost} disabled={saving}>
+          <button
+            className="acct-btn acct-btn--primary"
+            onClick={handlePost}
+            disabled={saving || hasPending}
+            title={hasPending ? 'Classify the "Other" lines first' : undefined}
+          >
             Post JEV
           </button>
         )}

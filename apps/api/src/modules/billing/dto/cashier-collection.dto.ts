@@ -99,6 +99,13 @@ export class CollectionLineDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
   amount!: number;
+
+  // Required for the "Other" type: the cashier describes the collection so the
+  // accountant can assign the correct GL account during review.
+  @IsString()
+  @IsOptional()
+  @MaxLength(200)
+  description?: string;
 }
 
 export class UpsertCashierEntryDto {

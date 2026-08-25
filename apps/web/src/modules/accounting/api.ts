@@ -325,6 +325,17 @@ export async function postJev(id: string, expectedVersion: number): Promise<JevD
   return res.json();
 }
 
+export async function classifyJevLines(
+  id: string,
+  data: {
+    expectedVersion: number;
+    assignments: Array<{ lineId: string; chartOfAccountId: string }>;
+  },
+): Promise<JevDetail> {
+  const res = await authFetchMutate(`/accounting/jev/${id}/classify`, 'PATCH', data);
+  return res.json();
+}
+
 export async function voidJev(
   id: string,
   data: { expectedVersion: number; voidReason: string },

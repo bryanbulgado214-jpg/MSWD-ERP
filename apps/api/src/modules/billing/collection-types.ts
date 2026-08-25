@@ -1,15 +1,33 @@
 /**
  * Types of collection the cashier picks from (instead of a raw GL account).
- * Each maps to a COA account via an AccountMapping (mappingKey), which the
- * accountant can change any time in Accounting → Account Mappings. defaultGlCode
- * is only the seeded default.
+ * Each standard type maps to a COA account via an AccountMapping (mappingKey),
+ * which the accountant can change any time in Accounting → Account Mappings.
+ * defaultGlCode is only the seeded default.
+ *
+ * The special "Other" type has no fixed GL: the cashier must describe it, and
+ * the accountant assigns the correct account while reviewing the journal entry.
+ * Until then it credits a temporary holding account (see COLLECTION_HOLDING_*)
+ * and the JEV cannot be posted.
  */
 export interface CollectionType {
   key: string;
   label: string;
-  mappingKey: string;
-  defaultGlCode: string;
+  mappingKey: string | null;
+  defaultGlCode: string | null;
+  /** Cashier must type a description for this type (the "Other" catch-all). */
+  requiresDescription?: boolean;
+  /** GL is assigned by the accountant during review, not by a fixed mapping. */
+  classifiedByAccountant?: boolean;
 }
+
+export const OTHER_COLLECTION_KEY = 'other';
+
+/**
+ * Temporary holding account an unclassified "Other" collection credits until the
+ * accountant reclassifies it. Editable by the accountant in Account Mappings.
+ */
+export const COLLECTION_HOLDING_MAPPING_KEY = 'collection.unclassified';
+export const COLLECTION_HOLDING_DEFAULT_GL = '2-99-99-990'; // Other Payables
 
 export const COLLECTION_TYPES: CollectionType[] = [
   {
@@ -41,6 +59,14 @@ export const COLLECTION_TYPES: CollectionType[] = [
     label: 'Guaranty deposit',
     mappingKey: 'collection.guaranty_deposit',
     defaultGlCode: '2-04-01-040', // Guaranty/Security Deposits Payable
+  },
+  {
+    key: OTHER_COLLECTION_KEY,
+    label: 'Other (specify)',
+    mappingKey: null,
+    defaultGlCode: null,
+    requiresDescription: true,
+    classifiedByAccountant: true,
   },
 ];
 

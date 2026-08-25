@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import {
   CashierCollectionApiError,
+  OTHER_COINS_KEY,
   addEntry,
   cashCountTotal,
   deleteEntry,
@@ -47,7 +48,7 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 };
 
-type LineDraft = { collectionType: string; amount: string };
+type LineDraft = { collectionType: string; amount: string; description: string };
 type Draft = {
   collectorId: string;
   collectionAreaId: string;
@@ -64,7 +65,7 @@ function emptyDraft(reportDate: string): Draft {
     collectionAreaId: '',
     collectionDate: reportDate,
     orSeries: '',
-    lines: [{ collectionType: '', amount: '' }],
+    lines: [{ collectionType: '', amount: '', description: '' }],
     checks: [],
     cashCount: {},
   };
@@ -129,6 +130,37 @@ function CashCountSheet({
             </tr>
           );
         })}
+        {/* Assorted loose coins entered as a single peso amount, not a count. */}
+        {(() => {
+          const other = Number(value[OTHER_COINS_KEY]) || 0;
+          return (
+            <tr>
+              <td>Other coins</td>
+              <td style={{ textAlign: 'right', color: '#98a2b3' }}>—</td>
+              <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>
+                {readOnly ? (
+                  other ? (
+                    peso(other)
+                  ) : (
+                    ''
+                  )
+                ) : (
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={other || ''}
+                    onChange={(e) =>
+                      onChange!({ ...value, [OTHER_COINS_KEY]: parseFloat(e.target.value) || 0 })
+                    }
+                    style={{ ...inputStyle, width: 100, textAlign: 'right', padding: '4px 6px' }}
+                  />
+                )}
+              </td>
+            </tr>
+          );
+        })()}
         <tr style={{ fontWeight: 700, borderTop: '2px solid var(--mswd-navy, #0b2e63)' }}>
           <td colSpan={2} style={{ textAlign: 'right' }}>
             Cash total
@@ -200,7 +232,11 @@ export default function CashierCollectionReportPage() {
       collectionAreaId: e.collectionAreaId ?? '',
       collectionDate: e.collectionDate.slice(0, 10),
       orSeries: e.orSeries,
-      lines: e.glLines.map((l) => ({ collectionType: l.collectionType, amount: String(l.amount) })),
+      lines: e.glLines.map((l) => ({
+        collectionType: l.collectionType,
+        amount: String(l.amount),
+        description: l.description ?? '',
+      })),
       checks: e.checks ?? [],
       cashCount: e.cashCount ?? {},
     });
@@ -216,12 +252,18 @@ export default function CashierCollectionReportPage() {
   const draftCash = draft ? cashCountTotal(denoms, draft.cashCount) : 0;
   const draftCounted = Math.round((draftCash + draftChecksTotal) * 100) / 100;
   const draftVariance = Math.round((draftCounted - draftRemit) * 100) / 100;
+  const typeRequiresDesc = (key: string) =>
+    !!opts?.collectionTypes.find((t) => t.key === key)?.requiresDescription;
   const draftValid =
     !!draft &&
     !!draft.collectorId &&
     !!draft.orSeries.trim() &&
     draft.lines.some((l) => l.collectionType && (parseFloat(l.amount) || 0) > 0) &&
     draft.lines.every((l) => !l.collectionType || (parseFloat(l.amount) || 0) > 0) &&
+    // "Other" lines must carry a description.
+    draft.lines.every(
+      (l) => !typeRequiresDesc(l.collectionType) || l.description.trim().length > 0,
+    ) &&
     draftRemit > 0 &&
     draftChecksTotal <= draftRemit + 0.005 &&
     draft.checks.every((c) => c.checkNumber.trim() && (Number(c.amount) || 0) > 0);
@@ -238,7 +280,11 @@ export default function CashierCollectionReportPage() {
         orSeries: draft.orSeries.trim(),
         lines: draft.lines
           .filter((l) => l.collectionType && (parseFloat(l.amount) || 0) > 0)
-          .map((l) => ({ collectionType: l.collectionType, amount: parseFloat(l.amount) || 0 })),
+          .map((l) => ({
+            collectionType: l.collectionType,
+            amount: parseFloat(l.amount) || 0,
+            ...(l.description.trim() ? { description: l.description.trim() } : {}),
+          })),
         checks: draft.checks
           .filter((c) => c.checkNumber.trim())
           .map((c) => ({
@@ -426,9 +472,18 @@ export default function CashierCollectionReportPage() {
                     {e.glLines.map((l, i) => (
                       <div key={i} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
                         {l.collectionTypeLabel}
+                        {l.description ? `: ${l.description}` : ''}
                         <span style={{ color: '#667085' }}> — {peso(l.amount)}</span>
-                        <div style={{ fontSize: 11, color: '#98a2b3', fontFamily: 'monospace' }}>
-                          {l.glAccountCode} {l.glAccountName}
+                        <div
+                          style={{
+                            fontSize: 11,
+                            fontFamily: 'monospace',
+                            color: l.classifiedByAccountant ? '#b54708' : '#98a2b3',
+                          }}
+                        >
+                          {l.classifiedByAccountant
+                            ? l.glAccountName
+                            : `${l.glAccountCode} ${l.glAccountName}`}
                         </div>
                       </div>
                     ))}
@@ -609,11 +664,31 @@ export default function CashierCollectionReportPage() {
                           ))}
                         </select>
                         {type && (
-                          <div style={{ fontSize: 11, color: '#98a2b3', marginTop: 2 }}>
-                            {type.mapped
-                              ? `→ ${type.glAccountCode} ${type.glAccountName}`
-                              : '→ not yet mapped to a GL account'}
+                          <div
+                            style={{
+                              fontSize: 11,
+                              marginTop: 2,
+                              color: type.classifiedByAccountant ? '#b54708' : '#98a2b3',
+                            }}
+                          >
+                            {type.classifiedByAccountant
+                              ? '→ GL account assigned by the accountant on review'
+                              : type.mapped
+                                ? `→ ${type.glAccountCode} ${type.glAccountName}`
+                                : '→ not yet mapped to a GL account'}
                           </div>
+                        )}
+                        {type?.requiresDescription && (
+                          <input
+                            style={{ ...inputStyle, padding: '4px 6px', marginTop: 4 }}
+                            placeholder="Describe this collection (required) *"
+                            value={l.description}
+                            onChange={(e) => {
+                              const lines = [...draft.lines];
+                              lines[i] = { ...lines[i]!, description: e.target.value };
+                              setDraft({ ...draft, lines });
+                            }}
+                          />
                         )}
                       </td>
                       <td>
@@ -670,7 +745,7 @@ export default function CashierCollectionReportPage() {
               onClick={() =>
                 setDraft({
                   ...draft,
-                  lines: [...draft.lines, { collectionType: '', amount: '' }],
+                  lines: [...draft.lines, { collectionType: '', amount: '', description: '' }],
                 })
               }
             >

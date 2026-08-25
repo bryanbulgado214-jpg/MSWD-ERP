@@ -87,6 +87,7 @@ export default function CashierCollectionPrintPage() {
                   {e.glLines.map((l, i) => (
                     <div key={i}>
                       {l.collectionTypeLabel}
+                      {l.description ? `: ${l.description}` : ''}
                       {e.glLines.length > 1 ? ` (${peso(l.amount)})` : ''}
                     </div>
                   ))}
@@ -171,6 +172,13 @@ export default function CashierCollectionPrintPage() {
                   </tr>
                 );
               })}
+            {(Number(report.combinedCashCount.other) || 0) > 0 && (
+              <tr>
+                <td style={cell}>Other coins</td>
+                <td style={num}>—</td>
+                <td style={num}>{peso(Number(report.combinedCashCount.other) || 0)}</td>
+              </tr>
+            )}
             <tr>
               <td style={{ ...th, textAlign: 'right' }} colSpan={2}>
                 TOTAL CASH COUNTED

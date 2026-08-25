@@ -62,6 +62,8 @@ export interface CollectionTypeOption {
   glAccountCode: string | null;
   glAccountName: string | null;
   mapped: boolean;
+  requiresDescription: boolean;
+  classifiedByAccountant: boolean;
 }
 export interface FormOptions {
   collectors: Collector[];
@@ -86,12 +88,15 @@ export interface CheckItem {
 export interface CollectionLineInput {
   collectionType: string;
   amount: number;
+  description?: string;
 }
 export interface CollectionLineDetail {
   collectionType: string;
   collectionTypeLabel: string;
+  description: string;
   glAccountCode: string;
   glAccountName: string;
+  classifiedByAccountant: boolean;
   amount: number;
 }
 export interface CashierEntry {
@@ -183,15 +188,18 @@ export const submitReport = (id: string, expectedVersion: number) =>
 
 // ── Cash-count helper (mirrors the teller sheet) ──
 
+// Assorted loose coins are entered as one peso amount under this key rather than
+// tallied per centavo denomination.
+export const OTHER_COINS_KEY = 'other';
+
 export function cashCountTotal(
   denominations: number[],
   count: Record<string, number> | null | undefined,
 ): number {
   if (!count) return 0;
-  const cents = denominations.reduce(
-    (s, d) => s + Math.round(d * 100) * (Number(count[String(d)]) || 0),
-    0,
-  );
+  const cents =
+    denominations.reduce((s, d) => s + Math.round(d * 100) * (Number(count[String(d)]) || 0), 0) +
+    Math.round((Number(count[OTHER_COINS_KEY]) || 0) * 100);
   return cents / 100;
 }
 export function denomLabel(d: number): string {

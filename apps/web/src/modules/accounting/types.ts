@@ -82,6 +82,9 @@ export interface JevLine {
   debitAmount: string;
   creditAmount: string;
   description: string | null;
+  // The GL account is a temporary holding placeholder; the accountant must
+  // assign a real account (e.g. an "Other" cashier collection) before posting.
+  pendingClassification: boolean;
   chartOfAccount: { id: string; accountCode: string; name: string; accountType: string };
 }
 

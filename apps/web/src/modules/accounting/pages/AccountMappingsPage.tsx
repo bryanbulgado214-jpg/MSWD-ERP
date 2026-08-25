@@ -37,6 +37,7 @@ const STANDARD_MAPPINGS = [
   { key: 'collection.reconnection', label: 'Collection — Reconnection Fee' },
   { key: 'collection.relocation', label: 'Collection — Relocation Fee' },
   { key: 'collection.guaranty_deposit', label: 'Collection — Guaranty Deposit' },
+  { key: 'collection.unclassified', label: 'Collection — Unclassified (holding)' },
 ];
 
 export default function AccountMappingsPage() {
