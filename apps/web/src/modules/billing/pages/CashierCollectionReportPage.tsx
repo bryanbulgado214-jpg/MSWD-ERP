@@ -217,7 +217,7 @@ export default function CashierCollectionReportPage() {
   }, [load]);
 
   const isDraft = report?.status === 'draft';
-  const denoms = report?.denominations ?? [1000, 500, 200, 100, 50, 20, 10, 5, 1, 0.25];
+  const denoms = report?.denominations ?? [1000, 500, 200, 100, 50, 20, 10, 5, 1];
 
   function startAdd() {
     if (!report) return;
