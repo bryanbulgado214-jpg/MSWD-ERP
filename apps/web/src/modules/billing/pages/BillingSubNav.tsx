@@ -1,6 +1,8 @@
 import { Link, useLocation } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
+import CashieringSubNav from '../../../app/CashieringSubNav';
+import { isCashierHome } from '../../../app/module-access';
 
 // Each tab declares when it is visible, so users only see tabs they can open —
 // e.g. an accountant granted only billing.reports sees just Dashboard + Reports
@@ -57,6 +59,8 @@ const LINKS: Array<{
 export default function BillingSubNav() {
   const { pathname } = useLocation();
   const { permissions } = useAuth();
+  // The cashier gets the unified Cashiering sub-nav (with DVs & Checks folded in).
+  if (isCashierHome(permissions)) return <CashieringSubNav />;
   const links = LINKS.filter((l) => l.visible(permissions));
 
   return (

@@ -74,6 +74,18 @@ export const REPORT_GROUPS: ReportGroup[] = [
     ],
   },
   {
+    label: 'Collections',
+    items: [
+      {
+        to: '/billing/cashier-report',
+        label: 'Cashier Report',
+        perm: 'collections.cashier.report',
+        icon: '🧾',
+        blurb: "Cashier's daily collection report",
+      },
+    ],
+  },
+  {
     label: 'Receivables',
     items: [
       {

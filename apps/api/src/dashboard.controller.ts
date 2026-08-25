@@ -338,6 +338,37 @@ export class DashboardController {
       }
     }
 
+    // ── Checks awaiting printing by the cashier ──
+    if (perms.has('accounting.check.print')) {
+      const checks = await this.prisma.check.findMany({
+        where: { organizationId: orgId, status: 'pending' },
+        orderBy: { checkDate: 'asc' },
+        take: 20,
+        select: {
+          id: true,
+          checkDate: true,
+          payeeName: true,
+          amount: true,
+          createdAt: true,
+          disbursementVoucher: { select: { dvNumber: true } },
+        },
+      });
+      for (const c of checks) {
+        const dv = c.disbursementVoucher?.dvNumber;
+        items.push({
+          id: c.id,
+          module: 'accounting',
+          type: 'check_to_print',
+          label: dv ? `Check for ${dv}` : 'Check to print',
+          description: `Print check payable to ${c.payeeName}`,
+          amount: c.amount.toString(),
+          createdAt: c.createdAt.toISOString(),
+          actionLabel: 'Print check',
+          link: '/accounting/checks',
+        });
+      }
+    }
+
     // ── Teller remittances awaiting the cashier's acceptance ──
     if (perms.has('collections.remittance.receive')) {
       const remittances = await this.prisma.tellerSession.findMany({

@@ -1,6 +1,8 @@
 import { Link, useLocation } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
+import CashieringSubNav from '../../../app/CashieringSubNav';
+import { isCashierHome } from '../../../app/module-access';
 
 // Each tab declares when it is visible. The sub-nav only renders tabs the user
 // can actually open — e.g. a cashier (no accounting.read) sees only the
@@ -78,6 +80,9 @@ export function accessibleAccountingLinks(permissions: Set<string>): AccountingL
 export function AccountingSubNav() {
   const { pathname } = useLocation();
   const { permissions } = useAuth();
+  // For the cashier, the disbursement screens (DVs & Checks) live under the
+  // Cashiering sub-nav — there is no separate Accounting tab.
+  if (isCashierHome(permissions)) return <CashieringSubNav />;
   const links = accessibleAccountingLinks(permissions);
   const mainLinks = links.filter((l) => (l.group ?? 'main') === 'main');
   const setupLinks = links.filter((l) => l.group === 'setup');

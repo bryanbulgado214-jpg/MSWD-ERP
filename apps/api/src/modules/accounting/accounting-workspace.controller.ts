@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Put, UseGuards } fro
 import { IsBoolean, IsDateString, IsOptional, IsString, MaxLength } from 'class-validator';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
+import { AuthenticatedOnly } from '../../common/decorators/require-permissions.decorator';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
@@ -39,31 +39,32 @@ class UpdateReminderDto {
   dueDate?: string;
 }
 
+// A personal notepad + reminders, scoped to the signed-in user (keyed by
+// userId), so any authenticated user has their own — the accountant on the
+// Accounting Dashboard and the cashier on the Cashiering Dashboard alike.
+// systemDueDates (open accounting-period closes) is read-only org context.
 @Controller('accounting/workspace')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
+@AuthenticatedOnly()
 export class AccountingWorkspaceController {
   constructor(private readonly service: AccountingWorkspaceService) {}
 
   @Get()
-  @RequirePermissions('accounting.read')
   get(@CurrentUser() user: AuthenticatedUser) {
     return this.service.getWorkspace(user.organizationId, user.userId);
   }
 
   @Put('notes')
-  @RequirePermissions('accounting.read')
   saveNotes(@CurrentUser() user: AuthenticatedUser, @Body() dto: NotesDto) {
     return this.service.saveNotes(user.organizationId, user.userId, dto.content);
   }
 
   @Post('reminders')
-  @RequirePermissions('accounting.read')
   addReminder(@CurrentUser() user: AuthenticatedUser, @Body() dto: ReminderDto) {
     return this.service.addReminder(user.organizationId, user.userId, dto.title, dto.dueDate);
   }
 
   @Patch('reminders/:id')
-  @RequirePermissions('accounting.read')
   updateReminder(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
@@ -73,7 +74,6 @@ export class AccountingWorkspaceController {
   }
 
   @Delete('reminders/:id')
-  @RequirePermissions('accounting.read')
   deleteReminder(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.service.deleteReminder(user.organizationId, user.userId, id);
   }

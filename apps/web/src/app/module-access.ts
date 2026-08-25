@@ -141,3 +141,17 @@ export function hasModuleAccess(permissions: Set<string>, mod: keyof typeof MODU
 export function isAccountantHome(permissions: Set<string>): boolean {
   return permissions.has('accounting.read') && !hasModuleAccess(permissions, 'admin');
 }
+
+/**
+ * A collection cashier (holds collections.cashier.report) who is not an admin or
+ * accountant. Their home is the Cashiering Dashboard: the generic Home tab is
+ * hidden, "/" redirects to /billing/dashboard, the top nav shows only the
+ * Cashiering module, and its sub-nav is limited to the cashiering screens.
+ */
+export function isCashierHome(permissions: Set<string>): boolean {
+  return (
+    permissions.has('collections.cashier.report') &&
+    !isAccountantHome(permissions) &&
+    !hasModuleAccess(permissions, 'admin')
+  );
+}

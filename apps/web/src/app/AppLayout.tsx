@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from './auth';
-import { hasModuleAccess, isAccountantHome } from './module-access';
+import { hasModuleAccess, isAccountantHome, isCashierHome } from './module-access';
 import { NotificationBell } from './NotificationBell';
 import './app-layout.css';
 
@@ -29,9 +29,17 @@ export function AppLayout() {
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
 
-  const visibleLinks = MODULE_NAV.filter((mod) => hasModuleAccess(permissions, mod.module));
-  // The accountant's home is the Accounting Dashboard — hide the generic Home tab.
-  const showHome = !isAccountantHome(permissions);
+  // The collection cashier sees only two tabs: Cashiering (billing, relabeled —
+  // with DVs & Checks folded into its sub-nav) and Reports. The Accounting tab is
+  // hidden for them; its disbursement screens live under Cashiering instead.
+  const cashierHome = isCashierHome(permissions);
+  const visibleLinks = MODULE_NAV.filter(
+    (mod) =>
+      hasModuleAccess(permissions, mod.module) && !(cashierHome && mod.module === 'accounting'),
+  ).map((mod) => (cashierHome && mod.module === 'billing' ? { ...mod, label: 'Cashiering' } : mod));
+  // The accountant's and cashier's homes are their own dashboards — hide the
+  // generic Home tab for them.
+  const showHome = !isAccountantHome(permissions) && !cashierHome;
 
   function handleLogout() {
     logout();
@@ -90,15 +98,24 @@ export function AppLayout() {
                   Home
                 </Link>
               )}
-              {visibleLinks.map((link) => (
-                <Link
-                  key={link.to}
-                  to={link.to}
-                  className={`app-nav__link${location.pathname.startsWith(link.to) ? ' app-nav__link--active' : ''}`}
-                >
-                  {link.label}
-                </Link>
-              ))}
+              {visibleLinks.map((link) => {
+                // For the cashier, the Cashiering (billing) tab stays active on the
+                // disbursement screens they reach under /accounting.
+                const active =
+                  location.pathname.startsWith(link.to) ||
+                  (cashierHome &&
+                    link.module === 'billing' &&
+                    location.pathname.startsWith('/accounting'));
+                return (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    className={`app-nav__link${active ? ' app-nav__link--active' : ''}`}
+                  >
+                    {link.label}
+                  </Link>
+                );
+              })}
             </div>
           </div>
           <div className="app-nav__user">
