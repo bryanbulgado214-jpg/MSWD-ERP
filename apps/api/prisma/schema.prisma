@@ -3904,6 +3904,100 @@ model CollectionAccountingBatch {
   @@map("collection_accounting_batches")
 }
 
+/// Admin-managed list of collectors (field tellers + the cashier) whose names
+/// the cashier picks when manually keying a daily collectors' report. Decoupled
+/// from user accounts — a field teller need not have an AquaBooks login.
+model Collector {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(150)
+  isCashier      Boolean  @default(false) @map("is_cashier")
+  isActive       Boolean  @default(true) @map("is_active")
+  sortOrder      Int      @default(0) @map("sort_order")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("collectors")
+}
+
+/// Admin-managed list of collection areas (e.g. a barangay/route) the cashier
+/// tags each teller's remittance with.
+model CollectionArea {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(150)
+  isActive       Boolean  @default(true) @map("is_active")
+  sortOrder      Int      @default(0) @map("sort_order")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("collection_areas")
+}
+
+/// A cashier's daily collection report: the cashier consolidates each teller's
+/// daily collectors' report (with its cash count) into one report, then submits
+/// it — creating a DRAFT journal entry for the accountant to review.
+model CashierCollectionReport {
+  id             String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String                        @map("organization_id") @db.Uuid
+  reportNumber   String                        @map("report_number") @db.VarChar(30)
+  reportDate     DateTime                      @map("report_date") @db.Date
+  status         CashierCollectionReportStatus @default(draft)
+  totalAmount    Decimal                       @default(0) @map("total_amount") @db.Decimal(18, 2)
+  remarks        String?
+  cashierId      String                        @map("cashier_id") @db.Uuid
+  journalEntryId String?                       @map("journal_entry_id") @db.Uuid
+  submittedAt    DateTime?                     @map("submitted_at") @db.Timestamptz(6)
+  submittedBy    String?                       @map("submitted_by") @db.Uuid
+  createdAt      DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime                      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy      String?                       @map("created_by") @db.Uuid
+  updatedBy      String?                       @map("updated_by") @db.Uuid
+  version        Int                           @default(1)
+
+  entries CashierCollectionEntry[]
+
+  @@unique([organizationId, reportNumber])
+  @@index([organizationId])
+  @@index([reportDate])
+  @@index([status])
+  @@map("cashier_collection_reports")
+}
+
+enum CashierCollectionReportStatus {
+  draft
+  submitted
+
+  @@map("cashier_collection_report_status")
+}
+
+/// One teller's remittance within a cashier's daily collection report: the
+/// collector, area, date, GL account credited, the OR series covered, the
+/// amount, and the denomination cash count the teller attached.
+model CashierCollectionEntry {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reportId         String   @map("report_id") @db.Uuid
+  collectorId      String   @map("collector_id") @db.Uuid
+  collectionAreaId String?  @map("collection_area_id") @db.Uuid
+  collectionDate   DateTime @map("collection_date") @db.Date
+  glAccountId      String   @map("gl_account_id") @db.Uuid
+  orSeries         String   @map("or_series") @db.VarChar(200)
+  amount           Decimal  @db.Decimal(18, 2)
+  cashCount        Json?    @map("cash_count")
+  sortOrder        Int      @default(0) @map("sort_order")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  report CashierCollectionReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@map("cashier_collection_entries")
+}
+
 /// Bank deposit of a collection batch's physical cash/checks, posted on the
 /// following banking day as Dr Cash in Bank / Cr Cash - Collecting Officer.
 model CollectionDeposit {

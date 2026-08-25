@@ -301,6 +301,39 @@ export class DashboardController {
       }
     }
 
+    // ── Cashier daily collection reports submitted for the accountant's review ──
+    if (perms.has('accounting.jev.approve')) {
+      const jevs = await this.prisma.journalEntryVoucher.findMany({
+        where: {
+          organizationId: orgId,
+          status: 'for_review',
+          sourceTable: 'cashier_collection_reports',
+        },
+        orderBy: { jevDate: 'asc' },
+        take: 20,
+        select: {
+          id: true,
+          jevNumber: true,
+          particulars: true,
+          totalCredit: true,
+          createdAt: true,
+        },
+      });
+      for (const j of jevs) {
+        items.push({
+          id: j.id,
+          module: 'accounting',
+          type: 'collection_jev_review',
+          label: j.jevNumber,
+          description: j.particulars,
+          amount: j.totalCredit.toString(),
+          createdAt: j.createdAt.toISOString(),
+          actionLabel: 'Review JEV',
+          link: `/accounting/jev/${j.id}`,
+        });
+      }
+    }
+
     // ── Teller remittances awaiting the cashier's acceptance ──
     if (perms.has('collections.remittance.receive')) {
       const remittances = await this.prisma.tellerSession.findMany({

@@ -1,0 +1,579 @@
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
+
+import { PrismaService } from '../../database/prisma.service';
+import { runAudited } from '../budgeting/audit-actor.util';
+
+import {
+  CreateCashierReportDto,
+  SubmitCashierReportDto,
+  UpdateCashierReportDto,
+  UpsertCashierEntryDto,
+  UpsertCollectionAreaDto,
+  UpsertCollectorDto,
+} from './dto/cashier-collection.dto';
+
+// PH peso denominations for the teller cash-count sheet (bills + coins).
+const PESO_DENOMINATIONS = [1000, 500, 200, 100, 50, 20, 10, 5, 1, 0.25];
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Value of a denomination→quantity map, summed in centavos for safety. */
+function cashCountTotal(count: Record<string, number> | null | undefined): number {
+  if (!count) return 0;
+  const cents = PESO_DENOMINATIONS.reduce(
+    (s, d) => s + Math.round(d * 100) * (Number(count[String(d)]) || 0),
+    0,
+  );
+  return cents / 100;
+}
+
+/** Sum two denomination maps (for the combined cash-count summary). */
+function addCashCounts(
+  a: Record<string, number>,
+  b: Record<string, number> | null | undefined,
+): Record<string, number> {
+  const out = { ...a };
+  if (b)
+    for (const d of PESO_DENOMINATIONS)
+      out[String(d)] = (out[String(d)] || 0) + (Number(b[String(d)]) || 0);
+  return out;
+}
+
+@Injectable()
+export class CashierCollectionService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  // ── Admin-managed collector list ──
+
+  listCollectors(orgId: string, activeOnly = false) {
+    return this.prisma.collector.findMany({
+      where: { organizationId: orgId, ...(activeOnly ? { isActive: true } : {}) },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+  }
+
+  async createCollector(orgId: string, dto: UpsertCollectorDto) {
+    const dup = await this.prisma.collector.findFirst({
+      where: { organizationId: orgId, name: dto.name.trim() },
+      select: { id: true },
+    });
+    if (dup) throw new ConflictException(`A collector named "${dto.name.trim()}" already exists.`);
+    return this.prisma.collector.create({
+      data: {
+        organizationId: orgId,
+        name: dto.name.trim(),
+        isCashier: dto.isCashier ?? false,
+        isActive: dto.isActive ?? true,
+        sortOrder: dto.sortOrder ?? 0,
+      },
+    });
+  }
+
+  async updateCollector(orgId: string, id: string, dto: UpsertCollectorDto) {
+    const c = await this.prisma.collector.findFirst({ where: { id, organizationId: orgId } });
+    if (!c) throw new NotFoundException('Collector not found.');
+    return this.prisma.collector.update({
+      where: { id },
+      data: {
+        name: dto.name.trim(),
+        ...(dto.isCashier !== undefined ? { isCashier: dto.isCashier } : {}),
+        ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
+        ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
+      },
+    });
+  }
+
+  async deleteCollector(orgId: string, id: string) {
+    const c = await this.prisma.collector.findFirst({ where: { id, organizationId: orgId } });
+    if (!c) throw new NotFoundException('Collector not found.');
+    const used = await this.prisma.cashierCollectionEntry.count({ where: { collectorId: id } });
+    if (used > 0) {
+      // Keep referential history — deactivate instead of hard-deleting.
+      return this.prisma.collector.update({ where: { id }, data: { isActive: false } });
+    }
+    await this.prisma.collector.delete({ where: { id } });
+    return { deleted: true };
+  }
+
+  // ── Admin-managed collection-area list ──
+
+  listAreas(orgId: string, activeOnly = false) {
+    return this.prisma.collectionArea.findMany({
+      where: { organizationId: orgId, ...(activeOnly ? { isActive: true } : {}) },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+  }
+
+  async createArea(orgId: string, dto: UpsertCollectionAreaDto) {
+    const dup = await this.prisma.collectionArea.findFirst({
+      where: { organizationId: orgId, name: dto.name.trim() },
+      select: { id: true },
+    });
+    if (dup)
+      throw new ConflictException(`A collection area named "${dto.name.trim()}" already exists.`);
+    return this.prisma.collectionArea.create({
+      data: {
+        organizationId: orgId,
+        name: dto.name.trim(),
+        isActive: dto.isActive ?? true,
+        sortOrder: dto.sortOrder ?? 0,
+      },
+    });
+  }
+
+  async updateArea(orgId: string, id: string, dto: UpsertCollectionAreaDto) {
+    const a = await this.prisma.collectionArea.findFirst({ where: { id, organizationId: orgId } });
+    if (!a) throw new NotFoundException('Collection area not found.');
+    return this.prisma.collectionArea.update({
+      where: { id },
+      data: {
+        name: dto.name.trim(),
+        ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
+        ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
+      },
+    });
+  }
+
+  async deleteArea(orgId: string, id: string) {
+    const a = await this.prisma.collectionArea.findFirst({ where: { id, organizationId: orgId } });
+    if (!a) throw new NotFoundException('Collection area not found.');
+    const used = await this.prisma.cashierCollectionEntry.count({
+      where: { collectionAreaId: id },
+    });
+    if (used > 0)
+      return this.prisma.collectionArea.update({ where: { id }, data: { isActive: false } });
+    await this.prisma.collectionArea.delete({ where: { id } });
+    return { deleted: true };
+  }
+
+  // ── Form options for the cashier ──
+
+  async getFormOptions(orgId: string) {
+    const [collectors, areas, glAccounts] = await Promise.all([
+      this.listCollectors(orgId, true),
+      this.listAreas(orgId, true),
+      this.prisma.chartOfAccount.findMany({
+        where: { organizationId: orgId, isHeader: false, isActive: true },
+        select: { id: true, accountCode: true, name: true },
+        orderBy: { accountCode: 'asc' },
+      }),
+    ]);
+    return { collectors, areas, glAccounts, denominations: PESO_DENOMINATIONS };
+  }
+
+  // ── Reports ──
+
+  async listReports(orgId: string) {
+    const reports = await this.prisma.cashierCollectionReport.findMany({
+      where: { organizationId: orgId },
+      orderBy: { reportDate: 'desc' },
+      take: 200,
+      include: { _count: { select: { entries: true } } },
+    });
+    return reports.map((r) => ({
+      id: r.id,
+      reportNumber: r.reportNumber,
+      reportDate: r.reportDate,
+      status: r.status,
+      totalAmount: Number(r.totalAmount),
+      entryCount: r._count.entries,
+      submittedAt: r.submittedAt,
+    }));
+  }
+
+  private async generateReportNumber(orgId: string, year: number): Promise<string> {
+    const rows = await this.prisma.cashierCollectionReport.findMany({
+      where: { organizationId: orgId, reportNumber: { startsWith: `CDR-${year}-` } },
+      select: { reportNumber: true },
+    });
+    const max = rows.reduce((m, r) => {
+      const n = parseInt(r.reportNumber.split('-')[2] ?? '0', 10);
+      return Number.isFinite(n) && n > m ? n : m;
+    }, 0);
+    return `CDR-${year}-${String(max + 1).padStart(4, '0')}`;
+  }
+
+  async createReport(orgId: string, userId: string, dto: CreateCashierReportDto) {
+    const reportDate = new Date(dto.reportDate);
+    const reportNumber = await this.generateReportNumber(orgId, reportDate.getUTCFullYear());
+    const report = await runAudited(this.prisma, userId, (tx) =>
+      tx.cashierCollectionReport.create({
+        data: {
+          organizationId: orgId,
+          reportNumber,
+          reportDate,
+          status: 'draft',
+          cashierId: userId,
+          ...(dto.remarks ? { remarks: dto.remarks } : {}),
+          createdBy: userId,
+          updatedBy: userId,
+        },
+        select: { id: true },
+      }),
+    );
+    return this.getReport(orgId, report.id);
+  }
+
+  async getReport(orgId: string, id: string) {
+    const report = await this.prisma.cashierCollectionReport.findFirst({
+      where: { id, organizationId: orgId },
+      include: { entries: { orderBy: { sortOrder: 'asc' } } },
+    });
+    if (!report) throw new NotFoundException('Report not found.');
+
+    // Resolve display fields for the entries.
+    const collectorIds = [...new Set(report.entries.map((e) => e.collectorId))];
+    const areaIds = [
+      ...new Set(report.entries.map((e) => e.collectionAreaId).filter(Boolean)),
+    ] as string[];
+    const glIds = [...new Set(report.entries.map((e) => e.glAccountId))];
+    const [collectors, areas, gls, cashier, jev] = await Promise.all([
+      this.prisma.collector.findMany({
+        where: { id: { in: collectorIds } },
+        select: { id: true, name: true },
+      }),
+      this.prisma.collectionArea.findMany({
+        where: { id: { in: areaIds } },
+        select: { id: true, name: true },
+      }),
+      this.prisma.chartOfAccount.findMany({
+        where: { id: { in: glIds } },
+        select: { id: true, accountCode: true, name: true },
+      }),
+      this.prisma.user.findUnique({ where: { id: report.cashierId }, select: { username: true } }),
+      report.journalEntryId
+        ? this.prisma.journalEntryVoucher.findUnique({
+            where: { id: report.journalEntryId },
+            select: { jevNumber: true, status: true },
+          })
+        : Promise.resolve(null),
+    ]);
+    const cMap = new Map(collectors.map((c) => [c.id, c.name]));
+    const aMap = new Map(areas.map((a) => [a.id, a.name]));
+    const gMap = new Map(gls.map((g) => [g.id, g]));
+
+    let combined: Record<string, number> = {};
+    const entries = report.entries.map((e) => {
+      const cc = (e.cashCount as Record<string, number> | null) ?? {};
+      combined = addCashCounts(combined, cc);
+      const gl = gMap.get(e.glAccountId);
+      return {
+        id: e.id,
+        collectorId: e.collectorId,
+        collectorName: cMap.get(e.collectorId) ?? '—',
+        collectionAreaId: e.collectionAreaId,
+        collectionAreaName: e.collectionAreaId ? (aMap.get(e.collectionAreaId) ?? '—') : null,
+        collectionDate: e.collectionDate,
+        glAccountId: e.glAccountId,
+        glAccountCode: gl?.accountCode ?? '',
+        glAccountName: gl?.name ?? '',
+        orSeries: e.orSeries,
+        amount: Number(e.amount),
+        cashCount: cc,
+      };
+    });
+
+    return {
+      id: report.id,
+      reportNumber: report.reportNumber,
+      reportDate: report.reportDate,
+      status: report.status,
+      totalAmount: Number(report.totalAmount),
+      remarks: report.remarks,
+      version: report.version,
+      cashierName: cashier?.username ?? '',
+      submittedAt: report.submittedAt,
+      journalEntry: jev
+        ? { id: report.journalEntryId, jevNumber: jev.jevNumber, status: jev.status }
+        : null,
+      entries,
+      combinedCashCount: combined,
+      combinedCashCountTotal: round2(cashCountTotal(combined)),
+      denominations: PESO_DENOMINATIONS,
+    };
+  }
+
+  private async requireDraft(orgId: string, id: string) {
+    const report = await this.prisma.cashierCollectionReport.findFirst({
+      where: { id, organizationId: orgId },
+      select: { id: true, status: true },
+    });
+    if (!report) throw new NotFoundException('Report not found.');
+    if (report.status !== 'draft') {
+      throw new BadRequestException('This report has been submitted and can no longer be edited.');
+    }
+    return report;
+  }
+
+  async updateReport(orgId: string, id: string, userId: string, dto: UpdateCashierReportDto) {
+    await this.requireDraft(orgId, id);
+    await runAudited(this.prisma, userId, (tx) =>
+      tx.cashierCollectionReport.update({
+        where: { id },
+        data: {
+          ...(dto.reportDate ? { reportDate: new Date(dto.reportDate) } : {}),
+          ...(dto.remarks !== undefined ? { remarks: dto.remarks } : {}),
+          updatedBy: userId,
+        },
+      }),
+    );
+    return this.getReport(orgId, id);
+  }
+
+  async deleteReport(orgId: string, id: string, userId: string) {
+    const report = await this.prisma.cashierCollectionReport.findFirst({
+      where: { id, organizationId: orgId },
+      select: { status: true },
+    });
+    if (!report) throw new NotFoundException('Report not found.');
+    if (report.status !== 'draft') {
+      throw new BadRequestException('Only draft reports can be deleted.');
+    }
+    await runAudited(this.prisma, userId, (tx) =>
+      tx.cashierCollectionReport.delete({ where: { id } }),
+    );
+    return { deleted: true };
+  }
+
+  private async recomputeTotal(tx: Prisma.TransactionClient, reportId: string, userId: string) {
+    const agg = await tx.cashierCollectionEntry.aggregate({
+      where: { reportId },
+      _sum: { amount: true },
+    });
+    await tx.cashierCollectionReport.update({
+      where: { id: reportId },
+      data: {
+        totalAmount: Number(agg._sum.amount ?? 0),
+        updatedBy: userId,
+        version: { increment: 1 },
+      },
+    });
+  }
+
+  private async validateEntry(orgId: string, dto: UpsertCashierEntryDto) {
+    const collector = await this.prisma.collector.findFirst({
+      where: { id: dto.collectorId, organizationId: orgId },
+      select: { id: true },
+    });
+    if (!collector) throw new BadRequestException('Select a valid collector.');
+    if (dto.collectionAreaId) {
+      const area = await this.prisma.collectionArea.findFirst({
+        where: { id: dto.collectionAreaId, organizationId: orgId },
+        select: { id: true },
+      });
+      if (!area) throw new BadRequestException('Select a valid collection area.');
+    }
+    const gl = await this.prisma.chartOfAccount.findFirst({
+      where: { id: dto.glAccountId, organizationId: orgId, isHeader: false, isActive: true },
+      select: { id: true },
+    });
+    if (!gl) throw new BadRequestException('Select a valid GL account.');
+    const amount = round2(cashCountTotal(dto.cashCount));
+    if (amount <= 0)
+      throw new BadRequestException('The cash count total must be greater than zero.');
+    return amount;
+  }
+
+  async addEntry(orgId: string, reportId: string, userId: string, dto: UpsertCashierEntryDto) {
+    await this.requireDraft(orgId, reportId);
+    const amount = await this.validateEntry(orgId, dto);
+    await runAudited(this.prisma, userId, async (tx) => {
+      const count = await tx.cashierCollectionEntry.count({ where: { reportId } });
+      await tx.cashierCollectionEntry.create({
+        data: {
+          reportId,
+          collectorId: dto.collectorId,
+          ...(dto.collectionAreaId ? { collectionAreaId: dto.collectionAreaId } : {}),
+          collectionDate: new Date(dto.collectionDate),
+          glAccountId: dto.glAccountId,
+          orSeries: dto.orSeries.trim(),
+          amount,
+          cashCount: dto.cashCount,
+          sortOrder: count,
+        },
+      });
+      await this.recomputeTotal(tx, reportId, userId);
+    });
+    return this.getReport(orgId, reportId);
+  }
+
+  async updateEntry(
+    orgId: string,
+    reportId: string,
+    entryId: string,
+    userId: string,
+    dto: UpsertCashierEntryDto,
+  ) {
+    await this.requireDraft(orgId, reportId);
+    const entry = await this.prisma.cashierCollectionEntry.findFirst({
+      where: { id: entryId, reportId },
+      select: { id: true },
+    });
+    if (!entry) throw new NotFoundException('Entry not found.');
+    const amount = await this.validateEntry(orgId, dto);
+    await runAudited(this.prisma, userId, async (tx) => {
+      await tx.cashierCollectionEntry.update({
+        where: { id: entryId },
+        data: {
+          collectorId: dto.collectorId,
+          collectionAreaId: dto.collectionAreaId ?? null,
+          collectionDate: new Date(dto.collectionDate),
+          glAccountId: dto.glAccountId,
+          orSeries: dto.orSeries.trim(),
+          amount,
+          cashCount: dto.cashCount,
+        },
+      });
+      await this.recomputeTotal(tx, reportId, userId);
+    });
+    return this.getReport(orgId, reportId);
+  }
+
+  async deleteEntry(orgId: string, reportId: string, entryId: string, userId: string) {
+    await this.requireDraft(orgId, reportId);
+    const entry = await this.prisma.cashierCollectionEntry.findFirst({
+      where: { id: entryId, reportId },
+      select: { id: true },
+    });
+    if (!entry) throw new NotFoundException('Entry not found.');
+    await runAudited(this.prisma, userId, async (tx) => {
+      await tx.cashierCollectionEntry.delete({ where: { id: entryId } });
+      await this.recomputeTotal(tx, reportId, userId);
+    });
+    return this.getReport(orgId, reportId);
+  }
+
+  private async nextJevNumber(
+    tx: Prisma.TransactionClient,
+    orgId: string,
+    year: number,
+  ): Promise<string> {
+    const rows = await tx.$queryRaw<Array<{ next_number: bigint }>>`
+      UPDATE document_sequences
+      SET next_number = next_number + 1, last_generated_at = NOW()
+      WHERE organization_id = ${orgId}::uuid AND document_type = 'jev'
+      RETURNING next_number`;
+    if (rows[0]) return `JEV-${year}-${String(rows[0].next_number).padStart(6, '0')}`;
+    const ins = await tx.$queryRaw<Array<{ next_number: bigint }>>`
+      INSERT INTO document_sequences (organization_id, document_type, prefix, next_number)
+      VALUES (${orgId}::uuid, 'jev', 'JEV-', 1)
+      RETURNING next_number`;
+    return `JEV-${year}-${String(ins[0]!.next_number).padStart(6, '0')}`;
+  }
+
+  /**
+   * Submit the report: creates a DRAFT (for-review) journal entry for the
+   * accountant — Dr Cash - Collecting Officer (total) / Cr each teller entry's
+   * chosen GL account — and marks the report submitted.
+   */
+  async submitReport(orgId: string, id: string, userId: string, dto: SubmitCashierReportDto) {
+    const report = await this.prisma.cashierCollectionReport.findFirst({
+      where: { id, organizationId: orgId },
+      include: { entries: true },
+    });
+    if (!report) throw new NotFoundException('Report not found.');
+    if (report.status !== 'draft')
+      throw new BadRequestException('This report has already been submitted.');
+    if (report.version !== dto.expectedVersion) {
+      throw new ConflictException('The report was modified. Please refresh and try again.');
+    }
+    if (report.entries.length === 0) {
+      throw new BadRequestException('Add at least one teller collection before submitting.');
+    }
+    const total = round2(report.entries.reduce((s, e) => s + Number(e.amount), 0));
+    if (total <= 0)
+      throw new BadRequestException('The total collection must be greater than zero.');
+
+    // Debit account: Cash - Collecting Officer (from the posting-account mapping).
+    const cashMap = await this.prisma.accountMapping.findFirst({
+      where: { organizationId: orgId, mappingKey: 'cash.collecting_officer', isActive: true },
+      select: { chartOfAccountId: true },
+    });
+    if (!cashMap?.chartOfAccountId) {
+      throw new BadRequestException(
+        'The "Cash - Collecting Officer" posting account is not configured. Set it up before submitting.',
+      );
+    }
+
+    // Open accounting period for the report date.
+    const period = await this.prisma.accountingPeriod.findFirst({
+      where: {
+        fiscalYear: { organizationId: orgId },
+        status: 'open',
+        lockedAt: null,
+        startDate: { lte: report.reportDate },
+        endDate: { gte: report.reportDate },
+      },
+      select: { id: true },
+    });
+    if (!period) {
+      throw new BadRequestException(
+        `No open accounting period covers ${report.reportDate.toISOString().slice(0, 10)}. Open the period, then submit.`,
+      );
+    }
+
+    // Resolve collector names for the credit-line descriptions.
+    const collectors = await this.prisma.collector.findMany({
+      where: { id: { in: report.entries.map((e) => e.collectorId) } },
+      select: { id: true, name: true },
+    });
+    const cName = new Map(collectors.map((c) => [c.id, c.name]));
+
+    const dateStr = report.reportDate.toISOString().slice(0, 10);
+    const lines = [
+      {
+        chartOfAccountId: cashMap.chartOfAccountId,
+        debitAmount: total,
+        creditAmount: 0,
+        description: `Daily collections — ${dateStr} (${report.reportNumber})`,
+      },
+      ...report.entries.map((e) => ({
+        chartOfAccountId: e.glAccountId,
+        debitAmount: 0,
+        creditAmount: round2(Number(e.amount)),
+        description: `${cName.get(e.collectorId) ?? 'Collector'} — OR ${e.orSeries}`,
+      })),
+    ];
+
+    const jev = await runAudited(this.prisma, userId, async (tx) => {
+      const created = await tx.journalEntryVoucher.create({
+        data: {
+          organizationId: orgId,
+          jevNumber: await this.nextJevNumber(tx, orgId, report.reportDate.getUTCFullYear()),
+          jevDate: report.reportDate,
+          accountingPeriodId: period.id,
+          sourceType: 'collection' as never,
+          sourceTable: 'cashier_collection_reports',
+          sourceId: report.id,
+          particulars: `Cashier daily collection report — ${dateStr} (${report.reportNumber})`,
+          totalDebit: total,
+          totalCredit: total,
+          status: 'for_review' as never,
+          createdBy: userId,
+          updatedBy: userId,
+          lines: { create: lines },
+        },
+        select: { id: true, jevNumber: true },
+      });
+      await tx.cashierCollectionReport.update({
+        where: { id: report.id },
+        data: {
+          status: 'submitted',
+          journalEntryId: created.id,
+          submittedAt: new Date(),
+          submittedBy: userId,
+          updatedBy: userId,
+          version: { increment: 1 },
+        },
+      });
+      return created;
+    });
+
+    return { ...(await this.getReport(orgId, id)), jevNumber: jev.jevNumber };
+  }
+}

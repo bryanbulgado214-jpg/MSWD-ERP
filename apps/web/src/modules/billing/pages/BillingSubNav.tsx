@@ -29,6 +29,16 @@ const LINKS: Array<{
     label: 'Remittances',
     visible: has('collections.remittance.receive'),
   },
+  {
+    to: '/billing/cashier-report',
+    label: 'Cashier Report',
+    visible: has('collections.cashier.report'),
+  },
+  {
+    to: '/billing/collection-setup',
+    label: 'Collection Setup',
+    visible: has('collections.setup.manage'),
+  },
   { to: '/billing/consumers', label: 'Consumers', visible: has('billing.read') },
   { to: '/billing/meters', label: 'Meters', visible: has('billing.read') },
   { to: '/billing/rate-schedules', label: 'Rate Schedules', visible: has('billing.read') },

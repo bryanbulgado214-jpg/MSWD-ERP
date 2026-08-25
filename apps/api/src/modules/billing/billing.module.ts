@@ -8,6 +8,8 @@ import { BillingPeriodController } from './billing-period.controller';
 import { BillingPeriodService } from './billing-period.service';
 import { BillingReportController } from './billing-report.controller';
 import { BillingReportService } from './billing-report.service';
+import { CashierCollectionController } from './cashier-collection.controller';
+import { CashierCollectionService } from './cashier-collection.service';
 import { ConsumerController } from './consumer.controller';
 import { ConsumerService } from './consumer.service';
 import { DisconnectionController } from './disconnection.controller';
@@ -36,6 +38,7 @@ import { TellerSessionService } from './teller-session.service';
     DisconnectionController,
     BillingReportController,
     TellerSessionController,
+    CashierCollectionController,
   ],
   providers: [
     ConsumerService,
@@ -48,6 +51,7 @@ import { TellerSessionService } from './teller-session.service';
     DisconnectionService,
     BillingReportService,
     TellerSessionService,
+    CashierCollectionService,
   ],
   exports: [
     ConsumerService,

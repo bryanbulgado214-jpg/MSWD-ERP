@@ -5,7 +5,11 @@ import BillingDashboardPage from './pages/BillingDashboardPage';
 import BillingPeriodPage from './pages/BillingPeriodPage';
 import BillingReportsPage from './pages/BillingReportsPage';
 import BillListPage from './pages/BillListPage';
+import CashierCollectionListPage from './pages/CashierCollectionListPage';
+import CashierCollectionPrintPage from './pages/CashierCollectionPrintPage';
+import CashierCollectionReportPage from './pages/CashierCollectionReportPage';
 import CollectionHubPage from './pages/CollectionHubPage';
+import CollectionSetupPage from './pages/CollectionSetupPage';
 import ConsumerDetailPage from './pages/ConsumerDetailPage';
 import ConsumerListPage from './pages/ConsumerListPage';
 import DisconnectionDetailPage from './pages/DisconnectionDetailPage';
@@ -35,6 +39,10 @@ export const billingRoutes: RouteObject[] = [
     element: <Navigate to="/billing/collection?tab=session" replace />,
   },
   { path: '/billing/remittances', element: <RemittancesPage /> },
+  { path: '/billing/cashier-report', element: <CashierCollectionListPage /> },
+  { path: '/billing/cashier-report/:id', element: <CashierCollectionReportPage /> },
+  { path: '/billing/collection-setup', element: <CollectionSetupPage /> },
+  { path: '/billing/print/cashier-report/:id', element: <CashierCollectionPrintPage /> },
   { path: '/billing/consumers', element: <ConsumerListPage /> },
   { path: '/billing/consumers/:id', element: <ConsumerDetailPage /> },
   { path: '/billing/meters', element: <MeterRegistryPage /> },
