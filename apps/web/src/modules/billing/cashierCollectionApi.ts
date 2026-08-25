@@ -56,15 +56,17 @@ export interface CollectionArea {
   isActive: boolean;
   sortOrder: number;
 }
-export interface GlAccountOption {
-  id: string;
-  accountCode: string;
-  name: string;
+export interface CollectionTypeOption {
+  key: string;
+  label: string;
+  glAccountCode: string | null;
+  glAccountName: string | null;
+  mapped: boolean;
 }
 export interface FormOptions {
   collectors: Collector[];
   areas: CollectionArea[];
-  glAccounts: GlAccountOption[];
+  collectionTypes: CollectionTypeOption[];
   denominations: number[];
 }
 export interface CashierReportListItem {
@@ -81,13 +83,16 @@ export interface CheckItem {
   bankName?: string;
   amount: number;
 }
-export interface GlLine {
-  glAccountId: string;
+export interface CollectionLineInput {
+  collectionType: string;
   amount: number;
 }
-export interface GlLineDetail extends GlLine {
+export interface CollectionLineDetail {
+  collectionType: string;
+  collectionTypeLabel: string;
   glAccountCode: string;
   glAccountName: string;
+  amount: number;
 }
 export interface CashierEntry {
   id: string;
@@ -96,7 +101,7 @@ export interface CashierEntry {
   collectionAreaId: string | null;
   collectionAreaName: string | null;
   collectionDate: string;
-  glLines: GlLineDetail[];
+  glLines: CollectionLineDetail[];
   orSeries: string;
   amount: number;
   totalRemittance: number;
@@ -132,7 +137,7 @@ export interface EntryInput {
   collectionAreaId?: string;
   collectionDate: string;
   orSeries: string;
-  glLines: GlLine[];
+  lines: CollectionLineInput[];
   checks?: CheckItem[];
   cashCount: Record<string, number>;
 }

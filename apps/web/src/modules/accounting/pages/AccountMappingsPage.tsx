@@ -31,6 +31,12 @@ const STANDARD_MAPPINGS = [
   { key: 'ppe.ict_equipment', label: 'PPE — ICT Equipment' },
   { key: 'depreciation.office_equipment', label: 'Depreciation — Office Equipment' },
   { key: 'depreciation.ict_equipment', label: 'Depreciation — ICT Equipment' },
+  // Cashier daily collection report — which GL each nature of collection credits.
+  { key: 'collection.water_sales', label: 'Collection — Water Sales' },
+  { key: 'collection.new_connection', label: 'Collection — New Connection Fee' },
+  { key: 'collection.reconnection', label: 'Collection — Reconnection Fee' },
+  { key: 'collection.relocation', label: 'Collection — Relocation Fee' },
+  { key: 'collection.guaranty_deposit', label: 'Collection — Guaranty Deposit' },
 ];
 
 export default function AccountMappingsPage() {

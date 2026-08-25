@@ -47,13 +47,13 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 };
 
-type GlLineDraft = { glAccountId: string; amount: string };
+type LineDraft = { collectionType: string; amount: string };
 type Draft = {
   collectorId: string;
   collectionAreaId: string;
   collectionDate: string;
   orSeries: string;
-  glLines: GlLineDraft[];
+  lines: LineDraft[];
   checks: CheckItem[];
   cashCount: Record<string, number>;
 };
@@ -64,7 +64,7 @@ function emptyDraft(reportDate: string): Draft {
     collectionAreaId: '',
     collectionDate: reportDate,
     orSeries: '',
-    glLines: [{ glAccountId: '', amount: '' }],
+    lines: [{ collectionType: '', amount: '' }],
     checks: [],
     cashCount: {},
   };
@@ -200,7 +200,7 @@ export default function CashierCollectionReportPage() {
       collectionAreaId: e.collectionAreaId ?? '',
       collectionDate: e.collectionDate.slice(0, 10),
       orSeries: e.orSeries,
-      glLines: e.glLines.map((l) => ({ glAccountId: l.glAccountId, amount: String(l.amount) })),
+      lines: e.glLines.map((l) => ({ collectionType: l.collectionType, amount: String(l.amount) })),
       checks: e.checks ?? [],
       cashCount: e.cashCount ?? {},
     });
@@ -208,7 +208,7 @@ export default function CashierCollectionReportPage() {
   }
 
   const draftRemit = draft
-    ? Math.round(draft.glLines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0) * 100) / 100
+    ? Math.round(draft.lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0) * 100) / 100
     : 0;
   const draftChecksTotal = draft
     ? draft.checks.reduce((s, c) => s + (Number(c.amount) || 0), 0)
@@ -220,8 +220,8 @@ export default function CashierCollectionReportPage() {
     !!draft &&
     !!draft.collectorId &&
     !!draft.orSeries.trim() &&
-    draft.glLines.some((l) => l.glAccountId && (parseFloat(l.amount) || 0) > 0) &&
-    draft.glLines.every((l) => !l.glAccountId || (parseFloat(l.amount) || 0) > 0) &&
+    draft.lines.some((l) => l.collectionType && (parseFloat(l.amount) || 0) > 0) &&
+    draft.lines.every((l) => !l.collectionType || (parseFloat(l.amount) || 0) > 0) &&
     draftRemit > 0 &&
     draftChecksTotal <= draftRemit + 0.005 &&
     draft.checks.every((c) => c.checkNumber.trim() && (Number(c.amount) || 0) > 0);
@@ -236,9 +236,9 @@ export default function CashierCollectionReportPage() {
         ...(draft.collectionAreaId ? { collectionAreaId: draft.collectionAreaId } : {}),
         collectionDate: draft.collectionDate,
         orSeries: draft.orSeries.trim(),
-        glLines: draft.glLines
-          .filter((l) => l.glAccountId && (parseFloat(l.amount) || 0) > 0)
-          .map((l) => ({ glAccountId: l.glAccountId, amount: parseFloat(l.amount) || 0 })),
+        lines: draft.lines
+          .filter((l) => l.collectionType && (parseFloat(l.amount) || 0) > 0)
+          .map((l) => ({ collectionType: l.collectionType, amount: parseFloat(l.amount) || 0 })),
         checks: draft.checks
           .filter((c) => c.checkNumber.trim())
           .map((c) => ({
@@ -408,7 +408,7 @@ export default function CashierCollectionReportPage() {
                 <th>Teller / Collector</th>
                 <th>Area</th>
                 <th>Date</th>
-                <th>GL Account</th>
+                <th>Nature of Collection</th>
                 <th>OR Series</th>
                 <th style={{ textAlign: 'right' }}>Total Remittance</th>
                 <th style={{ textAlign: 'right' }}>Checks</th>
@@ -425,9 +425,11 @@ export default function CashierCollectionReportPage() {
                   <td>
                     {e.glLines.map((l, i) => (
                       <div key={i} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
-                        <span style={{ fontFamily: 'monospace' }}>{l.glAccountCode}</span>{' '}
-                        {l.glAccountName}
+                        {l.collectionTypeLabel}
                         <span style={{ color: '#667085' }}> — {peso(l.amount)}</span>
+                        <div style={{ fontSize: 11, color: '#98a2b3', fontFamily: 'monospace' }}>
+                          {l.glAccountCode} {l.glAccountName}
+                        </div>
                       </div>
                     ))}
                   </td>
@@ -573,72 +575,83 @@ export default function CashierCollectionReportPage() {
             />
           </div>
 
-          {/* GL breakdown — one or more accounts, auto-summing to the remittance */}
+          {/* Collection breakdown — by nature of collection, auto-summing to the remittance.
+              Each type maps to a GL account (set by the accountant in Account Mappings). */}
           <div style={{ marginBottom: 12 }}>
             <table className="bill-table" style={{ maxWidth: 620 }}>
               <thead>
                 <tr>
-                  <th>GL account (collection recorded to) *</th>
+                  <th>Nature of collection (recorded to) *</th>
                   <th style={{ textAlign: 'right', width: 150 }}>Amount</th>
                   <th style={{ width: 30 }}></th>
                 </tr>
               </thead>
               <tbody>
-                {draft.glLines.map((l, i) => (
-                  <tr key={i}>
-                    <td>
-                      <select
-                        style={{ ...inputStyle, padding: '4px 6px' }}
-                        value={l.glAccountId}
-                        onChange={(e) => {
-                          const glLines = [...draft.glLines];
-                          glLines[i] = { ...glLines[i]!, glAccountId: e.target.value };
-                          setDraft({ ...draft, glLines });
-                        }}
-                      >
-                        <option value="">— Select GL account —</option>
-                        {opts.glAccounts.map((g) => (
-                          <option key={g.id} value={g.id}>
-                            {g.accountCode} — {g.name}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      <input
-                        style={{ ...inputStyle, padding: '4px 6px', textAlign: 'right' }}
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="0.00"
-                        value={l.amount}
-                        onChange={(e) => {
-                          const glLines = [...draft.glLines];
-                          glLines[i] = { ...glLines[i]!, amount: e.target.value };
-                          setDraft({ ...draft, glLines });
-                        }}
-                      />
-                    </td>
-                    <td>
-                      {draft.glLines.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setDraft({ ...draft, glLines: draft.glLines.filter((_, j) => j !== i) })
-                          }
-                          style={{
-                            color: '#b42318',
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
+                {draft.lines.map((l, i) => {
+                  const type = opts.collectionTypes.find((t) => t.key === l.collectionType);
+                  return (
+                    <tr key={i}>
+                      <td>
+                        <select
+                          style={{ ...inputStyle, padding: '4px 6px' }}
+                          value={l.collectionType}
+                          onChange={(e) => {
+                            const lines = [...draft.lines];
+                            lines[i] = { ...lines[i]!, collectionType: e.target.value };
+                            setDraft({ ...draft, lines });
                           }}
                         >
-                          ×
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                          <option value="">— Select type of collection —</option>
+                          {opts.collectionTypes.map((t) => (
+                            <option key={t.key} value={t.key}>
+                              {t.label}
+                            </option>
+                          ))}
+                        </select>
+                        {type && (
+                          <div style={{ fontSize: 11, color: '#98a2b3', marginTop: 2 }}>
+                            {type.mapped
+                              ? `→ ${type.glAccountCode} ${type.glAccountName}`
+                              : '→ not yet mapped to a GL account'}
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        <input
+                          style={{ ...inputStyle, padding: '4px 6px', textAlign: 'right' }}
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="0.00"
+                          value={l.amount}
+                          onChange={(e) => {
+                            const lines = [...draft.lines];
+                            lines[i] = { ...lines[i]!, amount: e.target.value };
+                            setDraft({ ...draft, lines });
+                          }}
+                        />
+                      </td>
+                      <td>
+                        {draft.lines.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDraft({ ...draft, lines: draft.lines.filter((_, j) => j !== i) })
+                            }
+                            style={{
+                              color: '#b42318',
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
                 <tr style={{ fontWeight: 700, borderTop: '2px solid var(--mswd-navy, #0b2e63)' }}>
                   <td style={{ textAlign: 'right' }}>
                     Total remittance (per teller&apos;s report)
@@ -655,10 +668,13 @@ export default function CashierCollectionReportPage() {
               className="bill-btn bill-btn--sm"
               style={{ marginTop: 6 }}
               onClick={() =>
-                setDraft({ ...draft, glLines: [...draft.glLines, { glAccountId: '', amount: '' }] })
+                setDraft({
+                  ...draft,
+                  lines: [...draft.lines, { collectionType: '', amount: '' }],
+                })
               }
             >
-              + Add GL account
+              + Add collection type
             </button>
           </div>
 

@@ -72,7 +72,7 @@ export default function CashierCollectionPrintPage() {
               <th style={th}>OR / DCR Series</th>
               <th style={th}>Teller / Collector</th>
               <th style={th}>Area</th>
-              <th style={th}>Account (GL) — Collection Recorded</th>
+              <th style={th}>Nature of Collection</th>
               <th style={th}>Checks</th>
               <th style={th}>Amount Collected</th>
             </tr>
@@ -86,7 +86,7 @@ export default function CashierCollectionPrintPage() {
                 <td style={cell}>
                   {e.glLines.map((l, i) => (
                     <div key={i}>
-                      {l.glAccountCode} — {l.glAccountName}
+                      {l.collectionTypeLabel}
                       {e.glLines.length > 1 ? ` (${peso(l.amount)})` : ''}
                     </div>
                   ))}

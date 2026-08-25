@@ -89,9 +89,12 @@ export class CheckItemDto {
   amount!: number;
 }
 
-export class GlLineDto {
-  @IsUUID()
-  glAccountId!: string;
+export class CollectionLineDto {
+  // A collection-type key (see collection-types.ts); resolves to a GL account
+  // via the account mappings.
+  @IsString()
+  @IsNotEmpty()
+  collectionType!: string;
 
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
@@ -114,13 +117,13 @@ export class UpsertCashierEntryDto {
   @MaxLength(200)
   orSeries!: string;
 
-  // GL breakdown of the remittance (one or more accounts). Their sum is the
-  // declared total remittance per the teller's report.
+  // Breakdown of the remittance by type of collection (one or more). Their sum
+  // is the declared total remittance per the teller's report.
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
-  @Type(() => GlLineDto)
-  glLines!: GlLineDto[];
+  @Type(() => CollectionLineDto)
+  lines!: CollectionLineDto[];
 
   // Checks received from customers (may be empty for an all-cash remittance).
   @IsArray()

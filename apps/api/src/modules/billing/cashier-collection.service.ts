@@ -9,6 +9,7 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
 
+import { COLLECTION_TYPES, collectionTypeByKey } from './collection-types';
 import {
   CreateCashierReportDto,
   SubmitCashierReportDto,
@@ -37,8 +38,8 @@ export interface CheckItem {
   bankName?: string;
   amount: number;
 }
-export interface GlLine {
-  glAccountId: string;
+export interface CollectionLine {
+  collectionType: string;
   amount: number;
 }
 function checksTotal(checks: CheckItem[] | null | undefined): number {
@@ -168,16 +169,46 @@ export class CashierCollectionService {
   // ── Form options for the cashier ──
 
   async getFormOptions(orgId: string) {
-    const [collectors, areas, glAccounts] = await Promise.all([
+    const [collectors, areas, collGl] = await Promise.all([
       this.listCollectors(orgId, true),
       this.listAreas(orgId, true),
-      this.prisma.chartOfAccount.findMany({
-        where: { organizationId: orgId, isHeader: false, isActive: true },
-        select: { id: true, accountCode: true, name: true },
-        orderBy: { accountCode: 'asc' },
-      }),
+      this.resolveCollectionGl(orgId),
     ]);
-    return { collectors, areas, glAccounts, denominations: PESO_DENOMINATIONS };
+    // The cashier picks a type of collection; each resolves to a GL account via
+    // the account mappings (shown for reference, and flagged when unmapped).
+    const collectionTypes = COLLECTION_TYPES.map((t) => {
+      const gl = collGl.get(t.key);
+      return {
+        key: t.key,
+        label: t.label,
+        glAccountCode: gl?.accountCode ?? null,
+        glAccountName: gl?.name ?? null,
+        mapped: !!gl,
+      };
+    });
+    return { collectors, areas, collectionTypes, denominations: PESO_DENOMINATIONS };
+  }
+
+  /** Resolve each collection type's mapped GL account (typeKey → account). */
+  private async resolveCollectionGl(orgId: string) {
+    const maps = await this.prisma.accountMapping.findMany({
+      where: {
+        organizationId: orgId,
+        mappingKey: { in: COLLECTION_TYPES.map((t) => t.mappingKey) },
+        isActive: true,
+      },
+      select: {
+        mappingKey: true,
+        chartOfAccount: { select: { id: true, accountCode: true, name: true } },
+      },
+    });
+    const byMappingKey = new Map(maps.map((m) => [m.mappingKey, m.chartOfAccount]));
+    const out = new Map<string, { id: string; accountCode: string; name: string }>();
+    for (const t of COLLECTION_TYPES) {
+      const gl = byMappingKey.get(t.mappingKey);
+      if (gl) out.set(t.key, gl);
+    }
+    return out;
   }
 
   // ── Reports ──
@@ -245,14 +276,7 @@ export class CashierCollectionService {
     const areaIds = [
       ...new Set(report.entries.map((e) => e.collectionAreaId).filter(Boolean)),
     ] as string[];
-    const glIds = [
-      ...new Set(
-        report.entries.flatMap((e) =>
-          ((e.glLines as GlLine[] | null) ?? []).map((l) => l.glAccountId),
-        ),
-      ),
-    ];
-    const [collectors, areas, gls, cashier, jev] = await Promise.all([
+    const [collectors, areas, collGl, cashier, jev] = await Promise.all([
       this.prisma.collector.findMany({
         where: { id: { in: collectorIds } },
         select: { id: true, name: true },
@@ -261,10 +285,7 @@ export class CashierCollectionService {
         where: { id: { in: areaIds } },
         select: { id: true, name: true },
       }),
-      this.prisma.chartOfAccount.findMany({
-        where: { id: { in: glIds } },
-        select: { id: true, accountCode: true, name: true },
-      }),
+      this.resolveCollectionGl(orgId),
       this.prisma.user.findUnique({ where: { id: report.cashierId }, select: { username: true } }),
       report.journalEntryId
         ? this.prisma.journalEntryVoucher.findUnique({
@@ -275,19 +296,20 @@ export class CashierCollectionService {
     ]);
     const cMap = new Map(collectors.map((c) => [c.id, c.name]));
     const aMap = new Map(areas.map((a) => [a.id, a.name]));
-    const gMap = new Map(gls.map((g) => [g.id, g]));
 
     let combined: Record<string, number> = {};
     let combinedChecks = 0;
     const entries = report.entries.map((e) => {
       const cc = (e.cashCount as Record<string, number> | null) ?? {};
       combined = addCashCounts(combined, cc);
-      const glLines = ((e.glLines as GlLine[] | null) ?? []).map((l) => {
-        const g = gMap.get(l.glAccountId);
+      const glLines = ((e.glLines as CollectionLine[] | null) ?? []).map((l) => {
+        const type = collectionTypeByKey.get(l.collectionType);
+        const gl = collGl.get(l.collectionType);
         return {
-          glAccountId: l.glAccountId,
-          glAccountCode: g?.accountCode ?? '',
-          glAccountName: g?.name ?? '',
+          collectionType: l.collectionType,
+          collectionTypeLabel: type?.label ?? l.collectionType,
+          glAccountCode: gl?.accountCode ?? '',
+          glAccountName: gl?.name ?? '(unmapped)',
           amount: round2(Number(l.amount)),
         };
       });
@@ -416,34 +438,28 @@ export class CashierCollectionService {
       });
       if (!area) throw new BadRequestException('Select a valid collection area.');
     }
-    if (!dto.glLines?.length) throw new BadRequestException('Add at least one GL account line.');
-    const glIds = [...new Set(dto.glLines.map((l) => l.glAccountId))];
-    const valid = new Set(
-      (
-        await this.prisma.chartOfAccount.findMany({
-          where: { id: { in: glIds }, organizationId: orgId, isHeader: false, isActive: true },
-          select: { id: true },
-        })
-      ).map((a) => a.id),
-    );
-    const glLines: GlLine[] = dto.glLines.map((l) => {
-      if (!valid.has(l.glAccountId)) throw new BadRequestException('Select a valid GL account.');
+    if (!dto.lines?.length) throw new BadRequestException('Add at least one type of collection.');
+    const lines: CollectionLine[] = dto.lines.map((l) => {
+      if (!collectionTypeByKey.has(l.collectionType)) {
+        throw new BadRequestException('Select a valid type of collection.');
+      }
       const amt = round2(Number(l.amount));
-      if (amt <= 0) throw new BadRequestException('Each GL line amount must be greater than zero.');
-      return { glAccountId: l.glAccountId, amount: amt };
+      if (amt <= 0)
+        throw new BadRequestException('Each collection amount must be greater than zero.');
+      return { collectionType: l.collectionType, amount: amt };
     });
-    const amount = round2(glLines.reduce((s, l) => s + l.amount, 0));
+    const amount = round2(lines.reduce((s, l) => s + l.amount, 0));
     if (amount <= 0)
       throw new BadRequestException('The total remittance must be greater than zero.');
     const ct = checksTotal(dto.checks as CheckItem[] | undefined);
     if (ct > amount + 0.005)
       throw new BadRequestException('The checks total cannot exceed the total remittance.');
-    return { amount, glLines };
+    return { amount, lines };
   }
 
   async addEntry(orgId: string, reportId: string, userId: string, dto: UpsertCashierEntryDto) {
     await this.requireDraft(orgId, reportId);
-    const { amount, glLines } = await this.validateEntry(orgId, dto);
+    const { amount, lines } = await this.validateEntry(orgId, dto);
     await runAudited(this.prisma, userId, async (tx) => {
       const count = await tx.cashierCollectionEntry.count({ where: { reportId } });
       await tx.cashierCollectionEntry.create({
@@ -452,7 +468,7 @@ export class CashierCollectionService {
           collectorId: dto.collectorId,
           ...(dto.collectionAreaId ? { collectionAreaId: dto.collectionAreaId } : {}),
           collectionDate: new Date(dto.collectionDate),
-          glLines: glLines as unknown as object[],
+          glLines: lines as unknown as object[],
           orSeries: dto.orSeries.trim(),
           amount,
           checks: (dto.checks as object[] | undefined) ?? [],
@@ -478,7 +494,7 @@ export class CashierCollectionService {
       select: { id: true },
     });
     if (!entry) throw new NotFoundException('Entry not found.');
-    const { amount, glLines } = await this.validateEntry(orgId, dto);
+    const { amount, lines } = await this.validateEntry(orgId, dto);
     await runAudited(this.prisma, userId, async (tx) => {
       await tx.cashierCollectionEntry.update({
         where: { id: entryId },
@@ -486,7 +502,7 @@ export class CashierCollectionService {
           collectorId: dto.collectorId,
           collectionAreaId: dto.collectionAreaId ?? null,
           collectionDate: new Date(dto.collectionDate),
-          glLines: glLines as unknown as object[],
+          glLines: lines as unknown as object[],
           orSeries: dto.orSeries.trim(),
           amount,
           checks: (dto.checks as object[] | undefined) ?? [],
@@ -589,15 +605,27 @@ export class CashierCollectionService {
     const cName = new Map(collectors.map((c) => [c.id, c.name]));
 
     const dateStr = report.reportDate.toISOString().slice(0, 10);
-    // Cr each GL line across every teller entry (a remittance may split across
-    // several accounts — A/R, installation fee, relocation fee, …).
+    // Resolve each collection type to its mapped GL account (the accountant sets
+    // these in Accounting → Account Mappings).
+    const collGl = await this.resolveCollectionGl(orgId);
+    // Cr each collection line across every teller entry (a remittance may split
+    // across several types — water sales, new-connection fee, guaranty deposit, …).
     const creditLines = report.entries.flatMap((e) =>
-      ((e.glLines as GlLine[] | null) ?? []).map((l) => ({
-        chartOfAccountId: l.glAccountId,
-        debitAmount: 0,
-        creditAmount: round2(Number(l.amount)),
-        description: `${cName.get(e.collectorId) ?? 'Collector'} — OR ${e.orSeries}`,
-      })),
+      ((e.glLines as CollectionLine[] | null) ?? []).map((l) => {
+        const gl = collGl.get(l.collectionType);
+        if (!gl) {
+          const label = collectionTypeByKey.get(l.collectionType)?.label ?? l.collectionType;
+          throw new BadRequestException(
+            `"${label}" has no GL account mapping. Set it in Accounting → Account Mappings, then submit.`,
+          );
+        }
+        return {
+          chartOfAccountId: gl.id,
+          debitAmount: 0,
+          creditAmount: round2(Number(l.amount)),
+          description: `${cName.get(e.collectorId) ?? 'Collector'} — OR ${e.orSeries}`,
+        };
+      }),
     );
     const lines = [
       {
