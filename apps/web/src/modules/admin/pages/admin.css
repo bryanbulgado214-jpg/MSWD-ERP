@@ -2,7 +2,7 @@
 
 .admin-page {
   max-width: 1200px;
-  margin: 0 auto;
+  margin: 0 auto 0 var(--subnav-left, 24px);
   padding: 28px 24px;
   font-family: 'Inter', system-ui, sans-serif;
 }
@@ -527,7 +527,7 @@
 /* ── Vertical left-sidebar sub-nav (matches Accounting; no horizontal scroll) ── */
 .admin-subnav {
   position: fixed;
-  left: max(24px, calc((100vw - 1200px) / 2 + 24px));
+  left: var(--subnav-left, 24px);
   top: calc(var(--app-header-h, 74px) + 26px);
   max-height: calc(100vh - var(--app-header-h, 74px) - 44px);
   overflow-y: auto;

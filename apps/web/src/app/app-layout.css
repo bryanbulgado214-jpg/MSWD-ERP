@@ -13,6 +13,13 @@
   z-index: 100;
 }
 
+:root {
+  /* Left edge of the top-nav tab row, published by AppLayout at runtime. The
+     vertical sub-nav rails and page content anchor to it so they line up under
+     the first header tab on every page. 24px is a safe pre-measurement fallback. */
+  --subnav-left: 24px;
+}
+
 .app-nav {
   display: flex;
   align-items: center;

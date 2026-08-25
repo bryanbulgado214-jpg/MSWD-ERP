@@ -31,7 +31,7 @@
 
 .bill-page {
   max-width: 1100px;
-  margin: 0 auto;
+  margin: 0 auto 0 var(--subnav-left, 24px);
   padding: 32px 24px;
   font-family: 'Inter', system-ui, sans-serif;
 }
@@ -466,7 +466,7 @@
   /* Locked to the viewport on scroll; left tracks the centered page gutter
      (page max-width 1100 + 24px inset). */
   position: fixed;
-  left: max(24px, calc((100vw - 1100px) / 2 + 24px));
+  left: var(--subnav-left, 24px);
   top: calc(var(--app-header-h, 74px) + 26px);
   width: 178px;
   max-height: calc(100vh - var(--app-header-h, 74px) - 44px);

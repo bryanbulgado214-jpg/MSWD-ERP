@@ -1,6 +1,6 @@
 .reports-page {
   max-width: 1200px;
-  margin: 0 auto;
+  margin: 0 auto 0 var(--subnav-left, 24px);
   padding: 24px;
 }
 
@@ -381,7 +381,7 @@
   /* Locked to the viewport on scroll; overflow stays visible so the category
      flyout can extend past the sidebar. */
   position: fixed;
-  left: max(24px, calc((100vw - 1200px) / 2 + 24px));
+  left: var(--subnav-left, 24px);
   top: calc(var(--app-header-h, 74px) + 26px);
   /* Above page content so the category flyout is never covered (header is 100). */
   z-index: 50;

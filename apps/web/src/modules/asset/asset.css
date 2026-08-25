@@ -1,6 +1,6 @@
 /* -- Asset Management Module -- */
 
-.am-page { padding: 1.5rem; max-width: 1200px; margin: 0 auto; }
+.am-page { padding: 1.5rem; max-width: 1200px; margin: 0 auto 0 var(--subnav-left, 24px); }
 .am-page__header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; }
 .am-page__header h1 { margin: 0; font-size: 1.5rem; }
 .am-page__actions { display: flex; gap: 0.5rem; }
@@ -146,7 +146,7 @@
 /* ── Vertical left-sidebar sub-nav (matches Accounting; no horizontal scroll) ── */
 .am-subnav {
   position: fixed;
-  left: max(24px, calc((100vw - 1200px) / 2 + 24px));
+  left: var(--subnav-left, 24px);
   top: calc(var(--app-header-h, 74px) + 26px);
   max-height: calc(100vh - var(--app-header-h, 74px) - 44px);
   overflow-y: auto;

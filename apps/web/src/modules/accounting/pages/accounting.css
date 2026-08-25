@@ -5,7 +5,7 @@
   /* Locked to the viewport so it stays put on scroll; left tracks the centered
      page gutter (page max-width 1240 + 24px inset). */
   position: fixed;
-  left: max(24px, calc((100vw - 1240px) / 2 + 24px));
+  left: var(--subnav-left, 24px);
   top: calc(var(--app-header-h, 74px) + 26px);
   width: 178px;
   max-height: calc(100vh - var(--app-header-h, 74px) - 44px);
@@ -41,7 +41,7 @@
 .acct-page {
   position: relative;
   max-width: 1240px;
-  margin: 0 auto;
+  margin: 0 auto 0 var(--subnav-left, 24px);
   padding: 28px 24px 32px 224px; /* left space reserved for the vertical sidebar */
   min-height: 460px;
   font-family: 'Inter', system-ui, sans-serif;

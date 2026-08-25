@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from './auth';
@@ -25,6 +25,25 @@ export function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchQ, setSearchQ] = useState('');
+  // Publish the left edge of the top-nav tab row as --subnav-left so the vertical
+  // sub-nav rails (and page content) line up under the first header tab, on every
+  // page, regardless of viewport width or brand width.
+  const linksRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    function measure() {
+      const el = linksRef.current;
+      if (el) {
+        const left = Math.round(el.getBoundingClientRect().left);
+        document.documentElement.style.setProperty('--subnav-left', `${left}px`);
+      }
+    }
+    measure();
+    window.addEventListener('resize', measure);
+    // The brand (and thus the tab row's left) shifts once the web font loads —
+    // re-measure then so the rails don't stay pinned to the fallback position.
+    document.fonts?.ready.then(measure).catch(() => {});
+    return () => window.removeEventListener('resize', measure);
+  }, [loading, user, organization?.name]);
 
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
@@ -89,7 +108,7 @@ export function AppLayout() {
                 <span className="app-nav__org"> · {organization.name}</span>
               ) : null}
             </Link>
-            <div className="app-nav__links">
+            <div className="app-nav__links" ref={linksRef}>
               {showHome && (
                 <Link
                   to="/"
