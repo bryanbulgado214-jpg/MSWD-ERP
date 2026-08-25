@@ -148,3 +148,13 @@ export class SubmitCashierReportDto {
   @IsNumber()
   expectedVersion!: number;
 }
+
+export class RecordDepositDto {
+  // The date the deposit appears on the passbook / bank statement.
+  @IsDateString()
+  depositDate!: string;
+
+  // Bank account the collections were deposited to (its GL is debited).
+  @IsUUID()
+  bankAccountId!: string;
+}

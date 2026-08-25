@@ -71,6 +71,10 @@ export interface FormOptions {
   collectionTypes: CollectionTypeOption[];
   denominations: number[];
 }
+export interface JevRef {
+  jevNumber: string;
+  status: 'draft' | 'for_review' | 'approved' | 'posted' | 'voided' | 'reversed';
+}
 export interface CashierReportListItem {
   id: string;
   reportNumber: string;
@@ -79,6 +83,22 @@ export interface CashierReportListItem {
   totalAmount: number;
   entryCount: number;
   submittedAt: string | null;
+  collectionJev: JevRef | null;
+  depositRecordedAt: string | null;
+  depositDate: string | null;
+  depositJev: JevRef | null;
+}
+export interface CashierDashboardCounts {
+  checksDueForPrinting: number;
+  unclearedChecks: number;
+  undepositedCollections: number;
+  collectionsNotPosted: number;
+  depositsNotPosted: number;
+}
+export interface BankAccountOption {
+  id: string;
+  label: string;
+  hasGl: boolean;
 }
 export interface CheckItem {
   checkNumber: string;
@@ -168,6 +188,10 @@ export const deleteArea = (id: string) => req(`${BASE}/areas/${id}`, 'DELETE');
 // ── Cashier report ──
 
 export const getFormOptions = () => req<FormOptions>(`${BASE}/form-options`);
+export const getDashboardCounts = () => req<CashierDashboardCounts>(`${BASE}/dashboard-counts`);
+export const listBankAccounts = () => req<BankAccountOption[]>(`${BASE}/bank-accounts`);
+export const recordDeposit = (id: string, data: { depositDate: string; bankAccountId: string }) =>
+  req<{ depositJevNumber: string }>(`${BASE}/reports/${id}/deposit`, 'POST', data);
 export const listReports = () => req<CashierReportListItem[]>(`${BASE}/reports`);
 export const createReport = (reportDate: string, remarks?: string) =>
   req<CashierReport>(`${BASE}/reports`, 'POST', { reportDate, ...(remarks ? { remarks } : {}) });

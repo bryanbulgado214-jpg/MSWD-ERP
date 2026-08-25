@@ -20,6 +20,7 @@ import type { AuthenticatedUser } from '../auth/jwt.strategy';
 import { CashierCollectionService } from './cashier-collection.service';
 import {
   CreateCashierReportDto,
+  RecordDepositDto,
   SubmitCashierReportDto,
   UpdateCashierReportDto,
   UpsertCashierEntryDto,
@@ -98,6 +99,28 @@ export class CashierCollectionController {
   @RequirePermissions('collections.cashier.report')
   formOptions(@CurrentUser() u: AuthenticatedUser) {
     return this.service.getFormOptions(u.organizationId);
+  }
+
+  @Get('dashboard-counts')
+  @RequirePermissions('collections.cashier.report')
+  dashboardCounts(@CurrentUser() u: AuthenticatedUser) {
+    return this.service.getDashboardCounts(u.organizationId);
+  }
+
+  @Get('bank-accounts')
+  @RequirePermissions('collections.cashier.report')
+  bankAccounts(@CurrentUser() u: AuthenticatedUser) {
+    return this.service.listBankAccounts(u.organizationId);
+  }
+
+  @Post('reports/:id/deposit')
+  @RequirePermissions('collections.cashier.report')
+  recordDeposit(
+    @CurrentUser() u: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RecordDepositDto,
+  ) {
+    return this.service.recordDeposit(u.organizationId, id, u.userId, dto);
   }
 
   @Get('reports')

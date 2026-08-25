@@ -258,6 +258,20 @@ export class CashierCollectionService {
       take: 200,
       include: { _count: { select: { entries: true } } },
     });
+    const jevIds = [
+      ...new Set(
+        reports
+          .flatMap((r) => [r.journalEntryId, r.depositJournalEntryId])
+          .filter((x): x is string => !!x),
+      ),
+    ];
+    const jevs = jevIds.length
+      ? await this.prisma.journalEntryVoucher.findMany({
+          where: { id: { in: jevIds } },
+          select: { id: true, jevNumber: true, status: true },
+        })
+      : [];
+    const jevById = new Map(jevs.map((j) => [j.id, { jevNumber: j.jevNumber, status: j.status }]));
     return reports.map((r) => ({
       id: r.id,
       reportNumber: r.reportNumber,
@@ -266,6 +280,10 @@ export class CashierCollectionService {
       totalAmount: Number(r.totalAmount),
       entryCount: r._count.entries,
       submittedAt: r.submittedAt,
+      collectionJev: r.journalEntryId ? (jevById.get(r.journalEntryId) ?? null) : null,
+      depositRecordedAt: r.depositRecordedAt,
+      depositDate: r.depositDate,
+      depositJev: r.depositJournalEntryId ? (jevById.get(r.depositJournalEntryId) ?? null) : null,
     }));
   }
 
@@ -748,5 +766,186 @@ export class CashierCollectionService {
     });
 
     return { ...(await this.getReport(orgId, id)), jevNumber: jev.jevNumber };
+  }
+
+  /** Active bank accounts the cashier can deposit to (id + display label). */
+  async listBankAccounts(orgId: string) {
+    const accts = await this.prisma.bankAccount.findMany({
+      where: { organizationId: orgId, status: 'active' },
+      orderBy: { accountName: 'asc' },
+      select: {
+        id: true,
+        accountName: true,
+        accountNumber: true,
+        chartOfAccountId: true,
+        bank: { select: { code: true } },
+      },
+    });
+    return accts.map((a) => ({
+      id: a.id,
+      label: `${a.bank.code} — ${a.accountName} (${a.accountNumber})`,
+      hasGl: !!a.chartOfAccountId,
+    }));
+  }
+
+  /**
+   * Record that a submitted report's collections now appear in the bank
+   * passbook/statement. Creates a DRAFT (for-review) journal entry —
+   * Dr Cash in Bank / Cr Cash - Collecting Officer — for the accountant to post.
+   */
+  async recordDeposit(
+    orgId: string,
+    id: string,
+    userId: string,
+    dto: { depositDate: string; bankAccountId: string },
+  ) {
+    const report = await this.prisma.cashierCollectionReport.findFirst({
+      where: { id, organizationId: orgId },
+    });
+    if (!report) throw new NotFoundException('Report not found.');
+    if (report.status !== 'submitted') {
+      throw new BadRequestException('Only a submitted report can be marked as deposited.');
+    }
+    if (report.depositRecordedAt) {
+      throw new BadRequestException('The deposit for this report has already been recorded.');
+    }
+    const total = round2(Number(report.totalAmount));
+    if (total <= 0) throw new BadRequestException('This report has no collection to deposit.');
+
+    const bank = await this.prisma.bankAccount.findFirst({
+      where: { id: dto.bankAccountId, organizationId: orgId, status: 'active' },
+      select: {
+        id: true,
+        chartOfAccountId: true,
+        accountName: true,
+        bank: { select: { code: true } },
+      },
+    });
+    if (!bank) throw new BadRequestException('Select a valid bank account.');
+    if (!bank.chartOfAccountId) {
+      throw new BadRequestException('The selected bank account is not linked to a GL account.');
+    }
+
+    const cashMap = await this.prisma.accountMapping.findFirst({
+      where: { organizationId: orgId, mappingKey: 'cash.collecting_officer', isActive: true },
+      select: { chartOfAccountId: true },
+    });
+    if (!cashMap?.chartOfAccountId) {
+      throw new BadRequestException(
+        'The "Cash - Collecting Officer" posting account is not configured.',
+      );
+    }
+
+    const depositDate = new Date(dto.depositDate);
+    if (isNaN(depositDate.getTime()))
+      throw new BadRequestException('A valid deposit date is required.');
+    const period = await this.prisma.accountingPeriod.findFirst({
+      where: {
+        fiscalYear: { organizationId: orgId },
+        status: 'open',
+        lockedAt: null,
+        startDate: { lte: depositDate },
+        endDate: { gte: depositDate },
+      },
+      select: { id: true },
+    });
+    if (!period) {
+      throw new BadRequestException(
+        `No open accounting period covers ${dto.depositDate}. Open the period, then record the deposit.`,
+      );
+    }
+
+    const dateStr = depositDate.toISOString().slice(0, 10);
+    const bankLabel = `${bank.bank.code} — ${bank.accountName}`;
+    const lines = [
+      {
+        chartOfAccountId: bank.chartOfAccountId,
+        debitAmount: total,
+        creditAmount: 0,
+        description: `Deposit to ${bankLabel}`,
+      },
+      {
+        chartOfAccountId: cashMap.chartOfAccountId,
+        debitAmount: 0,
+        creditAmount: total,
+        description: `Deposit of collections — ${report.reportNumber}`,
+      },
+    ];
+
+    const jev = await runAudited(this.prisma, userId, async (tx) => {
+      const created = await tx.journalEntryVoucher.create({
+        data: {
+          organizationId: orgId,
+          jevNumber: await this.nextJevNumber(tx, orgId, depositDate.getUTCFullYear()),
+          jevDate: depositDate,
+          accountingPeriodId: period.id,
+          sourceType: 'collection' as never,
+          sourceTable: 'cashier_collection_reports',
+          sourceId: report.id,
+          particulars: `Deposit of daily collections to ${bankLabel} — ${dateStr} (${report.reportNumber})`,
+          totalDebit: total,
+          totalCredit: total,
+          status: 'for_review' as never,
+          createdBy: userId,
+          updatedBy: userId,
+          lines: { create: lines },
+        },
+        select: { id: true, jevNumber: true },
+      });
+      await tx.cashierCollectionReport.update({
+        where: { id: report.id },
+        data: {
+          depositRecordedAt: new Date(),
+          depositDate,
+          depositJournalEntryId: created.id,
+          depositBankAccountId: bank.id,
+          depositRecordedBy: userId,
+          updatedBy: userId,
+          version: { increment: 1 },
+        },
+      });
+      return created;
+    });
+    return { depositJevNumber: jev.jevNumber };
+  }
+
+  /** Counts for the Cashiering Dashboard tiles (each links to its worklist). */
+  async getDashboardCounts(orgId: string) {
+    const reports = await this.prisma.cashierCollectionReport.findMany({
+      where: { organizationId: orgId },
+      select: {
+        status: true,
+        depositRecordedAt: true,
+        journalEntryId: true,
+        depositJournalEntryId: true,
+      },
+    });
+    const collectionJevIds = reports.map((r) => r.journalEntryId).filter((x): x is string => !!x);
+    const depositJevIds = reports
+      .map((r) => r.depositJournalEntryId)
+      .filter((x): x is string => !!x);
+    const allJevIds = [...collectionJevIds, ...depositJevIds];
+    const [checksDueForPrinting, unclearedChecks, notPostedJevs] = await Promise.all([
+      this.prisma.check.count({ where: { organizationId: orgId, status: 'pending' } }),
+      this.prisma.check.count({
+        where: { organizationId: orgId, status: { in: ['printed', 'released'] } },
+      }),
+      allJevIds.length
+        ? this.prisma.journalEntryVoucher.findMany({
+            where: { id: { in: allJevIds }, status: { in: ['for_review', 'approved'] } },
+            select: { id: true },
+          })
+        : Promise.resolve([] as { id: string }[]),
+    ]);
+    const notPosted = new Set(notPostedJevs.map((j) => j.id));
+    return {
+      checksDueForPrinting,
+      unclearedChecks,
+      undepositedCollections: reports.filter(
+        (r) => r.status === 'submitted' && !r.depositRecordedAt,
+      ).length,
+      collectionsNotPosted: collectionJevIds.filter((jid) => notPosted.has(jid)).length,
+      depositsNotPosted: depositJevIds.filter((jid) => notPosted.has(jid)).length,
+    };
   }
 }

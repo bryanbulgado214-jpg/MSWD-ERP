@@ -3957,6 +3957,14 @@ model CashierCollectionReport {
   journalEntryId String?                       @map("journal_entry_id") @db.Uuid
   submittedAt    DateTime?                     @map("submitted_at") @db.Timestamptz(6)
   submittedBy    String?                       @map("submitted_by") @db.Uuid
+  // Deposit-to-bank step: set when the cashier confirms the collection appears
+  // in the passbook/bank statement. Creates a draft JEV (Dr Bank, Cr Cash -
+  // Collecting Officer) for the accountant to post.
+  depositRecordedAt     DateTime? @map("deposit_recorded_at") @db.Timestamptz(6)
+  depositDate           DateTime? @map("deposit_date") @db.Date
+  depositJournalEntryId String?   @map("deposit_journal_entry_id") @db.Uuid
+  depositBankAccountId  String?   @map("deposit_bank_account_id") @db.Uuid
+  depositRecordedBy     String?   @map("deposit_recorded_by") @db.Uuid
   createdAt      DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime                      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   createdBy      String?                       @map("created_by") @db.Uuid
