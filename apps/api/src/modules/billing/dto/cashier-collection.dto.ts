@@ -1,4 +1,6 @@
+import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
   IsDateString,
   IsInt,
@@ -9,6 +11,8 @@ import {
   IsString,
   IsUUID,
   MaxLength,
+  Min,
+  ValidateNested,
 } from 'class-validator';
 
 // ── Admin-managed lookups ──
@@ -68,6 +72,22 @@ export class UpdateCashierReportDto {
   remarks?: string;
 }
 
+export class CheckItemDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(50)
+  checkNumber!: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(100)
+  bankName?: string;
+
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  amount!: number;
+}
+
 export class UpsertCashierEntryDto {
   @IsUUID()
   collectorId!: string;
@@ -86,6 +106,18 @@ export class UpsertCashierEntryDto {
   @IsNotEmpty()
   @MaxLength(200)
   orSeries!: string;
+
+  // Cashier-declared total remittance per the teller's report (cash + checks).
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  totalRemittance!: number;
+
+  // Checks received from customers (may be empty for an all-cash remittance).
+  @IsArray()
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => CheckItemDto)
+  checks?: CheckItemDto[];
 
   // Denomination → quantity map, e.g. { "1000": 2, "500": 3, "0.25": 4 }.
   @IsObject()

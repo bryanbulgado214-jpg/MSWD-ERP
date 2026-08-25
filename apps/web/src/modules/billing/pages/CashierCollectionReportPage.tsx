@@ -13,6 +13,7 @@ import {
   updateEntry,
   type CashierEntry,
   type CashierReport,
+  type CheckItem,
   type FormOptions,
 } from '../cashierCollectionApi';
 
@@ -52,6 +53,8 @@ type Draft = {
   collectionDate: string;
   glAccountId: string;
   orSeries: string;
+  totalRemittance: string;
+  checks: CheckItem[];
   cashCount: Record<string, number>;
 };
 
@@ -62,8 +65,17 @@ function emptyDraft(reportDate: string): Draft {
     collectionDate: reportDate,
     glAccountId: '',
     orSeries: '',
+    totalRemittance: '',
+    checks: [],
     cashCount: {},
   };
+}
+
+/** Shortage/(overage) label for a signed variance (counted − expected). */
+function varianceLabel(v: number): { text: string; color: string } {
+  if (Math.abs(v) < 0.005) return { text: 'Balanced ✓', color: '#067647' };
+  if (v > 0) return { text: `Overage ${peso(v)}`, color: '#b54708' };
+  return { text: `Shortage ${peso(-v)}`, color: '#b42318' };
 }
 
 /** Denomination grid for a cash-count sheet; edits a { denom: qty } map. */
@@ -172,14 +184,28 @@ export default function CashierCollectionReportPage() {
       collectionDate: e.collectionDate.slice(0, 10),
       glAccountId: e.glAccountId,
       orSeries: e.orSeries,
+      totalRemittance: String(e.totalRemittance),
+      checks: e.checks ?? [],
       cashCount: e.cashCount ?? {},
     });
     setError('');
   }
 
-  const draftTotal = draft ? cashCountTotal(denoms, draft.cashCount) : 0;
+  const draftRemit = draft ? parseFloat(draft.totalRemittance) || 0 : 0;
+  const draftChecksTotal = draft
+    ? draft.checks.reduce((s, c) => s + (Number(c.amount) || 0), 0)
+    : 0;
+  const draftCash = draft ? cashCountTotal(denoms, draft.cashCount) : 0;
+  const draftExpectedCash = Math.round((draftRemit - draftChecksTotal) * 100) / 100;
+  const draftVariance = Math.round((draftCash - draftExpectedCash) * 100) / 100;
   const draftValid =
-    !!draft && draft.collectorId && draft.glAccountId && draft.orSeries.trim() && draftTotal > 0;
+    !!draft &&
+    !!draft.collectorId &&
+    !!draft.glAccountId &&
+    !!draft.orSeries.trim() &&
+    draftRemit > 0 &&
+    draftChecksTotal <= draftRemit + 0.005 &&
+    draft.checks.every((c) => c.checkNumber.trim() && (Number(c.amount) || 0) > 0);
 
   async function saveEntry() {
     if (!id || !draft || !draftValid) return;
@@ -192,6 +218,14 @@ export default function CashierCollectionReportPage() {
         collectionDate: draft.collectionDate,
         glAccountId: draft.glAccountId,
         orSeries: draft.orSeries.trim(),
+        totalRemittance: draftRemit,
+        checks: draft.checks
+          .filter((c) => c.checkNumber.trim())
+          .map((c) => ({
+            checkNumber: c.checkNumber.trim(),
+            ...(c.bankName?.trim() ? { bankName: c.bankName.trim() } : {}),
+            amount: Number(c.amount) || 0,
+          })),
         cashCount: draft.cashCount,
       };
       const r = editingId ? await updateEntry(id, editingId, payload) : await addEntry(id, payload);
@@ -361,7 +395,9 @@ export default function CashierCollectionReportPage() {
                 <th>Date</th>
                 <th>GL Account</th>
                 <th>OR Series</th>
-                <th style={{ textAlign: 'right' }}>Amount</th>
+                <th style={{ textAlign: 'right' }}>Total Remittance</th>
+                <th style={{ textAlign: 'right' }}>Checks</th>
+                <th style={{ textAlign: 'right' }}>Cash Short / (Over)</th>
                 {isDraft && <th></th>}
               </tr>
             </thead>
@@ -377,6 +413,19 @@ export default function CashierCollectionReportPage() {
                   </td>
                   <td>{e.orSeries}</td>
                   <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>{peso(e.amount)}</td>
+                  <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>
+                    {e.checksTotal ? peso(e.checksTotal) : '—'}
+                  </td>
+                  <td
+                    style={{
+                      textAlign: 'right',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: varianceLabel(e.cashVariance).color,
+                    }}
+                  >
+                    {varianceLabel(e.cashVariance).text}
+                  </td>
                   {isDraft && (
                     <td>
                       <div style={{ display: 'flex', gap: 10 }}>
@@ -418,6 +467,19 @@ export default function CashierCollectionReportPage() {
                 </td>
                 <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>
                   {peso(report.totalAmount)}
+                </td>
+                <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>
+                  {report.combinedChecksTotal ? peso(report.combinedChecksTotal) : '—'}
+                </td>
+                <td
+                  style={{
+                    textAlign: 'right',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: varianceLabel(report.overallCashVariance).color,
+                  }}
+                >
+                  {varianceLabel(report.overallCashVariance).text}
                 </td>
                 {isDraft && <td></td>}
               </tr>
@@ -515,14 +577,188 @@ export default function CashierCollectionReportPage() {
             </div>
           </div>
 
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
+            <div style={{ flex: '0 0 220px' }}>
+              <label style={labelStyle}>Total remittance (per teller&apos;s report) *</label>
+              <input
+                style={inputStyle}
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                value={draft.totalRemittance}
+                onChange={(e) => setDraft({ ...draft, totalRemittance: e.target.value })}
+              />
+              <div style={{ fontSize: 11, color: '#667085', marginTop: 4 }}>
+                As reported by the teller. Verified against cash + checks below.
+              </div>
+            </div>
+          </div>
+
+          {/* Checks received from customers (multiple) */}
           <div style={{ marginBottom: 12 }}>
-            <label style={labelStyle}>Cash count sheet (teller&apos;s remittance) *</label>
+            <label style={labelStyle}>Checks received from customers</label>
+            {draft.checks.length > 0 && (
+              <table className="bill-table" style={{ maxWidth: 620, marginBottom: 6 }}>
+                <thead>
+                  <tr>
+                    <th>Check No.</th>
+                    <th>Bank</th>
+                    <th style={{ textAlign: 'right' }}>Amount</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {draft.checks.map((c, i) => (
+                    <tr key={i}>
+                      <td>
+                        <input
+                          style={{ ...inputStyle, padding: '4px 6px' }}
+                          value={c.checkNumber}
+                          onChange={(e) => {
+                            const checks = [...draft.checks];
+                            checks[i] = { ...checks[i]!, checkNumber: e.target.value };
+                            setDraft({ ...draft, checks });
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          style={{ ...inputStyle, padding: '4px 6px' }}
+                          value={c.bankName ?? ''}
+                          onChange={(e) => {
+                            const checks = [...draft.checks];
+                            checks[i] = { ...checks[i]!, bankName: e.target.value };
+                            setDraft({ ...draft, checks });
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          style={{
+                            ...inputStyle,
+                            padding: '4px 6px',
+                            textAlign: 'right',
+                            width: 110,
+                          }}
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={c.amount || ''}
+                          onChange={(e) => {
+                            const checks = [...draft.checks];
+                            checks[i] = { ...checks[i]!, amount: parseFloat(e.target.value) || 0 };
+                            setDraft({ ...draft, checks });
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDraft({ ...draft, checks: draft.checks.filter((_, j) => j !== i) })
+                          }
+                          style={{
+                            color: '#b42318',
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          ×
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  <tr style={{ fontWeight: 700 }}>
+                    <td colSpan={2} style={{ textAlign: 'right' }}>
+                      Total checks
+                    </td>
+                    <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>
+                      {peso(draftChecksTotal)}
+                    </td>
+                    <td></td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
+            <button
+              type="button"
+              className="bill-btn bill-btn--sm"
+              onClick={() =>
+                setDraft({
+                  ...draft,
+                  checks: [...draft.checks, { checkNumber: '', bankName: '', amount: 0 }],
+                })
+              }
+            >
+              + Add check
+            </button>
+          </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <label style={labelStyle}>Cash count sheet (verifies the cash portion) *</label>
             <CashCountSheet
               denominations={denoms}
               value={draft.cashCount}
               onChange={(v) => setDraft({ ...draft, cashCount: v })}
             />
           </div>
+
+          {/* Verification: expected cash vs counted cash → shortage/overage */}
+          {draftRemit > 0 && (
+            <div
+              style={{
+                border: '1px solid #e4e7ec',
+                borderRadius: 8,
+                padding: '10px 14px',
+                marginBottom: 12,
+                maxWidth: 380,
+                fontSize: 13,
+                background: '#fff',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Total remittance (declared)</span>
+                <span style={{ fontFamily: 'monospace' }}>{peso(draftRemit)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#b42318' }}>
+                <span>Less: checks received</span>
+                <span style={{ fontFamily: 'monospace' }}>({peso(draftChecksTotal)})</span>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontWeight: 600,
+                  borderTop: '1px solid #eaecf0',
+                  paddingTop: 4,
+                  marginTop: 4,
+                }}
+              >
+                <span>Expected cash</span>
+                <span style={{ fontFamily: 'monospace' }}>{peso(draftExpectedCash)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Cash counted</span>
+                <span style={{ fontFamily: 'monospace' }}>{peso(draftCash)}</span>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontWeight: 700,
+                  borderTop: '2px solid var(--mswd-navy,#0b2e63)',
+                  paddingTop: 4,
+                  marginTop: 4,
+                  color: varianceLabel(draftVariance).color,
+                }}
+              >
+                <span>Cash short / (over)</span>
+                <span>{varianceLabel(draftVariance).text}</span>
+              </div>
+            </div>
+          )}
 
           <div style={{ display: 'flex', gap: 10 }}>
             <button
@@ -554,19 +790,63 @@ export default function CashierCollectionReportPage() {
           <p style={{ color: '#667085', fontSize: 13, marginTop: 0 }}>
             All teller cash counts combined — the cashier&apos;s final count before finalizing.
           </p>
-          <CashCountSheet denominations={denoms} value={report.combinedCashCount} />
-          <div style={{ marginTop: 8, fontSize: 14 }}>
-            Grand total counted:{' '}
-            <strong style={{ fontFamily: 'monospace' }}>
-              {peso(report.combinedCashCountTotal)}
-            </strong>
-            {Math.abs(report.combinedCashCountTotal - report.totalAmount) > 0.005 ? (
-              <span style={{ color: '#b42318', marginLeft: 10 }}>
-                ⚠ differs from total collections {peso(report.totalAmount)}
-              </span>
-            ) : (
-              <span style={{ color: '#067647', marginLeft: 10 }}>✓ matches total collections</span>
-            )}
+          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            <CashCountSheet denominations={denoms} value={report.combinedCashCount} />
+            <div
+              style={{
+                border: '1px solid #e4e7ec',
+                borderRadius: 8,
+                padding: '12px 16px',
+                minWidth: 300,
+                fontSize: 14,
+                background: '#fff',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Total collections (declared)</span>
+                <strong style={{ fontFamily: 'monospace' }}>{peso(report.totalAmount)}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#b42318' }}>
+                <span>Less: checks received</span>
+                <span style={{ fontFamily: 'monospace' }}>
+                  ({peso(report.combinedChecksTotal)})
+                </span>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontWeight: 600,
+                  borderTop: '1px solid #eaecf0',
+                  paddingTop: 5,
+                  marginTop: 5,
+                }}
+              >
+                <span>Expected cash</span>
+                <span style={{ fontFamily: 'monospace' }}>{peso(report.overallExpectedCash)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Total cash counted</span>
+                <span style={{ fontFamily: 'monospace' }}>
+                  {peso(report.combinedCashCountTotal)}
+                </span>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontWeight: 700,
+                  fontSize: 15,
+                  borderTop: '2px solid var(--mswd-navy,#0b2e63)',
+                  paddingTop: 6,
+                  marginTop: 6,
+                  color: varianceLabel(report.overallCashVariance).color,
+                }}
+              >
+                <span>Cash short / (over)</span>
+                <span>{varianceLabel(report.overallCashVariance).text}</span>
+              </div>
+            </div>
           </div>
         </div>
       )}

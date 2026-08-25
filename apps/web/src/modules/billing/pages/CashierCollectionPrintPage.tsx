@@ -73,6 +73,7 @@ export default function CashierCollectionPrintPage() {
               <th style={th}>Teller / Collector</th>
               <th style={th}>Area</th>
               <th style={th}>Account (GL) — Collection Recorded</th>
+              <th style={th}>Checks</th>
               <th style={th}>Amount Collected</th>
             </tr>
           </thead>
@@ -85,21 +86,57 @@ export default function CashierCollectionPrintPage() {
                 <td style={cell}>
                   {e.glAccountCode} — {e.glAccountName}
                 </td>
+                <td style={num}>{e.checksTotal ? peso(e.checksTotal) : '—'}</td>
                 <td style={num}>{peso(e.amount)}</td>
               </tr>
             ))}
             {report.entries.length === 0 && (
               <tr>
-                <td style={{ ...cell, textAlign: 'center', color: '#888' }} colSpan={5}>
+                <td style={{ ...cell, textAlign: 'center', color: '#888' }} colSpan={6}>
                   No collections recorded.
                 </td>
               </tr>
             )}
             <tr>
               <td style={{ ...th, textAlign: 'right' }} colSpan={4}>
-                TOTAL COLLECTIONS
+                TOTAL
+              </td>
+              <td style={{ ...num, fontWeight: 700 }}>
+                {report.combinedChecksTotal ? peso(report.combinedChecksTotal) : '—'}
               </td>
               <td style={{ ...num, fontWeight: 700 }}>{peso(report.totalAmount)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* Remittance verification */}
+        <table style={{ borderCollapse: 'collapse', marginTop: 10, minWidth: 320 }}>
+          <tbody>
+            <tr>
+              <td style={cell}>Total collections (declared)</td>
+              <td style={num}>{peso(report.totalAmount)}</td>
+            </tr>
+            <tr>
+              <td style={cell}>Less: checks received</td>
+              <td style={num}>({peso(report.combinedChecksTotal)})</td>
+            </tr>
+            <tr>
+              <td style={{ ...cell, fontWeight: 700 }}>Expected cash</td>
+              <td style={{ ...num, fontWeight: 700 }}>{peso(report.overallExpectedCash)}</td>
+            </tr>
+            <tr>
+              <td style={cell}>Total cash counted</td>
+              <td style={num}>{peso(report.combinedCashCountTotal)}</td>
+            </tr>
+            <tr>
+              <td style={{ ...cell, fontWeight: 700 }}>Cash short / (over)</td>
+              <td style={{ ...num, fontWeight: 700 }}>
+                {Math.abs(report.overallCashVariance) < 0.005
+                  ? '— (balanced)'
+                  : report.overallCashVariance > 0
+                    ? `(${peso(report.overallCashVariance)}) over`
+                    : `${peso(-report.overallCashVariance)} short`}
+              </td>
             </tr>
           </tbody>
         </table>

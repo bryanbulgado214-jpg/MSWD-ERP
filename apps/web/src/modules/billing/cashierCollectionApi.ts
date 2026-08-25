@@ -76,6 +76,11 @@ export interface CashierReportListItem {
   entryCount: number;
   submittedAt: string | null;
 }
+export interface CheckItem {
+  checkNumber: string;
+  bankName?: string;
+  amount: number;
+}
 export interface CashierEntry {
   id: string;
   collectorId: string;
@@ -88,6 +93,12 @@ export interface CashierEntry {
   glAccountName: string;
   orSeries: string;
   amount: number;
+  totalRemittance: number;
+  checks: CheckItem[];
+  checksTotal: number;
+  cashCountTotal: number;
+  expectedCash: number;
+  cashVariance: number;
   cashCount: Record<string, number>;
 }
 export interface CashierReport {
@@ -104,6 +115,9 @@ export interface CashierReport {
   entries: CashierEntry[];
   combinedCashCount: Record<string, number>;
   combinedCashCountTotal: number;
+  combinedChecksTotal: number;
+  overallExpectedCash: number;
+  overallCashVariance: number;
   denominations: number[];
 }
 
@@ -113,6 +127,8 @@ export interface EntryInput {
   collectionDate: string;
   glAccountId: string;
   orSeries: string;
+  totalRemittance: number;
+  checks?: CheckItem[];
   cashCount: Record<string, number>;
 }
 

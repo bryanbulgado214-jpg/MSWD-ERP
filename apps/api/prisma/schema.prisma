@@ -3986,7 +3986,10 @@ model CashierCollectionEntry {
   collectionDate   DateTime @map("collection_date") @db.Date
   glAccountId      String   @map("gl_account_id") @db.Uuid
   orSeries         String   @map("or_series") @db.VarChar(200)
+  // Cashier-declared total remittance per the teller's report (cash + checks).
   amount           Decimal  @db.Decimal(18, 2)
+  // Checks received from customers: [{ checkNumber, bankName, amount }].
+  checks           Json?
   cashCount        Json?    @map("cash_count")
   sortOrder        Int      @default(0) @map("sort_order")
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)

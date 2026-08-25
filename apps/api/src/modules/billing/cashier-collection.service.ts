@@ -32,6 +32,16 @@ function cashCountTotal(count: Record<string, number> | null | undefined): numbe
   return cents / 100;
 }
 
+export interface CheckItem {
+  checkNumber: string;
+  bankName?: string;
+  amount: number;
+}
+function checksTotal(checks: CheckItem[] | null | undefined): number {
+  if (!Array.isArray(checks)) return 0;
+  return round2(checks.reduce((s, c) => s + (Number(c.amount) || 0), 0));
+}
+
 /** Sum two denomination maps (for the combined cash-count summary). */
 function addCashCounts(
   a: Record<string, number>,
@@ -258,10 +268,19 @@ export class CashierCollectionService {
     const gMap = new Map(gls.map((g) => [g.id, g]));
 
     let combined: Record<string, number> = {};
+    let combinedChecks = 0;
     const entries = report.entries.map((e) => {
       const cc = (e.cashCount as Record<string, number> | null) ?? {};
       combined = addCashCounts(combined, cc);
       const gl = gMap.get(e.glAccountId);
+      const checks = (e.checks as CheckItem[] | null) ?? [];
+      const chkTotal = checksTotal(checks);
+      const cashTotal = round2(cashCountTotal(cc));
+      const total = Number(e.amount); // declared total remittance
+      const expectedCash = round2(total - chkTotal);
+      // Cash over/(short): counted cash vs the cash expected after checks.
+      const cashVariance = round2(cashTotal - expectedCash);
+      combinedChecks = round2(combinedChecks + chkTotal);
       return {
         id: e.id,
         collectorId: e.collectorId,
@@ -273,7 +292,13 @@ export class CashierCollectionService {
         glAccountCode: gl?.accountCode ?? '',
         glAccountName: gl?.name ?? '',
         orSeries: e.orSeries,
-        amount: Number(e.amount),
+        amount: total,
+        totalRemittance: total,
+        checks,
+        checksTotal: chkTotal,
+        cashCountTotal: cashTotal,
+        expectedCash,
+        cashVariance,
         cashCount: cc,
       };
     });
@@ -294,6 +319,12 @@ export class CashierCollectionService {
       entries,
       combinedCashCount: combined,
       combinedCashCountTotal: round2(cashCountTotal(combined)),
+      combinedChecksTotal: combinedChecks,
+      // Overall verification: declared total = combined cash + combined checks.
+      overallExpectedCash: round2(Number(report.totalAmount) - combinedChecks),
+      overallCashVariance: round2(
+        cashCountTotal(combined) - (Number(report.totalAmount) - combinedChecks),
+      ),
       denominations: PESO_DENOMINATIONS,
     };
   }
@@ -373,9 +404,12 @@ export class CashierCollectionService {
       select: { id: true },
     });
     if (!gl) throw new BadRequestException('Select a valid GL account.');
-    const amount = round2(cashCountTotal(dto.cashCount));
+    const amount = round2(Number(dto.totalRemittance));
     if (amount <= 0)
-      throw new BadRequestException('The cash count total must be greater than zero.');
+      throw new BadRequestException('The total remittance must be greater than zero.');
+    const ct = checksTotal(dto.checks as CheckItem[] | undefined);
+    if (ct > amount + 0.005)
+      throw new BadRequestException('The checks total cannot exceed the total remittance.');
     return amount;
   }
 
@@ -393,6 +427,7 @@ export class CashierCollectionService {
           glAccountId: dto.glAccountId,
           orSeries: dto.orSeries.trim(),
           amount,
+          checks: (dto.checks as object[] | undefined) ?? [],
           cashCount: dto.cashCount,
           sortOrder: count,
         },
@@ -426,6 +461,7 @@ export class CashierCollectionService {
           glAccountId: dto.glAccountId,
           orSeries: dto.orSeries.trim(),
           amount,
+          checks: (dto.checks as object[] | undefined) ?? [],
           cashCount: dto.cashCount,
         },
       });
