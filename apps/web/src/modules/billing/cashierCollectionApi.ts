@@ -97,8 +97,8 @@ export interface CashierEntry {
   checks: CheckItem[];
   checksTotal: number;
   cashCountTotal: number;
-  expectedCash: number;
-  cashVariance: number;
+  countedTotal: number;
+  variance: number;
   cashCount: Record<string, number>;
 }
 export interface CashierReport {
@@ -116,8 +116,8 @@ export interface CashierReport {
   combinedCashCount: Record<string, number>;
   combinedCashCountTotal: number;
   combinedChecksTotal: number;
-  overallExpectedCash: number;
-  overallCashVariance: number;
+  overallCountedTotal: number;
+  overallVariance: number;
   denominations: number[];
 }
 

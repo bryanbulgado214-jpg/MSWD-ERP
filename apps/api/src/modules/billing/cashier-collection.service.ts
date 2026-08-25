@@ -277,9 +277,10 @@ export class CashierCollectionService {
       const chkTotal = checksTotal(checks);
       const cashTotal = round2(cashCountTotal(cc));
       const total = Number(e.amount); // declared total remittance
-      const expectedCash = round2(total - chkTotal);
-      // Cash over/(short): counted cash vs the cash expected after checks.
-      const cashVariance = round2(cashTotal - expectedCash);
+      // Checks are part of the collection: counted = cash + checks.
+      const countedTotal = round2(cashTotal + chkTotal);
+      // Over/(short): counted collection vs the teller's declared remittance.
+      const variance = round2(countedTotal - total);
       combinedChecks = round2(combinedChecks + chkTotal);
       return {
         id: e.id,
@@ -297,8 +298,8 @@ export class CashierCollectionService {
         checks,
         checksTotal: chkTotal,
         cashCountTotal: cashTotal,
-        expectedCash,
-        cashVariance,
+        countedTotal,
+        variance,
         cashCount: cc,
       };
     });
@@ -320,10 +321,10 @@ export class CashierCollectionService {
       combinedCashCount: combined,
       combinedCashCountTotal: round2(cashCountTotal(combined)),
       combinedChecksTotal: combinedChecks,
-      // Overall verification: declared total = combined cash + combined checks.
-      overallExpectedCash: round2(Number(report.totalAmount) - combinedChecks),
-      overallCashVariance: round2(
-        cashCountTotal(combined) - (Number(report.totalAmount) - combinedChecks),
+      // Overall: counted collection (cash + checks) vs the declared total.
+      overallCountedTotal: round2(cashCountTotal(combined) + combinedChecks),
+      overallVariance: round2(
+        cashCountTotal(combined) + combinedChecks - Number(report.totalAmount),
       ),
       denominations: PESO_DENOMINATIONS,
     };

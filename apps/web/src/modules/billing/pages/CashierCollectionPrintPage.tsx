@@ -109,33 +109,33 @@ export default function CashierCollectionPrintPage() {
           </tbody>
         </table>
 
-        {/* Remittance verification */}
+        {/* Remittance verification: cash + checks = total collection vs declared */}
         <table style={{ borderCollapse: 'collapse', marginTop: 10, minWidth: 320 }}>
           <tbody>
-            <tr>
-              <td style={cell}>Total collections (declared)</td>
-              <td style={num}>{peso(report.totalAmount)}</td>
-            </tr>
-            <tr>
-              <td style={cell}>Less: checks received</td>
-              <td style={num}>({peso(report.combinedChecksTotal)})</td>
-            </tr>
-            <tr>
-              <td style={{ ...cell, fontWeight: 700 }}>Expected cash</td>
-              <td style={{ ...num, fontWeight: 700 }}>{peso(report.overallExpectedCash)}</td>
-            </tr>
             <tr>
               <td style={cell}>Total cash counted</td>
               <td style={num}>{peso(report.combinedCashCountTotal)}</td>
             </tr>
             <tr>
-              <td style={{ ...cell, fontWeight: 700 }}>Cash short / (over)</td>
+              <td style={cell}>Add: checks received</td>
+              <td style={num}>{peso(report.combinedChecksTotal)}</td>
+            </tr>
+            <tr>
+              <td style={{ ...cell, fontWeight: 700 }}>Total collection counted</td>
+              <td style={{ ...num, fontWeight: 700 }}>{peso(report.overallCountedTotal)}</td>
+            </tr>
+            <tr>
+              <td style={cell}>Total collections (declared)</td>
+              <td style={num}>{peso(report.totalAmount)}</td>
+            </tr>
+            <tr>
+              <td style={{ ...cell, fontWeight: 700 }}>Short / (over)</td>
               <td style={{ ...num, fontWeight: 700 }}>
-                {Math.abs(report.overallCashVariance) < 0.005
+                {Math.abs(report.overallVariance) < 0.005
                   ? '— (balanced)'
-                  : report.overallCashVariance > 0
-                    ? `(${peso(report.overallCashVariance)}) over`
-                    : `${peso(-report.overallCashVariance)} short`}
+                  : report.overallVariance > 0
+                    ? `(${peso(report.overallVariance)}) over`
+                    : `${peso(-report.overallVariance)} short`}
               </td>
             </tr>
           </tbody>

@@ -83,13 +83,16 @@ function CashCountSheet({
   denominations,
   value,
   onChange,
+  checksTotal,
 }: {
   denominations: number[];
   value: Record<string, number>;
   onChange?: (v: Record<string, number>) => void;
+  checksTotal?: number;
   readOnly?: boolean;
 }) {
   const readOnly = !onChange;
+  const cashTotal = cashCountTotal(denominations, value);
   return (
     <table className="bill-table" style={{ maxWidth: 380 }}>
       <thead>
@@ -131,10 +134,26 @@ function CashCountSheet({
           <td colSpan={2} style={{ textAlign: 'right' }}>
             Cash total
           </td>
-          <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>
-            {peso(cashCountTotal(denominations, value))}
-          </td>
+          <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>{peso(cashTotal)}</td>
         </tr>
+        {checksTotal !== undefined && (
+          <>
+            <tr>
+              <td colSpan={2} style={{ textAlign: 'right' }}>
+                Add: total checks
+              </td>
+              <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>{peso(checksTotal)}</td>
+            </tr>
+            <tr style={{ fontWeight: 700, borderTop: '1px solid #d0d5dd' }}>
+              <td colSpan={2} style={{ textAlign: 'right' }}>
+                Total collection (cash + checks)
+              </td>
+              <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>
+                {peso(cashTotal + checksTotal)}
+              </td>
+            </tr>
+          </>
+        )}
       </tbody>
     </table>
   );
@@ -196,8 +215,8 @@ export default function CashierCollectionReportPage() {
     ? draft.checks.reduce((s, c) => s + (Number(c.amount) || 0), 0)
     : 0;
   const draftCash = draft ? cashCountTotal(denoms, draft.cashCount) : 0;
-  const draftExpectedCash = Math.round((draftRemit - draftChecksTotal) * 100) / 100;
-  const draftVariance = Math.round((draftCash - draftExpectedCash) * 100) / 100;
+  const draftCounted = Math.round((draftCash + draftChecksTotal) * 100) / 100;
+  const draftVariance = Math.round((draftCounted - draftRemit) * 100) / 100;
   const draftValid =
     !!draft &&
     !!draft.collectorId &&
@@ -397,7 +416,7 @@ export default function CashierCollectionReportPage() {
                 <th>OR Series</th>
                 <th style={{ textAlign: 'right' }}>Total Remittance</th>
                 <th style={{ textAlign: 'right' }}>Checks</th>
-                <th style={{ textAlign: 'right' }}>Cash Short / (Over)</th>
+                <th style={{ textAlign: 'right' }}>Short / (Over)</th>
                 {isDraft && <th></th>}
               </tr>
             </thead>
@@ -421,10 +440,10 @@ export default function CashierCollectionReportPage() {
                       textAlign: 'right',
                       fontSize: 12,
                       fontWeight: 600,
-                      color: varianceLabel(e.cashVariance).color,
+                      color: varianceLabel(e.variance).color,
                     }}
                   >
-                    {varianceLabel(e.cashVariance).text}
+                    {varianceLabel(e.variance).text}
                   </td>
                   {isDraft && (
                     <td>
@@ -476,10 +495,10 @@ export default function CashierCollectionReportPage() {
                     textAlign: 'right',
                     fontSize: 12,
                     fontWeight: 600,
-                    color: varianceLabel(report.overallCashVariance).color,
+                    color: varianceLabel(report.overallVariance).color,
                   }}
                 >
-                  {varianceLabel(report.overallCashVariance).text}
+                  {varianceLabel(report.overallVariance).text}
                 </td>
                 {isDraft && <td></td>}
               </tr>
@@ -697,15 +716,16 @@ export default function CashierCollectionReportPage() {
           </div>
 
           <div style={{ marginBottom: 12 }}>
-            <label style={labelStyle}>Cash count sheet (verifies the cash portion) *</label>
+            <label style={labelStyle}>Cash count sheet (cash + checks = total collection) *</label>
             <CashCountSheet
               denominations={denoms}
               value={draft.cashCount}
               onChange={(v) => setDraft({ ...draft, cashCount: v })}
+              checksTotal={draftChecksTotal}
             />
           </div>
 
-          {/* Verification: expected cash vs counted cash → shortage/overage */}
+          {/* Verification: counted collection (cash + checks) vs declared → shortage/overage */}
           {draftRemit > 0 && (
             <div
               style={{
@@ -719,12 +739,12 @@ export default function CashierCollectionReportPage() {
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Total remittance (declared)</span>
-                <span style={{ fontFamily: 'monospace' }}>{peso(draftRemit)}</span>
+                <span>Cash counted</span>
+                <span style={{ fontFamily: 'monospace' }}>{peso(draftCash)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#b42318' }}>
-                <span>Less: checks received</span>
-                <span style={{ fontFamily: 'monospace' }}>({peso(draftChecksTotal)})</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Add: checks received</span>
+                <span style={{ fontFamily: 'monospace' }}>{peso(draftChecksTotal)}</span>
               </div>
               <div
                 style={{
@@ -736,12 +756,12 @@ export default function CashierCollectionReportPage() {
                   marginTop: 4,
                 }}
               >
-                <span>Expected cash</span>
-                <span style={{ fontFamily: 'monospace' }}>{peso(draftExpectedCash)}</span>
+                <span>Total collection counted</span>
+                <span style={{ fontFamily: 'monospace' }}>{peso(draftCounted)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Cash counted</span>
-                <span style={{ fontFamily: 'monospace' }}>{peso(draftCash)}</span>
+                <span>Total remittance (declared)</span>
+                <span style={{ fontFamily: 'monospace' }}>{peso(draftRemit)}</span>
               </div>
               <div
                 style={{
@@ -754,7 +774,7 @@ export default function CashierCollectionReportPage() {
                   color: varianceLabel(draftVariance).color,
                 }}
               >
-                <span>Cash short / (over)</span>
+                <span>Short / (over)</span>
                 <span>{varianceLabel(draftVariance).text}</span>
               </div>
             </div>
@@ -791,7 +811,11 @@ export default function CashierCollectionReportPage() {
             All teller cash counts combined — the cashier&apos;s final count before finalizing.
           </p>
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-            <CashCountSheet denominations={denoms} value={report.combinedCashCount} />
+            <CashCountSheet
+              denominations={denoms}
+              value={report.combinedCashCount}
+              checksTotal={report.combinedChecksTotal}
+            />
             <div
               style={{
                 border: '1px solid #e4e7ec',
@@ -803,14 +827,14 @@ export default function CashierCollectionReportPage() {
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Total collections (declared)</span>
-                <strong style={{ fontFamily: 'monospace' }}>{peso(report.totalAmount)}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#b42318' }}>
-                <span>Less: checks received</span>
+                <span>Total cash counted</span>
                 <span style={{ fontFamily: 'monospace' }}>
-                  ({peso(report.combinedChecksTotal)})
+                  {peso(report.combinedCashCountTotal)}
                 </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Add: checks received</span>
+                <span style={{ fontFamily: 'monospace' }}>{peso(report.combinedChecksTotal)}</span>
               </div>
               <div
                 style={{
@@ -822,14 +846,12 @@ export default function CashierCollectionReportPage() {
                   marginTop: 5,
                 }}
               >
-                <span>Expected cash</span>
-                <span style={{ fontFamily: 'monospace' }}>{peso(report.overallExpectedCash)}</span>
+                <span>Total collection counted</span>
+                <span style={{ fontFamily: 'monospace' }}>{peso(report.overallCountedTotal)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Total cash counted</span>
-                <span style={{ fontFamily: 'monospace' }}>
-                  {peso(report.combinedCashCountTotal)}
-                </span>
+                <span>Total collections (declared)</span>
+                <strong style={{ fontFamily: 'monospace' }}>{peso(report.totalAmount)}</strong>
               </div>
               <div
                 style={{
@@ -840,11 +862,11 @@ export default function CashierCollectionReportPage() {
                   borderTop: '2px solid var(--mswd-navy,#0b2e63)',
                   paddingTop: 6,
                   marginTop: 6,
-                  color: varianceLabel(report.overallCashVariance).color,
+                  color: varianceLabel(report.overallVariance).color,
                 }}
               >
-                <span>Cash short / (over)</span>
-                <span>{varianceLabel(report.overallCashVariance).text}</span>
+                <span>Short / (over)</span>
+                <span>{varianceLabel(report.overallVariance).text}</span>
               </div>
             </div>
           </div>
