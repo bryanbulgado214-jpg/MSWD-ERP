@@ -17,7 +17,10 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
 
 import { ChartOfAccountService } from './chart-of-account.service';
-import type {
+// NOT `import type`: these are used as @Body() param types, so NestJS needs the
+// runtime class for validation/transform (a type-only import erases it, and the
+// whitelist pipe then strips every property — e.g. csv becomes undefined).
+import {
   CreateChartOfAccountDto,
   ImportCoaCsvDto,
   UpdateChartOfAccountDto,
