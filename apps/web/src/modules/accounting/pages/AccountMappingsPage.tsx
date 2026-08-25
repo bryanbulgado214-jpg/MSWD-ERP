@@ -24,6 +24,7 @@ const STANDARD_MAPPINGS = [
   { key: 'ap.due_to_pagibig', label: 'Due to Pag-IBIG' },
   { key: 'ap.due_to_philhealth', label: 'Due to PhilHealth' },
   { key: 'cash.in_bank', label: 'Cash in Bank' },
+  { key: 'cash.collecting_officer', label: 'Cash - Collecting Officer' },
   { key: 'expense.office_supplies', label: 'Office Supplies Expenses' },
   { key: 'expense.other_supplies', label: 'Other Supplies & Materials Expenses' },
   { key: 'inventory.office_supplies', label: 'Office Supplies Inventory' },

@@ -1,0 +1,11 @@
+accountCode,name,accountType,normalBalance
+1-01-01-010,Cash - Collecting Officer,asset,debit
+1-01-02-020,Cash in Bank - Local Currency Current Account,asset,debit
+1-03-01-010,Accounts Receivable,asset,debit
+2-01-01-010,Accounts Payable,liability,credit
+2-04-01-040,Guaranty/Security Deposits Payable,liability,credit
+3-01-01-010,Government Equity,equity,credit
+3-01-01-030,Contributed Capital,equity,credit
+4-02-01-010,Water Sales Revenue,revenue,credit
+4-06-03-990,Miscellaneous Income,revenue,credit
+5-02-01-010,Salaries and Wages,expense,debit
