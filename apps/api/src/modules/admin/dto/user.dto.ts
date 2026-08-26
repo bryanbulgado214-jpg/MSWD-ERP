@@ -37,6 +37,12 @@ export class CreateUserDto {
 export class UpdateUserDto {
   @IsOptional()
   @IsString()
+  @IsNotEmpty()
+  @MaxLength(50)
+  username?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(120)
   fullName?: string;
 

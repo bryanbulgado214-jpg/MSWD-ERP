@@ -24,7 +24,7 @@ export function UserListPage() {
   const [selectedRoleId, setSelectedRoleId] = useState('');
   const [accessModal, setAccessModal] = useState<{ userId: string; username: string } | null>(null);
   const [editUser, setEditUser] = useState<UserSummary | null>(null);
-  const [editForm, setEditForm] = useState({ fullName: '', password: '' });
+  const [editForm, setEditForm] = useState({ username: '', fullName: '', password: '' });
   const [savingEdit, setSavingEdit] = useState(false);
   const [flash, setFlash] = useState('');
 
@@ -62,7 +62,7 @@ export function UserListPage() {
 
   function startEdit(u: UserSummary) {
     setEditUser(u);
-    setEditForm({ fullName: u.fullName ?? '', password: '' });
+    setEditForm({ username: u.username, fullName: u.fullName ?? '', password: '' });
     setError('');
   }
 
@@ -72,6 +72,7 @@ export function UserListPage() {
     setSavingEdit(true);
     try {
       await updateUser(editUser.id, {
+        username: editForm.username.trim(),
         fullName: editForm.fullName,
         ...(editForm.password ? { password: editForm.password } : {}),
       });
@@ -264,8 +265,20 @@ export function UserListPage() {
               Edit <span style={{ color: '#175cd3' }}>{editUser.username}</span>
             </h2>
             <p style={{ margin: '0 0 12px', color: '#667085', fontSize: 12 }}>
-              The username stays the same for login; the full name is what shows in the app.
+              The <strong>username</strong> is what this person types to log in; the{' '}
+              <strong>full name</strong> is what shows in the app. Changing the username means the
+              old one no longer works for login.
             </p>
+            <label className="admin-field">
+              <span className="admin-field__label">Username (login)</span>
+              <input
+                className="admin-input"
+                value={editForm.username}
+                onChange={(e) => setEditForm((f) => ({ ...f, username: e.target.value }))}
+                required
+                autoFocus
+              />
+            </label>
             <label className="admin-field">
               <span className="admin-field__label">Full name</span>
               <input
@@ -273,7 +286,6 @@ export function UserListPage() {
                 value={editForm.fullName}
                 onChange={(e) => setEditForm((f) => ({ ...f, fullName: e.target.value }))}
                 placeholder="e.g. Maria Santos"
-                autoFocus
               />
             </label>
             <label className="admin-field">

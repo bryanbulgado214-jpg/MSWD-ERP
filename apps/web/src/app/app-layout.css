@@ -35,17 +35,30 @@
   display: flex;
   align-items: center;
   gap: 24px;
+  /* Allow this side to shrink (and its links to scroll) instead of pushing the
+     user menu — and the whole page — off the right edge on narrow/full menus. */
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .app-nav__brand {
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.02em;
+  flex: 0 0 auto;
 }
 
 .app-nav__links {
   display: flex;
   gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.app-nav__links::-webkit-scrollbar {
+  display: none;
 }
 
 .app-nav__link {
@@ -72,6 +85,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  flex: 0 0 auto;
 }
 
 .app-nav__username {

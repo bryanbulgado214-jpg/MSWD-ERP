@@ -129,7 +129,10 @@
 
 /* ── Table ── */
 .admin-table-wrap {
-  overflow-x: auto;
+  /* Scroll pane: both scrollbars stay attached to the table box (and on-screen),
+     so you never have to scroll to the bottom of a long list to slide sideways. */
+  overflow: auto;
+  max-height: calc(100vh - 200px);
   border: 1.5px solid #eaecf0;
   border-radius: 10px;
 }
@@ -150,6 +153,10 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   border-bottom: 1.5px solid #eaecf0;
+  /* Keep the column headings visible while scrolling the rows. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .admin-table td {

@@ -115,10 +115,24 @@ export class UserService {
     organizationId: string,
     actorId: string,
     userId: string,
-    data: { email?: string; password?: string; isActive?: boolean; fullName?: string },
+    data: {
+      username?: string;
+      email?: string;
+      password?: string;
+      isActive?: boolean;
+      fullName?: string;
+    },
   ) {
     const user = await this.prisma.user.findFirst({ where: { id: userId, organizationId } });
     if (!user) throw new NotFoundException('User not found.');
+
+    const newUsername = data.username?.trim();
+    if (newUsername && newUsername !== user.username) {
+      const usernameTaken = await this.prisma.user.findFirst({
+        where: { organizationId, username: newUsername, id: { not: userId } },
+      });
+      if (usernameTaken) throw new ConflictException('Username already taken.');
+    }
 
     if (data.email && data.email !== user.email) {
       const emailTaken = await this.prisma.user.findFirst({
@@ -129,6 +143,7 @@ export class UserService {
 
     return runAudited(this.prisma, actorId, async (tx) => {
       const updateData: Record<string, unknown> = {};
+      if (newUsername) updateData.username = newUsername;
       if (data.email) updateData.email = data.email;
       if (data.fullName !== undefined) updateData.fullName = data.fullName.trim() || null;
       if (data.isActive !== undefined) updateData.isActive = data.isActive;

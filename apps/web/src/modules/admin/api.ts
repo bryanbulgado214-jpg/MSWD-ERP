@@ -98,7 +98,13 @@ export async function createUser(data: {
 
 export async function updateUser(
   id: string,
-  data: { fullName?: string; email?: string; password?: string; isActive?: boolean },
+  data: {
+    username?: string;
+    fullName?: string;
+    email?: string;
+    password?: string;
+    isActive?: boolean;
+  },
 ): Promise<unknown> {
   const res = await authFetchMutate(`/admin/users/${id}`, 'PATCH', data);
   return res.json();
