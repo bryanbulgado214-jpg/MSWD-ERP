@@ -213,6 +213,7 @@ export async function getBankAccount(id: string): Promise<BankAccount> {
 export async function createBankAccount(data: {
   bankId: string;
   fundSourceId?: string;
+  chartOfAccountId?: string;
   accountNumber: string;
   accountName: string;
   accountType: string;
@@ -228,6 +229,7 @@ export async function updateBankAccount(
     expectedVersion: number;
     accountName?: string;
     fundSourceId?: string;
+    chartOfAccountId?: string;
     isDefault?: boolean;
     status?: string;
   },

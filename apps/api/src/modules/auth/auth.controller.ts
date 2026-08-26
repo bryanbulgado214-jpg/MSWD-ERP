@@ -5,6 +5,7 @@ import { getGrantedPermissionCodes } from '../../common/guards/get-granted-permi
 import { PrismaService } from '../../database/prisma.service';
 
 import { AuthService } from './auth.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import type { AuthenticatedUser } from './jwt.strategy';
@@ -22,9 +23,20 @@ export class AuthController {
     return this.authService.login(dto.username, dto.password);
   }
 
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async changePassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ChangePasswordDto,
+  ): Promise<{ success: true }> {
+    return this.authService.changePassword(user.userId, dto.currentPassword, dto.newPassword);
+  }
+
   @Get('me')
   @UseGuards(JwtAuthGuard)
   async me(@CurrentUser() user: AuthenticatedUser): Promise<{
+    user: { username: string; fullName: string | null };
     permissions: string[];
     organization: {
       id: string;
@@ -47,6 +59,7 @@ export class AuthController {
       }),
     ]);
     return {
+      user: { username: user.username, fullName: user.fullName },
       permissions: Array.from(codes).sort(),
       organization: org
         ? {

@@ -15,6 +15,11 @@ export class CreateUserDto {
   @MaxLength(50)
   username!: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  fullName?: string;
+
   @IsEmail()
   @MaxLength(255)
   email!: string;
@@ -30,6 +35,11 @@ export class CreateUserDto {
 }
 
 export class UpdateUserDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  fullName?: string;
+
   @IsOptional()
   @IsEmail()
   @MaxLength(255)

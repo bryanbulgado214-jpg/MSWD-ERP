@@ -7,7 +7,9 @@ import {
   createBankAccount,
   getBankAccounts,
   getBanks,
+  getPostableAccounts,
   updateBankAccount,
+  type PostableAccount,
 } from '../api';
 import type { Bank, BankAccount } from '../types';
 
@@ -28,6 +30,7 @@ export default function BanksPage() {
 
   const [banks, setBanks] = useState<LoadState<Bank[]>>({ status: 'loading' });
   const [accounts, setAccounts] = useState<LoadState<BankAccount[]>>({ status: 'loading' });
+  const [glAccounts, setGlAccounts] = useState<PostableAccount[]>([]);
   const [showBankForm, setShowBankForm] = useState(false);
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [formError, setFormError] = useState('');
@@ -35,6 +38,7 @@ export default function BanksPage() {
   // ── Edit a bank account ──
   const [editAcct, setEditAcct] = useState<BankAccount | null>(null);
   const [editName, setEditName] = useState('');
+  const [editCoaId, setEditCoaId] = useState('');
   const [editStatus, setEditStatus] = useState<'active' | 'inactive' | 'closed'>('active');
   const [editDefault, setEditDefault] = useState(false);
   const [editBusy, setEditBusy] = useState(false);
@@ -67,6 +71,9 @@ export default function BanksPage() {
   useEffect(() => {
     loadBanks();
     loadAccounts();
+    getPostableAccounts()
+      .then(setGlAccounts)
+      .catch(() => setGlAccounts([]));
   }, [loadBanks, loadAccounts]);
 
   async function handleCreateBank(e: React.FormEvent<HTMLFormElement>) {
@@ -91,11 +98,13 @@ export default function BanksPage() {
     setFormError('');
     const fd = new FormData(e.currentTarget);
     try {
+      const coaId = fd.get('chartOfAccountId') as string;
       await createBankAccount({
         bankId: fd.get('bankId') as string,
         accountNumber: fd.get('accountNumber') as string,
         accountName: fd.get('accountName') as string,
         accountType: fd.get('accountType') as string,
+        ...(coaId ? { chartOfAccountId: coaId } : {}),
         isDefault: fd.get('isDefault') === 'true',
       });
       setShowAccountForm(false);
@@ -108,6 +117,7 @@ export default function BanksPage() {
   function startEditAccount(acct: BankAccount) {
     setEditAcct(acct);
     setEditName(acct.accountName);
+    setEditCoaId(acct.chartOfAccount?.id ?? '');
     setEditStatus(acct.status);
     setEditDefault(acct.isDefault);
     setEditError('');
@@ -126,6 +136,7 @@ export default function BanksPage() {
       await updateBankAccount(editAcct.id, {
         expectedVersion: editAcct.version,
         accountName: name,
+        chartOfAccountId: editCoaId,
         status: editStatus,
         isDefault: editDefault,
       });
@@ -291,6 +302,21 @@ export default function BanksPage() {
             </div>
           </div>
           <div className="acct-field">
+            <label>GL account (Chart of Accounts)</label>
+            <select name="chartOfAccountId" required defaultValue="">
+              <option value="" disabled>
+                {glAccounts.length
+                  ? 'Select the cash-in-bank GL account…'
+                  : 'Upload the Chart of Accounts first'}
+              </option>
+              {glAccounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.accountCode} — {a.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="acct-field">
             <label>Set as default account?</label>
             <select name="isDefault">
               <option value="false">No</option>
@@ -415,6 +441,17 @@ export default function BanksPage() {
                 onChange={(e) => setEditName(e.target.value)}
                 maxLength={255}
               />
+            </div>
+            <div className="acct-field" style={{ marginBottom: 12 }}>
+              <label>GL account (Chart of Accounts)</label>
+              <select value={editCoaId} onChange={(e) => setEditCoaId(e.target.value)}>
+                <option value="">— None —</option>
+                {glAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.accountCode} — {a.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="acct-form-row">
               <div className="acct-field">

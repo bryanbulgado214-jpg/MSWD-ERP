@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
@@ -120,6 +125,7 @@ export class BankService {
     data: {
       bankId: string;
       fundSourceId?: string;
+      chartOfAccountId?: string;
       accountNumber: string;
       accountName: string;
       accountType: any;
@@ -130,6 +136,10 @@ export class BankService {
       where: { id: data.bankId, organizationId },
     });
     if (!bank) throw new NotFoundException('Bank not found.');
+
+    if (data.chartOfAccountId) {
+      await this.assertPostableCoa(organizationId, data.chartOfAccountId);
+    }
 
     const existing = await this.prisma.bankAccount.findFirst({
       where: { organizationId, accountNumber: data.accountNumber },
@@ -149,6 +159,7 @@ export class BankService {
           organizationId,
           bankId: data.bankId,
           ...(data.fundSourceId ? { fundSourceId: data.fundSourceId } : {}),
+          ...(data.chartOfAccountId ? { chartOfAccountId: data.chartOfAccountId } : {}),
           accountNumber: data.accountNumber,
           accountName: data.accountName,
           accountType: data.accountType,
@@ -161,6 +172,20 @@ export class BankService {
     });
   }
 
+  /** Validates that a Chart-of-Accounts id exists in this org and is a postable
+   * (non-header) account, so a bank account can never point at a heading row. */
+  private async assertPostableCoa(organizationId: string, chartOfAccountId: string) {
+    const coa = await this.prisma.chartOfAccount.findFirst({
+      where: { id: chartOfAccountId, organizationId, isHeader: false, isActive: true },
+      select: { id: true },
+    });
+    if (!coa) {
+      throw new BadRequestException(
+        'Select a valid, postable GL account from the Chart of Accounts.',
+      );
+    }
+  }
+
   async updateBankAccount(
     organizationId: string,
     id: string,
@@ -169,6 +194,7 @@ export class BankService {
       expectedVersion: number;
       accountName?: string;
       fundSourceId?: string;
+      chartOfAccountId?: string;
       isDefault?: boolean;
       status?: any;
     },
@@ -179,6 +205,9 @@ export class BankService {
     if (!account) throw new NotFoundException('Bank account not found.');
     if (account.version !== data.expectedVersion) {
       throw new ConflictException('Bank account was modified by another user. Please refresh.');
+    }
+    if (data.chartOfAccountId) {
+      await this.assertPostableCoa(organizationId, data.chartOfAccountId);
     }
 
     return runAudited(this.prisma, userId, async (tx) => {
@@ -194,6 +223,9 @@ export class BankService {
         data: {
           ...(data.accountName ? { accountName: data.accountName } : {}),
           ...(data.fundSourceId !== undefined ? { fundSourceId: data.fundSourceId || null } : {}),
+          ...(data.chartOfAccountId !== undefined
+            ? { chartOfAccountId: data.chartOfAccountId || null }
+            : {}),
           ...(data.isDefault !== undefined ? { isDefault: data.isDefault } : {}),
           ...(data.status ? { status: data.status } : {}),
           updatedBy: userId,

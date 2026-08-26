@@ -5,6 +5,7 @@ const TOKEN_KEY = 'mswd_access_token';
 
 interface AuthUser {
   username: string;
+  fullName: string | null;
   sub: string;
   organizationId: string;
 }
@@ -25,6 +26,7 @@ interface AuthContextValue {
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   hasPermission: (code: string) => boolean;
   hasAnyPermission: (...codes: string[]) => boolean;
 }
@@ -36,6 +38,7 @@ const AuthContext = createContext<AuthContextValue>({
   loading: true,
   login: async () => {},
   logout: () => {},
+  changePassword: async () => {},
   hasPermission: () => false,
   hasAnyPermission: () => false,
 });
@@ -51,27 +54,37 @@ function decodePayload(token: string): AuthUser | null {
     const json = atob(base64.replace(/-/g, '+').replace(/_/g, '/'));
     const payload = JSON.parse(json);
     if (payload.exp && payload.exp * 1000 < Date.now()) return null;
-    return { username: payload.username, sub: payload.sub, organizationId: payload.organizationId };
+    return {
+      username: payload.username,
+      fullName: null,
+      sub: payload.sub,
+      organizationId: payload.organizationId,
+    };
   } catch {
     return null;
   }
 }
 
-async function fetchMe(
-  token: string,
-): Promise<{ permissions: Set<string>; organization: OrganizationProfile | null }> {
+type MeResult = {
+  user: { username: string; fullName: string | null } | null;
+  permissions: Set<string>;
+  organization: OrganizationProfile | null;
+};
+
+async function fetchMe(token: string): Promise<MeResult> {
   try {
     const response = await fetch(`${API_BASE_URL}/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!response.ok) return { permissions: new Set(), organization: null };
+    if (!response.ok) return { user: null, permissions: new Set(), organization: null };
     const body = await response.json();
     return {
+      user: (body.user as MeResult['user']) ?? null,
       permissions: new Set(body.permissions as string[]),
       organization: (body.organization as OrganizationProfile | null) ?? null,
     };
   } catch {
-    return { permissions: new Set(), organization: null };
+    return { user: null, permissions: new Set(), organization: null };
   }
 }
 
@@ -88,6 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (decoded) {
         setUser(decoded);
         fetchMe(token).then((me) => {
+          if (me.user) setUser({ ...decoded, fullName: me.user.fullName });
           setPermissions(me.permissions);
           setOrganization(me.organization);
           setLoading(false);
@@ -113,8 +127,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const decoded = decodePayload(accessToken);
     setUser(decoded);
     const me = await fetchMe(accessToken);
+    if (decoded && me.user) setUser({ ...decoded, fullName: me.user.fullName });
     setPermissions(me.permissions);
     setOrganization(me.organization);
+  }, []);
+
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      const msg = Array.isArray(body?.message) ? body.message.join(' ') : body?.message;
+      throw new Error(msg ?? 'Failed to change password.');
+    }
   }, []);
 
   const logout = useCallback(() => {
@@ -139,6 +168,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         login,
         logout,
+        changePassword,
         hasPermission,
         hasAnyPermission,
       }}

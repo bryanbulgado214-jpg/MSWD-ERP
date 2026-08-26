@@ -3,8 +3,9 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
-import { PrismaService } from '../../database/prisma.service';
 import type { Env } from '../../config/env.validation';
+import { PrismaService } from '../../database/prisma.service';
+
 import type { JwtPayload } from './auth.service';
 
 /** What ends up on `request.user` after a token passes verification. */
@@ -12,6 +13,7 @@ export interface AuthenticatedUser {
   userId: string;
   organizationId: string;
   username: string;
+  fullName: string | null;
 }
 
 @Injectable()
@@ -36,6 +38,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user || !user.isActive) {
       throw new UnauthorizedException('User no longer exists or is inactive.');
     }
-    return { userId: user.id, organizationId: user.organizationId, username: user.username };
+    return {
+      userId: user.id,
+      organizationId: user.organizationId,
+      username: user.username,
+      fullName: user.fullName,
+    };
   }
 }

@@ -1,4 +1,12 @@
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class CreateBankDto {
   @IsString()
@@ -65,6 +73,11 @@ export class CreateBankAccountDto {
   @IsEnum(['checking', 'savings', 'trust'])
   accountType!: 'checking' | 'savings' | 'trust';
 
+  /** GL (cash-in-bank) account from the Chart of Accounts this bank account maps to. */
+  @IsOptional()
+  @IsString()
+  chartOfAccountId?: string;
+
   @IsOptional()
   @IsBoolean()
   isDefault?: boolean;
@@ -82,6 +95,10 @@ export class UpdateBankAccountDto {
   @IsOptional()
   @IsString()
   fundSourceId?: string;
+
+  @IsOptional()
+  @IsString()
+  chartOfAccountId?: string;
 
   @IsOptional()
   @IsBoolean()

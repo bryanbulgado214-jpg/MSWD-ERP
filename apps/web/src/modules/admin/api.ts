@@ -40,6 +40,7 @@ async function authFetchMutate(
 export interface UserSummary {
   id: string;
   username: string;
+  fullName: string | null;
   email: string;
   isActive: boolean;
   lastLoginAt: string | null;
@@ -87,6 +88,7 @@ export async function getUser(id: string): Promise<UserSummary> {
 
 export async function createUser(data: {
   username: string;
+  fullName?: string;
   email: string;
   password: string;
 }): Promise<unknown> {
@@ -96,7 +98,7 @@ export async function createUser(data: {
 
 export async function updateUser(
   id: string,
-  data: { email?: string; password?: string; isActive?: boolean },
+  data: { fullName?: string; email?: string; password?: string; isActive?: boolean },
 ): Promise<unknown> {
   const res = await authFetchMutate(`/admin/users/${id}`, 'PATCH', data);
   return res.json();

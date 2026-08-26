@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from './auth';
+import { ChangePasswordModal } from './ChangePasswordModal';
 import { hasModuleAccess, isAccountantHome, isCashierHome } from './module-access';
 import { NotificationBell } from './NotificationBell';
 import './app-layout.css';
@@ -39,6 +40,8 @@ export function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchQ, setSearchQ] = useState('');
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [showChangePw, setShowChangePw] = useState(false);
   // Publish the left edge of the top-nav tab row as --subnav-left so the vertical
   // sub-nav rails (and page content) line up under the first header tab, on every
   // page, regardless of viewport width or brand width.
@@ -168,7 +171,46 @@ export function AppLayout() {
               </button>
             </form>
             <NotificationBell />
-            <span className="app-nav__username">{user.username}</span>
+            <div className="app-nav__usermenu">
+              <button
+                type="button"
+                className="app-nav__userbtn"
+                aria-haspopup="menu"
+                aria-expanded={userMenuOpen}
+                title="Account"
+                onClick={() => setUserMenuOpen((v) => !v)}
+              >
+                {user.fullName || user.username}
+                <span className="app-nav__caret" aria-hidden="true">
+                  ▼
+                </span>
+              </button>
+              {userMenuOpen && (
+                <>
+                  <div
+                    style={{ position: 'fixed', inset: 0, zIndex: 1500 }}
+                    onClick={() => setUserMenuOpen(false)}
+                  />
+                  <div className="app-nav__menu" role="menu">
+                    <div className="app-nav__menu-head">
+                      <div className="app-nav__menu-name">{user.fullName || user.username}</div>
+                      <div className="app-nav__menu-sub">@{user.username}</div>
+                    </div>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="app-nav__menu-item"
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        setShowChangePw(true);
+                      }}
+                    >
+                      Change password
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
             {import.meta.env.DEV && (
               <button type="button" className="app-nav__btn" onClick={handleSwitchUser}>
                 Switch User
@@ -187,6 +229,7 @@ export function AppLayout() {
       <main className="app-main">
         <Outlet />
       </main>
+      {showChangePw && <ChangePasswordModal onClose={() => setShowChangePw(false)} />}
     </div>
   );
 }

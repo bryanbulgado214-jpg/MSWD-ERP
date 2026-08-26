@@ -109,6 +109,82 @@
   border-color: rgba(240, 30, 18, 0.6);
 }
 
+/* Clickable user pill + dropdown menu (change password, etc.) */
+.app-nav__usermenu {
+  position: relative;
+  display: inline-flex;
+}
+
+.app-nav__userbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 4px 12px;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.app-nav__userbtn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.app-nav__caret {
+  font-size: 9px;
+  opacity: 0.75;
+}
+
+.app-nav__menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 210px;
+  background: #fff;
+  border: 1px solid #eaecf0;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(16, 24, 40, 0.18);
+  z-index: 1600;
+  overflow: hidden;
+}
+
+.app-nav__menu-head {
+  padding: 10px 14px;
+  border-bottom: 1px solid #f2f4f7;
+}
+
+.app-nav__menu-name {
+  font-weight: 700;
+  font-size: 13px;
+  color: #10233f;
+}
+
+.app-nav__menu-sub {
+  font-size: 12px;
+  color: #98a2b3;
+}
+
+.app-nav__menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  font-size: 13px;
+  color: #344054;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.app-nav__menu-item:hover {
+  background: #f9fafb;
+}
+
 .app-main {
   min-height: calc(100vh - 52px);
 }

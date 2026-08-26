@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 
@@ -49,5 +49,30 @@ export class AuthService {
     };
 
     return { accessToken: await this.jwtService.signAsync(payload) };
+  }
+
+  /** Self-service password change for the logged-in user. Requires the current
+   * password (so a walk-up on an unlocked session can't silently reset it). */
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ success: true }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('User no longer exists.');
+    }
+
+    const matches = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!matches) {
+      throw new BadRequestException('Your current password is incorrect.');
+    }
+    if (await bcrypt.compare(newPassword, user.passwordHash)) {
+      throw new BadRequestException('The new password must be different from the current one.');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+    return { success: true };
   }
 }

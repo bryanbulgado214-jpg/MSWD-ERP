@@ -19,6 +19,7 @@ export class UserService {
       select: {
         id: true,
         username: true,
+        fullName: true,
         email: true,
         isActive: true,
         lastLoginAt: true,
@@ -45,6 +46,7 @@ export class UserService {
       select: {
         id: true,
         username: true,
+        fullName: true,
         email: true,
         isActive: true,
         lastLoginAt: true,
@@ -69,7 +71,13 @@ export class UserService {
   async create(
     organizationId: string,
     actorId: string,
-    data: { username: string; email: string; password: string; isActive?: boolean },
+    data: {
+      username: string;
+      email: string;
+      password: string;
+      isActive?: boolean;
+      fullName?: string;
+    },
   ) {
     const existing = await this.prisma.user.findFirst({
       where: { organizationId, OR: [{ username: data.username }, { email: data.email }] },
@@ -86,11 +94,19 @@ export class UserService {
         data: {
           organizationId,
           username: data.username,
+          fullName: data.fullName?.trim() || null,
           email: data.email,
           passwordHash,
           isActive: data.isActive ?? true,
         },
-        select: { id: true, username: true, email: true, isActive: true, createdAt: true },
+        select: {
+          id: true,
+          username: true,
+          fullName: true,
+          email: true,
+          isActive: true,
+          createdAt: true,
+        },
       });
     });
   }
@@ -99,7 +115,7 @@ export class UserService {
     organizationId: string,
     actorId: string,
     userId: string,
-    data: { email?: string; password?: string; isActive?: boolean },
+    data: { email?: string; password?: string; isActive?: boolean; fullName?: string },
   ) {
     const user = await this.prisma.user.findFirst({ where: { id: userId, organizationId } });
     if (!user) throw new NotFoundException('User not found.');
@@ -114,13 +130,21 @@ export class UserService {
     return runAudited(this.prisma, actorId, async (tx) => {
       const updateData: Record<string, unknown> = {};
       if (data.email) updateData.email = data.email;
+      if (data.fullName !== undefined) updateData.fullName = data.fullName.trim() || null;
       if (data.isActive !== undefined) updateData.isActive = data.isActive;
       if (data.password) updateData.passwordHash = await bcrypt.hash(data.password, 12);
 
       return tx.user.update({
         where: { id: userId },
         data: updateData,
-        select: { id: true, username: true, email: true, isActive: true, updatedAt: true },
+        select: {
+          id: true,
+          username: true,
+          fullName: true,
+          email: true,
+          isActive: true,
+          updatedAt: true,
+        },
       });
     });
   }
