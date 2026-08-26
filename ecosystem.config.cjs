@@ -1,10 +1,14 @@
 /**
  * PM2 process list for the LIVE deployment (Windows server).
  *
- *   pm2 start ecosystem.config.js      # start both
+ *   pm2 start ecosystem.config.cjs     # start both
  *   pm2 save                           # remember them across reboots
  *   pm2-startup install                # (once) auto-start PM2 on boot
  *   pm2 logs / pm2 status / pm2 restart all
+ *
+ * NOTE: this file is `.cjs` (CommonJS) on purpose — the repo's root
+ * package.json sets "type": "module", so a plain `.js` here would be parsed
+ * as an ES module and `module.exports` would throw.
  *
  * Two processes:
  *   aquabooks-api  — the NestJS API on :3000 (reads apps/api/.env)

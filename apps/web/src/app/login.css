@@ -87,6 +87,39 @@
   box-shadow: 0 0 0 3px rgba(11, 87, 255, 0.12);
 }
 
+/* Password field with a show/hide eye toggle */
+.login-input-wrap {
+  position: relative;
+}
+
+.login-input-wrap input {
+  /* leave room for the eye button so typed text never sits under it */
+  padding-right: 44px;
+}
+
+.login-eye {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--mswd-text-light);
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.login-eye:hover {
+  color: var(--mswd-navy);
+  background: var(--mswd-bg);
+}
+
 .login-button {
   width: 100%;
   padding: 12px;

@@ -98,7 +98,7 @@ empties the chart of accounts so the accountant can upload their own.
 cd C:\AquaBooks
 npm run build --workspace=@mswd-erp/api
 npm run build --workspace=@mswd-erp/web
-pm2 start ecosystem.config.js
+pm2 start ecosystem.config.cjs
 pm2 save
 ```
 

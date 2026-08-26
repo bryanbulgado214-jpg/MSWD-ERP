@@ -20,6 +20,20 @@ const MODULE_NAV = [
   { to: '/admin', label: 'Admin', module: 'admin' as const },
 ];
 
+// Modules that exist in the codebase but are not part of the initial LIVE rollout
+// (Cashiering + Accounting + Reports only). They are hidden in production builds
+// until we configure them; the dev/demo build still shows every module. Remove a
+// module from this set to bring it into the live navigation.
+const LIVE_HIDDEN_MODULES = new Set<string>([
+  'budgeting',
+  'procurement',
+  'inventory',
+  'hr',
+  'workorder',
+  'complaint',
+  'asset',
+]);
+
 export function AppLayout() {
   const { user, organization, loading, logout, permissions } = useAuth();
   const navigate = useNavigate();
@@ -54,7 +68,9 @@ export function AppLayout() {
   const cashierHome = isCashierHome(permissions);
   const visibleLinks = MODULE_NAV.filter(
     (mod) =>
-      hasModuleAccess(permissions, mod.module) && !(cashierHome && mod.module === 'accounting'),
+      hasModuleAccess(permissions, mod.module) &&
+      !(cashierHome && mod.module === 'accounting') &&
+      !(import.meta.env.PROD && LIVE_HIDDEN_MODULES.has(mod.module)),
   ).map((mod) => (cashierHome && mod.module === 'billing' ? { ...mod, label: 'Cashiering' } : mod));
   // The accountant's and cashier's homes are their own dashboards — hide the
   // generic Home tab for them.
@@ -82,9 +98,11 @@ export function AppLayout() {
   return (
     <div className="app-layout">
       <header className="app-header">
-        <div className="app-demo-banner" role="note">
-          DEMONSTRATION DATA — NOT ACTUAL WATER DISTRICT RECORDS
-        </div>
+        {import.meta.env.DEV && (
+          <div className="app-demo-banner" role="note">
+            DEMONSTRATION DATA — NOT ACTUAL WATER DISTRICT RECORDS
+          </div>
+        )}
         <nav className="app-nav">
           <div className="app-nav__left">
             <Link
@@ -151,9 +169,11 @@ export function AppLayout() {
             </form>
             <NotificationBell />
             <span className="app-nav__username">{user.username}</span>
-            <button type="button" className="app-nav__btn" onClick={handleSwitchUser}>
-              Switch User
-            </button>
+            {import.meta.env.DEV && (
+              <button type="button" className="app-nav__btn" onClick={handleSwitchUser}>
+                Switch User
+              </button>
+            )}
             <button
               type="button"
               className="app-nav__btn app-nav__btn--logout"

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 
 import {
   CashierCollectionApiError,
@@ -192,7 +192,6 @@ function CashCountSheet({
 
 export default function CashierCollectionReportPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const [report, setReport] = useState<CashierReport | null>(null);
   const [opts, setOpts] = useState<FormOptions | null>(null);
   const [error, setError] = useState('');
