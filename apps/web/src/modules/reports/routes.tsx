@@ -14,6 +14,7 @@ import { BankReconciliationReportPage } from './pages/BankReconciliationReportPa
 import { BudgetReportPage } from './pages/BudgetReportPage';
 import { CashBankActivityPage } from './pages/CashBankActivityPage';
 import { CheckRegisterReportPage } from './pages/CheckRegisterReportPage';
+import { CollectionLocationsPage } from './pages/CollectionLocationsPage';
 import { DepreciationScheduleReportPage } from './pages/DepreciationScheduleReportPage';
 import { FixedAssetLapsingReportPage } from './pages/FixedAssetLapsingReportPage';
 import { FixedAssetRegisterPage } from './pages/FixedAssetRegisterPage';
@@ -26,6 +27,7 @@ import { ReportsLanding } from './pages/ReportsLanding';
 import { ReportsLayout } from './pages/ReportsLayout';
 import { SubsidiaryLedgersIndexPage } from './pages/SubsidiaryLedgersIndexPage';
 import { SupplierReportPage } from './pages/SupplierReportPage';
+import { TellersPage } from './pages/TellersPage';
 
 export const reportsRoutes = [
   {
@@ -44,6 +46,10 @@ export const reportsRoutes = [
       { path: 'subsidiary-ledgers/:accountId', element: <SubsidiaryLedgerPage /> },
       { path: 'journal-entry-register', element: <JournalEntryRegisterPage /> },
       { path: 'payees', element: <PayeesPage /> },
+
+      // ── Collections (cashier-maintained lists) ─────────────────────────
+      { path: 'collection-tellers', element: <TellersPage /> },
+      { path: 'collection-locations', element: <CollectionLocationsPage /> },
 
       // ── Receivables ────────────────────────────────────────────────────
       { path: 'ar-aging', element: <ArAgingReportPage /> },

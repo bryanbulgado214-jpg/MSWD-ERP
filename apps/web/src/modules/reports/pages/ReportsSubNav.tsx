@@ -83,6 +83,20 @@ export const REPORT_GROUPS: ReportGroup[] = [
         icon: '🧾',
         blurb: "Cashier's daily collection report",
       },
+      {
+        to: '/reports/collection-tellers',
+        label: 'Tellers',
+        perm: 'collections.setup.manage',
+        icon: '🧑‍💼',
+        blurb: 'Teller / collector master list',
+      },
+      {
+        to: '/reports/collection-locations',
+        label: 'Collection Location',
+        perm: 'collections.setup.manage',
+        icon: '📍',
+        blurb: 'Collection center master list',
+      },
     ],
   },
   {

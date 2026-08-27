@@ -130,6 +130,9 @@ const GRANTS: Record<string, string[]> = {
     'collections.accounting.consolidate',
     'collections.cashier.report',
     'collections.remittance.receive',
+    // The cashier maintains their own teller & collection-location lists
+    // (Reports → Collections → Tellers / Collection Location).
+    'collections.setup.manage',
   ],
 };
 
