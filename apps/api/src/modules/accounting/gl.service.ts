@@ -534,7 +534,9 @@ export class GlService {
     const idByCode = new Map(accounts.map((a) => [a.accountCode.trim().toLowerCase(), a.id]));
 
     const lines = preview.rows
-      .filter((r) => r.status === 'ok')
+      // Skip zero-balance rows: a 0/0 line posts nothing and violates the
+      // jev_lines "exactly one side" check constraint. Only real balances post.
+      .filter((r) => r.status === 'ok' && (r.debit > 0 || r.credit > 0))
       .map((r) => ({
         chartOfAccountId: idByCode.get(r.accountCode.toLowerCase())!,
         debitAmount: r.debit,
