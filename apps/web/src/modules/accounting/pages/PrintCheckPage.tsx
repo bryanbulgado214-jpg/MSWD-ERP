@@ -22,9 +22,9 @@ const POS = {
   // grid, one per box: `gridLeft` = left edge of the first box, `gridRight` = right
   // edge of the last box (both inches from the check's left edge), `top` = inches
   // from the top edge. Each digit is centered in its cell = grid width / 8.
-  // From the DBP check measurements (15.0 / 19.8 / 1.75 cm) plus a fine nudge of
-  // +0.5cm right and +0.25cm down (÷2.54 → inches). `top` is the box centre.
-  date: { top: 0.79, gridLeft: 6.11, gridRight: 7.99 },
+  // From the DBP check measurements (15.0 / 19.8 / 1.75 cm → ÷2.54 inches).
+  // `top` is the box centre; digits are centred on it.
+  date: { top: 0.69, gridLeft: 5.91, gridRight: 7.8 },
   // Payee, on the "PAY TO THE ORDER OF" line.
   payee: { left: 1.55, top: 0.9 },
   // Amount in figures, in the ₱ box (top-right) — sized separately (looks right, leave it).
