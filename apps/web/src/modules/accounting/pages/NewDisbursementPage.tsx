@@ -49,6 +49,9 @@ export default function NewDisbursementPage() {
   const isEdit = Boolean(id);
   const { permissions } = useAuth();
   const canCreate = permissions.has('accounting.dv.create');
+  // Posting straight to the GL is the accountant's step; data-entry staff only
+  // save drafts, which the accountant then reviews and posts.
+  const canPost = permissions.has('accounting.dv.post');
 
   const [accounts, setAccounts] = useState<ChartOfAccount[]>([]);
   const [fundSources, setFundSources] = useState<Lookup[]>([]);
@@ -627,17 +630,19 @@ export default function NewDisbursementPage() {
             </button>
           ) : (
             <>
+              {canPost && (
+                <button
+                  type="button"
+                  className="acct-btn acct-btn--primary"
+                  disabled={!canSubmit || saving !== false}
+                  onClick={() => submit(false)}
+                >
+                  {saving === 'post' ? 'Posting...' : 'Create & Post DV'}
+                </button>
+              )}
               <button
                 type="button"
-                className="acct-btn acct-btn--primary"
-                disabled={!canSubmit || saving !== false}
-                onClick={() => submit(false)}
-              >
-                {saving === 'post' ? 'Posting...' : 'Create & Post DV'}
-              </button>
-              <button
-                type="button"
-                className="acct-btn"
+                className={`acct-btn${canPost ? '' : ' acct-btn--primary'}`}
                 disabled={!canSubmit || saving !== false}
                 onClick={() => submit(true)}
               >

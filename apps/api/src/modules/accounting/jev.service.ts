@@ -9,6 +9,7 @@ import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
+import { NotificationService } from '../notification/notification.service';
 
 import { dateRangeFilter } from './date-range-filter';
 import { amountQueryFilter } from './parse-amount-query';
@@ -64,7 +65,10 @@ const JEV_DETAIL_SELECT = {
 
 @Injectable()
 export class JevService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationService,
+  ) {}
 
   async findAll(
     organizationId: string,
@@ -332,7 +336,7 @@ export class JevService {
       throw new BadRequestException('Debits and credits must balance before submission.');
     }
 
-    return runAudited(this.prisma, userId, (tx) =>
+    const updated = await runAudited(this.prisma, userId, (tx) =>
       tx.journalEntryVoucher.update({
         where: { id },
         data: {
@@ -345,6 +349,22 @@ export class JevService {
         select: JEV_DETAIL_SELECT,
       }),
     );
+
+    // Let whoever posts JEVs (the accountant) know one is waiting for review.
+    await this.notifications.notifyUsersWithPermission(
+      organizationId,
+      'accounting.jev.post',
+      {
+        title: `JEV ${jev.jevNumber} is pending review`,
+        ...(jev.particulars ? { body: jev.particulars } : {}),
+        linkUrl: `/accounting/jev/${id}`,
+        relatedTable: 'journal_entry_vouchers',
+        relatedId: id,
+      },
+      userId,
+    );
+
+    return updated;
   }
 
   /**

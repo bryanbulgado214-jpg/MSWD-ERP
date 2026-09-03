@@ -18,7 +18,12 @@ import { JevService } from './jev.service';
 const prisma = new PrismaClient();
 const autoJev = new AutoJevService(prisma as unknown as PrismaService);
 const gl = new GlService(prisma as unknown as PrismaService, autoJev);
-const jevService = new JevService(prisma as unknown as PrismaService);
+const jevService = new JevService(
+  prisma as unknown as PrismaService,
+  {
+    notifyUsersWithPermission: async () => undefined,
+  } as never,
+);
 const runId = Date.now().toString(36);
 
 let organizationId: string;

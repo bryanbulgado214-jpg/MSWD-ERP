@@ -1,6 +1,7 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
 
 import { CurrentUser } from './common/decorators/current-user.decorator';
+import { getGrantedPermissionCodes } from './common/guards/get-granted-permission-codes';
 import { PrismaService } from './database/prisma.service';
 import { ExecutiveDashboardService } from './executive-dashboard.service';
 import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
@@ -338,6 +339,77 @@ export class DashboardController {
       }
     }
 
+    // ── JEVs a data-entry user submitted for the accountant to review/post ──
+    // (Cashier-collection JEVs are handled by their own block above; exclude
+    // them here so they aren't listed twice.)
+    if (perms.has('accounting.jev.post') || perms.has('accounting.jev.approve')) {
+      const jevs = await this.prisma.journalEntryVoucher.findMany({
+        where: {
+          organizationId: orgId,
+          status: 'for_review',
+          sourceType: { not: 'disbursement' },
+        },
+        orderBy: { jevDate: 'asc' },
+        take: 20,
+        select: {
+          id: true,
+          jevNumber: true,
+          particulars: true,
+          totalDebit: true,
+          createdAt: true,
+          sourceTable: true,
+          creator: { select: { username: true } },
+        },
+      });
+      for (const j of jevs) {
+        if (j.sourceTable === 'cashier_collection_reports') continue;
+        items.push({
+          id: j.id,
+          module: 'accounting',
+          type: 'jev_review',
+          label: j.jevNumber,
+          description: j.particulars,
+          amount: j.totalDebit.toString(),
+          createdAt: j.createdAt.toISOString(),
+          actionLabel: 'Review JEV',
+          link: `/accounting/jev/${j.id}`,
+          ...(j.creator ? { createdBy: j.creator.username } : {}),
+        });
+      }
+    }
+
+    // ── Draft DVs a data-entry user saved for the accountant to review & post ──
+    if (perms.has('accounting.dv.post')) {
+      const dvs = await this.prisma.disbursementVoucher.findMany({
+        where: { organizationId: orgId, status: 'draft' },
+        orderBy: { dvDate: 'asc' },
+        take: 20,
+        select: {
+          id: true,
+          dvNumber: true,
+          payeeName: true,
+          particulars: true,
+          netAmount: true,
+          createdAt: true,
+          creator: { select: { username: true } },
+        },
+      });
+      for (const d of dvs) {
+        items.push({
+          id: d.id,
+          module: 'accounting',
+          type: 'dv_review',
+          label: d.dvNumber,
+          description: d.payeeName ? `${d.payeeName} — ${d.particulars}` : d.particulars,
+          amount: d.netAmount.toString(),
+          createdAt: d.createdAt.toISOString(),
+          actionLabel: 'Review & Post DV',
+          link: `/accounting/disbursements/${d.id}`,
+          ...(d.creator ? { createdBy: d.creator.username } : {}),
+        });
+      }
+    }
+
     // ── Checks awaiting printing by the cashier ──
     if (perms.has('accounting.check.print')) {
       const checks = await this.prisma.check.findMany({
@@ -514,17 +586,9 @@ export class DashboardController {
   }
 
   private async getPermissions(userId: string): Promise<Set<string>> {
-    const userRoles = await this.prisma.userRole.findMany({
-      where: { userId },
-      select: { roleId: true },
-    });
-    const roleIds = userRoles.map((ur) => ur.roleId);
-    if (roleIds.length === 0) return new Set();
-
-    const rolePermissions = await this.prisma.rolePermission.findMany({
-      where: { roleId: { in: roleIds } },
-      include: { permission: { select: { code: true } } },
-    });
-    return new Set(rolePermissions.map((rp) => rp.permission.code));
+    // Include direct per-user grants and delegations, not just role permissions —
+    // live access is granted per-user, so a role-only check would hide the
+    // accountant's pending actions.
+    return getGrantedPermissionCodes(this.prisma, userId);
   }
 }

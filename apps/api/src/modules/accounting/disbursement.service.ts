@@ -5,17 +5,23 @@ import * as path from 'path';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
+import { getGrantedPermissionCodes } from '../../common/guards/get-granted-permission-codes';
 import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
+import { NotificationService } from '../notification/notification.service';
 
 import { AutoJevService } from './auto-jev.service';
 import { dateRangeFilter } from './date-range-filter';
 import { CreateDisbursementDto } from './dto/disbursement.dto';
+
+const pesoText = (n: number) =>
+  `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -92,6 +98,7 @@ export class DisbursementService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly autoJev: AutoJevService,
+    private readonly notifications: NotificationService,
   ) {}
 
   /** Edit a DV's document number directly — accountant, no approval, any status.
@@ -442,6 +449,18 @@ export class DisbursementService {
     const bankDisplay = `${bankAccount.bank.name} — ${bankAccount.accountName} (${bankAccount.accountNumber})`;
     const asDraft = dto.asDraft === true;
 
+    // Posting straight to the GL requires the Post permission. Data-entry staff
+    // can only save a draft; the accountant reviews and posts it.
+    if (!asDraft) {
+      const granted = await getGrantedPermissionCodes(this.prisma, userId);
+      if (!granted.has('accounting.dv.post')) {
+        throw new ForbiddenException(
+          'You can save this as a draft, but posting a disbursement voucher needs the ' +
+            '“Post Disbursement Vouchers” permission. Save it as a draft — the accountant will review and post it.',
+        );
+      }
+    }
+
     const settings = await this.prisma.organizationSettings.findUnique({
       where: { organizationId: orgId },
       select: { manualDocumentNumbering: true },
@@ -565,6 +584,22 @@ export class DisbursementService {
 
       return dv.id;
     });
+
+    // A draft awaits the accountant — let whoever can post it know.
+    if (asDraft) {
+      await this.notifications.notifyUsersWithPermission(
+        orgId,
+        'accounting.dv.post',
+        {
+          title: `DV ${dvNumber} is pending review`,
+          body: `${dto.payeeName} — ${pesoText(net)}`,
+          linkUrl: `/accounting/disbursements/${id}`,
+          relatedTable: 'disbursement_vouchers',
+          relatedId: id,
+        },
+        userId,
+      );
+    }
 
     return this.findOne(orgId, id);
   }

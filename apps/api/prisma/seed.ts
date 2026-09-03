@@ -383,6 +383,7 @@ async function main() {
     },
     { code: 'accounting.dv.read', name: 'View Disbursement Vouchers', module: 'accounting' },
     { code: 'accounting.dv.create', name: 'Create Disbursement Vouchers', module: 'accounting' },
+    { code: 'accounting.dv.post', name: 'Post Disbursement Vouchers', module: 'accounting' },
     { code: 'accounting.period.manage', name: 'Manage Accounting Periods', module: 'accounting' },
     {
       code: 'accounting.reports',
@@ -654,6 +655,7 @@ async function main() {
     'accounting.jev.reverse',
     'accounting.dv.read',
     'accounting.dv.create',
+    'accounting.dv.post',
     'accounting.check.read',
     'accounting.period.manage',
     'accounting.reports',

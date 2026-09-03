@@ -63,6 +63,7 @@ export default function DisbursementListPage() {
   const { permissions } = useAuth();
   const navigate = useNavigate();
   const canCreate = permissions.has('accounting.dv.create');
+  const canPost = permissions.has('accounting.dv.post');
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -277,7 +278,7 @@ export default function DisbursementListPage() {
                             2307
                           </Link>
                         )}
-                        {dv.status === 'draft' && canCreate && (
+                        {dv.status === 'draft' && canPost && (
                           <button
                             type="button"
                             className="acct-btn acct-btn--sm"

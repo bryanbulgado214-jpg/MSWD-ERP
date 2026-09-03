@@ -19,7 +19,12 @@ import type { PrismaService } from '../../database/prisma.service';
 import { JevService } from './jev.service';
 
 const prisma = new PrismaClient();
-const service = new JevService(prisma as unknown as PrismaService);
+const service = new JevService(
+  prisma as unknown as PrismaService,
+  {
+    notifyUsersWithPermission: async () => undefined,
+  } as never,
+);
 
 let organizationId: string;
 let creatorId: string;

@@ -60,6 +60,58 @@ export class NotificationService {
     });
   }
 
+  /**
+   * Every user in the org who holds a permission code — whether via a role or a
+   * direct per-user grant. Lets us notify "whoever can review/post" without
+   * depending on a specific role name (live access is granted per-user).
+   */
+  async findUserIdsWithPermission(organizationId: string, code: string): Promise<string[]> {
+    const perm = await this.prisma.permission.findUnique({
+      where: { code },
+      select: { id: true },
+    });
+    if (!perm) return [];
+    const [viaRole, viaDirect] = await Promise.all([
+      this.prisma.userRole.findMany({
+        where: { role: { organizationId, rolePermissions: { some: { permissionId: perm.id } } } },
+        select: { userId: true },
+      }),
+      this.prisma.userPermission.findMany({
+        where: { permissionId: perm.id, user: { organizationId } },
+        select: { userId: true },
+      }),
+    ]);
+    return [...new Set([...viaRole.map((r) => r.userId), ...viaDirect.map((d) => d.userId)])];
+  }
+
+  /**
+   * Notify every user holding `permissionCode`, optionally excluding one user
+   * (typically the person who triggered the event, so they don't notify
+   * themselves). No-op when nobody holds the permission.
+   */
+  async notifyUsersWithPermission(
+    organizationId: string,
+    permissionCode: string,
+    notification: Omit<CreateNotificationInput, 'organizationId' | 'userId'>,
+    excludeUserId?: string,
+  ) {
+    const userIds = (await this.findUserIdsWithPermission(organizationId, permissionCode)).filter(
+      (id) => id !== excludeUserId,
+    );
+    if (userIds.length === 0) return;
+    await this.prisma.notification.createMany({
+      data: userIds.map((userId) => ({
+        organizationId,
+        userId,
+        title: notification.title,
+        body: notification.body ?? null,
+        linkUrl: notification.linkUrl ?? null,
+        relatedTable: notification.relatedTable ?? null,
+        relatedId: notification.relatedId ?? null,
+      })),
+    });
+  }
+
   async listForUser(
     userId: string,
     options?: { unreadOnly?: boolean; limit?: number; offset?: number },

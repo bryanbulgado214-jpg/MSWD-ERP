@@ -15,7 +15,12 @@ import { JevService } from './jev.service';
 
 const prisma = new PrismaClient();
 const fs = new FinancialStatementsService(prisma as unknown as PrismaService);
-const jevService = new JevService(prisma as unknown as PrismaService);
+const jevService = new JevService(
+  prisma as unknown as PrismaService,
+  {
+    notifyUsersWithPermission: async () => undefined,
+  } as never,
+);
 
 let organizationId: string;
 let fiscalYearId: string;

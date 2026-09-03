@@ -68,7 +68,7 @@ export class DisbursementController {
   }
 
   @Post(':id/post')
-  @RequirePermissions('accounting.dv.create')
+  @RequirePermissions('accounting.dv.post')
   postDraft(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.disbursementService.postDraft(user.organizationId, user.userId, id);
   }

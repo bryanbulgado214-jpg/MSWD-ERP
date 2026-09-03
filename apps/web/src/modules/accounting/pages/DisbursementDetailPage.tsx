@@ -12,6 +12,7 @@ import {
   getDisbursement,
   getDvAttachments,
   getDvNotes,
+  postDisbursement,
   updateDvNumber,
   uploadDvAttachment,
   type DvAttachment,
@@ -94,10 +95,12 @@ export default function DisbursementDetailPage() {
   const navigate = useNavigate();
   const { permissions, user } = useAuth();
   const canCreate = permissions.has('accounting.dv.create');
+  const canPost = permissions.has('accounting.dv.post');
 
   const [dv, setDv] = useState<DisbursementDetail | null>(null);
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [posting, setPosting] = useState(false);
 
   // Notes & attachments
   const [notes, setNotes] = useState<DvNote[]>([]);
@@ -184,6 +187,24 @@ export default function DisbursementDetailPage() {
     }
   }
 
+  async function handlePost() {
+    if (!dv) return;
+    if (
+      !window.confirm(`Post ${dv.dvNumber} to the general ledger? This records the disbursement.`)
+    )
+      return;
+    setPosting(true);
+    setError('');
+    try {
+      const updated = await postDisbursement(dv.id);
+      setDv(updated);
+    } catch (e) {
+      setError(e instanceof AccountingApiError ? e.message : 'Failed to post the voucher.');
+    } finally {
+      setPosting(false);
+    }
+  }
+
   if (error) {
     return (
       <div className="acct-page">
@@ -235,6 +256,16 @@ export default function DisbursementDetailPage() {
           </span>
         </h1>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          {isDraft && canPost && (
+            <button
+              type="button"
+              className="acct-btn acct-btn--primary acct-btn--sm"
+              disabled={posting}
+              onClick={handlePost}
+            >
+              {posting ? 'Posting…' : 'Post to GL'}
+            </button>
+          )}
           {canCreate && (
             <button
               type="button"

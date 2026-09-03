@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 
+import { NotificationModule } from '../notification/notification.module';
+
 import { AccountMappingController } from './account-mapping.controller';
 import { AccountMappingService } from './account-mapping.service';
 import { AccountingWorkspaceController } from './accounting-workspace.controller';
@@ -44,6 +46,7 @@ import { AccountingReportsController } from './reports.controller';
 import { AccountingReportsService } from './reports.service';
 
 @Module({
+  imports: [NotificationModule],
   controllers: [
     AccountingWorkspaceController,
     ChartOfAccountController,
