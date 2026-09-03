@@ -11,7 +11,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
 
 import { dateRangeFilter } from './date-range-filter';
-import { parseAmountQuery } from './parse-amount-query';
+import { amountQueryFilter } from './parse-amount-query';
 
 const JEV_SELECT = {
   id: true,
@@ -83,9 +83,16 @@ export class JevService {
         { jevNumber: { contains: search, mode: 'insensitive' as const } },
         { particulars: { contains: search, mode: 'insensitive' as const } },
       ];
-      // Find a voucher by its amount too ("525", "525.00", "1,234.56").
-      const amount = parseAmountQuery(search);
-      if (amount !== null) or.push({ totalDebit: amount }, { totalCredit: amount });
+      // Find a voucher by its amount too ("525", "525.00", "1,234.56") — match
+      // the JEV total OR any debit/credit line, so a remembered line amount finds
+      // the voucher it sits in.
+      const amount = amountQueryFilter(search);
+      if (amount !== null)
+        or.push(
+          { totalDebit: amount },
+          { totalCredit: amount },
+          { lines: { some: { OR: [{ debitAmount: amount }, { creditAmount: amount }] } } },
+        );
       searchWhere = { OR: or };
     }
     const jevDate = dateRangeFilter(filters?.dateFrom, filters?.dateTo);
