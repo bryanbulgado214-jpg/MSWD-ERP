@@ -134,6 +134,8 @@ export function PrintCheckPage() {
     fontFamily: FONT.family,
     fontSize: FONT.size,
     fontWeight: 700,
+    // Pure black (not the app's dark-grey text) so the dot-matrix prints it solid.
+    color: '#000',
     whiteSpace: 'nowrap',
   };
   const dateField: React.CSSProperties = {
@@ -148,6 +150,7 @@ export function PrintCheckPage() {
         .chk-screen { background: #eef0f3; min-height: 100vh; padding: 24px; display: flex;
           flex-direction: column; align-items: center; gap: 14px; }
         .chk-sheet { position: relative; width: 8in; height: 3in; background: #fff;
+          color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact;
           box-shadow: 0 2px 10px rgba(16,24,40,.18); }
         .chk-guide { position: absolute; inset: 0; pointer-events: none; }
         .chk-guide .lbl { position: absolute; font: 8px system-ui, sans-serif; color: #b42318;
