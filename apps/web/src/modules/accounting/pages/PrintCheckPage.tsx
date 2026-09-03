@@ -19,19 +19,20 @@ import type { CheckDetail } from '../types';
 // ─────────────────────────────────────────────────────────────────────────────
 const POS = {
   // Date grid (top-right): month, day, year sit in separate box clusters.
-  dateMonth: { left: 5.42, top: 0.86 },
-  dateDay: { left: 5.98, top: 0.86 },
-  dateYear: { left: 6.52, top: 0.86 },
+  dateMonth: { left: 5.42, top: 0.72 },
+  dateDay: { left: 5.98, top: 0.72 },
+  dateYear: { left: 6.52, top: 0.72 },
   dateDigitSpacing: 0.16, // gap between the digits so they fall inside the boxes
   // Payee, on the "PAY TO THE ORDER OF" line.
-  payee: { left: 1.55, top: 1.12 },
+  payee: { left: 1.55, top: 0.98 },
   // Amount in figures, in the ₱ box (top-right). Right-edge to align near the box end.
   amountRight: 7.55,
-  amountTop: 1.12,
+  amountTop: 0.98,
   // Amount in words, on the "PESOS" line.
-  words: { left: 1.35, top: 1.46 },
+  words: { left: 1.35, top: 1.32 },
 };
-const FONT = { family: "'Courier New', monospace", size: 11, dateSize: 12 };
+// Bigger + bold so the dot-matrix strikes darker and the text is easy to read.
+const FONT = { family: "'Courier New', monospace", size: 14, dateSize: 15 };
 
 const IN = (n: number) => `${n}in`;
 
@@ -132,6 +133,7 @@ export function PrintCheckPage() {
     position: 'absolute',
     fontFamily: FONT.family,
     fontSize: FONT.size,
+    fontWeight: 700,
     whiteSpace: 'nowrap',
   };
   const dateField: React.CSSProperties = {
