@@ -18,21 +18,28 @@ import type { CheckDetail } from '../types';
 // FONT need tuning — nothing else.
 // ─────────────────────────────────────────────────────────────────────────────
 const POS = {
-  // Date grid (top-right): month, day, year sit in separate box clusters.
-  dateMonth: { left: 5.42, top: 0.72 },
-  dateDay: { left: 5.98, top: 0.72 },
-  dateYear: { left: 6.52, top: 0.72 },
-  dateDigitSpacing: 0.16, // gap between the digits so they fall inside the boxes
+  // Date grid (top-right). Each of the 8 digits (MM DD YYYY) is centered on its own
+  // box: `start` = center of the first box, `pitch` = center-to-center step within a
+  // group, `gap` = extra offset added at each dash (MM‑DD‑YYYY). Tune so the digits
+  // land inside the boxes.
+  date: { top: 0.66, start: 5.92, pitch: 0.22, gap: 0.13 },
   // Payee, on the "PAY TO THE ORDER OF" line.
-  payee: { left: 1.55, top: 0.98 },
-  // Amount in figures, in the ₱ box (top-right). Right-edge to align near the box end.
+  payee: { left: 1.55, top: 0.9 },
+  // Amount in figures, in the ₱ box (top-right) — sized separately (looks right, leave it).
   amountRight: 7.55,
   amountTop: 0.98,
   // Amount in words, on the "PESOS" line.
-  words: { left: 1.35, top: 1.32 },
+  words: { left: 1.35, top: 1.28 },
 };
-// Bigger + bold so the dot-matrix strikes darker and the text is easy to read.
-const FONT = { family: "'Courier New', monospace", size: 14, dateSize: 15 };
+// Payee & words are deliberately large (bold, easy to read); the figures stay smaller
+// because they already fit the ₱ box.
+const FONT = {
+  family: "'Courier New', monospace",
+  payeeSize: 22,
+  wordsSize: 17,
+  amountSize: 14,
+  dateSize: 15,
+};
 
 const IN = (n: number) => `${n}in`;
 
@@ -132,17 +139,17 @@ export function PrintCheckPage() {
   const fieldBase: React.CSSProperties = {
     position: 'absolute',
     fontFamily: FONT.family,
-    fontSize: FONT.size,
     fontWeight: 700,
     // Pure black (not the app's dark-grey text) so the dot-matrix prints it solid.
     color: '#000',
     whiteSpace: 'nowrap',
   };
-  const dateField: React.CSSProperties = {
-    ...fieldBase,
-    fontSize: FONT.dateSize,
-    letterSpacing: IN(POS.dateDigitSpacing),
-  };
+  // Each date digit centered on its own box.
+  const dz = POS.date;
+  const dateCenters = [0, 1, 2, 3, 4, 5, 6, 7].map(
+    (i) => dz.start + i * dz.pitch + (i >= 2 ? dz.gap : 0) + (i >= 4 ? dz.gap : 0),
+  );
+  const dateDigits = `${mm}${dd}${yyyy}`.split('');
 
   return (
     <>
@@ -178,7 +185,7 @@ export function PrintCheckPage() {
           <div className="chk-guide">
             <span
               className="lbl"
-              style={{ left: IN(POS.dateMonth.left), top: IN(POS.dateMonth.top - 0.22) }}
+              style={{ left: IN(POS.date.start - 0.1), top: IN(POS.date.top - 0.22) }}
             >
               Date (MM DD YYYY)
             </span>
@@ -203,22 +210,28 @@ export function PrintCheckPage() {
           </div>
 
           {/* The only things that print: the fill-in data. */}
-          <div style={{ ...dateField, left: IN(POS.dateMonth.left), top: IN(POS.dateMonth.top) }}>
-            {mm}
-          </div>
-          <div style={{ ...dateField, left: IN(POS.dateDay.left), top: IN(POS.dateDay.top) }}>
-            {dd}
-          </div>
-          <div style={{ ...dateField, left: IN(POS.dateYear.left), top: IN(POS.dateYear.top) }}>
-            {yyyy}
-          </div>
+          {/* Date — one digit per box, centered on the box. */}
+          {dateDigits.map((ch, i) => (
+            <div
+              key={i}
+              style={{
+                ...fieldBase,
+                left: IN(dateCenters[i]!),
+                top: IN(dz.top),
+                transform: 'translateX(-50%)',
+                fontSize: FONT.dateSize,
+              }}
+            >
+              {ch}
+            </div>
+          ))}
 
           <div
             style={{
               ...fieldBase,
               left: IN(POS.payee.left),
               top: IN(POS.payee.top),
-              fontWeight: 700,
+              fontSize: FONT.payeeSize,
             }}
           >
             {check.payeeName}
@@ -228,12 +241,19 @@ export function PrintCheckPage() {
               ...fieldBase,
               right: IN(8 - POS.amountRight),
               top: IN(POS.amountTop),
-              fontWeight: 700,
+              fontSize: FONT.amountSize,
             }}
           >
             {amountFigures}
           </div>
-          <div style={{ ...fieldBase, left: IN(POS.words.left), top: IN(POS.words.top) }}>
+          <div
+            style={{
+              ...fieldBase,
+              left: IN(POS.words.left),
+              top: IN(POS.words.top),
+              fontSize: FONT.wordsSize,
+            }}
+          >
             {words}
           </div>
         </div>
