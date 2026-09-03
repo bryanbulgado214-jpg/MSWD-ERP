@@ -4,10 +4,24 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../app/auth';
 import { AccountingApiError, deleteDisbursement, getDisbursements, postDisbursement } from '../api';
 import { amountSearchTokens, matchesQuery } from '../search';
+import { compareDocNumber, sortArrow, type SortDir } from '../sort-utils';
 import type { DisbursementSummary } from '../types';
 
 import { AccountingSubNav } from './AccountingSubNav';
 import './accounting.css';
+
+const sortBtnStyle: React.CSSProperties = {
+  background: 'none',
+  border: 'none',
+  padding: 0,
+  font: 'inherit',
+  fontWeight: 'inherit',
+  color: 'inherit',
+  cursor: 'pointer',
+  display: 'inline-flex',
+  gap: 4,
+  alignItems: 'center',
+};
 
 type LoadState =
   | { status: 'loading' }
@@ -68,6 +82,24 @@ export default function DisbursementListPage() {
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  // Back-entered out of order — sort by the manual DV number (read numerically)
+  // or by date. Default: DV number, earliest first.
+  const [sortKey, setSortKey] = useState<'dvNumber' | 'dvDate'>('dvNumber');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const toggleSort = (key: 'dvNumber' | 'dvDate') => {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  };
+  const compareDv = (a: DisbursementSummary, b: DisbursementSummary) => {
+    const c =
+      sortKey === 'dvNumber'
+        ? compareDocNumber(a.dvNumber, b.dvNumber)
+        : new Date(a.dvDate).getTime() - new Date(b.dvDate).getTime();
+    return sortDir === 'asc' ? c : -c;
+  };
   const [posting, setPosting] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -207,8 +239,16 @@ export default function DisbursementListPage() {
           <table className="acct-table">
             <thead>
               <tr>
-                <th>DV #</th>
-                <th>Date</th>
+                <th>
+                  <button type="button" style={sortBtnStyle} onClick={() => toggleSort('dvNumber')}>
+                    DV # <span aria-hidden>{sortArrow(sortKey === 'dvNumber', sortDir)}</span>
+                  </button>
+                </th>
+                <th>
+                  <button type="button" style={sortBtnStyle} onClick={() => toggleSort('dvDate')}>
+                    Date <span aria-hidden>{sortArrow(sortKey === 'dvDate', sortDir)}</span>
+                  </button>
+                </th>
                 <th>Payee</th>
                 <th>Particulars</th>
                 <th>Net Amount</th>
@@ -219,6 +259,7 @@ export default function DisbursementListPage() {
             <tbody>
               {state.data
                 .filter((dv) => matchesSearch(dv, search))
+                .sort(compareDv)
                 .map((dv) => (
                   <tr key={dv.id}>
                     <td className="acct-text-mono">{dv.dvNumber}</td>

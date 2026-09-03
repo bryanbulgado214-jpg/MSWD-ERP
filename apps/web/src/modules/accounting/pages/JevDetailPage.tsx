@@ -17,6 +17,7 @@ import {
   updateJevNumber,
   voidJev,
 } from '../api';
+import { formatAccounting, parseMoney, unformatMoney } from '../money-format';
 import type { ChartOfAccount, JevDetail } from '../types';
 
 import { AccountCombobox } from './AccountCombobox';
@@ -99,8 +100,8 @@ export default function JevDetailPage() {
         setLines(
           data.lines.map((l) => ({
             chartOfAccountId: l.chartOfAccount.id,
-            debitAmount: Number(l.debitAmount) > 0 ? l.debitAmount : '',
-            creditAmount: Number(l.creditAmount) > 0 ? l.creditAmount : '',
+            debitAmount: Number(l.debitAmount) > 0 ? formatAccounting(l.debitAmount) : '',
+            creditAmount: Number(l.creditAmount) > 0 ? formatAccounting(l.creditAmount) : '',
             description: l.description || '',
           })),
         );
@@ -144,8 +145,8 @@ export default function JevDetailPage() {
     setLines(next);
   }
 
-  const totalDebit = lines.reduce((s, l) => s + (parseFloat(l.debitAmount) || 0), 0);
-  const totalCredit = lines.reduce((s, l) => s + (parseFloat(l.creditAmount) || 0), 0);
+  const totalDebit = lines.reduce((s, l) => s + parseMoney(l.debitAmount), 0);
+  const totalCredit = lines.reduce((s, l) => s + parseMoney(l.creditAmount), 0);
   const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01 && totalDebit > 0;
 
   async function handleSave(e: React.FormEvent) {
@@ -165,8 +166,8 @@ export default function JevDetailPage() {
           .filter((l) => l.chartOfAccountId)
           .map((l) => ({
             chartOfAccountId: l.chartOfAccountId,
-            debitAmount: parseFloat(l.debitAmount) || 0,
-            creditAmount: parseFloat(l.creditAmount) || 0,
+            debitAmount: parseMoney(l.debitAmount),
+            creditAmount: parseMoney(l.creditAmount),
             ...(l.description ? { description: l.description } : {}),
           })),
       };
@@ -369,11 +370,16 @@ export default function JevDetailPage() {
                     </td>
                     <td>
                       <input
-                        type="number"
-                        step="0.01"
-                        min="0"
+                        type="text"
+                        inputMode="decimal"
                         value={line.debitAmount}
                         onChange={(e) => updateLine(idx, 'debitAmount', e.target.value)}
+                        onFocus={(e) =>
+                          updateLine(idx, 'debitAmount', unformatMoney(e.target.value))
+                        }
+                        onBlur={(e) =>
+                          updateLine(idx, 'debitAmount', formatAccounting(e.target.value))
+                        }
                         style={{
                           width: '100%',
                           textAlign: 'right',
@@ -385,11 +391,16 @@ export default function JevDetailPage() {
                     </td>
                     <td>
                       <input
-                        type="number"
-                        step="0.01"
-                        min="0"
+                        type="text"
+                        inputMode="decimal"
                         value={line.creditAmount}
                         onChange={(e) => updateLine(idx, 'creditAmount', e.target.value)}
+                        onFocus={(e) =>
+                          updateLine(idx, 'creditAmount', unformatMoney(e.target.value))
+                        }
+                        onBlur={(e) =>
+                          updateLine(idx, 'creditAmount', formatAccounting(e.target.value))
+                        }
                         style={{
                           width: '100%',
                           textAlign: 'right',
