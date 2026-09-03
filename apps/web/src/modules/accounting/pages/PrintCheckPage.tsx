@@ -22,7 +22,7 @@ const POS = {
   // box: `start` = center of the first box, `pitch` = center-to-center step within a
   // group, `gap` = extra offset added at each dash (MM‑DD‑YYYY). Tune so the digits
   // land inside the boxes.
-  date: { top: 0.66, start: 5.92, pitch: 0.22, gap: 0.13 },
+  date: { top: 0.66, start: 6.05, pitch: 0.23, gap: 0.13 },
   // Payee, on the "PAY TO THE ORDER OF" line.
   payee: { left: 1.55, top: 0.9 },
   // Amount in figures, in the ₱ box (top-right) — sized separately (looks right, leave it).
@@ -31,13 +31,13 @@ const POS = {
   // Amount in words, on the "PESOS" line.
   words: { left: 1.35, top: 1.28 },
 };
-// Payee & words are deliberately large (bold, easy to read); the figures stay smaller
-// because they already fit the ₱ box.
+// Payee, amount-in-figures and amount-in-words share one size (the amount-in-words
+// is the basis). Date digits are sized to fit their boxes.
 const FONT = {
   family: "'Courier New', monospace",
-  payeeSize: 22,
+  payeeSize: 17,
   wordsSize: 17,
-  amountSize: 14,
+  amountSize: 17,
   dateSize: 15,
 };
 
