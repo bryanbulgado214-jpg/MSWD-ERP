@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+import { useAuth } from '../../../app/auth';
+
 import { AccountingSubNav } from './AccountingSubNav';
 
 import './accounting.css';
@@ -16,6 +18,12 @@ import {
 import type { FiscalYearDetail, PeriodDetail } from '../types';
 
 export default function PeriodManagementPage() {
+  const { hasAnyPermission } = useAuth();
+  // Fiscal-year and period actions (create / lock / close / reopen) are for the
+  // accountant only. Data-entry staff (accounting.read) see the periods but no
+  // action controls; the API enforces the same, so the buttons never appear for
+  // someone who could not use them anyway.
+  const canManage = hasAnyPermission('accounting.period.manage', 'accounting.bank.manage');
   const [fiscalYears, setFiscalYears] = useState<FiscalYearDetail[]>([]);
   const [selectedFY, setSelectedFY] = useState<FiscalYearDetail | null>(null);
   const [periods, setPeriods] = useState<PeriodDetail[]>([]);
@@ -130,15 +138,17 @@ export default function PeriodManagementPage() {
           ))}
         </select>
 
-        {selectedFY && selectedFY.status === 'open' && (
+        {canManage && selectedFY && selectedFY.status === 'open' && (
           <button className="acct-btn" onClick={handleCloseFY}>
             Close Fiscal Year
           </button>
         )}
 
-        <button className="acct-btn acct-btn--primary" onClick={() => setShowFYForm(!showFYForm)}>
-          + New Fiscal Year
-        </button>
+        {canManage && (
+          <button className="acct-btn acct-btn--primary" onClick={() => setShowFYForm(!showFYForm)}>
+            + New Fiscal Year
+          </button>
+        )}
       </div>
 
       {showFYForm && (
@@ -201,7 +211,7 @@ export default function PeriodManagementPage() {
                 <th>JEVs</th>
                 <th>Status</th>
                 <th>Locked</th>
-                <th>Actions</th>
+                {canManage && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -238,44 +248,46 @@ export default function PeriodManagementPage() {
                         <span style={{ fontSize: 12, color: '#667085' }}>Unlocked</span>
                       )}
                     </td>
-                    <td>
-                      {!fyIsClosed && (
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                          {isOpen && !isLocked && (
-                            <button
-                              className="acct-btn acct-btn--sm"
-                              onClick={() => handlePeriodAction(p, 'lock')}
-                            >
-                              Lock
-                            </button>
-                          )}
-                          {isOpen && isLocked && (
-                            <button
-                              className="acct-btn acct-btn--sm"
-                              onClick={() => handlePeriodAction(p, 'unlock')}
-                            >
-                              Unlock
-                            </button>
-                          )}
-                          {isOpen && (
-                            <button
-                              className="acct-btn acct-btn--sm"
-                              onClick={() => handlePeriodAction(p, 'close')}
-                            >
-                              Close
-                            </button>
-                          )}
-                          {isClosed && (
-                            <button
-                              className="acct-btn acct-btn--sm"
-                              onClick={() => handlePeriodAction(p, 'reopen')}
-                            >
-                              Reopen
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </td>
+                    {canManage && (
+                      <td>
+                        {!fyIsClosed && (
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                            {isOpen && !isLocked && (
+                              <button
+                                className="acct-btn acct-btn--sm"
+                                onClick={() => handlePeriodAction(p, 'lock')}
+                              >
+                                Lock
+                              </button>
+                            )}
+                            {isOpen && isLocked && (
+                              <button
+                                className="acct-btn acct-btn--sm"
+                                onClick={() => handlePeriodAction(p, 'unlock')}
+                              >
+                                Unlock
+                              </button>
+                            )}
+                            {isOpen && (
+                              <button
+                                className="acct-btn acct-btn--sm"
+                                onClick={() => handlePeriodAction(p, 'close')}
+                              >
+                                Close
+                              </button>
+                            )}
+                            {isClosed && (
+                              <button
+                                className="acct-btn acct-btn--sm"
+                                onClick={() => handlePeriodAction(p, 'reopen')}
+                              >
+                                Reopen
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
