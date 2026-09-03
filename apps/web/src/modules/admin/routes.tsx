@@ -7,6 +7,7 @@ import { DemoDataPage } from './pages/DemoDataPage';
 import { DistrictProfilePage } from './pages/DistrictProfilePage';
 import { RoleDetailPage } from './pages/RoleDetailPage';
 import { RoleListPage } from './pages/RoleListPage';
+import { SignatoriesPage } from './pages/SignatoriesPage';
 import { UserListPage } from './pages/UserListPage';
 
 export const adminRoutes: RouteObject[] = [
@@ -20,6 +21,7 @@ export const adminRoutes: RouteObject[] = [
       { path: 'roles/:id', element: <RoleDetailPage /> },
       { path: 'audit-trail', element: <AuditTrailPage /> },
       { path: 'district-profile', element: <DistrictProfilePage /> },
+      { path: 'signatories', element: <SignatoriesPage /> },
       { path: 'demo-data', element: <DemoDataPage /> },
     ],
   },

@@ -207,6 +207,10 @@ model OrganizationSettings {
   address                String?  @db.VarChar(500)
   contact                String?  @db.VarChar(255)
   logoUrl                String?  @map("logo_url") @db.VarChar(1000)
+  /// Admin-configured signature blocks for printed documents, keyed by
+  /// document then slot: { jev: { preparedBy: { name, title }, ... }, ... }.
+  /// Rendered onto printouts so the correct officials appear automatically.
+  signatories            Json?
   createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   updatedBy              String?  @map("updated_by") @db.Uuid

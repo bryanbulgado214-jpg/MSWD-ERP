@@ -1,3 +1,5 @@
+import type { SignatoryMap } from '../../app/signatories';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
 
 function getAccessToken(): string | null {
@@ -224,6 +226,7 @@ export interface OrganizationProfile {
   contact: string | null;
   logoUrl: string | null;
   manualDocumentNumbering: boolean;
+  signatories: SignatoryMap;
 }
 
 export async function getOrganizationProfile(): Promise<OrganizationProfile> {
@@ -238,6 +241,7 @@ export async function updateOrganizationProfile(data: {
   contact?: string;
   logoUrl?: string;
   manualDocumentNumbering?: boolean;
+  signatories?: SignatoryMap;
 }): Promise<OrganizationProfile> {
   const res = await authFetchMutate('/admin/organization-profile', 'PATCH', data);
   return res.json();

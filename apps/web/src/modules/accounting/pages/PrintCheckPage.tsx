@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
+import { useAuth } from '../../../app/auth';
 import { GovLetterhead } from '../../../app/GovLetterhead';
+import { signatoryFor } from '../../../app/signatories';
 import { AccountingApiError, getCheck } from '../api';
 import type { CheckDetail } from '../types';
 import '../../procurement/pages/print-forms.css';
@@ -80,6 +82,8 @@ function peso(v: string): string {
 
 export function PrintCheckPage() {
   const { id } = useParams<{ id: string }>();
+  const { organization } = useAuth();
+  const authSig = signatoryFor(organization?.signatories, 'check', 'authorized');
   const [check, setCheck] = useState<CheckDetail | null>(null);
   const [error, setError] = useState('');
 
@@ -180,7 +184,19 @@ export function PrintCheckPage() {
         >
           <span>⑈ {check.checkNumber ?? '••••••'} ⑈</span>
           <span>{check.bankAccount.accountNumber}</span>
-          <span>Authorized Signature ______________________</span>
+          <span style={{ textAlign: 'center' }}>
+            {authSig?.name ? (
+              <span style={{ display: 'block', fontWeight: 700 }}>
+                {authSig.name.toUpperCase()}
+              </span>
+            ) : null}
+            <span style={{ display: 'block' }}>
+              Authorized Signature{authSig?.name ? '' : ' ______________________'}
+            </span>
+            {authSig?.title ? (
+              <span style={{ display: 'block', fontSize: 9 }}>{authSig.title}</span>
+            ) : null}
+          </span>
         </div>
 
         {/* Supporting reference */}

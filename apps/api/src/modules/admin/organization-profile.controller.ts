@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
-import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
@@ -7,7 +7,7 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
 
-import { OrganizationProfileService } from './organization-profile.service';
+import { OrganizationProfileService, type SignatoryMap } from './organization-profile.service';
 
 class UpdateOrganizationProfileDto {
   @IsOptional() @IsString() @MaxLength(255) name?: string;
@@ -16,6 +16,8 @@ class UpdateOrganizationProfileDto {
   @IsOptional() @IsString() @MaxLength(255) contact?: string;
   @IsOptional() @IsString() @MaxLength(1000) logoUrl?: string;
   @IsOptional() @IsBoolean() manualDocumentNumbering?: boolean;
+  // Shape validated/sanitized in the service (sanitizeSignatories).
+  @IsOptional() @IsObject() signatories?: SignatoryMap;
 }
 
 @Controller('admin/organization-profile')

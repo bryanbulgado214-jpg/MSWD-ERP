@@ -1,6 +1,8 @@
 import { formatPeso } from '../modules/budgeting/format-peso';
 
+import { useAuth } from './auth';
 import { GovLetterhead } from './GovLetterhead';
+import { signatoryFor } from './signatories';
 import '../modules/procurement/pages/print-forms.css';
 
 // Structural shape shared by the procurement DV (always has a supplier + PR/PO/
@@ -134,6 +136,10 @@ function numberToWords(n: number): string {
  * references and Box B accounting entry adapt to whichever data is present.
  */
 export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
+  const { organization } = useAuth();
+  const sigA = signatoryFor(organization?.signatories, 'dv', 'boxA');
+  const sigC = signatoryFor(organization?.signatories, 'dv', 'boxC');
+  const sigD = signatoryFor(organization?.signatories, 'dv', 'boxD');
   const dvDate = new Date(dv.dvDate).toLocaleDateString('en-PH', {
     year: 'numeric',
     month: 'long',
@@ -385,6 +391,10 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
                 }}
               >
                 <div className="gov-sig-line" style={{ width: '70%', margin: '0 auto 4px' }}></div>
+                {sigA?.name ? (
+                  <div style={{ fontSize: 10, fontWeight: 700 }}>{sigA.name.toUpperCase()}</div>
+                ) : null}
+                {sigA?.title ? <div style={{ fontSize: 8.5 }}>{sigA.title}</div> : null}
                 <div style={{ fontSize: 8, color: '#667085' }}>
                   Printed Name, Designation &amp; Signature of Head of Office / Supervisor
                 </div>
@@ -520,8 +530,9 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
               >
                 <div className="gov-sig-line" style={{ width: '70%', margin: '0 auto 4px' }}></div>
                 <div style={{ fontSize: 10, fontWeight: 700 }}>
-                  {dv.certifier?.username?.toUpperCase() ?? ''}
+                  {sigC?.name?.toUpperCase() || dv.certifier?.username?.toUpperCase() || ''}
                 </div>
+                {sigC?.title ? <div style={{ fontSize: 8.5 }}>{sigC.title}</div> : null}
                 <div style={{ fontSize: 8, color: '#667085' }}>
                   Printed Name &amp; Signature — Head, Accounting Unit / Authorized Representative
                 </div>
@@ -567,8 +578,9 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
               >
                 <div className="gov-sig-line" style={{ width: '70%', margin: '0 auto 4px' }}></div>
                 <div style={{ fontSize: 10, fontWeight: 700 }}>
-                  {dv.approver?.username?.toUpperCase() ?? ''}
+                  {sigD?.name?.toUpperCase() || dv.approver?.username?.toUpperCase() || ''}
                 </div>
+                {sigD?.title ? <div style={{ fontSize: 8.5 }}>{sigD.title}</div> : null}
                 <div style={{ fontSize: 8, color: '#667085' }}>
                   Printed Name &amp; Signature — Agency Head / Authorized Representative
                 </div>

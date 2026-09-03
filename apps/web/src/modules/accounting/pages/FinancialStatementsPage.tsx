@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 
 import { useAuth } from '../../../app/auth';
+import { signatoryFor } from '../../../app/signatories';
 import './accounting.css';
 import {
   getChangesInEquity,
@@ -120,34 +121,35 @@ function DocHeader({ org, title, period }: { org: string; title: string; period:
 }
 
 function Signatories({ prepared, noted }: { prepared: string; noted: string }) {
+  const { organization } = useAuth();
+  const prepCfg = signatoryFor(organization?.signatories, 'financialStatements', 'preparedBy');
+  const noteCfg = signatoryFor(organization?.signatories, 'financialStatements', 'notedBy');
+  // Configured name wins; the passed-in string ("Accountant"/"General Manager")
+  // is the fallback. A configured designation shows as a second line.
+  const preparedName = prepCfg?.name || prepared;
+  const notedName = noteCfg?.name || noted;
+  const lineStyle: CSSProperties = {
+    marginTop: 28,
+    fontWeight: 700,
+    borderTop: '1px solid #344054',
+    paddingTop: 4,
+    minWidth: 200,
+  };
+  const titleStyle: CSSProperties = { fontWeight: 400, color: '#475467', fontSize: 11 };
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 48, fontSize: 12 }}>
       <div>
         <div style={{ color: '#667085' }}>Prepared by:</div>
-        <div
-          style={{
-            marginTop: 28,
-            fontWeight: 700,
-            borderTop: '1px solid #344054',
-            paddingTop: 4,
-            minWidth: 200,
-          }}
-        >
-          {prepared}
+        <div style={lineStyle}>
+          {preparedName}
+          {prepCfg?.title ? <div style={titleStyle}>{prepCfg.title}</div> : null}
         </div>
       </div>
       <div>
         <div style={{ color: '#667085' }}>Noted by:</div>
-        <div
-          style={{
-            marginTop: 28,
-            fontWeight: 700,
-            borderTop: '1px solid #344054',
-            paddingTop: 4,
-            minWidth: 200,
-          }}
-        >
-          {noted}
+        <div style={lineStyle}>
+          {notedName}
+          {noteCfg?.title ? <div style={titleStyle}>{noteCfg.title}</div> : null}
         </div>
       </div>
     </div>

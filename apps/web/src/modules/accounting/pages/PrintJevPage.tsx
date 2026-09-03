@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
+import { signatoryFor } from '../../../app/signatories';
 import { formatPeso } from '../../budgeting/format-peso';
 import { getJev } from '../api';
 import type { JevDetail } from '../types';
@@ -34,6 +35,8 @@ export function PrintJevPage() {
   if (!jev) return <div style={{ padding: 32, color: '#667085' }}>Loading…</div>;
 
   const entity = (organization?.name ?? 'Sta. Barbara Water District').toUpperCase();
+  const prepBy = signatoryFor(organization?.signatories, 'jev', 'preparedBy');
+  const certBy = signatoryFor(organization?.signatories, 'jev', 'certifiedBy');
   const jevDate = new Date(jev.jevDate).toLocaleDateString('en-PH', {
     year: 'numeric',
     month: 'long',
@@ -195,8 +198,8 @@ export function PrintJevPage() {
               Prepared by:
             </div>
             <div className="gov-sig-line" style={{ width: '85%', margin: '18px auto 4px' }}></div>
-            <div className="gov-sig-name">{jev.creator?.username ?? ' '}</div>
-            <div className="gov-sig-title">Accounting Personnel</div>
+            <div className="gov-sig-name">{prepBy?.name || jev.creator?.username || ' '}</div>
+            <div className="gov-sig-title">{prepBy?.title || 'Accounting Personnel'}</div>
             <div className="gov-sig-date">Date: ____________________</div>
           </div>
           <div className="gov-sig-col">
@@ -205,9 +208,9 @@ export function PrintJevPage() {
             </div>
             <div className="gov-sig-line" style={{ width: '85%', margin: '18px auto 4px' }}></div>
             <div className="gov-sig-name">
-              {jev.poster?.username ?? jev.reviewer?.username ?? ' '}
+              {certBy?.name || jev.poster?.username || jev.reviewer?.username || ' '}
             </div>
-            <div className="gov-sig-title">Head, Accounting Division/Unit</div>
+            <div className="gov-sig-title">{certBy?.title || 'Head, Accounting Division/Unit'}</div>
             <div className="gov-sig-date">Date: ____________________</div>
           </div>
         </div>

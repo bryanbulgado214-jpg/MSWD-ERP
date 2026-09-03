@@ -3,6 +3,7 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@n
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { getGrantedPermissionCodes } from '../../common/guards/get-granted-permission-codes';
 import { PrismaService } from '../../database/prisma.service';
+import type { SignatoryMap } from '../admin/organization-profile.service';
 
 import { AuthService } from './auth.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -45,6 +46,7 @@ export class AuthController {
       address: string | null;
       contact: string | null;
       logoUrl: string | null;
+      signatories: SignatoryMap;
     } | null;
   }> {
     const [codes, org] = await Promise.all([
@@ -54,7 +56,15 @@ export class AuthController {
         select: {
           id: true,
           name: true,
-          settings: { select: { legalName: true, address: true, contact: true, logoUrl: true } },
+          settings: {
+            select: {
+              legalName: true,
+              address: true,
+              contact: true,
+              logoUrl: true,
+              signatories: true,
+            },
+          },
         },
       }),
     ]);
@@ -69,6 +79,8 @@ export class AuthController {
             address: org.settings?.address ?? null,
             contact: org.settings?.contact ?? null,
             logoUrl: org.settings?.logoUrl ?? null,
+            // Already sanitized on write; forms read slots defensively.
+            signatories: (org.settings?.signatories as SignatoryMap | null) ?? {},
           }
         : null,
     };

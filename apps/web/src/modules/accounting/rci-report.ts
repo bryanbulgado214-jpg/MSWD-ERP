@@ -8,6 +8,12 @@ import type { RciReport } from './api';
  * PDF — both following the prescribed column layout and certification block.
  */
 
+/** Admin-configured disbursing officer for the certification block. */
+export interface RciSignatory {
+  name: string;
+  title: string;
+}
+
 const money = (n: number) =>
   new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 const shortDate = (d: string) => (d ? new Date(d).toLocaleDateString('en-PH') : '');
@@ -47,7 +53,7 @@ function rowCells(report: RciReport) {
 function csvEsc(v: string): string {
   return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
 }
-export function downloadRciCsv(report: RciReport): void {
+export function downloadRciCsv(report: RciReport, signatory?: RciSignatory | null): void {
   const lines: string[][] = [
     ['REPORT OF CHECKS ISSUED', '', '', '', '', '', '', '', 'Appendix 35'],
     [`Period Covered:`, report.periodCovered],
@@ -62,7 +68,9 @@ export function downloadRciCsv(report: RciReport): void {
     ['CERTIFICATION'],
     [CERTIFICATION],
     [],
+    ['', '', '', signatory?.name ?? ''],
     ['', '', '', 'Name and Signature of Disbursing Officer/Cashier'],
+    ['', '', '', signatory?.title ?? ''],
     ['', '', '', 'Official Designation', '', '', 'Date'],
   ];
   const csv = lines.map((row) => row.map((c) => csvEsc(c ?? '')).join(',')).join('\r\n') + '\r\n';
@@ -71,7 +79,7 @@ export function downloadRciCsv(report: RciReport): void {
 }
 
 // ── PDF ──
-export function downloadRciPdf(report: RciReport): void {
+export function downloadRciPdf(report: RciReport, signatory?: RciSignatory | null): void {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
   const W = doc.internal.pageSize.getWidth();
   const left = 32;
@@ -143,11 +151,17 @@ export function downloadRciPdf(report: RciReport): void {
   doc.text(wrapped, left, cy);
   cy += wrapped.length * 12 + 34;
 
+  if (signatory?.name) {
+    doc.setFont('helvetica', 'bold');
+    doc.text(signatory.name.toUpperCase(), left + 140, cy - 3, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+  }
   doc.line(left, cy, left + 280, cy);
   cy += 12;
   doc.setFontSize(8.5);
   doc.text('Name and Signature of Disbursing Officer/Cashier', left, cy);
   cy += 26;
+  if (signatory?.title) doc.text(signatory.title, left + 100, cy - 3, { align: 'center' });
   doc.line(left, cy, left + 200, cy);
   doc.line(left + 240, cy, left + 380, cy);
   cy += 12;

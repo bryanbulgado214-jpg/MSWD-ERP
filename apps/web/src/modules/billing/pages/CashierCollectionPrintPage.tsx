@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
+import { useAuth } from '../../../app/auth';
 import { GovLetterhead } from '../../../app/GovLetterhead';
+import { signatoryFor } from '../../../app/signatories';
 import { CashierCollectionApiError, getReport, type CashierReport } from '../cashierCollectionApi';
 import '../../procurement/pages/print-forms.css';
 
@@ -19,6 +21,8 @@ function fmtDate(d: string) {
 /** Cashier's Collection Summary — the printable end page of the daily report. */
 export default function CashierCollectionPrintPage() {
   const { id } = useParams<{ id: string }>();
+  const { organization } = useAuth();
+  const reviewer = signatoryFor(organization?.signatories, 'cashierCollection', 'reviewedBy');
   const [report, setReport] = useState<CashierReport | null>(null);
   const [error, setError] = useState('');
 
@@ -196,8 +200,10 @@ export default function CashierCollectionPrintPage() {
             <div>Prepared by — Cashier</div>
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ borderTop: '1px solid #000', paddingTop: 3 }}>&nbsp;</div>
-            <div>Reviewed by — Accounting</div>
+            <div style={{ borderTop: '1px solid #000', paddingTop: 3, fontWeight: 700 }}>
+              {reviewer?.name || ' '}
+            </div>
+            <div>Reviewed by — {reviewer?.title || 'Accounting'}</div>
           </div>
         </div>
 

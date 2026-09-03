@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
+import { useAuth } from '../../../app/auth';
+import { signatoryFor } from '../../../app/signatories';
 import { getCheckRci, getChecks } from '../../accounting/api';
 import { downloadRciCsv, downloadRciPdf } from '../../accounting/rci-report';
 import '../../accounting/pages/accounting.css';
@@ -27,6 +29,7 @@ const lbl: React.CSSProperties = {
  * cashier's own check register (they can't list bank accounts directly).
  */
 export function RciReportPage() {
+  const { organization } = useAuth();
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [fund, setFund] = useState(FUND_CLUSTERS[0]!);
   const [bank, setBank] = useState('');
@@ -63,8 +66,9 @@ export function RciReportPage() {
         setError('No checks were issued for the selected month and bank account.');
         return;
       }
-      if (format === 'csv') downloadRciCsv(report);
-      else downloadRciPdf(report);
+      const sig = signatoryFor(organization?.signatories, 'rci', 'disbursingOfficer');
+      if (format === 'csv') downloadRciCsv(report, sig);
+      else downloadRciPdf(report, sig);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not generate the report.');
     } finally {

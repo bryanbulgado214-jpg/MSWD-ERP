@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
+import type { SignatoryMap } from './signatories';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
 const TOKEN_KEY = 'mswd_access_token';
 
@@ -17,6 +19,9 @@ export interface OrganizationProfile {
   address: string | null;
   contact: string | null;
   logoUrl: string | null;
+  // Admin-configured signature blocks for printed documents, keyed by
+  // document then slot. Defaults to {} when nothing has been set up.
+  signatories?: SignatoryMap;
 }
 
 interface AuthContextValue {
