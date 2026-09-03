@@ -18,11 +18,11 @@ import type { CheckDetail } from '../types';
 // FONT need tuning — nothing else.
 // ─────────────────────────────────────────────────────────────────────────────
 const POS = {
-  // Date grid (top-right). Each of the 8 digits (MM DD YYYY) is centered on its own
-  // box: `start` = center of the first box, `pitch` = center-to-center step within a
-  // group, `gap` = extra offset added at each dash (MM‑DD‑YYYY). Tune so the digits
-  // land inside the boxes.
-  date: { top: 0.66, start: 6.05, pitch: 0.23, gap: 0.13 },
+  // Date grid (top-right). The 8 digits (MM DD YYYY) are spread evenly across the
+  // grid, one per box: `gridLeft` = left edge of the first box, `gridRight` = right
+  // edge of the last box (both inches from the check's left edge), `top` = inches
+  // from the top edge. Each digit is centered in its cell = grid width / 8.
+  date: { top: 0.62, gridLeft: 5.85, gridRight: 7.78 },
   // Payee, on the "PAY TO THE ORDER OF" line.
   payee: { left: 1.55, top: 0.9 },
   // Amount in figures, in the ₱ box (top-right) — sized separately (looks right, leave it).
@@ -144,11 +144,10 @@ export function PrintCheckPage() {
     color: '#000',
     whiteSpace: 'nowrap',
   };
-  // Each date digit centered on its own box.
+  // Each date digit centered in its own cell (grid width / 8 boxes).
   const dz = POS.date;
-  const dateCenters = [0, 1, 2, 3, 4, 5, 6, 7].map(
-    (i) => dz.start + i * dz.pitch + (i >= 2 ? dz.gap : 0) + (i >= 4 ? dz.gap : 0),
-  );
+  const cellW = (dz.gridRight - dz.gridLeft) / 8;
+  const dateCenters = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => dz.gridLeft + (i + 0.5) * cellW);
   const dateDigits = `${mm}${dd}${yyyy}`.split('');
 
   return (
@@ -185,7 +184,7 @@ export function PrintCheckPage() {
           <div className="chk-guide">
             <span
               className="lbl"
-              style={{ left: IN(POS.date.start - 0.1), top: IN(POS.date.top - 0.22) }}
+              style={{ left: IN(POS.date.gridLeft), top: IN(POS.date.top - 0.22) }}
             >
               Date (MM DD YYYY)
             </span>
