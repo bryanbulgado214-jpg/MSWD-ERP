@@ -4,15 +4,6 @@ import { getDisbursements } from '../../accounting/api';
 import type { DisbursementSummary } from '../../accounting/types';
 import { formatPeso } from '../../budgeting/format-peso';
 
-const TYPE_LABELS: Record<string, string> = {
-  procurement: 'Procurement',
-  travel: 'Travel',
-  reimbursement: 'Reimbursement',
-  payroll: 'Payroll',
-  utility: 'Utility',
-  other: 'Other',
-};
-
 export function ApRegisterReportPage() {
   const [rows, setRows] = useState<DisbursementSummary[] | null>(null);
   const [error, setError] = useState('');
@@ -41,7 +32,6 @@ export function ApRegisterReportPage() {
             <tr>
               <th>DV #</th>
               <th>Date</th>
-              <th>Type</th>
               <th>Payee</th>
               <th style={{ textAlign: 'right' }}>Amount</th>
               <th>Status</th>
@@ -52,7 +42,6 @@ export function ApRegisterReportPage() {
               <tr key={r.id}>
                 <td style={{ fontFamily: 'monospace' }}>{r.dvNumber}</td>
                 <td>{new Date(r.dvDate).toLocaleDateString('en-PH')}</td>
-                <td>{TYPE_LABELS[r.dvType] ?? r.dvType}</td>
                 <td>{r.supplier?.name ?? r.payeeName ?? '—'}</td>
                 <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>
                   {formatPeso(r.netAmount)}

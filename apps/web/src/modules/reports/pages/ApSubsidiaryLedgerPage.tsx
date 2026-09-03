@@ -69,7 +69,6 @@ export function ApSubsidiaryLedgerPage() {
                 <th>Date</th>
                 {payee === 'all' && <th>Payee / Supplier</th>}
                 <th>Particulars</th>
-                <th>Type</th>
                 <th className="num">Gross</th>
                 <th className="num">Net</th>
                 <th>Status</th>
@@ -82,7 +81,6 @@ export function ApSubsidiaryLedgerPage() {
                   <td>{new Date(d.dvDate).toLocaleDateString('en-PH')}</td>
                   {payee === 'all' && <td>{payeeOf(d)}</td>}
                   <td>{d.particulars}</td>
-                  <td style={{ textTransform: 'capitalize' }}>{d.dvType?.replace(/_/g, ' ')}</td>
                   <td className="num">{formatPeso(d.grossAmount)}</td>
                   <td className="num">{formatPeso(d.netAmount)}</td>
                   <td>

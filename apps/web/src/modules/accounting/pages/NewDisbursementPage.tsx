@@ -43,14 +43,6 @@ function peso(n: number): string {
   return n.toLocaleString('en-PH', { style: 'currency', currency: 'PHP' });
 }
 
-const DV_TYPES = [
-  { value: 'travel', label: 'Travel' },
-  { value: 'reimbursement', label: 'Reimbursement' },
-  { value: 'payroll', label: 'Payroll' },
-  { value: 'utility', label: 'Utility' },
-  { value: 'other', label: 'Other' },
-];
-
 export default function NewDisbursementPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
@@ -65,8 +57,9 @@ export default function NewDisbursementPage() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState<false | 'draft' | 'post'>(false);
 
-  // Header
-  const [dvType, setDvType] = useState('travel');
+  // Header. The DV "type" is no longer shown in the form (all accounting DVs are
+  // non-procurement); we still send a valid value the API requires.
+  const [dvType, setDvType] = useState('other');
   const [dvDate, setDvDate] = useState(new Date().toISOString().slice(0, 10));
   const [dvNumber, setDvNumber] = useState('');
   const [manualNumbering, setManualNumbering] = useState(false);
@@ -280,16 +273,6 @@ export default function NewDisbursementPage() {
         <div style={{ maxWidth: 920 }}>
           {/* Header */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 10 }}>
-            <div style={cell('160px')}>
-              <label style={labelStyle}>Type</label>
-              <select style={inputStyle} value={dvType} onChange={(e) => setDvType(e.target.value)}>
-                {DV_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
-            </div>
             <div style={cell('160px')}>
               <label style={labelStyle}>DV Date</label>
               <input

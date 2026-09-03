@@ -19,15 +19,6 @@ function formatPeso(value: string | number): string {
   return num.toLocaleString('en-PH', { style: 'currency', currency: 'PHP' });
 }
 
-const DV_TYPE_LABELS: Record<string, string> = {
-  procurement: 'Procurement',
-  travel: 'Travel',
-  reimbursement: 'Reimbursement',
-  payroll: 'Payroll',
-  utility: 'Utility',
-  other: 'Other',
-};
-
 const STATUS_LABELS: Record<string, string> = {
   // DV lifecycle (accountant / procurement side)
   draft: 'Draft',
@@ -73,7 +64,6 @@ export default function DisbursementListPage() {
   const navigate = useNavigate();
   const canCreate = permissions.has('accounting.dv.create');
   const [state, setState] = useState<LoadState>({ status: 'loading' });
-  const [typeFilter, setTypeFilter] = useState('');
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -84,7 +74,6 @@ export default function DisbursementListPage() {
   const load = useCallback(async () => {
     try {
       const params = new URLSearchParams();
-      if (typeFilter) params.set('dvType', typeFilter);
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
       const data = await getDisbursements(params.toString());
@@ -96,7 +85,7 @@ export default function DisbursementListPage() {
           e instanceof AccountingApiError ? e.message : 'Failed to load disbursement vouchers.',
       });
     }
-  }, [typeFilter, dateFrom, dateTo]);
+  }, [dateFrom, dateTo]);
 
   useEffect(() => {
     load();
@@ -152,15 +141,6 @@ export default function DisbursementListPage() {
           style={{ minWidth: 260, flex: '1 1 260px' }}
           aria-label="Search disbursement vouchers"
         />
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-          <option value="">All Types</option>
-          <option value="procurement">Procurement</option>
-          <option value="travel">Travel</option>
-          <option value="reimbursement">Reimbursement</option>
-          <option value="payroll">Payroll</option>
-          <option value="utility">Utility</option>
-          <option value="other">Other</option>
-        </select>
         <span className="acct-daterange">
           <span className="acct-daterange__label">Date</span>
           <input
@@ -228,7 +208,6 @@ export default function DisbursementListPage() {
               <tr>
                 <th>DV #</th>
                 <th>Date</th>
-                <th>Type</th>
                 <th>Payee</th>
                 <th>Particulars</th>
                 <th>Net Amount</th>
@@ -243,7 +222,6 @@ export default function DisbursementListPage() {
                   <tr key={dv.id}>
                     <td className="acct-text-mono">{dv.dvNumber}</td>
                     <td>{new Date(dv.dvDate).toLocaleDateString('en-PH')}</td>
-                    <td>{DV_TYPE_LABELS[dv.dvType] ?? dv.dvType}</td>
                     <td>{dv.supplier?.name ?? dv.payeeName ?? '—'}</td>
                     <td
                       style={{

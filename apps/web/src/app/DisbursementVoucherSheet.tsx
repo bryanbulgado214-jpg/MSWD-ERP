@@ -50,15 +50,6 @@ export interface DvSheetData {
   } | null;
 }
 
-const DV_TYPE_LABELS: Record<string, string> = {
-  procurement: 'Procurement',
-  travel: 'Travel',
-  reimbursement: 'Reimbursement',
-  payroll: 'Payroll',
-  utility: 'Utility',
-  other: 'Other',
-};
-
 function numberToWords(n: number): string {
   if (n === 0) return 'Zero Pesos Only';
   const ones = [
@@ -150,7 +141,6 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
   const payeeName = dv.supplier?.name ?? dv.payeeName ?? '—';
   const payeeTin = dv.supplier?.tin ?? dv.payeeTin ?? '—';
   const payeeAddress = dv.supplier?.address ?? dv.payeeAddress ?? '—';
-  const typeLabel = dv.dvType ? (DV_TYPE_LABELS[dv.dvType] ?? dv.dvType) : null;
 
   // Box B is driven by the posted JEV (never re-derived), so it matches the GL.
   const je = dv.journalEntry;
@@ -292,11 +282,6 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
                 {dv.inspectionReport && (
                   <div style={{ fontSize: 9, color: '#667085' }}>
                     IR: {dv.inspectionReport.reportNumber} ({dv.inspectionReport.overallResult})
-                  </div>
-                )}
-                {!dv.purchaseRequest && typeLabel && (
-                  <div style={{ marginTop: 8, fontSize: 9, color: '#667085' }}>
-                    Disbursement type: {typeLabel}
                   </div>
                 )}
               </td>

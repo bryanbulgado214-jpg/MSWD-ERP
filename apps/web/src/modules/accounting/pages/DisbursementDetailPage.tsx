@@ -45,14 +45,6 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-const DV_TYPE_LABELS: Record<string, string> = {
-  procurement: 'Procurement',
-  travel: 'Travel',
-  reimbursement: 'Reimbursement',
-  payroll: 'Payroll',
-  utility: 'Utility',
-  other: 'Other',
-};
 const PAYMENT_MODE_LABELS: Record<string, string> = {
   check: 'MDS / Commercial Check',
   ada: 'Advice to Debit Account (ADA)',
@@ -300,7 +292,6 @@ export default function DisbursementDetailPage() {
           gap: 14,
         }}
       >
-        <Field label="Type" value={DV_TYPE_LABELS[dv.dvType] ?? dv.dvType} />
         <Field label="DV Date" value={fmtDate(dv.dvDate)} />
         <Field
           label="Mode of Payment"
