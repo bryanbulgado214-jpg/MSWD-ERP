@@ -42,7 +42,19 @@ const MODULE_LABEL: Record<string, string> = {
 
 // Quick presets. `modules` = every permission in those modules; `extra`/`codes`
 // = specific codes. Applying a preset replaces the current selection.
-const PRESETS: { label: string; modules?: string[]; extra?: string[]; codes?: string[] }[] = [
+const PRESETS: {
+  label: string;
+  modules?: string[];
+  extra?: string[];
+  codes?: string[];
+  readonly?: boolean;
+}[] = [
+  {
+    // Every view/report permission across the business modules — can see
+    // everything, change nothing. Ideal for a remote viewer or auditor.
+    label: 'View only (read-only)',
+    readonly: true,
+  },
   {
     label: 'Accountant (full accounting)',
     modules: ['accounting'],
@@ -142,6 +154,15 @@ export function UserAccessModal({
 
   function applyPreset(preset: (typeof PRESETS)[number]) {
     const next = new Set<string>();
+    if (preset.readonly) {
+      // All read/view/report permissions, but nothing under `core.` (keeps the
+      // viewer out of the admin area) and no create/update/delete/post/print.
+      for (const p of perms) {
+        if (!p.code.startsWith('core.') && /\.(read|reports?|view)$/.test(p.code)) {
+          next.add(p.code);
+        }
+      }
+    }
     for (const p of perms) {
       if (preset.modules?.includes(p.module)) next.add(p.code);
     }
