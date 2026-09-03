@@ -22,7 +22,10 @@ const POS = {
   // grid, one per box: `gridLeft` = left edge of the first box, `gridRight` = right
   // edge of the last box (both inches from the check's left edge), `top` = inches
   // from the top edge. Each digit is centered in its cell = grid width / 8.
-  date: { top: 0.62, gridLeft: 5.85, gridRight: 7.78 },
+  // Measured on the DBP check: first box left 15.0cm, last box right 19.8cm,
+  // vertical middle 1.5cm from the top edge (÷2.54 → inches). `top` is the box
+  // centre; the digits are centred on it.
+  date: { top: 0.59, gridLeft: 5.91, gridRight: 7.8 },
   // Payee, on the "PAY TO THE ORDER OF" line.
   payee: { left: 1.55, top: 0.9 },
   // Amount in figures, in the ₱ box (top-right) — sized separately (looks right, leave it).
@@ -217,7 +220,8 @@ export function PrintCheckPage() {
                 ...fieldBase,
                 left: IN(dateCenters[i]!),
                 top: IN(dz.top),
-                transform: 'translateX(-50%)',
+                transform: 'translate(-50%, -50%)',
+                lineHeight: 1,
                 fontSize: FONT.dateSize,
               }}
             >
