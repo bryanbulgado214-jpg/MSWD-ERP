@@ -12,6 +12,7 @@ import {
   getDisbursement,
   getDvAttachments,
   getDvNotes,
+  updateDvNumber,
   uploadDvAttachment,
   type DvAttachment,
   type DvNote,
@@ -242,6 +243,29 @@ export default function DisbursementDetailPage() {
           </span>
         </h1>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          {canCreate && (
+            <button
+              type="button"
+              className="acct-btn acct-btn--sm"
+              title="Edit the DV number"
+              onClick={async () => {
+                const next = window.prompt('Edit DV number:', dv.dvNumber);
+                if (next === null) return;
+                const t = next.trim();
+                if (!t || t === dv.dvNumber) return;
+                try {
+                  await updateDvNumber(dv.id, t);
+                  window.location.reload();
+                } catch (e) {
+                  window.alert(
+                    e instanceof AccountingApiError ? e.message : 'Could not update the DV number.',
+                  );
+                }
+              }}
+            >
+              Edit #
+            </button>
+          )}
           {isDraft && canCreate && (
             <Link to={`/accounting/disbursements/${dv.id}/edit`} className="acct-btn acct-btn--sm">
               Edit
@@ -375,7 +399,7 @@ export default function DisbursementDetailPage() {
             style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: '#667085' }}
           >
             {'   '}
-            {je.jevNumber} · {STATUS_LABELS[je.status] ?? je.status}
+            {je.status === 'posted' ? 'Posted to GL' : (STATUS_LABELS[je.status] ?? je.status)}
             {je.status !== 'posted' && ' (not yet posted to the ledger)'}
           </span>
         )}
@@ -422,7 +446,7 @@ export default function DisbursementDetailPage() {
         <div className="acct-empty">
           {dv.status === 'cancelled'
             ? 'This voucher was cancelled — no accounting entry was recorded.'
-            : 'The accounting entry is recorded as a journal entry voucher when this DV is released.'}
+            : 'The accounting entry is recorded to the general ledger when this DV is released.'}
         </div>
       )}
 
@@ -450,7 +474,10 @@ export default function DisbursementDetailPage() {
         <Field label="Check / ADA No." value={dv.checkNumber ?? '—'} />
         <Field label="Check Date" value={fmtDate(dv.checkDate)} />
         <Field label="Bank Name & Account" value={dv.bankName ?? '—'} />
-        <Field label="JEV No." value={je?.jevNumber ?? '—'} />
+        <Field
+          label="GL Posting"
+          value={je?.status === 'posted' ? 'Posted to GL ✓' : je ? 'Not yet posted' : '—'}
+        />
       </div>
 
       {sideError && (

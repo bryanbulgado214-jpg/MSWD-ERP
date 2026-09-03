@@ -23,7 +23,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
 
 import { DisbursementService } from './disbursement.service';
-import { AddDvNoteDto, CreateDisbursementDto } from './dto/disbursement.dto';
+import { AddDvNoteDto, CreateDisbursementDto, UpdateDvNumberDto } from './dto/disbursement.dto';
 
 @Controller('accounting/disbursements')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -81,6 +81,21 @@ export class DisbursementController {
     @Body() dto: CreateDisbursementDto,
   ) {
     return this.disbursementService.update(user.organizationId, user.userId, id, dto);
+  }
+
+  @Patch(':id/number')
+  @RequirePermissions('accounting.dv.create')
+  updateNumber(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateDvNumberDto,
+  ) {
+    return this.disbursementService.updateNumber(
+      user.organizationId,
+      user.userId,
+      id,
+      dto.dvNumber,
+    );
   }
 
   @Delete(':id')

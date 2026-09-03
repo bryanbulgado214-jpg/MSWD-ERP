@@ -94,6 +94,36 @@ export class DisbursementService {
     private readonly autoJev: AutoJevService,
   ) {}
 
+  /** Edit a DV's document number directly — accountant, no approval, any status.
+   *  Keeps the DV's own GL entry (which carries the DV number) aligned. */
+  async updateNumber(organizationId: string, actorId: string, id: string, dvNumber: string) {
+    const number = dvNumber?.trim();
+    if (!number) throw new BadRequestException('DV number is required.');
+    const dv = await this.prisma.disbursementVoucher.findFirst({
+      where: { id, organizationId },
+      select: { id: true },
+    });
+    if (!dv) throw new NotFoundException('Disbursement voucher not found.');
+    const taken = await this.prisma.disbursementVoucher.findFirst({
+      where: { organizationId, dvNumber: number, id: { not: id } },
+      select: { id: true },
+    });
+    if (taken) throw new ConflictException(`DV number "${number}" is already in use.`);
+    return runAudited(this.prisma, actorId, async (tx) => {
+      const updated = await tx.disbursementVoucher.update({
+        where: { id },
+        data: { dvNumber: number, updatedBy: actorId },
+        select: { id: true, dvNumber: true },
+      });
+      // The DV's GL entry carries the DV number — keep it aligned.
+      await tx.journalEntryVoucher.updateMany({
+        where: { organizationId, sourceTable: 'disbursement_vouchers', sourceId: id },
+        data: { jevNumber: number, updatedBy: actorId },
+      });
+      return updated;
+    });
+  }
+
   /** Register of ALL disbursement vouchers in the org (procurement + non-procurement). */
   async list(
     orgId: string,

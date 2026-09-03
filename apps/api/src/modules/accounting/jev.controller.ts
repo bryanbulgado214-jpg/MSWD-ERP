@@ -22,6 +22,7 @@ import {
   PostJevDto,
   ReverseJevDto,
   UpdateJevDto,
+  UpdateJevNumberDto,
   VoidJevDto,
 } from './dto/jev.dto';
 import { JevService } from './jev.service';
@@ -86,6 +87,16 @@ export class JevController {
     @Body() dto: UpdateJevDto,
   ) {
     return this.jevService.update(user.organizationId, id, user.userId, dto);
+  }
+
+  @Patch(':id/number')
+  @RequirePermissions('accounting.jev.create')
+  updateNumber(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateJevNumberDto,
+  ) {
+    return this.jevService.updateNumber(user.organizationId, user.userId, id, dto.jevNumber);
   }
 
   @Post(':id/submit')

@@ -92,6 +92,9 @@ export class JevService {
     return this.prisma.journalEntryVoucher.findMany({
       where: {
         organizationId,
+        // A DV's GL entry belongs to the DV, not the JEV register — keep the two
+        // lists separate. (It still posts to the ledger / trial balance.)
+        sourceType: { not: 'disbursement' },
         ...(filters?.status ? { status: filters.status as any } : {}),
         ...(filters?.periodId ? { accountingPeriodId: filters.periodId } : {}),
         ...(jevDate ? { jevDate } : {}),
@@ -116,6 +119,29 @@ export class JevService {
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /** Edit a JEV's document number directly — accountant, no approval, any status. */
+  async updateNumber(organizationId: string, actorId: string, id: string, jevNumber: string) {
+    const number = jevNumber?.trim();
+    if (!number) throw new BadRequestException('JEV number is required.');
+    const jev = await this.prisma.journalEntryVoucher.findFirst({
+      where: { id, organizationId },
+      select: { id: true },
+    });
+    if (!jev) throw new NotFoundException('JEV not found.');
+    const taken = await this.prisma.journalEntryVoucher.findFirst({
+      where: { organizationId, jevNumber: number, id: { not: id } },
+      select: { id: true },
+    });
+    if (taken) throw new ConflictException(`JEV number "${number}" is already in use.`);
+    return runAudited(this.prisma, actorId, async (tx) => {
+      return tx.journalEntryVoucher.update({
+        where: { id },
+        data: { jevNumber: number, updatedBy: actorId },
+        select: { id: true, jevNumber: true },
+      });
     });
   }
 

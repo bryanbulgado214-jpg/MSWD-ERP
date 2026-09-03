@@ -312,6 +312,23 @@ export async function updateJev(
   return res.json();
 }
 
+/** Edit a JEV's document number directly (accountant, no approval, any status). */
+export async function updateJevNumber(
+  id: string,
+  jevNumber: string,
+): Promise<{ jevNumber: string }> {
+  const res = await authFetchMutate(`/accounting/jev/${id}/number`, 'PATCH', { jevNumber });
+  return res.json();
+}
+
+/** Edit a DV's document number directly (accountant, no approval, any status). */
+export async function updateDvNumber(id: string, dvNumber: string): Promise<{ dvNumber: string }> {
+  const res = await authFetchMutate(`/accounting/disbursements/${id}/number`, 'PATCH', {
+    dvNumber,
+  });
+  return res.json();
+}
+
 export async function submitJev(id: string, expectedVersion: number): Promise<JevDetail> {
   const res = await authFetchMutate(`/accounting/jev/${id}/submit`, 'POST', { expectedVersion });
   return res.json();

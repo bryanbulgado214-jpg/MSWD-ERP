@@ -90,6 +90,13 @@ export class UpdateJevDto {
   lines?: JevLineDto[];
 }
 
+export class UpdateJevNumberDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(50)
+  jevNumber!: string;
+}
+
 export class PostJevDto {
   @IsInt()
   expectedVersion!: number;

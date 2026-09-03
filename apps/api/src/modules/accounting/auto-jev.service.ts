@@ -189,6 +189,9 @@ export class AutoJevService {
       sourceTable: 'disbursement_vouchers',
       sourceId: dv.id,
       particulars: `DV ${dv.dvNumber}: ${dv.particulars}`,
+      // The DV's GL entry is the DV itself — carry the DV number so it never
+      // draws (or collides with) a manual JEV number. DVs and JEVs stay separate.
+      jevNumber: dv.dvNumber,
       status,
       ...(dv.fundSourceId ? { fundSourceId: dv.fundSourceId } : {}),
       ...(dv.responsibilityCenterId ? { responsibilityCenterId: dv.responsibilityCenterId } : {}),
@@ -1037,6 +1040,10 @@ export class AutoJevService {
       fundSourceId?: string;
       responsibilityCenterId?: string;
       status?: 'draft' | 'posted';
+      // Optional explicit number. When set, this is used as the JEV number
+      // instead of drawing from the auto sequence — e.g. a disbursement's GL
+      // entry carries the DV number so it never consumes a JEV number.
+      jevNumber?: string;
       lines: Array<{
         chartOfAccountId: string;
         debitAmount: number;
@@ -1072,11 +1079,9 @@ export class AutoJevService {
       return null;
     }
 
-    const jevNumber = await this.generateJevNumber(
-      tx,
-      data.organizationId,
-      data.jevDate.getUTCFullYear(),
-    );
+    const jevNumber =
+      data.jevNumber?.trim() ||
+      (await this.generateJevNumber(tx, data.organizationId, data.jevDate.getUTCFullYear()));
 
     const jev = await tx.journalEntryVoucher.create({
       data: {

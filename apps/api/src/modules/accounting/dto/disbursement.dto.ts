@@ -31,6 +31,13 @@ export const NON_PROCUREMENT_DV_TYPES = [
   'other',
 ] as const;
 
+export class UpdateDvNumberDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(50)
+  dvNumber!: string;
+}
+
 export class DisbursementLineDto {
   @IsString()
   chartOfAccountId!: string;

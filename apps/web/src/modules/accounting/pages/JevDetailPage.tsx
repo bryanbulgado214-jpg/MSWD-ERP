@@ -14,6 +14,7 @@ import {
   postJev,
   reverseJev,
   submitJev,
+  updateJevNumber,
   voidJev,
 } from '../api';
 import type { ChartOfAccount, JevDetail } from '../types';
@@ -518,6 +519,29 @@ export default function JevDetailPage() {
         <span className={`acct-badge acct-badge--${jev.status}`}>
           {STATUS_LABELS[jev.status] || jev.status}
         </span>
+        {canCreate && (
+          <button
+            type="button"
+            className="acct-btn acct-btn--sm"
+            title="Edit the JEV number"
+            onClick={async () => {
+              const next = window.prompt('Edit JEV number:', jev.jevNumber);
+              if (next === null) return;
+              const t = next.trim();
+              if (!t || t === jev.jevNumber) return;
+              try {
+                await updateJevNumber(jev.id, t);
+                window.location.reload();
+              } catch (e) {
+                window.alert(
+                  e instanceof AccountingApiError ? e.message : 'Could not update the JEV number.',
+                );
+              }
+            }}
+          >
+            Edit #
+          </button>
+        )}
       </div>
 
       {error && <div className="acct-error">{error}</div>}
