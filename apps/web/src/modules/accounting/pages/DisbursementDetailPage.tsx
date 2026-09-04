@@ -47,8 +47,8 @@ function formatBytes(n: number): string {
 }
 
 const PAYMENT_MODE_LABELS: Record<string, string> = {
-  check: 'MDS / Commercial Check',
-  ada: 'Advice to Debit Account (ADA)',
+  check: 'Check (Commercial / MDS)',
+  ada: 'ADA — Advice to Debit Account',
   others: 'Others',
 };
 const STATUS_LABELS: Record<string, string> = {

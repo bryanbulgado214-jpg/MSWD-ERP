@@ -394,8 +394,8 @@ export default function NewDisbursementPage() {
                 value={paymentMode}
                 onChange={(e) => setPaymentMode(e.target.value)}
               >
-                <option value="check">MDS Check</option>
-                <option value="ada">Commercial Check / ADA</option>
+                <option value="check">Check (Commercial / MDS)</option>
+                <option value="ada">ADA — Advice to Debit Account (no check)</option>
                 <option value="others">Others</option>
               </select>
             </div>
