@@ -1,7 +1,4 @@
-import { formatPeso } from '../modules/budgeting/format-peso';
-
 import { useAuth } from './auth';
-import { GovLetterhead } from './GovLetterhead';
 import { signatoryFor } from './signatories';
 import '../modules/procurement/pages/print-forms.css';
 
@@ -50,606 +47,440 @@ export interface DvSheetData {
   } | null;
 }
 
-function numberToWords(n: number): string {
-  if (n === 0) return 'Zero Pesos Only';
-  const ones = [
-    '',
-    'One',
-    'Two',
-    'Three',
-    'Four',
-    'Five',
-    'Six',
-    'Seven',
-    'Eight',
-    'Nine',
-    'Ten',
-    'Eleven',
-    'Twelve',
-    'Thirteen',
-    'Fourteen',
-    'Fifteen',
-    'Sixteen',
-    'Seventeen',
-    'Eighteen',
-    'Nineteen',
-  ];
-  const tens = [
-    '',
-    '',
-    'Twenty',
-    'Thirty',
-    'Forty',
-    'Fifty',
-    'Sixty',
-    'Seventy',
-    'Eighty',
-    'Ninety',
-  ];
-
-  function convert(num: number): string {
-    if (num < 20) return ones[num]!;
-    if (num < 100) return tens[Math.floor(num / 10)]! + (num % 10 ? ' ' + ones[num % 10]! : '');
-    if (num < 1000)
-      return (
-        ones[Math.floor(num / 100)]! + ' Hundred' + (num % 100 ? ' ' + convert(num % 100) : '')
-      );
-    if (num < 1000000)
-      return (
-        convert(Math.floor(num / 1000)) +
-        ' Thousand' +
-        (num % 1000 ? ' ' + convert(num % 1000) : '')
-      );
-    if (num < 1000000000)
-      return (
-        convert(Math.floor(num / 1000000)) +
-        ' Million' +
-        (num % 1000000 ? ' ' + convert(num % 1000000) : '')
-      );
-    return (
-      convert(Math.floor(num / 1000000000)) +
-      ' Billion' +
-      (num % 1000000000 ? ' ' + convert(num % 1000000000) : '')
-    );
-  }
-
-  const whole = Math.floor(Math.abs(n));
-  const cents = Math.round((Math.abs(n) - whole) * 100);
-  let result = convert(whole) + ' Pesos';
-  if (cents > 0) result += ' and ' + convert(cents) + ' Centavos';
-  else result += ' Only';
-  return result;
+/** Plain grouped amount ("9,216.00") — the form prints "Php" separately, so no ₱. */
+function money(v: string | number | null | undefined): string {
+  if (v === null || v === undefined || v === '') return '';
+  const s = typeof v === 'number' ? String(v) : v;
+  const neg = s.startsWith('-');
+  const u = neg ? s.slice(1) : s;
+  const parts = u.split('.');
+  const whole = (parts[0] ?? '0').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const dec = (parts[1] ?? '00').padEnd(2, '0').slice(0, 2);
+  return `${neg ? '-' : ''}${whole}.${dec}`;
 }
 
+const BORDER = '1px solid #000';
+
 /**
- * The COA-prescribed Disbursement Voucher (Appendix 32). Renders identically for
- * a procurement DV and a non-procurement (accounting) DV; the payee, particulars
- * references and Box B accounting entry adapt to whichever data is present.
+ * The Metro Siquijor Water District Disbursement Voucher — an exact reproduction
+ * of the district's pre-printed form. Renders for both a procurement DV and a
+ * non-procurement (accounting) DV; the payee, particulars, accounting entry and
+ * signatories adapt to whichever data is present. Kept to a single page.
  */
 export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
   const { organization } = useAuth();
+  const entity = (organization?.name ?? 'Metro Siquijor Water District').toUpperCase();
+  const logo = organization?.logoUrl || '/aquabooks-mark.png';
+
+  // Box A = requesting/supervising officer; Box B (this form) = funds-available
+  // certification (the "boxC" slot); Box C (this form) = approver (the "boxD" slot).
   const sigA = signatoryFor(organization?.signatories, 'dv', 'boxA');
-  const sigC = signatoryFor(organization?.signatories, 'dv', 'boxC');
-  const sigD = signatoryFor(organization?.signatories, 'dv', 'boxD');
+  const sigB = signatoryFor(organization?.signatories, 'dv', 'boxC');
+  const sigC = signatoryFor(organization?.signatories, 'dv', 'boxD');
+  const approverName = sigC?.name || dv.approver?.username || '';
+  const approverTitle = sigC?.title || '';
+
   const dvDate = new Date(dv.dvDate).toLocaleDateString('en-PH', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   });
-  const amountInWords = numberToWords(parseFloat(dv.netAmount));
 
-  const payeeName = dv.supplier?.name ?? dv.payeeName ?? '—';
-  const payeeTin = dv.supplier?.tin ?? dv.payeeTin ?? '—';
-  const payeeAddress = dv.supplier?.address ?? dv.payeeAddress ?? '—';
+  const payeeName = dv.supplier?.name ?? dv.payeeName ?? '';
+  const payeeTin = dv.supplier?.tin ?? dv.payeeTin ?? '';
+  const payeeAddress = dv.supplier?.address ?? dv.payeeAddress ?? '';
 
-  // Box B is driven by the posted JEV (never re-derived), so it matches the GL.
-  const je = dv.journalEntry;
-  const jeLines = je?.lines ?? [];
-  const jeTotalDebit = jeLines.reduce((s, l) => s + parseFloat(l.debitAmount), 0);
-  const jeTotalCredit = jeLines.reduce((s, l) => s + parseFloat(l.creditAmount), 0);
+  const mode = dv.paymentMode;
+  const isAda = mode === 'ada';
+
+  // The accounting entry is driven by the posted JEV (never re-derived), so it
+  // matches the GL. Pad to a fixed number of rows to keep the sheet's height.
+  const jeLines = dv.journalEntry?.lines ?? [];
+  const jeTotalDebit = jeLines.reduce((s, l) => s + parseFloat(l.debitAmount || '0'), 0);
+  const jeTotalCredit = jeLines.reduce((s, l) => s + parseFloat(l.creditAmount || '0'), 0);
+  const MIN_ROWS = 14;
+  const blankRows = Math.max(0, MIN_ROWS - jeLines.length);
+
+  const chk = (on: boolean) => <span className="gov-checkbox">{on ? '☑' : '☐'}</span>;
+
+  const label9: React.CSSProperties = { fontSize: 9, fontWeight: 700 };
+  const sigCell = (name: string, title: string) => (
+    <div style={{ padding: '2px 0' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9 }}>
+        <tbody>
+          <tr>
+            <td style={{ width: '34%', padding: '5px 2px 1px', verticalAlign: 'bottom' }}>
+              Signature
+            </td>
+            <td style={{ borderBottom: BORDER, padding: '5px 2px 1px' }}>&nbsp;</td>
+          </tr>
+          <tr>
+            <td style={{ padding: '7px 2px 1px', verticalAlign: 'bottom' }}>Printed Name</td>
+            <td
+              style={{
+                borderBottom: BORDER,
+                padding: '7px 2px 1px',
+                textAlign: 'center',
+                fontWeight: 700,
+              }}
+            >
+              {name ? name.toUpperCase() : ' '}
+            </td>
+          </tr>
+          <tr>
+            <td style={{ padding: '7px 2px 1px', verticalAlign: 'bottom' }}>Position</td>
+            <td
+              style={{
+                borderBottom: BORDER,
+                padding: '7px 2px 1px',
+                textAlign: 'center',
+                fontWeight: 700,
+              }}
+            >
+              {title || ' '}
+            </td>
+          </tr>
+          <tr>
+            <td style={{ padding: '7px 2px 1px', verticalAlign: 'bottom' }}>Date</td>
+            <td style={{ borderBottom: BORDER, padding: '7px 2px 1px' }}>&nbsp;</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
 
   return (
     <div className="gov-print-page">
-      <div className="gov-print-sheet">
-        {/* Header */}
-        <table className="gov-table gov-table--bordered" style={{ marginBottom: 0 }}>
+      <div className="gov-print-sheet" style={{ fontSize: 10 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', border: BORDER }}>
           <tbody>
+            {/* ── Header: logo + entity + title | DV No / DV Date ── */}
             <tr>
-              <td
-                style={{ width: '50%', border: 'none', padding: '4px 8px', verticalAlign: 'top' }}
-              >
-                <GovLetterhead
-                  entityStyle={{ fontSize: 11, marginBottom: 0 }}
-                  subStyle={{ fontSize: 9 }}
-                />
-              </td>
-              <td
-                style={{
-                  width: '50%',
-                  border: 'none',
-                  padding: '4px 8px',
-                  textAlign: 'right',
-                  verticalAlign: 'top',
-                }}
-              >
-                <div style={{ fontSize: 9, color: '#667085' }}>Appendix 32</div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div className="gov-title" style={{ fontSize: 14, margin: '4px 0 8px', letterSpacing: 3 }}>
-          DISBURSEMENT VOUCHER
-        </div>
-
-        {/* Top info section */}
-        <table
-          className="gov-table gov-table--bordered gov-table--compact"
-          style={{ marginBottom: 0 }}
-        >
-          <tbody>
-            <tr>
-              <td style={{ width: '15%', fontWeight: 700, fontSize: 9 }}>Fund Cluster:</td>
-              <td style={{ width: '35%', fontSize: 10 }}>
-                {dv.fundSource ? `${dv.fundSource.code} — ${dv.fundSource.name}` : '—'}
-              </td>
-              <td style={{ width: '15%', fontWeight: 700, fontSize: 9 }}>Date:</td>
-              <td style={{ width: '15%', fontSize: 10 }}>{dvDate}</td>
-              <td style={{ width: '10%', fontWeight: 700, fontSize: 9 }}>DV No.:</td>
-              <td style={{ width: '10%', fontSize: 10, fontWeight: 700 }}>{dv.dvNumber}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        {/* Mode of Payment */}
-        <table
-          className="gov-table gov-table--bordered gov-table--compact"
-          style={{ marginBottom: 0 }}
-        >
-          <tbody>
-            <tr>
-              <td style={{ width: '20%', fontWeight: 700, fontSize: 9, verticalAlign: 'middle' }}>
-                Mode of Payment:
-              </td>
-              <td style={{ fontSize: 10 }}>
-                <div style={{ display: 'flex', gap: 24 }}>
-                  <span>
-                    <span className="gov-checkbox">{dv.paymentMode === 'check' ? '☑' : '☐'}</span>{' '}
-                    MDS Check
-                  </span>
-                  <span>
-                    <span className="gov-checkbox">{dv.paymentMode === 'ada' ? '☑' : '☐'}</span>{' '}
-                    Commercial Check / ADA
-                  </span>
-                  <span>
-                    <span className="gov-checkbox">{dv.paymentMode === 'others' ? '☑' : '☐'}</span>{' '}
-                    Others
-                  </span>
+              <td style={{ border: BORDER, padding: 0, width: '72%' }}>
+                <div style={{ display: 'flex', alignItems: 'center', padding: '4px 8px' }}>
+                  <img
+                    src={logo}
+                    alt=""
+                    style={{ height: 58, width: 58, objectFit: 'contain', marginRight: 10 }}
+                  />
+                  <div style={{ flex: 1, textAlign: 'center' }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.15 }}>{entity}</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.2, marginTop: 6 }}>
+                      DISBURSEMENT VOUCHER
+                    </div>
+                  </div>
                 </div>
               </td>
+              <td style={{ border: BORDER, padding: 0, verticalAlign: 'top' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', height: '100%' }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ borderBottom: BORDER, padding: '4px 6px', ...label9 }}>
+                        DV No:
+                      </td>
+                      <td style={{ borderBottom: BORDER, padding: '4px 6px', fontWeight: 700 }}>
+                        {dv.dvNumber ?? ''}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '6px 6px', width: '42%', ...label9 }}>DV Date:</td>
+                      <td style={{ borderLeft: BORDER, padding: '6px 6px' }}>{dvDate}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </td>
             </tr>
-          </tbody>
-        </table>
 
-        {/* Payee and Address */}
-        <table
-          className="gov-table gov-table--bordered gov-table--compact"
-          style={{ marginBottom: 0 }}
-        >
-          <tbody>
+            {/* ── Mode of Payment ── */}
             <tr>
-              <td style={{ width: '15%', fontWeight: 700, fontSize: 9 }}>Payee:</td>
-              <td style={{ width: '45%', fontSize: 11, fontWeight: 600 }}>{payeeName}</td>
-              <td style={{ width: '10%', fontWeight: 700, fontSize: 9 }}>TIN/ID No.:</td>
-              <td style={{ width: '30%', fontSize: 10 }}>{payeeTin}</td>
-            </tr>
-            <tr>
-              <td style={{ fontWeight: 700, fontSize: 9 }}>ORS/BURS No.:</td>
-              <td style={{ fontSize: 10 }}>{dv.ors?.orsNumber ?? '—'}</td>
-              <td style={{ fontWeight: 700, fontSize: 9 }}>Address:</td>
-              <td style={{ fontSize: 10 }}>{payeeAddress}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        {/* Particulars */}
-        <table className="gov-table gov-table--bordered" style={{ marginBottom: 0 }}>
-          <thead>
-            <tr>
-              <th style={{ width: '15%', fontSize: 9 }}>Responsibility Center</th>
-              <th style={{ fontSize: 9 }}>Particulars</th>
-              <th style={{ width: '15%', fontSize: 9 }}>MFO/PAP</th>
-              <th style={{ width: '18%', fontSize: 9, textAlign: 'right' }}>Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td className="gov-center" style={{ fontSize: 10, verticalAlign: 'top' }}>
-                {dv.responsibilityCenter ? dv.responsibilityCenter.code : '—'}
-              </td>
-              <td style={{ fontSize: 10, verticalAlign: 'top', minHeight: 80 }}>
-                <div style={{ whiteSpace: 'pre-wrap', minHeight: 60 }}>{dv.particulars}</div>
-                {dv.purchaseRequest && (
-                  <div style={{ marginTop: 8, fontSize: 9, color: '#667085' }}>
-                    PR: {dv.purchaseRequest.prNumber} — {dv.purchaseRequest.title}
-                  </div>
-                )}
-                {dv.purchaseOrder && (
-                  <div style={{ fontSize: 9, color: '#667085' }}>
-                    PO: {dv.purchaseOrder.poNumber}
-                  </div>
-                )}
-                {dv.inspectionReport && (
-                  <div style={{ fontSize: 9, color: '#667085' }}>
-                    IR: {dv.inspectionReport.reportNumber} ({dv.inspectionReport.overallResult})
-                  </div>
-                )}
-              </td>
-              <td className="gov-center" style={{ fontSize: 10, verticalAlign: 'top' }}>
-                {dv.accountCode ?? '—'}
-              </td>
-              <td className="gov-right gov-mono" style={{ fontSize: 11, verticalAlign: 'top' }}>
-                {formatPeso(dv.grossAmount)}
-              </td>
-            </tr>
-            {parseFloat(dv.taxAmount) > 0 && (
-              <tr>
-                <td></td>
-                <td style={{ fontSize: 10, paddingLeft: 24 }}>Less: Withholding Tax</td>
-                <td></td>
-                <td className="gov-right gov-mono" style={{ fontSize: 10, color: '#b42318' }}>
-                  ({formatPeso(dv.taxAmount)})
-                </td>
-              </tr>
-            )}
-            {dv.deductions && dv.deductions.length > 0
-              ? dv.deductions.map((d, i) => (
-                  <tr key={i}>
-                    <td></td>
-                    <td style={{ fontSize: 10, paddingLeft: 24 }}>Less: {d.label}</td>
-                    <td className="gov-center gov-mono" style={{ fontSize: 9 }}>
-                      {d.chartOfAccount?.accountCode ?? ''}
-                    </td>
-                    <td className="gov-right gov-mono" style={{ fontSize: 10, color: '#b42318' }}>
-                      ({formatPeso(d.amount)})
-                    </td>
-                  </tr>
-                ))
-              : parseFloat(dv.otherDeductions) > 0 && (
-                  <tr>
-                    <td></td>
-                    <td style={{ fontSize: 10, paddingLeft: 24 }}>Less: Other Deductions</td>
-                    <td></td>
-                    <td className="gov-right gov-mono" style={{ fontSize: 10, color: '#b42318' }}>
-                      ({formatPeso(dv.otherDeductions)})
-                    </td>
-                  </tr>
-                )}
-          </tbody>
-        </table>
-
-        {/* Amount in Words and Net Amount */}
-        <table
-          className="gov-table gov-table--bordered gov-table--compact"
-          style={{ marginBottom: 0 }}
-        >
-          <tbody>
-            <tr>
-              <td style={{ width: '82%' }}>
-                <span style={{ fontSize: 9, fontWeight: 700 }}>Amount Due: </span>
-                <span style={{ fontSize: 10, fontStyle: 'italic' }}>{amountInWords}</span>
-              </td>
-              <td className="gov-right gov-mono gov-bold" style={{ width: '18%', fontSize: 12 }}>
-                {formatPeso(dv.netAmount)}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        {/* Box A - Certified by requesting/supervising officer */}
-        <table
-          className="gov-table gov-table--bordered gov-table--compact"
-          style={{ marginBottom: 0 }}
-        >
-          <tbody>
-            <tr>
-              <td
-                colSpan={2}
-                style={{ fontSize: 8, fontWeight: 700, background: '#f3f4f6', padding: '2px 6px' }}
-              >
-                A — Certified
-              </td>
-            </tr>
-            <tr>
-              <td colSpan={2} style={{ fontSize: 9, padding: '6px 8px' }}>
-                Certified: Expenses/Cash Advance necessary, lawful and incurred under my direct
-                supervision.
-              </td>
-            </tr>
-            <tr>
-              <td
-                style={{
-                  width: '50%',
-                  textAlign: 'center',
-                  padding: '20px 8px 4px',
-                  borderRight: '1px solid #bbb',
-                }}
-              >
-                <div className="gov-sig-line" style={{ width: '70%', margin: '0 auto 4px' }}></div>
-                {sigA?.name ? (
-                  <div style={{ fontSize: 10, fontWeight: 700 }}>{sigA.name.toUpperCase()}</div>
-                ) : null}
-                {sigA?.title ? <div style={{ fontSize: 8.5 }}>{sigA.title}</div> : null}
-                <div style={{ fontSize: 8, color: '#667085' }}>
-                  Printed Name, Designation &amp; Signature of Head of Office / Supervisor
-                </div>
-              </td>
-              <td style={{ width: '50%', textAlign: 'center', padding: '20px 8px 4px' }}>
-                <div className="gov-sig-line" style={{ width: '50%', margin: '0 auto 4px' }}></div>
-                <div style={{ fontSize: 8, color: '#667085' }}>Date</div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        {/* Box B - Accounting Entry (from the posted JEV) */}
-        <table
-          className="gov-table gov-table--bordered gov-table--compact"
-          style={{ marginBottom: 0 }}
-        >
-          <tbody>
-            <tr>
-              <td
-                colSpan={4}
-                style={{ fontSize: 8, fontWeight: 700, background: '#f3f4f6', padding: '2px 6px' }}
-              >
-                B — Accounting Entry
-                {je && (
-                  <span style={{ fontWeight: 400, color: '#667085' }}>
-                    {'   '}(per posted {je.jevNumber})
-                  </span>
-                )}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <table
-          className="gov-table gov-table--bordered gov-table--compact"
-          style={{ marginBottom: 0 }}
-        >
-          <thead>
-            <tr>
-              <th style={{ fontSize: 9, textAlign: 'left' }}>Account Title</th>
-              <th style={{ width: '18%', fontSize: 9 }}>UACS Code</th>
-              <th style={{ width: '17%', fontSize: 9, textAlign: 'right' }}>Debit</th>
-              <th style={{ width: '17%', fontSize: 9, textAlign: 'right' }}>Credit</th>
-            </tr>
-          </thead>
-          <tbody>
-            {jeLines.length > 0 ? (
-              jeLines.map((l, i) => (
-                <tr key={i}>
-                  <td style={{ fontSize: 10 }}>{l.chartOfAccount.name}</td>
-                  <td className="gov-center gov-mono" style={{ fontSize: 9 }}>
-                    {l.chartOfAccount.accountCode}
-                  </td>
-                  <td className="gov-right gov-mono" style={{ fontSize: 10 }}>
-                    {parseFloat(l.debitAmount) > 0 ? formatPeso(l.debitAmount) : ''}
-                  </td>
-                  <td className="gov-right gov-mono" style={{ fontSize: 10 }}>
-                    {parseFloat(l.creditAmount) > 0 ? formatPeso(l.creditAmount) : ''}
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td
-                  colSpan={4}
+              <td colSpan={2} style={{ border: BORDER, padding: '3px 8px 5px' }}>
+                <div
                   style={{
-                    fontSize: 9,
-                    color: '#98a2b3',
+                    textAlign: 'center',
                     fontStyle: 'italic',
-                    padding: '10px 8px',
+                    fontWeight: 700,
+                    fontSize: 10,
                   }}
                 >
-                  The accounting entry is recorded automatically as a posted journal entry voucher
-                  upon release / disbursement of this voucher.
-                </td>
-              </tr>
-            )}
-            {jeLines.length > 0 && (
-              <tr>
-                <td colSpan={2} className="gov-right gov-bold" style={{ fontSize: 9 }}>
-                  Total
-                </td>
-                <td className="gov-right gov-mono gov-bold" style={{ fontSize: 10 }}>
-                  {formatPeso(jeTotalDebit)}
-                </td>
-                <td className="gov-right gov-mono gov-bold" style={{ fontSize: 10 }}>
-                  {formatPeso(jeTotalCredit)}
-                </td>
-              </tr>
-            )}
+                  MODE OF PAYMENT
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-around',
+                    fontSize: 10,
+                    marginTop: 2,
+                  }}
+                >
+                  <span>{chk(false)} MDS Check</span>
+                  <span>{chk(mode === 'check')} Commercial Check</span>
+                  <span>{chk(isAda)} ADA</span>
+                  <span>{chk(mode === 'others')} Others</span>
+                </div>
+              </td>
+            </tr>
           </tbody>
         </table>
 
-        {/* Box C - Certified by Head, Accounting Unit / Authorized Representative */}
-        <table
-          className="gov-table gov-table--bordered gov-table--compact"
-          style={{ marginBottom: 0 }}
-        >
+        {/* ── Payee / TIN / Address ── */}
+        <table style={{ width: '100%', borderCollapse: 'collapse', border: BORDER, borderTop: 0 }}>
           <tbody>
+            <tr>
+              <td style={{ border: BORDER, padding: '6px 8px', width: '13%', ...label9 }}>
+                Payee:
+              </td>
+              <td
+                style={{
+                  border: BORDER,
+                  padding: '6px 8px',
+                  width: '61%',
+                  fontStyle: 'italic',
+                  fontWeight: 700,
+                  fontSize: 12,
+                }}
+              >
+                {payeeName}
+              </td>
+              <td style={{ border: BORDER, padding: '6px 8px', verticalAlign: 'top', ...label9 }}>
+                Payee&apos;s TIN: <span style={{ fontWeight: 400 }}>{payeeTin}</span>
+              </td>
+            </tr>
+            <tr>
+              <td style={{ border: BORDER, padding: '6px 8px', ...label9 }}>Address:</td>
+              <td colSpan={2} style={{ border: BORDER, padding: '6px 8px', fontWeight: 700 }}>
+                {payeeAddress}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* ── Particulars / Amount + Accounting entry ── */}
+        <table style={{ width: '100%', borderCollapse: 'collapse', border: BORDER, borderTop: 0 }}>
+          <colgroup>
+            <col style={{ width: '56%' }} />
+            <col style={{ width: '20%' }} />
+            <col style={{ width: '12%' }} />
+            <col style={{ width: '12%' }} />
+          </colgroup>
+          <tbody>
+            <tr>
+              <td colSpan={2} style={{ border: BORDER, textAlign: 'center', padding: '3px 6px' }}>
+                Particulars
+              </td>
+              <td colSpan={2} style={{ border: BORDER, textAlign: 'center', padding: '3px 6px' }}>
+                Amount
+              </td>
+            </tr>
+            <tr>
+              <td colSpan={2} style={{ border: BORDER, padding: '5px 8px' }}>
+                {dv.particulars}
+              </td>
+              <td style={{ border: BORDER, textAlign: 'center', padding: '5px 6px' }}>Php</td>
+              <td
+                style={{
+                  border: BORDER,
+                  textAlign: 'right',
+                  padding: '5px 8px',
+                  fontWeight: 700,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {money(dv.grossAmount)}
+              </td>
+            </tr>
+            <tr>
+              <td
+                style={{ border: BORDER, textAlign: 'center', fontWeight: 700, padding: '2px 6px' }}
+              >
+                ACCOUNT NAME
+              </td>
+              <td
+                style={{ border: BORDER, textAlign: 'center', fontWeight: 700, padding: '2px 6px' }}
+              >
+                ACCOUNT CODE
+              </td>
+              <td
+                style={{ border: BORDER, textAlign: 'center', fontWeight: 700, padding: '2px 6px' }}
+              >
+                DEBIT
+              </td>
+              <td
+                style={{ border: BORDER, textAlign: 'center', fontWeight: 700, padding: '2px 6px' }}
+              >
+                CREDIT
+              </td>
+            </tr>
+            {jeLines.map((l, i) => (
+              <tr key={i}>
+                <td style={{ border: BORDER, padding: '2px 8px' }}>{l.chartOfAccount.name}</td>
+                <td style={{ border: BORDER, textAlign: 'center', padding: '2px 6px' }}>
+                  {l.chartOfAccount.accountCode}
+                </td>
+                <td
+                  style={{
+                    border: BORDER,
+                    textAlign: 'right',
+                    padding: '2px 8px',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {parseFloat(l.debitAmount || '0') > 0 ? money(l.debitAmount) : ''}
+                </td>
+                <td
+                  style={{
+                    border: BORDER,
+                    textAlign: 'right',
+                    padding: '2px 8px',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {parseFloat(l.creditAmount || '0') > 0 ? money(l.creditAmount) : ''}
+                </td>
+              </tr>
+            ))}
+            {Array.from({ length: blankRows }).map((_, i) => (
+              <tr key={`b${i}`}>
+                <td style={{ border: BORDER, padding: '2px 8px' }}>&nbsp;</td>
+                <td style={{ border: BORDER }}></td>
+                <td style={{ border: BORDER }}></td>
+                <td style={{ border: BORDER }}></td>
+              </tr>
+            ))}
             <tr>
               <td
                 colSpan={2}
-                style={{ fontSize: 8, fontWeight: 700, background: '#f3f4f6', padding: '2px 6px' }}
+                style={{ border: BORDER, textAlign: 'right', fontWeight: 700, padding: '2px 8px' }}
               >
-                C — Certified
+                TOTAL
               </td>
-            </tr>
-            <tr>
-              <td colSpan={2} style={{ fontSize: 9, padding: '6px 8px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  <span>
-                    <span className="gov-checkbox">☑</span> Cash available
-                  </span>
-                  <span>
-                    <span className="gov-checkbox">☐</span> Subject to Authority to Debit Account
-                    (ADA)
-                  </span>
-                  <span>
-                    <span className="gov-checkbox">☑</span> Supporting documents complete and amount
-                    claimed proper
-                  </span>
-                </div>
-              </td>
-            </tr>
-            <tr>
               <td
                 style={{
-                  width: '50%',
-                  textAlign: 'center',
-                  padding: '16px 8px 4px',
-                  borderRight: '1px solid #bbb',
+                  border: BORDER,
+                  textAlign: 'right',
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  fontVariantNumeric: 'tabular-nums',
                 }}
               >
-                <div className="gov-sig-line" style={{ width: '70%', margin: '0 auto 4px' }}></div>
-                <div style={{ fontSize: 10, fontWeight: 700 }}>
-                  {sigC?.name?.toUpperCase() || dv.certifier?.username?.toUpperCase() || ''}
-                </div>
-                {sigC?.title ? <div style={{ fontSize: 8.5 }}>{sigC.title}</div> : null}
-                <div style={{ fontSize: 8, color: '#667085' }}>
-                  Printed Name &amp; Signature — Head, Accounting Unit / Authorized Representative
-                </div>
+                {jeLines.length ? money(jeTotalDebit.toFixed(2)) : ''}
               </td>
-              <td style={{ width: '50%', textAlign: 'center', padding: '16px 8px 4px' }}>
-                <div style={{ fontSize: 9 }}>
-                  {dv.certifiedAt ? new Date(dv.certifiedAt).toLocaleDateString('en-PH') : ''}
-                </div>
-                <div style={{ fontSize: 8, color: '#667085' }}>Date</div>
+              <td
+                style={{
+                  border: BORDER,
+                  textAlign: 'right',
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {jeLines.length ? money(jeTotalCredit.toFixed(2)) : ''}
               </td>
             </tr>
           </tbody>
         </table>
 
-        {/* Box D - Approved for Payment */}
-        <table
-          className="gov-table gov-table--bordered gov-table--compact"
-          style={{ marginBottom: 0 }}
-        >
+        {/* ── Certifications A | B | C  and  Received | Check details | JEV ── */}
+        <table style={{ width: '100%', borderCollapse: 'collapse', border: BORDER, borderTop: 0 }}>
+          <colgroup>
+            <col style={{ width: '38%' }} />
+            <col style={{ width: '38%' }} />
+            <col style={{ width: '24%' }} />
+          </colgroup>
           <tbody>
             <tr>
-              <td
-                colSpan={2}
-                style={{ fontSize: 8, fontWeight: 700, background: '#f3f4f6', padding: '2px 6px' }}
-              >
-                D — Approved for Payment
+              {/* A) Certified */}
+              <td style={{ border: BORDER, padding: '5px 8px', verticalAlign: 'top' }}>
+                <div style={{ fontSize: 9.5, minHeight: 52 }}>
+                  A) Certified: Expenses/Advances necessary, lawful and incurred under my direct
+                  supervision
+                </div>
+                {sigCell(sigA?.name ?? '', sigA?.title ?? '')}
+              </td>
+              {/* B) Certified */}
+              <td style={{ border: BORDER, padding: '5px 8px', verticalAlign: 'top' }}>
+                <div style={{ fontSize: 9.5, minHeight: 52 }}>
+                  B) Certified:
+                  <div style={{ paddingLeft: 12 }}>
+                    Supporting documents complete and proper; and
+                  </div>
+                  <div style={{ paddingLeft: 24, marginTop: 2 }}>{chk(!isAda)} Cash available</div>
+                  <div style={{ paddingLeft: 24, marginTop: 2 }}>{chk(isAda)} Subject ADA</div>
+                </div>
+                {sigCell(sigB?.name ?? '', sigB?.title ?? '')}
+              </td>
+              {/* C) Approved For Payment */}
+              <td style={{ border: BORDER, padding: '5px 8px', verticalAlign: 'top' }}>
+                <div style={{ fontSize: 9.5 }}>C) Approved For Payment</div>
+                <div style={{ textAlign: 'center', marginTop: 26 }}>
+                  <div style={{ fontWeight: 700, fontSize: 11 }}>
+                    {approverName ? approverName.toUpperCase() : ' '}
+                  </div>
+                  <div style={{ fontWeight: 700, fontSize: 10, marginTop: 8 }}>
+                    {approverTitle || ' '}
+                  </div>
+                </div>
+                <div style={{ fontSize: 10, marginTop: 18 }}>P.O. No.</div>
               </td>
             </tr>
             <tr>
-              <td colSpan={2} style={{ fontSize: 9, padding: '4px 8px' }}>
-                Approved for Payment in the amount of{' '}
-                <span className="gov-bold">{formatPeso(dv.netAmount)}</span>.
+              {/* D) Received */}
+              <td style={{ border: BORDER, padding: '6px 8px', verticalAlign: 'top' }}>
+                <div style={{ fontSize: 9.5 }}>
+                  D) Received:&nbsp;&nbsp;Php{' '}
+                  <span
+                    style={{
+                      borderBottom: BORDER,
+                      fontWeight: 700,
+                      padding: '0 6px',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {money(dv.netAmount)}
+                  </span>
+                </div>
+                <div style={{ marginTop: 30, textAlign: 'center' }}>
+                  <div style={{ borderBottom: BORDER, height: 1, margin: '0 8px' }}></div>
+                  <div style={{ fontSize: 9, fontWeight: 700, marginTop: 2 }}>
+                    Signature Over Printed Name
+                  </div>
+                </div>
               </td>
-            </tr>
-            <tr>
-              <td
-                style={{
-                  width: '50%',
-                  textAlign: 'center',
-                  padding: '16px 8px 4px',
-                  borderRight: '1px solid #bbb',
-                }}
-              >
-                <div className="gov-sig-line" style={{ width: '70%', margin: '0 auto 4px' }}></div>
-                <div style={{ fontSize: 10, fontWeight: 700 }}>
-                  {sigD?.name?.toUpperCase() || dv.approver?.username?.toUpperCase() || ''}
-                </div>
-                {sigD?.title ? <div style={{ fontSize: 8.5 }}>{sigD.title}</div> : null}
-                <div style={{ fontSize: 8, color: '#667085' }}>
-                  Printed Name &amp; Signature — Agency Head / Authorized Representative
-                </div>
+              {/* Check / ADA details */}
+              <td style={{ border: BORDER, padding: 0, verticalAlign: 'top' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9 }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ padding: '4px 6px', width: '38%', ...label9 }}>Check/ADA No:</td>
+                      <td style={{ borderBottom: BORDER, padding: '4px 6px' }}>
+                        {dv.checkNumber ?? ''}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '4px 6px', ...label9 }}>Bank Name:</td>
+                      <td style={{ borderBottom: BORDER, padding: '4px 6px' }}>
+                        {dv.bankName ?? ''}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '4px 6px', ...label9 }}>O.R. No.</td>
+                      <td style={{ borderBottom: BORDER, padding: '4px 6px' }}>&nbsp;</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '4px 6px', ...label9 }}>Date</td>
+                      <td style={{ borderBottom: BORDER, padding: '4px 6px' }}>
+                        {dv.checkDate ? new Date(dv.checkDate).toLocaleDateString('en-PH') : ''}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </td>
-              <td style={{ width: '50%', textAlign: 'center', padding: '16px 8px 4px' }}>
-                <div style={{ fontSize: 9 }}>
-                  {dv.approvedAt ? new Date(dv.approvedAt).toLocaleDateString('en-PH') : ''}
-                </div>
-                <div style={{ fontSize: 8, color: '#667085' }}>Date</div>
+              {/* JEV No. */}
+              <td style={{ border: BORDER, padding: '4px 8px', verticalAlign: 'top', ...label9 }}>
+                JEV No.: <span style={{ fontWeight: 400 }}>{dv.journalEntry?.jevNumber ?? ''}</span>
               </td>
             </tr>
           </tbody>
         </table>
-
-        {/* Box E - Receipt of Payment */}
-        <table className="gov-table gov-table--bordered gov-table--compact">
-          <tbody>
-            <tr>
-              <td
-                colSpan={4}
-                style={{ fontSize: 8, fontWeight: 700, background: '#f3f4f6', padding: '2px 6px' }}
-              >
-                E — Receipt of Payment
-              </td>
-            </tr>
-            <tr>
-              <td
-                style={{
-                  width: '15%',
-                  fontSize: 9,
-                  fontWeight: 700,
-                  borderRight: '1px solid #bbb',
-                }}
-              >
-                Check / ADA No.:
-              </td>
-              <td style={{ width: '25%', fontSize: 10, borderRight: '1px solid #bbb' }}>
-                {dv.checkNumber ?? ''}
-              </td>
-              <td
-                style={{
-                  width: '10%',
-                  fontSize: 9,
-                  fontWeight: 700,
-                  borderRight: '1px solid #bbb',
-                }}
-              >
-                Date:
-              </td>
-              <td style={{ width: '20%', fontSize: 10 }}>
-                {dv.checkDate ? new Date(dv.checkDate).toLocaleDateString('en-PH') : ''}
-              </td>
-            </tr>
-            <tr>
-              <td style={{ fontSize: 9, fontWeight: 700, borderRight: '1px solid #bbb' }}>
-                Bank Name &amp; Account No.:
-              </td>
-              <td colSpan={3} style={{ fontSize: 10 }}>
-                {dv.bankName ?? ''}
-              </td>
-            </tr>
-            <tr>
-              <td style={{ fontSize: 9, fontWeight: 700, borderRight: '1px solid #bbb' }}>
-                JEV No.:
-              </td>
-              <td colSpan={3} className="gov-mono" style={{ fontSize: 10 }}>
-                {je?.jevNumber ?? '—'}
-              </td>
-            </tr>
-            <tr>
-              <td colSpan={4} style={{ fontSize: 9, padding: '6px 8px' }}>
-                Received Payment: _____________________________ Date: _____________ OR / Other
-                Documents No.: _____________
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        {/* Print-only footer */}
-        <div className="gov-print-footer">
-          <div style={{ fontSize: 8, color: '#98a2b3' }}>
-            Printed: {new Date().toLocaleString('en-PH')} | {dv.dvNumber}
-          </div>
-        </div>
       </div>
 
       <div className="gov-print-controls">
