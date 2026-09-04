@@ -448,6 +448,11 @@ export class DisbursementService {
 
     const bankDisplay = `${bankAccount.bank.name} — ${bankAccount.accountName} (${bankAccount.accountNumber})`;
     const asDraft = dto.asDraft === true;
+    // A check-paid DV is released by the CASHIER after they print and release the
+    // check — so posting it only takes it to "approved" with a pending check.
+    // Non-check disbursements (ADA/others) have no check to print, so they release
+    // on post.
+    const isCheckPayment = (dto.paymentMode ?? 'check') === 'check';
 
     // Posting straight to the GL requires the Post permission. Data-entry staff
     // can only save a draft; the accountant reviews and posts it.
@@ -515,7 +520,7 @@ export class DisbursementService {
           netAmount: net,
           bankName: bankDisplay,
           ...(dto.fundSourceId ? { fundSourceId: dto.fundSourceId } : {}),
-          status: asDraft ? 'draft' : 'released',
+          status: asDraft ? 'draft' : isCheckPayment ? 'approved' : 'released',
           ...(asDraft
             ? {}
             : {
@@ -523,8 +528,9 @@ export class DisbursementService {
                 certifiedAt: now,
                 approvedBy: userId,
                 approvedAt: now,
-                releasedBy: userId,
-                releasedAt: now,
+                // Check-paid DVs are released by the cashier (on check release);
+                // ADA/other payments release immediately on post.
+                ...(isCheckPayment ? {} : { releasedBy: userId, releasedAt: now }),
               }),
           createdBy: userId,
           updatedBy: userId,
@@ -556,7 +562,7 @@ export class DisbursementService {
 
       // A check-paid DV raises a PENDING check in the register — the cashier
       // assigns the number and prints it. No check number is captured here.
-      if ((dto.paymentMode ?? 'check') === 'check') {
+      if (isCheckPayment) {
         const check = await tx.check.create({
           data: {
             organizationId: orgId,
@@ -800,12 +806,15 @@ export class DisbursementService {
   async postDraft(orgId: string, userId: string, id: string) {
     const dv = await this.prisma.disbursementVoucher.findFirst({
       where: { id, organizationId: orgId },
-      select: { id: true, status: true, version: true },
+      select: { id: true, status: true, version: true, paymentMode: true },
     });
     if (!dv) throw new NotFoundException('Disbursement voucher not found.');
     if (dv.status !== 'draft') {
       throw new BadRequestException('Only draft disbursement vouchers can be posted.');
     }
+    // A check-paid DV is released by the cashier after printing/releasing the
+    // check; only non-check payments release on post.
+    const isCheckPayment = dv.paymentMode === 'check';
 
     const jev = await this.prisma.journalEntryVoucher.findFirst({
       where: { organizationId: orgId, sourceType: 'disbursement', sourceId: id, status: 'draft' },
@@ -834,13 +843,13 @@ export class DisbursementService {
       await tx.disbursementVoucher.update({
         where: { id, version: dv.version },
         data: {
-          status: 'released',
+          status: isCheckPayment ? 'approved' : 'released',
           certifiedBy: userId,
           certifiedAt: now,
           approvedBy: userId,
           approvedAt: now,
-          releasedBy: userId,
-          releasedAt: now,
+          // Check-paid DVs are released by the cashier on check release.
+          ...(isCheckPayment ? {} : { releasedBy: userId, releasedAt: now }),
           updatedBy: userId,
           version: { increment: 1 },
         },

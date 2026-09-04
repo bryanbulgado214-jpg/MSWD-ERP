@@ -333,6 +333,20 @@ export class CheckService {
         },
       });
 
+      // Releasing the check releases its DV — the cashier is the releaser, not
+      // the accountant who posted it (segregation of duties).
+      if (isReleased && check.disbursementVoucherId) {
+        await tx.disbursementVoucher.update({
+          where: { id: check.disbursementVoucherId },
+          data: {
+            status: 'released',
+            releasedBy: userId,
+            releasedAt: new Date(),
+            updatedBy: userId,
+          },
+        });
+      }
+
       return updated;
     });
   }
