@@ -439,6 +439,84 @@ export class CheckService {
   }
 
   /**
+   * Cashier corrects a check's number (a print jam or misfeed often means the
+   * physical check actually used isn't the one first assigned). Allowed while the
+   * check is still in play; once it has CLEARED the bank the number is locked.
+   */
+  async updateCheckNumber(
+    organizationId: string,
+    userId: string,
+    id: string,
+    data: { checkNumber: string; checkDate?: string },
+  ) {
+    const number = data.checkNumber?.trim();
+    if (!number) throw new BadRequestException('Check number is required.');
+
+    const check = await this.prisma.check.findFirst({
+      where: { id, organizationId },
+      select: {
+        id: true,
+        status: true,
+        bankAccountId: true,
+        checkNumber: true,
+        disbursementVoucherId: true,
+      },
+    });
+    if (!check) throw new NotFoundException('Check not found.');
+    if (check.status === 'cleared' || check.status === 'stale_dated') {
+      throw new BadRequestException(
+        'This check has cleared the bank — its number is locked and can no longer be changed.',
+      );
+    }
+
+    const dup = await this.prisma.check.findFirst({
+      where: {
+        organizationId,
+        bankAccountId: check.bankAccountId,
+        checkNumber: number,
+        NOT: { id },
+      },
+      select: { id: true },
+    });
+    if (dup)
+      throw new ConflictException('That check number is already used for this bank account.');
+
+    return runAudited(this.prisma, userId, async (tx) => {
+      const updated = await tx.check.update({
+        where: { id },
+        data: {
+          checkNumber: number,
+          ...(data.checkDate ? { checkDate: new Date(data.checkDate) } : {}),
+          updatedBy: userId,
+          version: { increment: 1 },
+        },
+        select: CHECK_DETAIL_SELECT,
+      });
+      await tx.checkStatusHistory.create({
+        data: {
+          checkId: id,
+          fromStatus: check.status,
+          toStatus: check.status,
+          changedBy: userId,
+          remarks: `Check number corrected${check.checkNumber ? ` from ${check.checkNumber}` : ''} to ${number}`,
+        },
+      });
+      // Keep the DV's stamped number in sync (its Appendix 32 printout uses it).
+      if (check.disbursementVoucherId) {
+        await tx.disbursementVoucher.update({
+          where: { id: check.disbursementVoucherId },
+          data: {
+            checkNumber: number,
+            ...(data.checkDate ? { checkDate: new Date(data.checkDate) } : {}),
+            updatedBy: userId,
+          },
+        });
+      }
+      return updated;
+    });
+  }
+
+  /**
    * Approver-only: void or spoil a check. Enforces maker != checker — the person
    * who prepared, printed, or released the check may NOT be the one who voids it
    * (segregation of duties; the person who handled the cash can't reverse the

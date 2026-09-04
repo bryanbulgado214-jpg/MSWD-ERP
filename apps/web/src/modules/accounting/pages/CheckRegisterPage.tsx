@@ -6,7 +6,7 @@ import { useAuth } from '../../../app/auth';
 import { AccountingSubNav } from './AccountingSubNav';
 
 import './accounting.css';
-import { getChecks, printCheck, transitionCheck, voidCheck } from '../api';
+import { getChecks, printCheck, transitionCheck, updateCheckNumber, voidCheck } from '../api';
 import type { CheckListItem } from '../types';
 
 function formatPeso(value: string | number): string {
@@ -111,6 +111,26 @@ export default function CheckRegisterPage() {
       setPrintError(err.message);
     } finally {
       setPrinting(false);
+    }
+  }
+
+  async function handleEditNumber(check: CheckListItem) {
+    const next = window.prompt(
+      `Correct the check number for ${check.disbursementVoucher?.dvNumber ?? 'this check'} (currently ${check.checkNumber ?? '—'}):`,
+      check.checkNumber ?? '',
+    );
+    if (next === null) return;
+    const trimmed = next.trim();
+    if (!trimmed || trimmed === check.checkNumber) return;
+    setActionError('');
+    setBusy(check.id);
+    try {
+      await updateCheckNumber(check.id, { checkNumber: trimmed });
+      loadChecks();
+    } catch (err: any) {
+      setActionError(err.message);
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -503,6 +523,18 @@ export default function CheckRegisterPage() {
                             Print
                           </Link>
                         )}
+                        {canPrint &&
+                          c.checkNumber &&
+                          !['cleared', 'stale_dated', 'voided', 'spoiled'].includes(c.status) && (
+                            <button
+                              className="acct-btn acct-btn--sm"
+                              title="Correct the check number (e.g. after a print jam)"
+                              disabled={busy === c.id}
+                              onClick={() => handleEditNumber(c)}
+                            >
+                              Edit #
+                            </button>
+                          )}
                         {canRelease && c.status === 'printed' && (
                           <button
                             className="acct-btn acct-btn--sm"

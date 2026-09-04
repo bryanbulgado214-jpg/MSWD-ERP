@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -69,6 +70,18 @@ export class CheckController {
     @Body() dto: PrintCheckDto,
   ) {
     return this.checkService.printCheck(user.organizationId, user.userId, id, dto);
+  }
+
+  // Cashier corrects a check's number (e.g. a print jam meant a different physical
+  // check was used). Locked once the check has cleared the bank.
+  @Patch(':id/number')
+  @RequirePermissions('accounting.check.print')
+  updateNumber(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PrintCheckDto,
+  ) {
+    return this.checkService.updateCheckNumber(user.organizationId, user.userId, id, dto);
   }
 
   // Cashier records the forward lifecycle (release, clearing). Void/spoil are

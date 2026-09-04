@@ -548,6 +548,15 @@ export async function printCheck(
   return res.json();
 }
 
+// Cashier corrects a check's number (print jam/misfeed). Locked once cleared.
+export async function updateCheckNumber(
+  id: string,
+  data: { checkNumber: string; checkDate?: string },
+): Promise<CheckDetail> {
+  const res = await authFetchMutate(`/accounting/checks/${id}/number`, 'PATCH', data);
+  return res.json();
+}
+
 // Cashier records the forward lifecycle (release, clearing). Void/spoil are not
 // allowed here — see voidCheck (approver-only).
 export async function transitionCheck(
