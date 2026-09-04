@@ -400,13 +400,21 @@ export default function NewDisbursementPage() {
               </select>
             </div>
           </div>
-          {paymentMode === 'check' && (
-            <p style={{ fontSize: 12, color: '#667085', marginTop: -4, marginBottom: 0 }}>
-              A check payment raises a <strong>pending check</strong> in the Check Register. The
-              cashier assigns the check number and prints it — the accountant does not enter a check
-              number here.
-            </p>
-          )}
+          <p style={{ fontSize: 12, color: '#667085', marginTop: -4, marginBottom: 0 }}>
+            {paymentMode === 'check' ? (
+              <>
+                Posting this DV raises a <strong>pending check</strong> in the Check Register. The
+                cashier assigns the number, prints it, then releases it — which releases the DV. The
+                accountant does not enter a check number here.
+              </>
+            ) : (
+              <>
+                No check is printed for this mode. Posting leaves the DV <strong>Approved</strong>;
+                the cashier or accountant then uses <strong>Release</strong> on the DV to complete
+                it. It does <strong>not</strong> auto-release.
+              </>
+            )}
+          </p>
         </div>
         {/* End compact header */}
 

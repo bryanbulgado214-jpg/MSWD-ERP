@@ -17,7 +17,10 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
+import {
+  RequireAnyPermissions,
+  RequirePermissions,
+} from '../../common/decorators/require-permissions.decorator';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
@@ -71,6 +74,14 @@ export class DisbursementController {
   @RequirePermissions('accounting.dv.post')
   postDraft(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.disbursementService.postDraft(user.organizationId, user.userId, id);
+  }
+
+  // Release a non-check (ADA/others) DV to the payee. Check-paid DVs release via
+  // the check itself. Cashier or accountant.
+  @Post(':id/release')
+  @RequireAnyPermissions('accounting.dv.post', 'accounting.check.record_release')
+  release(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.disbursementService.releaseDv(user.organizationId, user.userId, id);
   }
 
   @Patch(':id')

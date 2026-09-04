@@ -13,6 +13,7 @@ import {
   getDvAttachments,
   getDvNotes,
   postDisbursement,
+  releaseDisbursement,
   updateDvNumber,
   uploadDvAttachment,
   type DvAttachment,
@@ -96,11 +97,13 @@ export default function DisbursementDetailPage() {
   const { permissions, user } = useAuth();
   const canCreate = permissions.has('accounting.dv.create');
   const canPost = permissions.has('accounting.dv.post');
+  const canRelease = canPost || permissions.has('accounting.check.record_release');
 
   const [dv, setDv] = useState<DisbursementDetail | null>(null);
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [posting, setPosting] = useState(false);
+  const [releasing, setReleasing] = useState(false);
 
   // Notes & attachments
   const [notes, setNotes] = useState<DvNote[]>([]);
@@ -191,6 +194,21 @@ export default function DisbursementDetailPage() {
     }
   }
 
+  async function handleRelease() {
+    if (!dv) return;
+    if (!window.confirm(`Release ${dv.dvNumber} to the payee? This records the disbursement.`))
+      return;
+    setReleasing(true);
+    setError('');
+    try {
+      setDv(await releaseDisbursement(dv.id));
+    } catch (e) {
+      setError(e instanceof AccountingApiError ? e.message : 'Failed to release the voucher.');
+    } finally {
+      setReleasing(false);
+    }
+  }
+
   async function handlePost() {
     if (!dv) return;
     if (
@@ -270,6 +288,19 @@ export default function DisbursementDetailPage() {
               {posting ? 'Posting…' : 'Post to GL'}
             </button>
           )}
+          {dv.status === 'approved' &&
+            dv.checkStatus !== 'pending' &&
+            dv.checkStatus !== 'printed' &&
+            canRelease && (
+              <button
+                type="button"
+                className="acct-btn acct-btn--primary acct-btn--sm"
+                disabled={releasing}
+                onClick={handleRelease}
+              >
+                {releasing ? 'Releasing…' : 'Release'}
+              </button>
+            )}
           {canCreate && (
             <button
               type="button"

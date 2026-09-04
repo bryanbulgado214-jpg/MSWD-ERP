@@ -528,18 +528,14 @@ export class DisbursementService {
           netAmount: net,
           bankName: dvBankName,
           ...(dto.fundSourceId ? { fundSourceId: dto.fundSourceId } : {}),
-          status: asDraft ? 'draft' : isCheckPayment ? 'approved' : 'released',
+          // Posting a DV never auto-releases it. It becomes "approved" and waits:
+          // a check-paid DV is released when the cashier releases the printed
+          // check; a non-check DV (ADA/others) is released via the DV Release
+          // action. The releaser is therefore never the posting accountant.
+          status: asDraft ? 'draft' : 'approved',
           ...(asDraft
             ? {}
-            : {
-                certifiedBy: userId,
-                certifiedAt: now,
-                approvedBy: userId,
-                approvedAt: now,
-                // Check-paid DVs are released by the cashier (on check release);
-                // ADA/other payments release immediately on post.
-                ...(isCheckPayment ? {} : { releasedBy: userId, releasedAt: now }),
-              }),
+            : { certifiedBy: userId, certifiedAt: now, approvedBy: userId, approvedAt: now }),
           createdBy: userId,
           updatedBy: userId,
         },
@@ -856,9 +852,6 @@ export class DisbursementService {
     if (dv.status !== 'draft') {
       throw new BadRequestException('Only draft disbursement vouchers can be posted.');
     }
-    // A check-paid DV is released by the cashier after printing/releasing the
-    // check; only non-check payments release on post.
-    const isCheckPayment = dv.paymentMode === 'check';
 
     const jev = await this.prisma.journalEntryVoucher.findFirst({
       where: { organizationId: orgId, sourceType: 'disbursement', sourceId: id, status: 'draft' },
@@ -887,19 +880,61 @@ export class DisbursementService {
       await tx.disbursementVoucher.update({
         where: { id, version: dv.version },
         data: {
-          status: isCheckPayment ? 'approved' : 'released',
+          // Posting never auto-releases — the DV becomes "approved" and is
+          // released downstream (check release, or the DV Release action).
+          status: 'approved',
           certifiedBy: userId,
           certifiedAt: now,
           approvedBy: userId,
           approvedAt: now,
-          // Check-paid DVs are released by the cashier on check release.
-          ...(isCheckPayment ? {} : { releasedBy: userId, releasedAt: now }),
           updatedBy: userId,
           version: { increment: 1 },
         },
       });
     });
 
+    return this.findOne(orgId, id);
+  }
+
+  /**
+   * Release an approved DV to the payee. For a check-paid DV this happens when
+   * the cashier releases the printed check; this action is for non-check DVs
+   * (ADA/others) that have no check to print — the cashier/accountant records
+   * the release here. Blocked while a check is still pending or printed (that
+   * DV releases through the Checks screen instead).
+   */
+  async releaseDv(orgId: string, userId: string, id: string) {
+    const dv = await this.prisma.disbursementVoucher.findFirst({
+      where: { id, organizationId: orgId },
+      select: {
+        id: true,
+        status: true,
+        version: true,
+        dvNumber: true,
+        checks: { select: { status: true } },
+      },
+    });
+    if (!dv) throw new NotFoundException('Disbursement voucher not found.');
+    if (dv.status !== 'approved') {
+      throw new BadRequestException('Only an approved disbursement voucher can be released.');
+    }
+    if (dv.checks.some((c) => c.status === 'pending' || c.status === 'printed')) {
+      throw new BadRequestException(
+        `${dv.dvNumber} has a check to issue — print and release it from the Checks screen.`,
+      );
+    }
+    await runAudited(this.prisma, userId, async (tx) => {
+      await tx.disbursementVoucher.update({
+        where: { id, version: dv.version },
+        data: {
+          status: 'released',
+          releasedBy: userId,
+          releasedAt: new Date(),
+          updatedBy: userId,
+          version: { increment: 1 },
+        },
+      });
+    });
     return this.findOne(orgId, id);
   }
 

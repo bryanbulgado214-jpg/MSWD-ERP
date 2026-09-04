@@ -955,6 +955,11 @@ export async function postDisbursement(id: string): Promise<DisbursementDetail> 
   return res.json();
 }
 
+export async function releaseDisbursement(id: string): Promise<DisbursementDetail> {
+  const res = await authFetchMutate(`/accounting/disbursements/${id}/release`, 'POST');
+  return res.json();
+}
+
 export async function updateDisbursement(
   id: string,
   input: CreateDisbursementInput,
