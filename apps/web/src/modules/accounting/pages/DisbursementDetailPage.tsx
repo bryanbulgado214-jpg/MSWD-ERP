@@ -176,7 +176,11 @@ export default function DisbursementDetailPage() {
 
   async function handleDelete() {
     if (!dv) return;
-    if (!window.confirm(`Delete draft ${dv.dvNumber}? This cannot be undone.`)) return;
+    const msg =
+      dv.status === 'draft'
+        ? `Delete draft ${dv.dvNumber}? This cannot be undone.`
+        : `Delete ${dv.dvNumber}? This removes its GL entry and voids the check. This cannot be undone.`;
+    if (!window.confirm(msg)) return;
     setDeleting(true);
     try {
       await deleteDisbursement(dv.id);
@@ -297,7 +301,7 @@ export default function DisbursementDetailPage() {
           <Link to={`/accounting/disbursements/${dv.id}/print`} className="acct-btn acct-btn--sm">
             Print
           </Link>
-          {isDraft && canCreate && (
+          {((isDraft && canCreate) || (canPost && dv.checkStatus !== 'cleared')) && (
             <button
               type="button"
               className="acct-btn acct-btn--sm"

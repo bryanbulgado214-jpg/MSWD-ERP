@@ -140,7 +140,11 @@ export default function DisbursementListPage() {
   }
 
   async function handleDelete(dv: DisbursementSummary) {
-    if (!window.confirm(`Delete draft ${dv.dvNumber}? This cannot be undone.`)) return;
+    const posted = dv.status !== 'draft';
+    const msg = posted
+      ? `Delete ${dv.dvNumber}? This removes its GL entry and voids the check. This cannot be undone.`
+      : `Delete draft ${dv.dvNumber}? This cannot be undone.`;
+    if (!window.confirm(msg)) return;
     setDeleting(dv.id);
     setError('');
     try {
@@ -329,7 +333,8 @@ export default function DisbursementListPage() {
                             {posting === dv.id ? 'Posting…' : 'Post'}
                           </button>
                         )}
-                        {dv.status === 'draft' && canCreate && (
+                        {((dv.status === 'draft' && canCreate) ||
+                          (canPost && dv.checkStatus !== 'cleared')) && (
                           <button
                             type="button"
                             onClick={() => handleDelete(dv)}

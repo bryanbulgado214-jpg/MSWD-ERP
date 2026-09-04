@@ -245,10 +245,15 @@ export class DisbursementService {
     const check = await this.prisma.check.findFirst({
       where: { disbursementVoucherId: id },
       orderBy: { createdAt: 'desc' },
-      select: { bankAccountId: true },
+      select: { bankAccountId: true, status: true },
     });
 
-    return { ...dv, journalEntry, bankAccountId: check?.bankAccountId ?? null };
+    return {
+      ...dv,
+      journalEntry,
+      bankAccountId: check?.bankAccountId ?? null,
+      checkStatus: check?.status ?? null,
+    };
   }
 
   /**
@@ -760,20 +765,54 @@ export class DisbursementService {
   }
 
   /**
-   * Delete a DRAFT disbursement voucher and its held artifacts (draft JEV +
-   * pending check). Posted/released DVs cannot be deleted.
+   * Delete a disbursement voucher and everything it holds — its accounting entry
+   * (draft or posted JEV, lines cascade) and its check(s) (+ history, bank-rec
+   * items). A draft is deletable by its preparer; a posted/printed DV can be
+   * deleted by the accountant (dv.post) as long as its check has NOT cleared the
+   * bank. A cleared check is a settled payment — reverse it instead of deleting.
    */
   async remove(orgId: string, userId: string, id: string) {
     const dv = await this.prisma.disbursementVoucher.findFirst({
       where: { id, organizationId: orgId },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        status: true,
+        dvNumber: true,
+        checks: { select: { id: true, status: true } },
+      },
     });
     if (!dv) throw new NotFoundException('Disbursement voucher not found.');
+
+    // Deleting a posted/printed DV reverses its GL entry and voids the check —
+    // the accountant's call, not data-entry's.
     if (dv.status !== 'draft') {
-      throw new BadRequestException('Only draft disbursement vouchers can be deleted.');
+      const granted = await getGrantedPermissionCodes(this.prisma, userId);
+      if (!granted.has('accounting.dv.post')) {
+        throw new ForbiddenException(
+          'Deleting a posted disbursement voucher needs the “Post Disbursement Vouchers” permission.',
+        );
+      }
     }
+    // A check that has cleared the bank is a settled payment — it must be
+    // reversed, never silently deleted.
+    if (dv.checks.some((c) => c.status === 'cleared')) {
+      throw new BadRequestException(
+        `${dv.dvNumber} cannot be deleted — its check has already cleared the bank. Reverse the entry instead.`,
+      );
+    }
+
+    const checkIds = dv.checks.map((c) => c.id);
     await runAudited(this.prisma, userId, async (tx) => {
-      await this.deleteDraftArtifacts(tx, orgId, id);
+      if (checkIds.length) {
+        await tx.bankReconciliationItem.deleteMany({ where: { checkId: { in: checkIds } } });
+        await tx.checkStatusHistory.deleteMany({ where: { checkId: { in: checkIds } } });
+        await tx.check.deleteMany({ where: { id: { in: checkIds } } });
+      }
+      // The DV's accounting entry — draft or posted; jev_lines cascade.
+      await tx.journalEntryVoucher.deleteMany({
+        where: { organizationId: orgId, sourceType: 'disbursement', sourceId: id },
+      });
+      // The DV itself — dv_deductions cascade.
       await tx.disbursementVoucher.delete({ where: { id } });
     });
     return { deleted: true };

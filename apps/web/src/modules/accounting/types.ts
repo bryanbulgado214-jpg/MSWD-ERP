@@ -459,6 +459,8 @@ export interface DisbursementDetail {
   checkDate: string | null;
   bankName: string | null;
   status: string;
+  /** Lifecycle of the raised check (pending→printed→released→cleared), or null. */
+  checkStatus: string | null;
   version: number;
   certifiedAt: string | null;
   approvedAt: string | null;
