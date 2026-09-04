@@ -465,9 +465,26 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
                 </div>
                 {sigCell(sigB?.name ?? '', sigB?.title ?? '')}
               </td>
-              <td style={{ border: BORDER, padding: '5px 8px', verticalAlign: 'top' }}>
+              <td
+                style={{
+                  border: BORDER,
+                  padding: '5px 8px',
+                  verticalAlign: 'top',
+                  position: 'relative',
+                }}
+              >
                 <div style={{ fontSize: '9.5pt' }}>C) Approved For Payment</div>
-                <div style={{ textAlign: 'center', marginTop: 26 }}>
+                {/* Anchored toward the foot so the signature has room above and the
+                    box has no dead space at the bottom. */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: 8,
+                    right: 8,
+                    bottom: 30,
+                    textAlign: 'center',
+                  }}
+                >
                   <div style={{ fontWeight: 700, fontSize: '11pt' }}>
                     {approverName ? approverName.toUpperCase() : ' '}
                   </div>
