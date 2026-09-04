@@ -105,6 +105,21 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
   const jeLines = dv.journalEntry?.lines ?? [];
   const jeTotalDebit = jeLines.reduce((s, l) => s + parseFloat(l.debitAmount || '0'), 0);
   const jeTotalCredit = jeLines.reduce((s, l) => s + parseFloat(l.creditAmount || '0'), 0);
+  // Blank ruled rows that continue the accounting grid; they stretch (the table
+  // is height:100% inside the flexible .dv-acct) so the section fills the page
+  // to the foot with no gap, and the TOTAL row sits directly above Box A/B/C.
+  const blankCount = Math.max(4, 15 - jeLines.length);
+
+  // The Amount printed on the DV (and on the check) is what is CREDITED to the
+  // Cash in Bank / MDS account — not the gross claim, and not the total credits.
+  // On a compound entry (multiple debits/credits) these differ; the check is only
+  // ever the cash actually paid out. Fall back to the DV net until the JEV exists.
+  const CASH_RE = /cash in bank|modified disbursement|cash[- ]*mds|\bmds\b/i;
+  const cashCredit = jeLines
+    .filter((l) => CASH_RE.test(l.chartOfAccount.name))
+    .reduce((s, l) => s + parseFloat(l.creditAmount || '0'), 0);
+  const printAmount =
+    cashCredit > 0 ? cashCredit.toFixed(2) : dv.netAmount || dv.grossAmount || '0';
 
   const chk = (on: boolean) => <span className="gov-checkbox">{on ? '☑' : '☐'}</span>;
   // If the configured logo URL fails to load, fall back to the bundled mark so
@@ -200,7 +215,7 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
                     </tr>
                     <tr>
                       <td style={{ padding: '6px 6px', width: '42%', ...label9 }}>DV Date:</td>
-                      <td style={{ borderLeft: BORDER, padding: '6px 6px' }}>{dvDate}</td>
+                      <td style={{ padding: '6px 6px' }}>{dvDate}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -302,7 +317,7 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
                     fontVariantNumeric: 'tabular-nums',
                   }}
                 >
-                  {money(dv.grossAmount)}
+                  {money(printAmount)}
                 </td>
               </tr>
               <tr>
@@ -375,15 +390,15 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
                   </td>
                 </tr>
               ))}
-              {/* Ruled filler stretches to the page foot. */}
-              <tr style={{ height: '100%' }}>
-                <td className="dv-fill" style={{ border: BORDER }}>
-                  &nbsp;
-                </td>
-                <td className="dv-fill" style={{ border: BORDER }}></td>
-                <td className="dv-fill" style={{ border: BORDER }}></td>
-                <td className="dv-fill" style={{ border: BORDER }}></td>
-              </tr>
+              {/* Ruled blank rows that stretch to fill the page to the foot. */}
+              {Array.from({ length: blankCount }).map((_, i) => (
+                <tr key={`b${i}`}>
+                  <td style={{ border: BORDER, padding: '3px 8px' }}>&nbsp;</td>
+                  <td style={{ border: BORDER }}></td>
+                  <td style={{ border: BORDER }}></td>
+                  <td style={{ border: BORDER }}></td>
+                </tr>
+              ))}
               <tr>
                 <td
                   colSpan={2}
@@ -460,7 +475,6 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
                     {approverTitle || ' '}
                   </div>
                 </div>
-                <div style={{ fontSize: '10pt', marginTop: 18 }}>P.O. No.</div>
               </td>
             </tr>
             <tr>
@@ -475,7 +489,7 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
                       fontVariantNumeric: 'tabular-nums',
                     }}
                   >
-                    {money(dv.netAmount)}
+                    {money(printAmount)}
                   </span>
                 </div>
                 <div style={{ marginTop: 30, textAlign: 'center' }}>
@@ -514,7 +528,7 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
                 </table>
               </td>
               <td style={{ border: BORDER, padding: '4px 8px', verticalAlign: 'top', ...label9 }}>
-                JEV No.: <span style={{ fontWeight: 400 }}>{dv.journalEntry?.jevNumber ?? ''}</span>
+                P.O. No.
               </td>
             </tr>
           </tbody>
