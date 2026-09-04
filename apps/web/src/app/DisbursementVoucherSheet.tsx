@@ -1,6 +1,7 @@
 import { useAuth } from './auth';
 import { signatoryFor } from './signatories';
 import '../modules/procurement/pages/print-forms.css';
+import './dv-print.css';
 
 // Structural shape shared by the procurement DV (always has a supplier + PR/PO/
 // ORS) and the accounting DV (non-procurement: a free-text payee, no chain).
@@ -60,17 +61,23 @@ function money(v: string | number | null | undefined): string {
 }
 
 const BORDER = '1px solid #000';
+const FALLBACK_LOGO = '/aquabooks-mark.png';
 
 /**
  * The Metro Siquijor Water District Disbursement Voucher — an exact reproduction
- * of the district's pre-printed form. Renders for both a procurement DV and a
- * non-procurement (accounting) DV; the payee, particulars, accounting entry and
- * signatories adapt to whichever data is present. Kept to a single page.
+ * of the district's pre-printed form, filling a single Letter page. Renders for
+ * both a procurement DV and a non-procurement (accounting) DV; the payee,
+ * particulars, accounting entry and signatories adapt to whichever data exists.
  */
 export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
   const { organization } = useAuth();
-  const entity = (organization?.name ?? 'Metro Siquijor Water District').toUpperCase();
-  const logo = organization?.logoUrl || '/aquabooks-mark.png';
+  // The header carries the district's full legal name (not the short name/initials).
+  const entity = (
+    organization?.legalName ||
+    organization?.name ||
+    'Metro Siquijor Water District'
+  ).toUpperCase();
+  const logo = organization?.logoUrl || FALLBACK_LOGO;
 
   // Box A = requesting/supervising officer; Box B (this form) = funds-available
   // certification (the "boxC" slot); Box C (this form) = approver (the "boxD" slot).
@@ -94,19 +101,23 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
   const isAda = mode === 'ada';
 
   // The accounting entry is driven by the posted JEV (never re-derived), so it
-  // matches the GL. Pad to a fixed number of rows to keep the sheet's height.
+  // matches the GL.
   const jeLines = dv.journalEntry?.lines ?? [];
   const jeTotalDebit = jeLines.reduce((s, l) => s + parseFloat(l.debitAmount || '0'), 0);
   const jeTotalCredit = jeLines.reduce((s, l) => s + parseFloat(l.creditAmount || '0'), 0);
-  const MIN_ROWS = 14;
-  const blankRows = Math.max(0, MIN_ROWS - jeLines.length);
 
   const chk = (on: boolean) => <span className="gov-checkbox">{on ? '☑' : '☐'}</span>;
+  // If the configured logo URL fails to load, fall back to the bundled mark so
+  // the header never shows a broken image.
+  const onLogoError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    if (!img.src.endsWith(FALLBACK_LOGO)) img.src = FALLBACK_LOGO;
+  };
 
-  const label9: React.CSSProperties = { fontSize: 9, fontWeight: 700 };
+  const label9: React.CSSProperties = { fontSize: '9pt', fontWeight: 700 };
   const sigCell = (name: string, title: string) => (
     <div style={{ padding: '2px 0' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt' }}>
         <tbody>
           <tr>
             <td style={{ width: '34%', padding: '5px 2px 1px', verticalAlign: 'bottom' }}>
@@ -115,34 +126,34 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
             <td style={{ borderBottom: BORDER, padding: '5px 2px 1px' }}>&nbsp;</td>
           </tr>
           <tr>
-            <td style={{ padding: '7px 2px 1px', verticalAlign: 'bottom' }}>Printed Name</td>
+            <td style={{ padding: '8px 2px 1px', verticalAlign: 'bottom' }}>Printed Name</td>
             <td
               style={{
                 borderBottom: BORDER,
-                padding: '7px 2px 1px',
+                padding: '8px 2px 1px',
                 textAlign: 'center',
                 fontWeight: 700,
               }}
             >
-              {name ? name.toUpperCase() : ' '}
+              {name ? name.toUpperCase() : ' '}
             </td>
           </tr>
           <tr>
-            <td style={{ padding: '7px 2px 1px', verticalAlign: 'bottom' }}>Position</td>
+            <td style={{ padding: '8px 2px 1px', verticalAlign: 'bottom' }}>Position</td>
             <td
               style={{
                 borderBottom: BORDER,
-                padding: '7px 2px 1px',
+                padding: '8px 2px 1px',
                 textAlign: 'center',
                 fontWeight: 700,
               }}
             >
-              {title || ' '}
+              {title || ' '}
             </td>
           </tr>
           <tr>
-            <td style={{ padding: '7px 2px 1px', verticalAlign: 'bottom' }}>Date</td>
-            <td style={{ borderBottom: BORDER, padding: '7px 2px 1px' }}>&nbsp;</td>
+            <td style={{ padding: '8px 2px 1px', verticalAlign: 'bottom' }}>Date</td>
+            <td style={{ borderBottom: BORDER, padding: '8px 2px 1px' }}>&nbsp;</td>
           </tr>
         </tbody>
       </table>
@@ -151,21 +162,26 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
 
   return (
     <div className="gov-print-page">
-      <div className="gov-print-sheet" style={{ fontSize: 10 }}>
+      <div className="dv-print-sheet">
+        {/* ── Header + Mode of Payment ── */}
         <table style={{ width: '100%', borderCollapse: 'collapse', border: BORDER }}>
           <tbody>
-            {/* ── Header: logo + entity + title | DV No / DV Date ── */}
             <tr>
               <td style={{ border: BORDER, padding: 0, width: '72%' }}>
                 <div style={{ display: 'flex', alignItems: 'center', padding: '4px 8px' }}>
                   <img
                     src={logo}
                     alt=""
-                    style={{ height: 58, width: 58, objectFit: 'contain', marginRight: 10 }}
+                    onError={onLogoError}
+                    style={{ height: 60, width: 60, objectFit: 'contain', marginRight: 10 }}
                   />
                   <div style={{ flex: 1, textAlign: 'center' }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.15 }}>{entity}</div>
-                    <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.2, marginTop: 6 }}>
+                    <div style={{ fontSize: '14pt', fontWeight: 700, lineHeight: 1.15 }}>
+                      {entity}
+                    </div>
+                    <div
+                      style={{ fontSize: '14pt', fontWeight: 700, lineHeight: 1.2, marginTop: 6 }}
+                    >
                       DISBURSEMENT VOUCHER
                     </div>
                   </div>
@@ -190,8 +206,6 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
                 </table>
               </td>
             </tr>
-
-            {/* ── Mode of Payment ── */}
             <tr>
               <td colSpan={2} style={{ border: BORDER, padding: '3px 8px 5px' }}>
                 <div
@@ -199,7 +213,7 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
                     textAlign: 'center',
                     fontStyle: 'italic',
                     fontWeight: 700,
-                    fontSize: 10,
+                    fontSize: '10pt',
                   }}
                 >
                   MODE OF PAYMENT
@@ -208,7 +222,7 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
                   style={{
                     display: 'flex',
                     justifyContent: 'space-around',
-                    fontSize: 10,
+                    fontSize: '10pt',
                     marginTop: 2,
                   }}
                 >
@@ -236,7 +250,7 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
                   width: '61%',
                   fontStyle: 'italic',
                   fontWeight: 700,
-                  fontSize: 12,
+                  fontSize: '12pt',
                 }}
               >
                 {payeeName}
@@ -254,130 +268,160 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
           </tbody>
         </table>
 
-        {/* ── Particulars / Amount + Accounting entry ── */}
-        <table style={{ width: '100%', borderCollapse: 'collapse', border: BORDER, borderTop: 0 }}>
-          <colgroup>
-            <col style={{ width: '56%' }} />
-            <col style={{ width: '20%' }} />
-            <col style={{ width: '12%' }} />
-            <col style={{ width: '12%' }} />
-          </colgroup>
-          <tbody>
-            <tr>
-              <td colSpan={2} style={{ border: BORDER, textAlign: 'center', padding: '3px 6px' }}>
-                Particulars
-              </td>
-              <td colSpan={2} style={{ border: BORDER, textAlign: 'center', padding: '3px 6px' }}>
-                Amount
-              </td>
-            </tr>
-            <tr>
-              <td colSpan={2} style={{ border: BORDER, padding: '5px 8px' }}>
-                {dv.particulars}
-              </td>
-              <td style={{ border: BORDER, textAlign: 'center', padding: '5px 6px' }}>Php</td>
-              <td
-                style={{
-                  border: BORDER,
-                  textAlign: 'right',
-                  padding: '5px 8px',
-                  fontWeight: 700,
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {money(dv.grossAmount)}
-              </td>
-            </tr>
-            <tr>
-              <td
-                style={{ border: BORDER, textAlign: 'center', fontWeight: 700, padding: '2px 6px' }}
-              >
-                ACCOUNT NAME
-              </td>
-              <td
-                style={{ border: BORDER, textAlign: 'center', fontWeight: 700, padding: '2px 6px' }}
-              >
-                ACCOUNT CODE
-              </td>
-              <td
-                style={{ border: BORDER, textAlign: 'center', fontWeight: 700, padding: '2px 6px' }}
-              >
-                DEBIT
-              </td>
-              <td
-                style={{ border: BORDER, textAlign: 'center', fontWeight: 700, padding: '2px 6px' }}
-              >
-                CREDIT
-              </td>
-            </tr>
-            {jeLines.map((l, i) => (
-              <tr key={i}>
-                <td style={{ border: BORDER, padding: '2px 8px' }}>{l.chartOfAccount.name}</td>
-                <td style={{ border: BORDER, textAlign: 'center', padding: '2px 6px' }}>
-                  {l.chartOfAccount.accountCode}
+        {/* ── Particulars / Amount + Accounting entry (flexes to fill the page) ── */}
+        <div className="dv-acct">
+          <table
+            style={{ width: '100%', borderCollapse: 'collapse', border: BORDER, borderTop: 0 }}
+          >
+            <colgroup>
+              <col style={{ width: '56%' }} />
+              <col style={{ width: '20%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '12%' }} />
+            </colgroup>
+            <tbody>
+              <tr>
+                <td colSpan={2} style={{ border: BORDER, textAlign: 'center', padding: '3px 6px' }}>
+                  Particulars
+                </td>
+                <td colSpan={2} style={{ border: BORDER, textAlign: 'center', padding: '3px 6px' }}>
+                  Amount
+                </td>
+              </tr>
+              <tr>
+                <td colSpan={2} style={{ border: BORDER, padding: '5px 8px' }}>
+                  {dv.particulars}
+                </td>
+                <td style={{ border: BORDER, textAlign: 'center', padding: '5px 6px' }}>Php</td>
+                <td
+                  style={{
+                    border: BORDER,
+                    textAlign: 'right',
+                    padding: '5px 8px',
+                    fontWeight: 700,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {money(dv.grossAmount)}
+                </td>
+              </tr>
+              <tr>
+                <td
+                  style={{
+                    border: BORDER,
+                    textAlign: 'center',
+                    fontWeight: 700,
+                    padding: '2px 6px',
+                  }}
+                >
+                  ACCOUNT NAME
+                </td>
+                <td
+                  style={{
+                    border: BORDER,
+                    textAlign: 'center',
+                    fontWeight: 700,
+                    padding: '2px 6px',
+                  }}
+                >
+                  ACCOUNT CODE
+                </td>
+                <td
+                  style={{
+                    border: BORDER,
+                    textAlign: 'center',
+                    fontWeight: 700,
+                    padding: '2px 6px',
+                  }}
+                >
+                  DEBIT
+                </td>
+                <td
+                  style={{
+                    border: BORDER,
+                    textAlign: 'center',
+                    fontWeight: 700,
+                    padding: '2px 6px',
+                  }}
+                >
+                  CREDIT
+                </td>
+              </tr>
+              {jeLines.map((l, i) => (
+                <tr key={i}>
+                  <td style={{ border: BORDER, padding: '3px 8px' }}>{l.chartOfAccount.name}</td>
+                  <td style={{ border: BORDER, textAlign: 'center', padding: '3px 6px' }}>
+                    {l.chartOfAccount.accountCode}
+                  </td>
+                  <td
+                    style={{
+                      border: BORDER,
+                      textAlign: 'right',
+                      padding: '3px 8px',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {parseFloat(l.debitAmount || '0') > 0 ? money(l.debitAmount) : ''}
+                  </td>
+                  <td
+                    style={{
+                      border: BORDER,
+                      textAlign: 'right',
+                      padding: '3px 8px',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {parseFloat(l.creditAmount || '0') > 0 ? money(l.creditAmount) : ''}
+                  </td>
+                </tr>
+              ))}
+              {/* Ruled filler stretches to the page foot. */}
+              <tr style={{ height: '100%' }}>
+                <td className="dv-fill" style={{ border: BORDER }}>
+                  &nbsp;
+                </td>
+                <td className="dv-fill" style={{ border: BORDER }}></td>
+                <td className="dv-fill" style={{ border: BORDER }}></td>
+                <td className="dv-fill" style={{ border: BORDER }}></td>
+              </tr>
+              <tr>
+                <td
+                  colSpan={2}
+                  style={{
+                    border: BORDER,
+                    textAlign: 'right',
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                  }}
+                >
+                  TOTAL
                 </td>
                 <td
                   style={{
                     border: BORDER,
                     textAlign: 'right',
+                    fontWeight: 700,
                     padding: '2px 8px',
                     fontVariantNumeric: 'tabular-nums',
                   }}
                 >
-                  {parseFloat(l.debitAmount || '0') > 0 ? money(l.debitAmount) : ''}
+                  {jeLines.length ? money(jeTotalDebit.toFixed(2)) : ''}
                 </td>
                 <td
                   style={{
                     border: BORDER,
                     textAlign: 'right',
+                    fontWeight: 700,
                     padding: '2px 8px',
                     fontVariantNumeric: 'tabular-nums',
                   }}
                 >
-                  {parseFloat(l.creditAmount || '0') > 0 ? money(l.creditAmount) : ''}
+                  {jeLines.length ? money(jeTotalCredit.toFixed(2)) : ''}
                 </td>
               </tr>
-            ))}
-            {Array.from({ length: blankRows }).map((_, i) => (
-              <tr key={`b${i}`}>
-                <td style={{ border: BORDER, padding: '2px 8px' }}>&nbsp;</td>
-                <td style={{ border: BORDER }}></td>
-                <td style={{ border: BORDER }}></td>
-                <td style={{ border: BORDER }}></td>
-              </tr>
-            ))}
-            <tr>
-              <td
-                colSpan={2}
-                style={{ border: BORDER, textAlign: 'right', fontWeight: 700, padding: '2px 8px' }}
-              >
-                TOTAL
-              </td>
-              <td
-                style={{
-                  border: BORDER,
-                  textAlign: 'right',
-                  fontWeight: 700,
-                  padding: '2px 8px',
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {jeLines.length ? money(jeTotalDebit.toFixed(2)) : ''}
-              </td>
-              <td
-                style={{
-                  border: BORDER,
-                  textAlign: 'right',
-                  fontWeight: 700,
-                  padding: '2px 8px',
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {jeLines.length ? money(jeTotalCredit.toFixed(2)) : ''}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
 
         {/* ── Certifications A | B | C  and  Received | Check details | JEV ── */}
         <table style={{ width: '100%', borderCollapse: 'collapse', border: BORDER, borderTop: 0 }}>
@@ -388,17 +432,15 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
           </colgroup>
           <tbody>
             <tr>
-              {/* A) Certified */}
               <td style={{ border: BORDER, padding: '5px 8px', verticalAlign: 'top' }}>
-                <div style={{ fontSize: 9.5, minHeight: 52 }}>
+                <div style={{ fontSize: '9.5pt', minHeight: 50 }}>
                   A) Certified: Expenses/Advances necessary, lawful and incurred under my direct
                   supervision
                 </div>
                 {sigCell(sigA?.name ?? '', sigA?.title ?? '')}
               </td>
-              {/* B) Certified */}
               <td style={{ border: BORDER, padding: '5px 8px', verticalAlign: 'top' }}>
-                <div style={{ fontSize: 9.5, minHeight: 52 }}>
+                <div style={{ fontSize: '9.5pt', minHeight: 50 }}>
                   B) Certified:
                   <div style={{ paddingLeft: 12 }}>
                     Supporting documents complete and proper; and
@@ -408,24 +450,22 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
                 </div>
                 {sigCell(sigB?.name ?? '', sigB?.title ?? '')}
               </td>
-              {/* C) Approved For Payment */}
               <td style={{ border: BORDER, padding: '5px 8px', verticalAlign: 'top' }}>
-                <div style={{ fontSize: 9.5 }}>C) Approved For Payment</div>
+                <div style={{ fontSize: '9.5pt' }}>C) Approved For Payment</div>
                 <div style={{ textAlign: 'center', marginTop: 26 }}>
-                  <div style={{ fontWeight: 700, fontSize: 11 }}>
-                    {approverName ? approverName.toUpperCase() : ' '}
+                  <div style={{ fontWeight: 700, fontSize: '11pt' }}>
+                    {approverName ? approverName.toUpperCase() : ' '}
                   </div>
-                  <div style={{ fontWeight: 700, fontSize: 10, marginTop: 8 }}>
-                    {approverTitle || ' '}
+                  <div style={{ fontWeight: 700, fontSize: '10pt', marginTop: 8 }}>
+                    {approverTitle || ' '}
                   </div>
                 </div>
-                <div style={{ fontSize: 10, marginTop: 18 }}>P.O. No.</div>
+                <div style={{ fontSize: '10pt', marginTop: 18 }}>P.O. No.</div>
               </td>
             </tr>
             <tr>
-              {/* D) Received */}
               <td style={{ border: BORDER, padding: '6px 8px', verticalAlign: 'top' }}>
-                <div style={{ fontSize: 9.5 }}>
+                <div style={{ fontSize: '9.5pt' }}>
                   D) Received:&nbsp;&nbsp;Php{' '}
                   <span
                     style={{
@@ -440,41 +480,39 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
                 </div>
                 <div style={{ marginTop: 30, textAlign: 'center' }}>
                   <div style={{ borderBottom: BORDER, height: 1, margin: '0 8px' }}></div>
-                  <div style={{ fontSize: 9, fontWeight: 700, marginTop: 2 }}>
+                  <div style={{ fontSize: '9pt', fontWeight: 700, marginTop: 2 }}>
                     Signature Over Printed Name
                   </div>
                 </div>
               </td>
-              {/* Check / ADA details */}
               <td style={{ border: BORDER, padding: 0, verticalAlign: 'top' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt' }}>
                   <tbody>
                     <tr>
-                      <td style={{ padding: '4px 6px', width: '38%', ...label9 }}>Check/ADA No:</td>
-                      <td style={{ borderBottom: BORDER, padding: '4px 6px' }}>
+                      <td style={{ padding: '5px 6px', width: '38%', ...label9 }}>Check/ADA No:</td>
+                      <td style={{ borderBottom: BORDER, padding: '5px 6px' }}>
                         {dv.checkNumber ?? ''}
                       </td>
                     </tr>
                     <tr>
-                      <td style={{ padding: '4px 6px', ...label9 }}>Bank Name:</td>
-                      <td style={{ borderBottom: BORDER, padding: '4px 6px' }}>
+                      <td style={{ padding: '5px 6px', ...label9 }}>Bank Name:</td>
+                      <td style={{ borderBottom: BORDER, padding: '5px 6px' }}>
                         {dv.bankName ?? ''}
                       </td>
                     </tr>
                     <tr>
-                      <td style={{ padding: '4px 6px', ...label9 }}>O.R. No.</td>
-                      <td style={{ borderBottom: BORDER, padding: '4px 6px' }}>&nbsp;</td>
+                      <td style={{ padding: '5px 6px', ...label9 }}>O.R. No.</td>
+                      <td style={{ borderBottom: BORDER, padding: '5px 6px' }}>&nbsp;</td>
                     </tr>
                     <tr>
-                      <td style={{ padding: '4px 6px', ...label9 }}>Date</td>
-                      <td style={{ borderBottom: BORDER, padding: '4px 6px' }}>
+                      <td style={{ padding: '5px 6px', ...label9 }}>Date</td>
+                      <td style={{ borderBottom: BORDER, padding: '5px 6px' }}>
                         {dv.checkDate ? new Date(dv.checkDate).toLocaleDateString('en-PH') : ''}
                       </td>
                     </tr>
                   </tbody>
                 </table>
               </td>
-              {/* JEV No. */}
               <td style={{ border: BORDER, padding: '4px 8px', verticalAlign: 'top', ...label9 }}>
                 JEV No.: <span style={{ fontWeight: 400 }}>{dv.journalEntry?.jevNumber ?? ''}</span>
               </td>

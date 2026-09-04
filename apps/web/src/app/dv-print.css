@@ -1,0 +1,54 @@
+/* Metro Siquijor Water District Disbursement Voucher — an exact reproduction of
+ * the district's pre-printed form, sized to fill one Letter page (portrait) with
+ * no blank space at the bottom. The middle accounting-entry grid flexes to
+ * absorb the remaining height; the certification band stays pinned to the foot. */
+
+.dv-print-sheet {
+  width: 8.5in;
+  min-height: 11in;
+  margin: 0 auto;
+  padding: 0.4in;
+  background: #fff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 10pt;
+  color: #000;
+  line-height: 1.25;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The accounting-entry table is the flexible middle of the sheet. */
+.dv-acct {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+.dv-acct > table {
+  height: 100%;
+}
+
+/* Ruled filler that stretches to the page foot, drawing ledger lines. */
+.dv-fill {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    #000 0,
+    #000 1px,
+    transparent 1px,
+    transparent 24px
+  );
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+@media print {
+  .dv-print-sheet {
+    width: 100%;
+    min-height: 0;
+    height: 10.2in; /* Letter (11in) minus the shared @page 0.4in top+bottom */
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+}
