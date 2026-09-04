@@ -452,6 +452,9 @@ export class DisbursementService {
     }
 
     const bankDisplay = `${bankAccount.bank.name} — ${bankAccount.accountName} (${bankAccount.accountNumber})`;
+    // dv.bank_name is VarChar(100); store a compact label (bank + account number)
+    // and cap it so a long account name never overflows the column.
+    const dvBankName = `${bankAccount.bank.name} — ${bankAccount.accountNumber}`.slice(0, 100);
     const asDraft = dto.asDraft === true;
     // A check-paid DV is released by the CASHIER after they print and release the
     // check — so posting it only takes it to "approved" with a pending check.
@@ -523,7 +526,7 @@ export class DisbursementService {
           taxAmount: totalCredit,
           otherDeductions: 0,
           netAmount: net,
-          bankName: bankDisplay,
+          bankName: dvBankName,
           ...(dto.fundSourceId ? { fundSourceId: dto.fundSourceId } : {}),
           status: asDraft ? 'draft' : isCheckPayment ? 'approved' : 'released',
           ...(asDraft
@@ -672,6 +675,8 @@ export class DisbursementService {
     }
 
     const bankDisplay = `${bankAccount.bank.name} — ${bankAccount.accountName} (${bankAccount.accountNumber})`;
+    // dv.bank_name is VarChar(100) — compact + capped so it never overflows.
+    const dvBankName = `${bankAccount.bank.name} — ${bankAccount.accountNumber}`.slice(0, 100);
     const dvDate = new Date(dto.dvDate);
     const jevLines = [
       ...dto.lines.map((l) => ({
@@ -705,7 +710,7 @@ export class DisbursementService {
           taxAmount: totalCredit,
           otherDeductions: 0,
           netAmount: net,
-          bankName: bankDisplay,
+          bankName: dvBankName,
           fundSourceId: dto.fundSourceId ?? null,
           updatedBy: userId,
           version: { increment: 1 },
