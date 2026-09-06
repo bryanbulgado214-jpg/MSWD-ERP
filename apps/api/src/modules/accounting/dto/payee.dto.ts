@@ -15,6 +15,10 @@ export class CreatePayeeDto {
   @IsString()
   @MaxLength(30)
   tin?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  vatRegistered?: boolean;
 }
 
 export class UpdatePayeeDto {
@@ -33,6 +37,10 @@ export class UpdatePayeeDto {
   @IsString()
   @MaxLength(30)
   tin?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  vatRegistered?: boolean;
 
   @IsOptional()
   @IsBoolean()

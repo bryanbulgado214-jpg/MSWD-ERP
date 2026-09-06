@@ -32,6 +32,7 @@ export class PayeeService {
         name: true,
         address: true,
         tin: true,
+        vatRegistered: true,
         isActive: true,
         version: true,
       },
@@ -46,10 +47,19 @@ export class PayeeService {
         name: dto.name.trim(),
         address: dto.address?.trim() || null,
         tin: dto.tin?.trim() || null,
+        vatRegistered: dto.vatRegistered ?? false,
         createdBy: userId,
         updatedBy: userId,
       },
-      select: { id: true, name: true, address: true, tin: true, isActive: true, version: true },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        tin: true,
+        vatRegistered: true,
+        isActive: true,
+        version: true,
+      },
     });
   }
 
@@ -65,11 +75,20 @@ export class PayeeService {
         ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
         ...(dto.address !== undefined ? { address: dto.address.trim() || null } : {}),
         ...(dto.tin !== undefined ? { tin: dto.tin.trim() || null } : {}),
+        ...(dto.vatRegistered !== undefined ? { vatRegistered: dto.vatRegistered } : {}),
         ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
         updatedBy: userId,
         version: { increment: 1 },
       },
-      select: { id: true, name: true, address: true, tin: true, isActive: true, version: true },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        tin: true,
+        vatRegistered: true,
+        isActive: true,
+        version: true,
+      },
     });
   }
 
@@ -118,7 +137,15 @@ export class PayeeService {
 
     const survivor = await this.prisma.payee.findUnique({
       where: { id: targetId },
-      select: { id: true, name: true, address: true, tin: true, isActive: true, version: true },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        tin: true,
+        vatRegistered: true,
+        isActive: true,
+        version: true,
+      },
     });
     return survivor;
   }

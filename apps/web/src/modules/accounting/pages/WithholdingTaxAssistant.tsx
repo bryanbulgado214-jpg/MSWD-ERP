@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { ChartOfAccount } from '../types';
 
@@ -43,15 +43,29 @@ export interface WhtRow {
 export function WithholdingTaxAssistant({
   accounts,
   onApply,
+  payeeVatRegistered = null,
+  payeeName = null,
 }: {
   accounts: ChartOfAccount[];
   onApply: (rows: WhtRow[]) => void;
+  // VAT status of the selected payee from the payee master: true/false when a
+  // payee is chosen, null when unknown (name typed by hand or no payee).
+  payeeVatRegistered?: boolean | null;
+  payeeName?: string | null;
 }) {
   const [amount, setAmount] = useState('');
   const [mode, setMode] = useState<'invoice' | 'grossup'>('invoice');
-  const [vatReg, setVatReg] = useState(false);
+  const [vatReg, setVatReg] = useState(payeeVatRegistered ?? false);
   const [nature, setNature] = useState<(typeof NATURES)[number]['key']>('services');
   const [expenseId, setExpenseId] = useState('');
+
+  // Follow the payee's VAT status from the master whenever a payee is picked, so
+  // the accountant needn't look it up. They can still override the checkbox.
+  useEffect(() => {
+    if (payeeVatRegistered !== null && payeeVatRegistered !== undefined) {
+      setVatReg(payeeVatRegistered);
+    }
+  }, [payeeVatRegistered]);
 
   const byCode = (code: string) => accounts.find((a) => a.accountCode === code);
   const ewtAcct = byCode(EWT_CODE);
@@ -200,6 +214,22 @@ export function WithholdingTaxAssistant({
           <input type="checkbox" checked={vatReg} onChange={(e) => setVatReg(e.target.checked)} />
           Payee is VAT-registered
         </label>
+        {payeeVatRegistered !== null && payeeVatRegistered !== undefined && (
+          <span
+            style={{
+              flex: '0 0 auto',
+              paddingBottom: 8,
+              fontSize: 12,
+              color: payeeVatRegistered ? '#175cd3' : '#667085',
+            }}
+            title="From the payee's record in the payee master"
+          >
+            {payeeName ? `${payeeName}: ` : ''}
+            {payeeVatRegistered
+              ? 'VAT-registered (per payee record)'
+              : 'Not VAT-registered (per payee record)'}
+          </span>
+        )}
         <div style={{ flex: '1 1 320px', minWidth: 0 }}>
           <label style={labelStyle}>Account charged (expense / asset)</label>
           <AccountCombobox accounts={accounts} value={expenseId} onChange={setExpenseId} />

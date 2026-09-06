@@ -70,6 +70,9 @@ export default function NewDisbursementPage() {
   const [payeeName, setPayeeName] = useState('');
   const [payeeTin, setPayeeTin] = useState('');
   const [payeeAddress, setPayeeAddress] = useState('');
+  // VAT status of the selected payee (from the payee master): true/false when a
+  // payee is picked, null when the name was typed by hand (status unknown).
+  const [payeeVat, setPayeeVat] = useState<boolean | null>(null);
   const [particulars, setParticulars] = useState('');
   const [paymentMode, setPaymentMode] = useState('check');
   const [fundSourceId, setFundSourceId] = useState('');
@@ -363,11 +366,16 @@ export default function NewDisbursementPage() {
               ) : (
                 <PayeeCombobox
                   name={payeeName}
-                  onNameChange={setPayeeName}
+                  onNameChange={(n) => {
+                    setPayeeName(n);
+                    // Typed by hand — VAT status is no longer known from the master.
+                    setPayeeVat(null);
+                  }}
                   onPick={(p) => {
                     setPayeeName(p.name);
                     setPayeeTin(p.tin ?? '');
                     setPayeeAddress(p.address ?? '');
+                    setPayeeVat(p.vatRegistered);
                   }}
                   inputStyle={inputStyle}
                   placeholder="Type or select a payee…"
@@ -472,7 +480,14 @@ export default function NewDisbursementPage() {
           >
             {showWht ? 'Hide' : '🧮'} Withholding Tax Assistant
           </button>
-          {showWht && <WithholdingTaxAssistant accounts={accounts} onApply={applyWht} />}
+          {showWht && (
+            <WithholdingTaxAssistant
+              accounts={accounts}
+              onApply={applyWht}
+              payeeVatRegistered={payeeVat}
+              payeeName={payeeName || null}
+            />
+          )}
         </div>
 
         {/* Accounting entry (charges + deductions) — the main working area */}

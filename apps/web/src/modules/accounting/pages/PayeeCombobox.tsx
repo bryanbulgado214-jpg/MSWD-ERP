@@ -8,6 +8,7 @@ export interface PickedPayee {
   name: string;
   tin: string | null;
   address: string | null;
+  vatRegistered: boolean;
 }
 
 /**
@@ -32,7 +33,7 @@ export function PayeeCombobox({
   const [payees, setPayees] = useState<Payee[]>([]);
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ name: '', tin: '', address: '' });
+  const [form, setForm] = useState({ name: '', tin: '', address: '', vatRegistered: false });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -75,7 +76,7 @@ export function PayeeCombobox({
   const modalLabel: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: '#344054' };
 
   function openAdd() {
-    setForm({ name: name.trim(), tin: '', address: '' });
+    setForm({ name: name.trim(), tin: '', address: '', vatRegistered: false });
     setErr('');
     setAdding(true);
     setOpen(false);
@@ -90,9 +91,15 @@ export function PayeeCombobox({
         name: form.name.trim(),
         ...(form.tin.trim() ? { tin: form.tin.trim() } : {}),
         ...(form.address.trim() ? { address: form.address.trim() } : {}),
+        vatRegistered: form.vatRegistered,
       });
       setPayees((prev) => [created, ...prev]);
-      onPick({ name: created.name, tin: created.tin, address: created.address });
+      onPick({
+        name: created.name,
+        tin: created.tin,
+        address: created.address,
+        vatRegistered: created.vatRegistered,
+      });
       setAdding(false);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Could not add payee.');
@@ -136,12 +143,34 @@ export function PayeeCombobox({
               key={p.id}
               onMouseDown={(e) => {
                 e.preventDefault();
-                onPick({ name: p.name, tin: p.tin, address: p.address });
+                onPick({
+                  name: p.name,
+                  tin: p.tin,
+                  address: p.address,
+                  vatRegistered: p.vatRegistered,
+                });
                 setOpen(false);
               }}
               style={{ padding: '7px 10px', cursor: 'pointer', borderBottom: '1px solid #f2f4f7' }}
             >
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#101828' }}>{p.name}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#101828' }}>
+                {p.name}
+                {p.vatRegistered && (
+                  <span
+                    style={{
+                      marginLeft: 6,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: '#175cd3',
+                      border: '1px solid #b2ccf4',
+                      borderRadius: 4,
+                      padding: '0 4px',
+                    }}
+                  >
+                    VAT
+                  </span>
+                )}
+              </div>
               <div style={{ fontSize: 11, color: '#667085' }}>
                 {p.tin ? `TIN ${p.tin}` : 'No TIN'}
                 {p.address ? ` · ${p.address}` : ''}
@@ -230,6 +259,28 @@ export function PayeeCombobox({
                   value={form.address}
                   onChange={(e) => setForm({ ...form, address: e.target.value })}
                 />
+              </div>
+              <div style={modalField}>
+                <span style={modalLabel}>VAT status</span>
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    fontSize: 13,
+                    color: '#344054',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={form.vatRegistered}
+                    onChange={(e) => setForm({ ...form, vatRegistered: e.target.checked })}
+                  />
+                  Payee is VAT-registered
+                </label>
+                <span style={{ fontSize: 11, color: '#98a2b3' }}>
+                  Used by the withholding-tax assistant (final VAT 5% vs percentage tax 3%).
+                </span>
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 16, justifyContent: 'flex-end' }}>

@@ -8,6 +8,7 @@ import type { ChartOfAccount } from '../types';
 
 import { AccountCombobox } from './AccountCombobox';
 import { AccountingSubNav } from './AccountingSubNav';
+import { PayeeCombobox } from './PayeeCombobox';
 import './accounting.css';
 
 interface LineDraft {
@@ -223,13 +224,20 @@ export default function NewSupplierInvoicePage() {
 
         <div className="acct-form-row">
           <div className="acct-field">
-            <label>Supplier Name</label>
-            <input
-              value={supplierName}
-              onChange={(e) => setSupplierName(e.target.value)}
-              required
-              placeholder="Name of supplier / payee"
+            <label>Supplier</label>
+            <PayeeCombobox
+              name={supplierName}
+              onNameChange={setSupplierName}
+              onPick={(p) => {
+                setSupplierName(p.name);
+                setSupplierTin(p.tin ?? '');
+                setSupplierAddress(p.address ?? '');
+              }}
+              placeholder="Type or select a supplier…"
             />
+            <span style={{ fontSize: 11, color: '#98a2b3', marginTop: 4 }}>
+              Picks from the payee list and fills in the TIN and address.
+            </span>
           </div>
           <div className="acct-field">
             <label>

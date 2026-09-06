@@ -1223,6 +1223,7 @@ export interface Payee {
   name: string;
   address: string | null;
   tin: string | null;
+  vatRegistered: boolean;
   isActive: boolean;
   version: number;
 }
@@ -1230,11 +1231,13 @@ export interface CreatePayeeInput {
   name: string;
   address?: string;
   tin?: string;
+  vatRegistered?: boolean;
 }
 export interface UpdatePayeeInput {
   name?: string;
   address?: string;
   tin?: string;
+  vatRegistered?: boolean;
   isActive?: boolean;
 }
 

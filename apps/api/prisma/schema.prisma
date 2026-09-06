@@ -3330,6 +3330,9 @@ model Payee {
   name           String   @db.VarChar(255)
   address        String?
   tin            String?  @db.VarChar(30)
+  // Whether the payee is VAT-registered. Drives the withholding-tax assistant
+  // (final VAT/GMP 5% vs percentage tax 3%) so the accountant needn't look it up.
+  vatRegistered  Boolean  @default(false) @map("vat_registered")
   isActive       Boolean  @default(true) @map("is_active")
   mergedIntoId   String?  @map("merged_into_id") @db.Uuid
   createdBy      String?  @map("created_by") @db.Uuid
