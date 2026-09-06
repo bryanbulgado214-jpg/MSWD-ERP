@@ -108,6 +108,7 @@ export class SupplierInvoiceService {
         taxAmount: true,
         netAmount: true,
         status: true,
+        supplierInvoiceInstallment: true,
         checks: {
           orderBy: { createdAt: 'desc' },
           take: 1,
@@ -125,13 +126,47 @@ export class SupplierInvoiceService {
         taxWithheld: String(p.taxAmount),
         cashPaid: String(p.netAmount),
         dvStatus: p.status,
+        installment: p.supplierInvoiceInstallment ?? null,
         checkStatus: check?.status ?? null,
         checkNumber: check?.checkNumber ?? null,
         checkDate: check?.checkDate ?? null,
       };
     });
 
-    return { ...this.toSummary(inv), journalEntry, payments };
+    // Per-installment status. Payments count toward the payable once they are
+    // posted (not draft/cancelled); the amount applied is the DV's gross debit
+    // to Accounts Payable. An installment is paid / partially paid, else due or
+    // past due by its date.
+    const settledPayments = paymentRows.filter(
+      (p) => p.status !== 'draft' && p.status !== 'cancelled',
+    );
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const rawSchedule = (inv.dueSchedule as unknown as DueItem[] | null) ?? [];
+    const schedule = rawSchedule.map((d, i) => {
+      const installmentNo = i + 1;
+      const paid = round2(
+        settledPayments
+          .filter((p) => p.supplierInvoiceInstallment === installmentNo)
+          .reduce((s, p) => s + Number(p.grossAmount), 0),
+      );
+      const amount = round2(Number(d.amount));
+      const due = String(d.dueDate).slice(0, 10);
+      let status: 'paid' | 'partially_paid' | 'due' | 'past_due';
+      if (paid >= amount - 0.01) status = 'paid';
+      else if (paid > 0.01) status = 'partially_paid';
+      else if (due < todayStr) status = 'past_due';
+      else status = 'due';
+      return {
+        installment: installmentNo,
+        dueDate: d.dueDate,
+        amount: String(amount),
+        paid: String(paid),
+        balance: String(round2(amount - paid)),
+        status,
+      };
+    });
+
+    return { ...this.toSummary(inv), journalEntry, payments, schedule };
   }
 
   async create(organizationId: string, userId: string, dto: CreateSupplierInvoiceDto) {

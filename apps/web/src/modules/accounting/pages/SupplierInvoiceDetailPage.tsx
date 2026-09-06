@@ -20,6 +20,32 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: 'Cancelled',
 };
 
+const SCHEDULE_STATUS: Record<string, { label: string; bg: string; fg: string }> = {
+  paid: { label: 'Paid', bg: '#e6f4ea', fg: '#12805c' },
+  partially_paid: { label: 'Partially Paid', bg: '#fef7e6', fg: '#b54708' },
+  due: { label: 'Due', bg: '#eff4ff', fg: '#175cd3' },
+  past_due: { label: 'Past Due', bg: '#fdecec', fg: '#b42318' },
+};
+
+function ScheduleStatusChip({ status }: { status: string }) {
+  const s = SCHEDULE_STATUS[status] ?? { label: status, bg: '#eef0f3', fg: '#475467' };
+  return (
+    <span
+      style={{
+        display: 'inline-block',
+        padding: '2px 8px',
+        borderRadius: 12,
+        fontSize: 12,
+        fontWeight: 600,
+        background: s.bg,
+        color: s.fg,
+      }}
+    >
+      {s.label}
+    </span>
+  );
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
@@ -196,6 +222,7 @@ export default function SupplierInvoiceDetailPage() {
               <tr>
                 <th>DV #</th>
                 <th>Date</th>
+                {inv.schedule.length > 1 && <th>For</th>}
                 <th>Check</th>
                 <th className="acct-text-right">Applied to A/P</th>
                 <th className="acct-text-right">Tax Withheld</th>
@@ -215,6 +242,9 @@ export default function SupplierInvoiceDetailPage() {
                     </Link>
                   </td>
                   <td>{new Date(p.dvDate).toLocaleDateString('en-PH')}</td>
+                  {inv.schedule.length > 1 && (
+                    <td>{p.installment ? `Installment ${p.installment}` : '—'}</td>
+                  )}
                   <td className="acct-text-mono">{p.checkNumber || '—'}</td>
                   <td className="acct-text-right acct-text-mono">{formatPeso(p.applied)}</td>
                   <td className="acct-text-right acct-text-mono">
@@ -231,26 +261,38 @@ export default function SupplierInvoiceDetailPage() {
         </div>
       )}
 
-      {inv.dueSchedule.length > 0 && (
+      {inv.schedule.length > 0 && (
         <>
           <h3
             style={{ fontSize: 14, fontWeight: 700, color: 'var(--mswd-navy)', margin: '0 0 8px' }}
           >
             Payment Schedule
           </h3>
-          <div style={{ overflowX: 'auto', maxWidth: 420 }}>
+          <div style={{ overflowX: 'auto', maxWidth: 640 }}>
             <table className="acct-table">
               <thead>
                 <tr>
+                  {inv.schedule.length > 1 && <th>Installment</th>}
                   <th>Due Date</th>
                   <th className="acct-text-right">Amount</th>
+                  <th className="acct-text-right">Paid</th>
+                  <th className="acct-text-right">Balance</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {inv.dueSchedule.map((d, i) => (
-                  <tr key={i}>
+                {inv.schedule.map((d) => (
+                  <tr key={d.installment}>
+                    {inv.schedule.length > 1 && <td>{d.installment}</td>}
                     <td>{new Date(d.dueDate).toLocaleDateString('en-PH')}</td>
                     <td className="acct-text-right acct-text-mono">{formatPeso(d.amount)}</td>
+                    <td className="acct-text-right acct-text-mono">
+                      {Number(d.paid) > 0 ? formatPeso(d.paid) : '—'}
+                    </td>
+                    <td className="acct-text-right acct-text-mono">{formatPeso(d.balance)}</td>
+                    <td>
+                      <ScheduleStatusChip status={d.status} />
+                    </td>
                   </tr>
                 ))}
               </tbody>

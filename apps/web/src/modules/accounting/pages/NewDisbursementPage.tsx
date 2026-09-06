@@ -50,6 +50,13 @@ function peso(n: number): string {
   return n.toLocaleString('en-PH', { style: 'currency', currency: 'PHP' });
 }
 
+const INSTALLMENT_STATUS: Record<string, { label: string; bg: string; fg: string }> = {
+  paid: { label: 'Paid', bg: '#e6f4ea', fg: '#12805c' },
+  partially_paid: { label: 'Partially Paid', bg: '#fef7e6', fg: '#b54708' },
+  due: { label: 'Due', bg: '#eff4ff', fg: '#175cd3' },
+  past_due: { label: 'Past Due', bg: '#fdecec', fg: '#b42318' },
+};
+
 export default function NewDisbursementPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
@@ -96,8 +103,10 @@ export default function NewDisbursementPage() {
   const [attachFiles, setAttachFiles] = useState<File[]>([]);
   // Withholding-tax assistant panel.
   const [showWht, setShowWht] = useState(false);
-  // The supplier invoice being paid (when launched from an invoice).
+  // The supplier invoice being paid (when launched from an invoice), and which
+  // installment of its schedule this payment is for (1-based; null = whole/none).
   const [payingInvoice, setPayingInvoice] = useState<SupplierInvoiceDetail | null>(null);
+  const [installmentNo, setInstallmentNo] = useState<number | null>(null);
 
   function applyWht(rows: WhtRow[]) {
     setLines(
@@ -109,6 +118,24 @@ export default function NewDisbursementPage() {
       })),
     );
     setShowWht(false);
+  }
+
+  // Pick which installment of the invoice's schedule to pay; refill the Accounts
+  // Payable line with that installment's remaining balance.
+  function selectInstallment(no: number) {
+    setInstallmentNo(no);
+    const item = payingInvoice?.schedule.find((s) => s.installment === no);
+    if (item && payingInvoice?.apAccountId) {
+      const amt = Number(item.balance);
+      setLines([
+        {
+          chartOfAccountId: payingInvoice.apAccountId,
+          debitAmount: amt > 0 ? formatAccounting(String(amt)) : '',
+          creditAmount: '',
+          description: `A/P settled — SI ${payingInvoice.invoiceNumber} (installment ${no})`,
+        },
+      ]);
+    }
   }
 
   const load = useCallback(async () => {
@@ -134,7 +161,8 @@ export default function NewDisbursementPage() {
       }
 
       // Paying a supplier's invoice — prefill from the invoice: payee, particulars,
-      // and a Dr Accounts Payable line for the outstanding balance.
+      // and a Dr Accounts Payable line for the outstanding balance. With an
+      // installment plan, default to the first unpaid installment.
       if (!id && supplierInvoiceId) {
         const inv = await getSupplierInvoice(supplierInvoiceId);
         setPayingInvoice(inv);
@@ -142,14 +170,25 @@ export default function NewDisbursementPage() {
         setPayeeTin(inv.supplierTin ?? '');
         setPayeeAddress(inv.supplierAddress ?? '');
         setParticulars(`Payment of Supplier's Invoice ${inv.invoiceNumber} — ${inv.supplierName}`);
-        const bal = Number(inv.balance);
+
+        const hasPlan = inv.schedule.length > 1;
+        const firstUnpaid = hasPlan
+          ? (inv.schedule.find((s) => s.status !== 'paid') ?? null)
+          : null;
+        const inst = firstUnpaid?.installment ?? null;
+        setInstallmentNo(inst);
+        // Prefill the amount: the chosen installment's balance, else the invoice
+        // balance.
+        const amt = firstUnpaid ? Number(firstUnpaid.balance) : Number(inv.balance);
         if (inv.apAccountId) {
           setLines([
             {
               chartOfAccountId: inv.apAccountId,
-              debitAmount: bal > 0 ? formatAccounting(String(bal)) : '',
+              debitAmount: amt > 0 ? formatAccounting(String(amt)) : '',
               creditAmount: '',
-              description: `Accounts Payable settled — SI ${inv.invoiceNumber}`,
+              description: inst
+                ? `A/P settled — SI ${inv.invoiceNumber} (installment ${inst})`
+                : `Accounts Payable settled — SI ${inv.invoiceNumber}`,
             },
           ]);
         }
@@ -259,6 +298,7 @@ export default function NewDisbursementPage() {
         bankAccountId,
         ...(fundSourceId ? { fundSourceId } : {}),
         ...(supplierInvoiceId ? { supplierInvoiceId } : {}),
+        ...(installmentNo ? { supplierInvoiceInstallment: installmentNo } : {}),
         ...(asDraft ? { asDraft: true } : {}),
         lines: filledLines.map((l) => ({
           chartOfAccountId: l.chartOfAccountId,
@@ -352,6 +392,82 @@ export default function NewDisbursementPage() {
           the accounts charged and any deductions withheld — the net is credited automatically to
           the bank account you choose.
         </p>
+      )}
+
+      {payingInvoice && payingInvoice.schedule.length > 1 && (
+        <div style={{ marginBottom: 18, maxWidth: 760 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#344054', marginBottom: 6 }}>
+            Which installment is this payment for?
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="acct-table" style={{ fontSize: 13 }}>
+              <thead>
+                <tr>
+                  <th style={{ width: 40 }}></th>
+                  <th>Installment</th>
+                  <th>Due Date</th>
+                  <th className="acct-text-right">Amount</th>
+                  <th className="acct-text-right">Balance</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payingInvoice.schedule.map((s) => {
+                  const paidOff = s.status === 'paid';
+                  const st = INSTALLMENT_STATUS[s.status] ?? {
+                    label: s.status,
+                    bg: '#eef0f3',
+                    fg: '#475467',
+                  };
+                  return (
+                    <tr
+                      key={s.installment}
+                      onClick={() => !paidOff && selectInstallment(s.installment)}
+                      style={{
+                        cursor: paidOff ? 'not-allowed' : 'pointer',
+                        opacity: paidOff ? 0.6 : 1,
+                        background: installmentNo === s.installment ? '#eff8ff' : undefined,
+                      }}
+                    >
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="radio"
+                          name="installment"
+                          checked={installmentNo === s.installment}
+                          disabled={paidOff}
+                          onChange={() => selectInstallment(s.installment)}
+                        />
+                      </td>
+                      <td>Installment {s.installment}</td>
+                      <td>{new Date(s.dueDate).toLocaleDateString('en-PH')}</td>
+                      <td className="acct-text-right acct-text-mono">{peso(Number(s.amount))}</td>
+                      <td className="acct-text-right acct-text-mono">{peso(Number(s.balance))}</td>
+                      <td>
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            padding: '2px 8px',
+                            borderRadius: 12,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            background: st.bg,
+                            color: st.fg,
+                          }}
+                        >
+                          {st.label}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ fontSize: 12, color: '#667085', marginTop: 6 }}>
+            Selecting an installment fills the payment with its remaining balance — adjust it for a
+            partial payment.
+          </div>
+        </div>
       )}
 
       {checkCleared && (

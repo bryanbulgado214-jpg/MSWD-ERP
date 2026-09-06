@@ -6,6 +6,7 @@ import {
   IsDateString,
   IsIn,
   IsNumber,
+  IsInt,
   IsOptional,
   IsString,
   IsUUID,
@@ -107,6 +108,12 @@ export class CreateDisbursementDto {
   @IsOptional()
   @IsUUID()
   supplierInvoiceId?: string;
+
+  // Which installment of the invoice's payment schedule this pays (1-based).
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  supplierInvoiceInstallment?: number;
 
   // Save without posting to the general ledger. The accounting entry is held as
   // a draft JEV until the DV is posted.

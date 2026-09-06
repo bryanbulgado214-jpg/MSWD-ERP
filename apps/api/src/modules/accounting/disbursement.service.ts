@@ -505,6 +505,7 @@ export class DisbursementService {
           amountPaid: true,
           apAccountId: true,
           invoiceNumber: true,
+          dueSchedule: true,
         },
       });
       if (!invoice) throw new BadRequestException('The supplier invoice being paid was not found.');
@@ -524,6 +525,19 @@ export class DisbursementService {
           `The payment (${pesoText(totalDebit)}) exceeds invoice ${invoice.invoiceNumber}'s ` +
             `outstanding balance (${pesoText(balance)}).`,
         );
+      }
+      if (dto.supplierInvoiceInstallment != null) {
+        const schedule = Array.isArray(invoice.dueSchedule)
+          ? (invoice.dueSchedule as unknown[])
+          : [];
+        if (
+          dto.supplierInvoiceInstallment < 1 ||
+          dto.supplierInvoiceInstallment > schedule.length
+        ) {
+          throw new BadRequestException(
+            'The selected installment is not on this invoice’s payment schedule.',
+          );
+        }
       }
     }
 
@@ -616,6 +630,9 @@ export class DisbursementService {
           netAmount: net,
           bankName: dvBankName,
           ...(dto.supplierInvoiceId ? { supplierInvoiceId: dto.supplierInvoiceId } : {}),
+          ...(dto.supplierInvoiceInstallment != null
+            ? { supplierInvoiceInstallment: dto.supplierInvoiceInstallment }
+            : {}),
           ...(dto.fundSourceId ? { fundSourceId: dto.fundSourceId } : {}),
           // Posting a DV never auto-releases it. It becomes "approved" and waits:
           // a check-paid DV is released when the cashier releases the printed

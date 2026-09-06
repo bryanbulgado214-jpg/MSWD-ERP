@@ -2066,6 +2066,9 @@ model DisbursementVoucher {
   // When this DV pays a supplier's invoice (recorded from the Supplier's
   // Invoices module), it settles that invoice's Accounts Payable.
   supplierInvoiceId      String?     @map("supplier_invoice_id") @db.Uuid
+  // Which installment of the invoice's payment schedule this DV pays (1-based
+  // index into due_schedule). Null when the invoice has no installment plan.
+  supplierInvoiceInstallment Int?    @map("supplier_invoice_installment") @db.SmallInt
   particulars            String
   paymentMode            PaymentMode @default(check) @map("payment_mode")
   grossAmount            Decimal     @default(0) @map("gross_amount") @db.Decimal(18, 2)

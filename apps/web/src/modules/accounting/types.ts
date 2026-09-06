@@ -188,9 +188,21 @@ export interface SupplierInvoicePayment {
   taxWithheld: string;
   cashPaid: string;
   dvStatus: string;
+  installment: number | null;
   checkStatus: string | null;
   checkNumber: string | null;
   checkDate: string | null;
+}
+
+export type ScheduleStatus = 'paid' | 'partially_paid' | 'due' | 'past_due';
+
+export interface SupplierInvoiceScheduleItem {
+  installment: number;
+  dueDate: string;
+  amount: string;
+  paid: string;
+  balance: string;
+  status: ScheduleStatus;
 }
 
 export interface SupplierInvoiceDetail extends SupplierInvoiceSummary {
@@ -208,6 +220,7 @@ export interface SupplierInvoiceDetail extends SupplierInvoiceSummary {
     }>;
   } | null;
   payments: SupplierInvoicePayment[];
+  schedule: SupplierInvoiceScheduleItem[];
 }
 
 export interface CreateSupplierInvoicePayload {
