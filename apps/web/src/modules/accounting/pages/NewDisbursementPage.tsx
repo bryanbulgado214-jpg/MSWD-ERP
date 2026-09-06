@@ -74,6 +74,10 @@ export default function NewDisbursementPage() {
   const [paymentMode, setPaymentMode] = useState('check');
   const [fundSourceId, setFundSourceId] = useState('');
   const [bankAccountId, setBankAccountId] = useState('');
+  // Once the check has CLEARED the bank the payment is settled: payee, bank and
+  // amount are locked (the accountant can still fix the date, number, particulars
+  // and the accounting classification).
+  const [checkCleared, setCheckCleared] = useState(false);
   // Charge/deduction entry (the cash credit is added automatically from the bank)
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
   // Supporting documents to attach once the DV is created.
@@ -119,6 +123,7 @@ export default function NewDisbursementPage() {
       if (id) {
         const dv = await getDisbursement(id);
         setDvType(dv.dvType);
+        setDvNumber(dv.dvNumber);
         setDvDate(dv.dvDate.slice(0, 10));
         setPayeeName(dv.payeeName ?? '');
         setPayeeTin(dv.payeeTin ?? '');
@@ -127,11 +132,23 @@ export default function NewDisbursementPage() {
         setPaymentMode(dv.paymentMode);
         setFundSourceId(dv.fundSource?.id ?? '');
         setBankAccountId(dv.bankAccountId ?? '');
+        setCheckCleared(dv.checkStatus === 'cleared');
         // Show only the charge/deduction lines — the balancing cash credit is
-        // re-derived from the bank account on save (it carries that description).
-        const editable = (dv.journalEntry?.lines ?? []).filter(
-          (l) => !(l.description ?? '').startsWith('Cash disbursement —'),
-        );
+        // re-derived from the bank account on save, so it must NOT appear as an
+        // editable line (otherwise charges = deductions and the net reads zero).
+        // Drop it whether it is tagged by description or is simply a credit to a
+        // Cash in Bank / MDS account (older vouchers word the line differently).
+        const CASH_RE = /cash in bank|modified disbursement|cash[- ]*mds|\bmds\b/i;
+        const editable = (dv.journalEntry?.lines ?? []).filter((l) => {
+          const desc = l.description ?? '';
+          if (desc.startsWith('Cash disbursement —') || desc.startsWith('Disbursement —')) {
+            return false;
+          }
+          if (Number(l.creditAmount) > 0 && CASH_RE.test(l.chartOfAccount?.name ?? '')) {
+            return false;
+          }
+          return true;
+        });
         setLines(
           editable.length
             ? editable.map((l) => ({
@@ -197,7 +214,7 @@ export default function NewDisbursementPage() {
       const payload: CreateDisbursementInput = {
         dvType,
         dvDate,
-        ...(manualNumbering && dvNumber.trim() ? { dvNumber: dvNumber.trim() } : {}),
+        ...((isEdit || manualNumbering) && dvNumber.trim() ? { dvNumber: dvNumber.trim() } : {}),
         payeeName: payeeName.trim(),
         ...(payeeTin.trim() ? { payeeTin: payeeTin.trim() } : {}),
         ...(payeeAddress.trim() ? { payeeAddress: payeeAddress.trim() } : {}),
@@ -268,6 +285,23 @@ export default function NewDisbursementPage() {
         bank account you choose.
       </p>
 
+      {checkCleared && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: '10px 14px',
+            border: '1px solid #fedf89',
+            background: '#fffaeb',
+            color: '#93370d',
+            borderRadius: 8,
+            fontSize: 13,
+          }}
+        >
+          The check for this voucher has already <strong>cleared the bank</strong>, so the payee,
+          bank account and amount are locked. You can still correct the DV date, number,
+          particulars, and the accounting classification (which account each line hits).
+        </div>
+      )}
       {error && (
         <div className="acct-error" style={{ marginBottom: 16 }}>
           {error}
@@ -288,7 +322,7 @@ export default function NewDisbursementPage() {
                 onChange={(e) => setDvDate(e.target.value)}
               />
             </div>
-            {manualNumbering && (
+            {(isEdit || manualNumbering) && (
               <div style={cell('180px')}>
                 <label style={labelStyle}>DV Number</label>
                 <input
@@ -320,17 +354,25 @@ export default function NewDisbursementPage() {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 10 }}>
             <div style={cell('280px')}>
               <label style={labelStyle}>Payee *</label>
-              <PayeeCombobox
-                name={payeeName}
-                onNameChange={setPayeeName}
-                onPick={(p) => {
-                  setPayeeName(p.name);
-                  setPayeeTin(p.tin ?? '');
-                  setPayeeAddress(p.address ?? '');
-                }}
-                inputStyle={inputStyle}
-                placeholder="Type or select a payee…"
-              />
+              {checkCleared ? (
+                <input
+                  style={{ ...inputStyle, background: '#f2f4f7' }}
+                  value={payeeName}
+                  disabled
+                />
+              ) : (
+                <PayeeCombobox
+                  name={payeeName}
+                  onNameChange={setPayeeName}
+                  onPick={(p) => {
+                    setPayeeName(p.name);
+                    setPayeeTin(p.tin ?? '');
+                    setPayeeAddress(p.address ?? '');
+                  }}
+                  inputStyle={inputStyle}
+                  placeholder="Type or select a payee…"
+                />
+              )}
             </div>
             <div style={cell('150px')}>
               <label style={labelStyle}>Payee TIN / ID</label>
@@ -368,9 +410,10 @@ export default function NewDisbursementPage() {
                 <span style={{ fontWeight: 400, color: '#667085' }}>(account credited)</span>
               </label>
               <select
-                style={inputStyle}
+                style={checkCleared ? { ...inputStyle, background: '#f2f4f7' } : inputStyle}
                 value={bankAccountId}
                 onChange={(e) => setBankAccountId(e.target.value)}
+                disabled={checkCleared}
               >
                 <option value="">Select paying bank account...</option>
                 {bankAccounts.map((b) => (
@@ -390,9 +433,10 @@ export default function NewDisbursementPage() {
             <div style={cell('200px')}>
               <label style={labelStyle}>Mode of Payment</label>
               <select
-                style={inputStyle}
+                style={checkCleared ? { ...inputStyle, background: '#f2f4f7' } : inputStyle}
                 value={paymentMode}
                 onChange={(e) => setPaymentMode(e.target.value)}
+                disabled={checkCleared}
               >
                 <option value="check">Check (Commercial / MDS)</option>
                 <option value="ada">ADA — Advice to Debit Account (no check)</option>
@@ -424,6 +468,7 @@ export default function NewDisbursementPage() {
             type="button"
             className="acct-btn acct-btn--sm"
             onClick={() => setShowWht((v) => !v)}
+            disabled={checkCleared}
           >
             {showWht ? 'Hide' : '🧮'} Withholding Tax Assistant
           </button>
@@ -449,7 +494,12 @@ export default function NewDisbursementPage() {
             }}
           >
             <h2 style={{ fontSize: 15, margin: 0 }}>Accounting Entry — charges &amp; deductions</h2>
-            <button type="button" className="acct-btn acct-btn--primary" onClick={addLine}>
+            <button
+              type="button"
+              className="acct-btn acct-btn--primary"
+              onClick={addLine}
+              disabled={checkCleared}
+            >
               + Add Line
             </button>
           </div>
@@ -479,9 +529,14 @@ export default function NewDisbursementPage() {
                   </td>
                   <td>
                     <input
-                      style={{ ...inputStyle, textAlign: 'right' }}
+                      style={{
+                        ...inputStyle,
+                        textAlign: 'right',
+                        ...(checkCleared ? { background: '#f2f4f7' } : {}),
+                      }}
                       type="text"
                       inputMode="decimal"
+                      disabled={checkCleared}
                       value={l.debitAmount}
                       onChange={(e) => updateLine(idx, 'debitAmount', e.target.value)}
                       onFocus={(e) => updateLine(idx, 'debitAmount', unformatMoney(e.target.value))}
@@ -492,9 +547,14 @@ export default function NewDisbursementPage() {
                   </td>
                   <td>
                     <input
-                      style={{ ...inputStyle, textAlign: 'right' }}
+                      style={{
+                        ...inputStyle,
+                        textAlign: 'right',
+                        ...(checkCleared ? { background: '#f2f4f7' } : {}),
+                      }}
                       type="text"
                       inputMode="decimal"
+                      disabled={checkCleared}
                       value={l.creditAmount}
                       onChange={(e) => updateLine(idx, 'creditAmount', e.target.value)}
                       onFocus={(e) =>
@@ -516,7 +576,7 @@ export default function NewDisbursementPage() {
                     <button
                       type="button"
                       className="acct-btn"
-                      disabled={lines.length <= 1}
+                      disabled={lines.length <= 1 || checkCleared}
                       onClick={() => removeLine(idx)}
                       title="Remove line"
                     >
@@ -548,6 +608,7 @@ export default function NewDisbursementPage() {
             className="acct-btn acct-btn--sm"
             onClick={addLine}
             style={{ marginTop: 8 }}
+            disabled={checkCleared}
           >
             + Add Line
           </button>

@@ -2,13 +2,49 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
-import { AccountingApiError, deleteDisbursement, getDisbursements, postDisbursement } from '../api';
+import { AccountingApiError, deleteDisbursement, getDisbursements } from '../api';
 import { amountSearchTokens, matchesQuery } from '../search';
 import { compareDocNumber, sortArrow, type SortDir } from '../sort-utils';
 import type { DisbursementSummary } from '../types';
 
 import { AccountingSubNav } from './AccountingSubNav';
 import './accounting.css';
+
+const PenIcon = (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
+  </svg>
+);
+const TrashIcon = (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M3 6h18" />
+    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    <line x1="10" y1="11" x2="10" y2="17" />
+    <line x1="14" y1="11" x2="14" y2="17" />
+  </svg>
+);
 
 const sortBtnStyle: React.CSSProperties = {
   background: 'none',
@@ -100,7 +136,6 @@ export default function DisbursementListPage() {
         : new Date(a.dvDate).getTime() - new Date(b.dvDate).getTime();
     return sortDir === 'asc' ? c : -c;
   };
-  const [posting, setPosting] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState('');
 
@@ -123,21 +158,6 @@ export default function DisbursementListPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  async function handlePost(id: string) {
-    setPosting(id);
-    setError('');
-    try {
-      await postDisbursement(id);
-      await load();
-    } catch (e) {
-      setError(
-        e instanceof AccountingApiError ? e.message : 'Failed to post the disbursement voucher.',
-      );
-    } finally {
-      setPosting(null);
-    }
-  }
 
   async function handleDelete(dv: DisbursementSummary) {
     const posted = dv.status !== 'draft';
@@ -257,7 +277,7 @@ export default function DisbursementListPage() {
                 <th>Particulars</th>
                 <th>Net Amount</th>
                 <th>Status</th>
-                <th></th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -265,7 +285,11 @@ export default function DisbursementListPage() {
                 .filter((dv) => matchesSearch(dv, search))
                 .sort(compareDv)
                 .map((dv) => (
-                  <tr key={dv.id}>
+                  <tr
+                    key={dv.id}
+                    className="acct-row--click"
+                    onClick={() => navigate(`/accounting/disbursements/${dv.id}`)}
+                  >
                     <td className="acct-text-mono">{dv.dvNumber}</td>
                     <td>{new Date(dv.dvDate).toLocaleDateString('en-PH')}</td>
                     <td>{dv.supplier?.name ?? dv.payeeName ?? '—'}</td>
@@ -280,76 +304,51 @@ export default function DisbursementListPage() {
                       {dv.particulars}
                     </td>
                     <td className="acct-text-right acct-text-mono">{formatPeso(dv.netAmount)}</td>
-                    <td>
-                      <span className="acct-badge">
-                        {STATUS_LABELS[effectiveStatus(dv)] ?? effectiveStatus(dv)}
-                      </span>
-                      {dv.checkStatusDate && (
-                        <span style={{ color: '#667085', fontSize: 12, marginLeft: 6 }}>
-                          on {new Date(dv.checkStatusDate).toLocaleDateString('en-PH')}
-                        </span>
-                      )}
-                    </td>
-                    <td>
+                    <td style={{ textAlign: 'center' }}>
                       <div
-                        style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}
+                        style={{
+                          display: 'inline-flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: 3,
+                        }}
                       >
-                        <Link
-                          to={`/accounting/disbursements/${dv.id}`}
-                          className="acct-table__link"
-                        >
-                          View
-                        </Link>
-                        {dv.status === 'draft' && canCreate && (
-                          <Link
-                            to={`/accounting/disbursements/${dv.id}/edit`}
-                            className="acct-table__link"
-                          >
-                            Edit
-                          </Link>
+                        <span className="acct-badge">
+                          {STATUS_LABELS[effectiveStatus(dv)] ?? effectiveStatus(dv)}
+                        </span>
+                        {dv.checkStatusDate && (
+                          <span style={{ color: '#667085', fontSize: 12 }}>
+                            {new Date(dv.checkStatusDate).toLocaleDateString('en-PH')}
+                          </span>
                         )}
-                        <Link
-                          to={`/accounting/disbursements/${dv.id}/print`}
-                          className="acct-table__link"
-                        >
-                          Print
-                        </Link>
-                        {parseFloat(dv.taxAmount) > 0 && (
-                          <Link
-                            to={`/accounting/disbursements/${dv.id}/bir-2307`}
-                            className="acct-table__link"
-                            title="Certificate of Creditable Tax Withheld at Source"
-                          >
-                            2307
-                          </Link>
-                        )}
-                        {dv.status === 'draft' && canPost && (
-                          <button
-                            type="button"
-                            className="acct-btn acct-btn--sm"
-                            disabled={posting === dv.id}
-                            onClick={() => handlePost(dv.id)}
-                          >
-                            {posting === dv.id ? 'Posting…' : 'Post'}
-                          </button>
-                        )}
+                      </div>
+                    </td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        {/* Drafts are edited by data-entry; a posted voucher's edit
+                            re-posts its GL entry, so it needs the post permission. */}
+                        {dv.status !== 'cancelled' &&
+                          (dv.status === 'draft' ? canCreate : canPost) && (
+                            <Link
+                              to={`/accounting/disbursements/${dv.id}/edit`}
+                              className="acct-icon-btn"
+                              title="Edit"
+                              aria-label="Edit"
+                            >
+                              {PenIcon}
+                            </Link>
+                          )}
                         {((dv.status === 'draft' && canCreate) ||
                           (canPost && dv.checkStatus !== 'cleared')) && (
                           <button
                             type="button"
+                            className="acct-icon-btn acct-icon-btn--danger"
                             onClick={() => handleDelete(dv)}
                             disabled={deleting === dv.id}
-                            style={{
-                              color: '#b42318',
-                              background: 'none',
-                              border: 'none',
-                              cursor: 'pointer',
-                              padding: 0,
-                              font: 'inherit',
-                              textDecoration: 'underline',
-                            }}
+                            title="Delete"
+                            aria-label="Delete"
                           >
-                            {deleting === dv.id ? 'Deleting…' : 'Delete'}
+                            {TrashIcon}
                           </button>
                         )}
                       </div>

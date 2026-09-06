@@ -163,6 +163,9 @@ export class DisbursementService {
         taxAmount: true,
         netAmount: true,
         status: true,
+        certifiedAt: true,
+        approvedAt: true,
+        releasedAt: true,
         payeeName: true,
         supplier: { select: { name: true } },
         // The most recently issued check. Its lifecycle
@@ -183,10 +186,9 @@ export class DisbursementService {
       },
     });
 
-    return dvs.map(({ checks, ...dv }) => {
+    return dvs.map(({ checks, certifiedAt, approvedAt, releasedAt, ...dv }) => {
       const c = checks[0];
-      // The timestamp of the action that put the check in its current state —
-      // shown next to the status ("Cleared on 8/24/2026").
+      // The timestamp of the action that put the CHECK in its current state.
       const checkStatusDate =
         c?.status === 'cleared'
           ? c.clearedDate
@@ -197,10 +199,20 @@ export class DisbursementService {
               : c?.status === 'voided' || c?.status === 'spoiled'
                 ? c.voidedAt
                 : null;
+      // With no check, fall back to the DV's own status timestamp so every
+      // voucher shows a date under its status (kept consistent across the list).
+      const dvStatusDate =
+        dv.status === 'released'
+          ? releasedAt
+          : dv.status === 'approved'
+            ? approvedAt
+            : dv.status === 'certified'
+              ? certifiedAt
+              : null;
       return {
         ...dv,
         checkStatus: c?.status ?? null,
-        checkStatusDate: checkStatusDate ?? null,
+        checkStatusDate: (c ? checkStatusDate : dvStatusDate) ?? null,
       };
     });
   }
@@ -248,10 +260,31 @@ export class DisbursementService {
       select: { bankAccountId: true, status: true },
     });
 
+    // Fallback when there is no check (e.g. an ADA payment or older entry): the
+    // bank is whichever Cash-in-Bank account the entry's cash-disbursement line
+    // credits, so the edit form still prefills the original bank account.
+    let bankAccountId = check?.bankAccountId ?? null;
+    if (!bankAccountId && journalEntry) {
+      const CASH_RE = /cash in bank|modified disbursement|cash[- ]*mds|\bmds\b/i;
+      const cashLine = journalEntry.lines.find(
+        (l) =>
+          Number(l.creditAmount) > 0 &&
+          ((l.description ?? '').startsWith('Cash disbursement —') ||
+            CASH_RE.test(l.chartOfAccount?.name ?? '')),
+      );
+      if (cashLine) {
+        const ba = await this.prisma.bankAccount.findFirst({
+          where: { organizationId: orgId, chartOfAccountId: cashLine.chartOfAccountId },
+          select: { id: true },
+        });
+        bankAccountId = ba?.id ?? null;
+      }
+    }
+
     return {
       ...dv,
       journalEntry,
-      bankAccountId: check?.bankAccountId ?? null,
+      bankAccountId,
       checkStatus: check?.status ?? null,
     };
   }
@@ -636,18 +669,43 @@ export class DisbursementService {
   }
 
   /**
-   * Edit a DRAFT disbursement voucher: re-validate the resubmitted form and
-   * rebuild its held draft entry + pending check. Posted/released DVs are
-   * immutable — they carry a posted JEV, an issued check, and a GL impact.
+   * Edit a disbursement voucher: re-validate the resubmitted form and rebuild its
+   * accounting entry. A draft rebuilds its held draft JEV + pending check. A
+   * posted/released DV re-posts its JEV (an accountant step — needs dv.post).
+   *
+   * Once its check has CLEARED the bank the payment is settled, so the fields the
+   * check embodies — payee, bank account and amount — are locked; the DV date,
+   * number, particulars and the accounting classification can still be corrected.
+   * The cleared check itself is never touched. For a not-yet-cleared check, the
+   * check is left alone unless payee/bank/amount changed, in which case a fresh
+   * pending check is raised so the cashier reprints.
    */
   async update(orgId: string, userId: string, id: string, dto: CreateDisbursementDto) {
     const existing = await this.prisma.disbursementVoucher.findFirst({
       where: { id, organizationId: orgId },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        status: true,
+        dvNumber: true,
+        payeeName: true,
+        netAmount: true,
+        checks: { select: { id: true, status: true, bankAccountId: true } },
+      },
     });
     if (!existing) throw new NotFoundException('Disbursement voucher not found.');
-    if (existing.status !== 'draft') {
-      throw new BadRequestException('Only draft disbursement vouchers can be edited.');
+    if (existing.status === 'cancelled') {
+      throw new BadRequestException('A cancelled disbursement voucher cannot be edited.');
+    }
+    const isDraft = existing.status === 'draft';
+    const clearedCheck = existing.checks.find((c) => c.status === 'cleared');
+    // Editing a posted voucher re-posts its GL entry — the accountant's call.
+    if (!isDraft) {
+      const granted = await getGrantedPermissionCodes(this.prisma, userId);
+      if (!granted.has('accounting.dv.post')) {
+        throw new ForbiddenException(
+          'Editing a posted disbursement voucher needs the “Post Disbursement Vouchers” permission.',
+        );
+      }
     }
 
     // Same validation + entry-building as create().
@@ -677,6 +735,24 @@ export class DisbursementService {
     if (net <= 0) {
       throw new BadRequestException(
         'The net amount payable (charges minus deductions) must be greater than zero.',
+      );
+    }
+
+    // Did any field the check embodies change (payee, bank account, amount)?
+    const anyCheck = existing.checks[0];
+    const checkFieldsChanged =
+      dto.payeeName.trim() !== (existing.payeeName ?? '') ||
+      net !== round2(Number(existing.netAmount)) ||
+      (anyCheck ? dto.bankAccountId !== anyCheck.bankAccountId : false);
+    // A cleared check is a settled payment — those fields are locked.
+    if (clearedCheck && checkFieldsChanged) {
+      const changed: string[] = [];
+      if (dto.payeeName.trim() !== (existing.payeeName ?? '')) changed.push('payee');
+      if (dto.bankAccountId !== clearedCheck.bankAccountId) changed.push('bank account');
+      if (net !== round2(Number(existing.netAmount))) changed.push('amount');
+      throw new BadRequestException(
+        `The ${changed.join(', ')} cannot be changed — the check for ${existing.dvNumber} has already cleared the bank. ` +
+          'You can still edit the DV date, number, particulars and the accounting entry.',
       );
     }
 
@@ -710,12 +786,36 @@ export class DisbursementService {
       },
     ];
 
+    // The DV number can be edited here too (no separate step). Keep it unique.
+    const newDvNumber = dto.dvNumber?.trim() || existing.dvNumber;
+    if (newDvNumber !== existing.dvNumber) {
+      const taken = await this.prisma.disbursementVoucher.findFirst({
+        where: { organizationId: orgId, dvNumber: newDvNumber, id: { not: id } },
+        select: { id: true },
+      });
+      if (taken) throw new ConflictException(`DV number "${newDvNumber}" is already in use.`);
+    }
+
+    // Draft edits always rebuild the pending check; a posted edit only re-raises
+    // it when the payee/bank/amount changed (a cleared check is never touched).
+    const reissueCheck = isDraft || (!clearedCheck && checkFieldsChanged);
+    const jevStatus = isDraft ? 'draft' : 'posted';
     await runAudited(this.prisma, userId, async (tx) => {
-      await this.deleteDraftArtifacts(tx, orgId, id);
+      // Replace the accounting entry (draft or posted; jev_lines cascade).
+      await tx.journalEntryVoucher.deleteMany({
+        where: { organizationId: orgId, sourceType: 'disbursement', sourceId: id },
+      });
+      if (reissueCheck && existing.checks.length) {
+        const ids = existing.checks.map((c) => c.id);
+        await tx.bankReconciliationItem.deleteMany({ where: { checkId: { in: ids } } });
+        await tx.checkStatusHistory.deleteMany({ where: { checkId: { in: ids } } });
+        await tx.check.deleteMany({ where: { id: { in: ids } } });
+      }
 
       const dv = await tx.disbursementVoucher.update({
         where: { id },
         data: {
+          dvNumber: newDvNumber,
           dvDate,
           dvType: dto.dvType as never,
           payeeName: dto.payeeName,
@@ -729,6 +829,8 @@ export class DisbursementService {
           netAmount: net,
           bankName: dvBankName,
           fundSourceId: dto.fundSourceId ?? null,
+          // Re-raising the check on a posted DV sends it back to awaiting release.
+          ...(reissueCheck && !isDraft ? { status: 'approved' as never } : {}),
           updatedBy: userId,
           version: { increment: 1 },
         },
@@ -748,7 +850,7 @@ export class DisbursementService {
         userId,
         dv,
         jevLines,
-        'draft',
+        jevStatus,
       );
       if (!jev) {
         throw new BadRequestException(
@@ -756,7 +858,7 @@ export class DisbursementService {
         );
       }
 
-      if ((dto.paymentMode ?? 'check') === 'check') {
+      if (reissueCheck && (dto.paymentMode ?? 'check') === 'check') {
         const check = await tx.check.create({
           data: {
             organizationId: orgId,
@@ -838,26 +940,6 @@ export class DisbursementService {
       await tx.disbursementVoucher.delete({ where: { id } });
     });
     return { deleted: true };
-  }
-
-  /**
-   * Remove a draft DV's held draft JEV (lines cascade) and its pending check(s)
-   * (+ status history). Shared by edit (rebuild) and delete.
-   */
-  private async deleteDraftArtifacts(tx: Prisma.TransactionClient, orgId: string, dvId: string) {
-    const checks = await tx.check.findMany({
-      where: { disbursementVoucherId: dvId },
-      select: { id: true },
-    });
-    const checkIds = checks.map((c) => c.id);
-    if (checkIds.length) {
-      await tx.checkStatusHistory.deleteMany({ where: { checkId: { in: checkIds } } });
-      await tx.bankReconciliationItem.deleteMany({ where: { checkId: { in: checkIds } } });
-      await tx.check.deleteMany({ where: { id: { in: checkIds } } });
-    }
-    await tx.journalEntryVoucher.deleteMany({
-      where: { organizationId: orgId, sourceType: 'disbursement', sourceId: dvId, status: 'draft' },
-    });
   }
 
   /**

@@ -14,7 +14,6 @@ import {
   getDvNotes,
   postDisbursement,
   releaseDisbursement,
-  updateDvNumber,
   uploadDvAttachment,
   type DvAttachment,
   type DvNote,
@@ -53,6 +52,7 @@ const PAYMENT_MODE_LABELS: Record<string, string> = {
   others: 'Others',
 };
 const STATUS_LABELS: Record<string, string> = {
+  // DV lifecycle
   draft: 'Draft',
   for_certification: 'For Certification',
   certified: 'Certified',
@@ -60,6 +60,15 @@ const STATUS_LABELS: Record<string, string> = {
   approved: 'Approved',
   released: 'Released',
   cancelled: 'Cancelled',
+  // Check lifecycle — shown once a check exists so the DV mirrors the Check
+  // Register (e.g. a released DV whose check has since cleared reads "Cleared").
+  pending: 'Pending (for printing)',
+  assigned: 'Assigned',
+  printed: 'Printed',
+  cleared: 'Cleared',
+  stale_dated: 'Stale-dated',
+  spoiled: 'Spoiled',
+  voided: 'Voided',
 };
 
 function Field({ label, value }: { label: string; value: string }) {
@@ -248,6 +257,9 @@ export default function DisbursementDetailPage() {
   }
 
   const isDraft = dv.status === 'draft';
+  // Once a check exists its lifecycle (pending→printed→released→cleared) is the
+  // status shown — matching the DV register and the cashier's Check Register.
+  const effStatus = dv.checkStatus ?? dv.status;
   const payee = dv.supplier?.name ?? dv.payeeName ?? '—';
   const payeeTin = dv.supplier?.tin ?? dv.payeeTin ?? '—';
   const payeeAddress = dv.supplier?.address ?? dv.payeeAddress ?? '—';
@@ -274,7 +286,7 @@ export default function DisbursementDetailPage() {
         <h1 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
           {dv.dvNumber}
           <span className="acct-badge" style={{ fontSize: 12 }}>
-            {STATUS_LABELS[dv.status] ?? dv.status.replace(/_/g, ' ')}
+            {STATUS_LABELS[effStatus] ?? effStatus.replace(/_/g, ' ')}
           </span>
         </h1>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -301,37 +313,26 @@ export default function DisbursementDetailPage() {
                 {releasing ? 'Releasing…' : 'Release'}
               </button>
             )}
-          {canCreate && (
-            <button
-              type="button"
-              className="acct-btn acct-btn--sm"
-              title="Edit the DV number"
-              onClick={async () => {
-                const next = window.prompt('Edit DV number:', dv.dvNumber);
-                if (next === null) return;
-                const t = next.trim();
-                if (!t || t === dv.dvNumber) return;
-                try {
-                  await updateDvNumber(dv.id, t);
-                  window.location.reload();
-                } catch (e) {
-                  window.alert(
-                    e instanceof AccountingApiError ? e.message : 'Could not update the DV number.',
-                  );
-                }
-              }}
+          {dv.status !== 'cancelled' && (isDraft ? canCreate : canPost) && (
+            <Link
+              to={`/accounting/disbursements/${dv.id}/edit`}
+              className="acct-btn acct-btn--primary acct-btn--sm"
             >
-              Edit #
-            </button>
-          )}
-          {isDraft && canCreate && (
-            <Link to={`/accounting/disbursements/${dv.id}/edit`} className="acct-btn acct-btn--sm">
               Edit
             </Link>
           )}
           <Link to={`/accounting/disbursements/${dv.id}/print`} className="acct-btn acct-btn--sm">
             Print
           </Link>
+          {parseFloat(dv.taxAmount) > 0 && (
+            <Link
+              to={`/accounting/disbursements/${dv.id}/bir-2307`}
+              className="acct-btn acct-btn--sm"
+              title="Certificate of Creditable Tax Withheld at Source"
+            >
+              BIR 2307
+            </Link>
+          )}
           {((isDraft && canCreate) || (canPost && dv.checkStatus !== 'cleared')) && (
             <button
               type="button"

@@ -746,3 +746,44 @@
   z-index: 5;
   background: #f5f7fa;
 }
+
+/* Clickable DV rows — the whole line opens the voucher. */
+/* Only the data cells open the voucher — NOT the last cell (edit/delete). The
+   pointer and the blue hover highlight cover just that range. */
+.acct-table tbody tr.acct-row--click > td:not(:last-child) {
+  cursor: pointer;
+}
+.acct-table tbody tr.acct-row--click:hover > td:not(:last-child) {
+  background: #d6e4ff;
+}
+
+/* Row action icons (edit / delete) with a hover tint. The native title shows
+   the word "Edit"/"Delete" on hover. */
+.acct-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #475467;
+  padding: 0;
+}
+.acct-icon-btn:hover {
+  background: #eef2fb;
+  color: #0b2e63;
+}
+.acct-icon-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.acct-icon-btn--danger {
+  color: #b42318;
+}
+.acct-icon-btn--danger:hover {
+  background: #fef3f2;
+  color: #b42318;
+}
