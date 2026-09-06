@@ -47,6 +47,11 @@ export class AuthController {
       contact: string | null;
       logoUrl: string | null;
       signatories: SignatoryMap;
+      tin: string | null;
+      zipCode: string | null;
+      birRepName: string | null;
+      birRepDesignation: string | null;
+      birRepTin: string | null;
     } | null;
   }> {
     const [codes, org] = await Promise.all([
@@ -63,6 +68,11 @@ export class AuthController {
               contact: true,
               logoUrl: true,
               signatories: true,
+              tin: true,
+              zipCode: true,
+              birRepName: true,
+              birRepDesignation: true,
+              birRepTin: true,
             },
           },
         },
@@ -81,6 +91,11 @@ export class AuthController {
             logoUrl: org.settings?.logoUrl ?? null,
             // Already sanitized on write; forms read slots defensively.
             signatories: (org.settings?.signatories as SignatoryMap | null) ?? {},
+            tin: org.settings?.tin ?? null,
+            zipCode: org.settings?.zipCode ?? null,
+            birRepName: org.settings?.birRepName ?? null,
+            birRepDesignation: org.settings?.birRepDesignation ?? null,
+            birRepTin: org.settings?.birRepTin ?? null,
           }
         : null,
     };

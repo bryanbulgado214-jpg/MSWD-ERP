@@ -207,6 +207,13 @@ model OrganizationSettings {
   address                String?  @db.VarChar(500)
   contact                String?  @db.VarChar(255)
   logoUrl                String?  @map("logo_url") @db.VarChar(1000)
+  // Payor identity for BIR forms (e.g. Form 2307). The district is the payor:
+  // its TIN + ZIP, and the authorized representative who signs (name/designation/TIN).
+  tin                    String?  @db.VarChar(20)
+  zipCode                String?  @map("zip_code") @db.VarChar(10)
+  birRepName             String?  @map("bir_rep_name") @db.VarChar(150)
+  birRepDesignation      String?  @map("bir_rep_designation") @db.VarChar(150)
+  birRepTin              String?  @map("bir_rep_tin") @db.VarChar(20)
   /// Admin-configured signature blocks for printed documents, keyed by
   /// document then slot: { jev: { preparedBy: { name, title }, ... }, ... }.
   /// Rendered onto printouts so the correct officials appear automatically.

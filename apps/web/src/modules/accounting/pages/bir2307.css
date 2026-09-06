@@ -1,0 +1,69 @@
+/* BIR Form 2307 (page 1) — the official form's own vector art as the background,
+ * with editable data laid over it at exact positions. Native size 8.5 × 13 in. */
+
+.b7-sheet {
+  position: relative;
+  width: 8.5in;
+  height: 13in;
+  margin: 0 auto;
+  background: #fff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  font-family: Arial, Helvetica, sans-serif;
+  color: #000;
+}
+.b7-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+.b7-in {
+  position: absolute;
+  border: none;
+  background: transparent;
+  color: #000;
+  font-family: Arial, Helvetica, sans-serif;
+  line-height: 1;
+  padding: 0;
+  box-sizing: border-box;
+  outline: none;
+  white-space: nowrap;
+}
+.b7-dig,
+.b7-ctr {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-family: Arial, Helvetica, sans-serif;
+  color: #000;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.b7-ctr {
+  text-align: center;
+}
+
+/* On screen, tint the editable fields so they are discoverable. */
+@media screen {
+  .b7-in {
+    background: rgba(37, 99, 235, 0.05);
+  }
+  .b7-in:focus {
+    background: rgba(37, 99, 235, 0.14);
+  }
+}
+
+@media print {
+  @page {
+    size: 8.5in 13in;
+    margin: 0;
+  }
+  .b7-sheet {
+    box-shadow: none;
+    margin: 0;
+  }
+  .b7-in {
+    background: transparent !important;
+  }
+}

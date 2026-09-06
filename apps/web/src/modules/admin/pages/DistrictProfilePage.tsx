@@ -60,6 +60,11 @@ export function DistrictProfilePage() {
         contact: form.contact ?? '',
         logoUrl: form.logoUrl ?? '',
         manualDocumentNumbering: form.manualDocumentNumbering,
+        tin: form.tin ?? '',
+        zipCode: form.zipCode ?? '',
+        birRepName: form.birRepName ?? '',
+        birRepDesignation: form.birRepDesignation ?? '',
+        birRepTin: form.birRepTin ?? '',
       });
       setSaved(true);
       // Reload so the header and printed forms pick up the new profile everywhere.
@@ -149,6 +154,68 @@ export function DistrictProfilePage() {
                 }}
               />
             ) : null}
+          </div>
+
+          <div style={{ borderTop: '1px solid #eaecf0', paddingTop: 16 }}>
+            <h2 style={{ fontSize: 15, margin: '0 0 2px' }}>BIR / Tax Filing (Payor Details)</h2>
+            <div style={{ fontSize: 12, color: '#98a2b3', margin: '0 0 14px' }}>
+              The district is the payor (withholding agent) on BIR forms such as Form 2307. These
+              auto-fill Part II and the payor&apos;s signature block on every certificate.
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 12 }}>
+              <div>
+                <label style={LABEL_STYLE}>District TIN</label>
+                <input
+                  style={FIELD_STYLE}
+                  value={form.tin ?? ''}
+                  onChange={(e) => set('tin', e.target.value)}
+                  placeholder="e.g. 000-123-456-00000"
+                />
+              </div>
+              <div>
+                <label style={LABEL_STYLE}>ZIP Code</label>
+                <input
+                  style={FIELD_STYLE}
+                  value={form.zipCode ?? ''}
+                  onChange={(e) => set('zipCode', e.target.value)}
+                  placeholder="e.g. 6225"
+                />
+              </div>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <label style={LABEL_STYLE}>Authorized Representative — Name</label>
+              <input
+                style={FIELD_STYLE}
+                value={form.birRepName ?? ''}
+                onChange={(e) => set('birRepName', e.target.value)}
+                placeholder="e.g. Jose Rubos Bryan A. Bulgado"
+              />
+              <div style={{ fontSize: 12, color: '#98a2b3', marginTop: 4 }}>
+                Prints over the &ldquo;Signature over Printed Name of Payor&rdquo; line.
+              </div>
+            </div>
+            <div
+              style={{ display: 'grid', gridTemplateColumns: '1fr 200px', gap: 12, marginTop: 12 }}
+            >
+              <div>
+                <label style={LABEL_STYLE}>Representative — Designation</label>
+                <input
+                  style={FIELD_STYLE}
+                  value={form.birRepDesignation ?? ''}
+                  onChange={(e) => set('birRepDesignation', e.target.value)}
+                  placeholder="e.g. Corporate Budget Officer B"
+                />
+              </div>
+              <div>
+                <label style={LABEL_STYLE}>Representative — TIN</label>
+                <input
+                  style={FIELD_STYLE}
+                  value={form.birRepTin ?? ''}
+                  onChange={(e) => set('birRepTin', e.target.value)}
+                  placeholder="e.g. 273-206-230"
+                />
+              </div>
+            </div>
           </div>
 
           <div

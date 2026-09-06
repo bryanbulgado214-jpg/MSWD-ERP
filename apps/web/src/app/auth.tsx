@@ -22,6 +22,12 @@ export interface OrganizationProfile {
   // Admin-configured signature blocks for printed documents, keyed by
   // document then slot. Defaults to {} when nothing has been set up.
   signatories?: SignatoryMap;
+  // Payor identity for BIR forms (Form 2307).
+  tin?: string | null;
+  zipCode?: string | null;
+  birRepName?: string | null;
+  birRepDesignation?: string | null;
+  birRepTin?: string | null;
 }
 
 interface AuthContextValue {

@@ -227,6 +227,11 @@ export interface OrganizationProfile {
   logoUrl: string | null;
   manualDocumentNumbering: boolean;
   signatories: SignatoryMap;
+  tin: string | null;
+  zipCode: string | null;
+  birRepName: string | null;
+  birRepDesignation: string | null;
+  birRepTin: string | null;
 }
 
 export async function getOrganizationProfile(): Promise<OrganizationProfile> {
@@ -242,6 +247,11 @@ export async function updateOrganizationProfile(data: {
   logoUrl?: string;
   manualDocumentNumbering?: boolean;
   signatories?: SignatoryMap;
+  tin?: string;
+  zipCode?: string;
+  birRepName?: string;
+  birRepDesignation?: string;
+  birRepTin?: string;
 }): Promise<OrganizationProfile> {
   const res = await authFetchMutate('/admin/organization-profile', 'PATCH', data);
   return res.json();

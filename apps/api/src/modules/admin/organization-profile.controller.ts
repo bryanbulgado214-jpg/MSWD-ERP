@@ -18,6 +18,12 @@ class UpdateOrganizationProfileDto {
   @IsOptional() @IsBoolean() manualDocumentNumbering?: boolean;
   // Shape validated/sanitized in the service (sanitizeSignatories).
   @IsOptional() @IsObject() signatories?: SignatoryMap;
+  // Payor identity for BIR forms (Form 2307).
+  @IsOptional() @IsString() @MaxLength(20) tin?: string;
+  @IsOptional() @IsString() @MaxLength(10) zipCode?: string;
+  @IsOptional() @IsString() @MaxLength(150) birRepName?: string;
+  @IsOptional() @IsString() @MaxLength(150) birRepDesignation?: string;
+  @IsOptional() @IsString() @MaxLength(20) birRepTin?: string;
 }
 
 @Controller('admin/organization-profile')

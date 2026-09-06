@@ -932,7 +932,9 @@ export interface Bir2307Data {
   net: number;
   jevNumber: string | null;
   payee: { name: string; tin: string; address: string };
-  payor: { name: string; tin: string; address: string };
+  payor: { name: string; tin: string; address: string; zip: string };
+  // The district's authorized representative who signs (from District Profile).
+  payorRep: { name: string; designation: string; tin: string };
   incomeLines: Bir2307Line[];
   withholdingLines: Bir2307Line[];
   // Structured breakdown from the withholding-tax assistant (null for a

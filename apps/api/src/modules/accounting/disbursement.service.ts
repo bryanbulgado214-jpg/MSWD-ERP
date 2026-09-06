@@ -279,7 +279,20 @@ export class DisbursementService {
         payeeAddress: true,
         supplier: { select: { name: true, tin: true, address: true } },
         organization: {
-          select: { name: true, settings: { select: { legalName: true, address: true } } },
+          select: {
+            name: true,
+            settings: {
+              select: {
+                legalName: true,
+                address: true,
+                tin: true,
+                zipCode: true,
+                birRepName: true,
+                birRepDesignation: true,
+                birRepTin: true,
+              },
+            },
+          },
         },
       },
     });
@@ -392,8 +405,16 @@ export class DisbursementService {
       },
       payor: {
         name: settings?.legalName ?? dv.organization.name,
-        tin: '',
+        tin: settings?.tin ?? '',
         address: settings?.address ?? '',
+        zip: settings?.zipCode ?? '',
+      },
+      // The district's authorized representative who signs the certificate
+      // (printed over the Payor signature line), from the District Profile.
+      payorRep: {
+        name: settings?.birRepName ?? '',
+        designation: settings?.birRepDesignation ?? '',
+        tin: settings?.birRepTin ?? '',
       },
       incomeLines,
       withholdingLines,

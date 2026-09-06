@@ -20,6 +20,13 @@ export interface OrganizationProfile {
   logoUrl: string | null;
   manualDocumentNumbering: boolean;
   signatories: SignatoryMap;
+  // Payor identity for BIR forms (Form 2307): the district's TIN + ZIP and the
+  // authorized representative who signs (name / designation / TIN).
+  tin: string | null;
+  zipCode: string | null;
+  birRepName: string | null;
+  birRepDesignation: string | null;
+  birRepTin: string | null;
 }
 
 const norm = (s?: string): string | null => (s && s.trim() ? s.trim() : null);
@@ -64,6 +71,11 @@ export class OrganizationProfileService {
             logoUrl: true,
             manualDocumentNumbering: true,
             signatories: true,
+            tin: true,
+            zipCode: true,
+            birRepName: true,
+            birRepDesignation: true,
+            birRepTin: true,
           },
         },
       },
@@ -77,6 +89,11 @@ export class OrganizationProfileService {
       logoUrl: org.settings?.logoUrl ?? null,
       manualDocumentNumbering: org.settings?.manualDocumentNumbering ?? false,
       signatories: sanitizeSignatories(org.settings?.signatories),
+      tin: org.settings?.tin ?? null,
+      zipCode: org.settings?.zipCode ?? null,
+      birRepName: org.settings?.birRepName ?? null,
+      birRepDesignation: org.settings?.birRepDesignation ?? null,
+      birRepTin: org.settings?.birRepTin ?? null,
     };
   }
 
@@ -91,6 +108,11 @@ export class OrganizationProfileService {
       logoUrl?: string;
       manualDocumentNumbering?: boolean;
       signatories?: SignatoryMap;
+      tin?: string;
+      zipCode?: string;
+      birRepName?: string;
+      birRepDesignation?: string;
+      birRepTin?: string;
     },
   ): Promise<OrganizationProfile> {
     await runAudited(this.prisma, userId, async (tx) => {
@@ -112,6 +134,12 @@ export class OrganizationProfileService {
       if (data.manualDocumentNumbering !== undefined)
         patch.manualDocumentNumbering = data.manualDocumentNumbering;
       if (data.signatories !== undefined) patch.signatories = sanitizeSignatories(data.signatories);
+      if (data.tin !== undefined) patch.tin = norm(data.tin);
+      if (data.zipCode !== undefined) patch.zipCode = norm(data.zipCode);
+      if (data.birRepName !== undefined) patch.birRepName = norm(data.birRepName);
+      if (data.birRepDesignation !== undefined)
+        patch.birRepDesignation = norm(data.birRepDesignation);
+      if (data.birRepTin !== undefined) patch.birRepTin = norm(data.birRepTin);
 
       if (existing) {
         await tx.organizationSettings.update({ where: { organizationId }, data: patch });
@@ -127,6 +155,11 @@ export class OrganizationProfileService {
             manualDocumentNumbering:
               (patch.manualDocumentNumbering as boolean | undefined) ?? false,
             signatories: (patch.signatories as Prisma.InputJsonValue | undefined) ?? {},
+            tin: (patch.tin as string | null) ?? null,
+            zipCode: (patch.zipCode as string | null) ?? null,
+            birRepName: (patch.birRepName as string | null) ?? null,
+            birRepDesignation: (patch.birRepDesignation as string | null) ?? null,
+            birRepTin: (patch.birRepTin as string | null) ?? null,
             updatedBy: userId,
           },
         });
