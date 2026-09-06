@@ -171,11 +171,26 @@ export interface SupplierInvoiceSummary {
   taxAmount: string;
   netAmount: string;
   amountPaid: string;
+  balance: string;
   status: string;
   glLines: SupplierInvoicePostedLine[];
   dueSchedule: SupplierInvoiceDueItem[];
   journalEntryId: string | null;
+  apAccountId: string | null;
   createdAt: string;
+}
+
+export interface SupplierInvoicePayment {
+  id: string;
+  dvNumber: string;
+  dvDate: string;
+  applied: string; // settled against Accounts Payable
+  taxWithheld: string;
+  cashPaid: string;
+  dvStatus: string;
+  checkStatus: string | null;
+  checkNumber: string | null;
+  checkDate: string | null;
 }
 
 export interface SupplierInvoiceDetail extends SupplierInvoiceSummary {
@@ -192,6 +207,7 @@ export interface SupplierInvoiceDetail extends SupplierInvoiceSummary {
       description: string | null;
     }>;
   } | null;
+  payments: SupplierInvoicePayment[];
 }
 
 export interface CreateSupplierInvoicePayload {
@@ -595,6 +611,8 @@ export interface CreateDisbursementInput {
   // The paying bank account; its Cash-in-Bank ledger account is auto-credited.
   bankAccountId: string;
   fundSourceId?: string;
+  // Set when this DV pays a supplier's invoice — it settles that invoice's AP.
+  supplierInvoiceId?: string;
   // Save without posting to the GL (held as a draft JEV).
   asDraft?: boolean;
   // Charge/deduction lines only — the cash credit is added from the bank account.

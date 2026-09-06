@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
+import { useAuth } from '../../../app/auth';
 import { AccountingApiError, getSupplierInvoice } from '../api';
 import type { SupplierInvoiceDetail } from '../types';
 
@@ -14,8 +15,9 @@ function formatPeso(value: string | number): string {
 
 const STATUS_LABELS: Record<string, string> = {
   unpaid: 'Unpaid',
-  partial: 'Partially Paid',
+  partially_paid: 'Partially Paid',
   paid: 'Paid',
+  cancelled: 'Cancelled',
 };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -33,6 +35,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 export default function SupplierInvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { permissions } = useAuth();
+  const canPay = permissions.has('accounting.dv.create');
   const [inv, setInv] = useState<SupplierInvoiceDetail | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -68,6 +73,7 @@ export default function SupplierInvoiceDetailPage() {
     );
 
   const je = inv.journalEntry;
+  const balance = Number(inv.balance);
 
   return (
     <div className="acct-page">
@@ -84,20 +90,27 @@ export default function SupplierInvoiceDetailPage() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
         <h1 style={{ margin: 0 }}>{inv.invoiceNumber}</h1>
         <span className="acct-badge">{STATUS_LABELS[inv.status] ?? inv.status}</span>
-        {je && (
-          <Link
-            to={`/accounting/jev/${je.id}`}
-            style={{
-              color: 'var(--mswd-blue)',
-              textDecoration: 'none',
-              fontSize: 13,
-              marginLeft: 'auto',
-            }}
-            title="The posted payable journal entry"
-          >
-            {je.jevNumber} &rarr;
-          </Link>
-        )}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14 }}>
+          {je && (
+            <Link
+              to={`/accounting/jev/${je.id}`}
+              style={{ color: 'var(--mswd-blue)', textDecoration: 'none', fontSize: 13 }}
+              title="The posted payable journal entry"
+            >
+              {je.jevNumber} &rarr;
+            </Link>
+          )}
+          {canPay && balance > 0.01 && (
+            <button
+              type="button"
+              className="acct-btn acct-btn--primary"
+              onClick={() => navigate(`/accounting/disbursements/new?supplierInvoiceId=${inv.id}`)}
+              title="Pay this invoice — records a disbursement voucher and raises a check"
+            >
+              Record Payment
+            </button>
+          )}
+        </div>
       </div>
 
       {error && <div className="acct-error">{error}</div>}
@@ -124,6 +137,11 @@ export default function SupplierInvoiceDetailPage() {
           <strong>{formatPeso(inv.netAmount)}</strong>
         </Field>
         <Field label="Amount Paid">{formatPeso(inv.amountPaid)}</Field>
+        <Field label="Balance">
+          <strong style={{ color: balance > 0.01 ? '#b42318' : '#12805c' }}>
+            {formatPeso(inv.balance)}
+          </strong>
+        </Field>
         {inv.supplierAddress && <Field label="Address">{inv.supplierAddress}</Field>}
       </div>
 
@@ -162,6 +180,56 @@ export default function SupplierInvoiceDetailPage() {
           </tbody>
         </table>
       </div>
+
+      <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--mswd-navy)', margin: '0 0 8px' }}>
+        Payments
+      </h3>
+      {inv.payments.length === 0 ? (
+        <p style={{ color: '#667085', fontSize: 13, margin: '0 0 24px' }}>
+          No payments recorded yet.{' '}
+          {canPay && balance > 0.01 && 'Use “Record Payment” above to pay this invoice.'}
+        </p>
+      ) : (
+        <div style={{ overflowX: 'auto', marginBottom: 24 }}>
+          <table className="acct-table">
+            <thead>
+              <tr>
+                <th>DV #</th>
+                <th>Date</th>
+                <th>Check</th>
+                <th className="acct-text-right">Applied to A/P</th>
+                <th className="acct-text-right">Tax Withheld</th>
+                <th className="acct-text-right">Cash Paid</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {inv.payments.map((p) => (
+                <tr key={p.id}>
+                  <td>
+                    <Link
+                      to={`/accounting/disbursements/${p.id}`}
+                      className="acct-table__link acct-text-mono"
+                    >
+                      {p.dvNumber}
+                    </Link>
+                  </td>
+                  <td>{new Date(p.dvDate).toLocaleDateString('en-PH')}</td>
+                  <td className="acct-text-mono">{p.checkNumber || '—'}</td>
+                  <td className="acct-text-right acct-text-mono">{formatPeso(p.applied)}</td>
+                  <td className="acct-text-right acct-text-mono">
+                    {Number(p.taxWithheld) > 0 ? formatPeso(p.taxWithheld) : '—'}
+                  </td>
+                  <td className="acct-text-right acct-text-mono">{formatPeso(p.cashPaid)}</td>
+                  <td>
+                    <span className="acct-badge">{p.checkStatus ?? p.dvStatus}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {inv.dueSchedule.length > 0 && (
         <>

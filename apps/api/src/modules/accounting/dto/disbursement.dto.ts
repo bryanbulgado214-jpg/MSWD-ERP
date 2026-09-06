@@ -8,6 +8,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
   MinLength,
@@ -100,6 +101,12 @@ export class CreateDisbursementDto {
   @IsOptional()
   @IsString()
   fundSourceId?: string;
+
+  // Set when this DV pays a supplier's invoice (recorded from the Supplier's
+  // Invoices module). The DV then settles that invoice's Accounts Payable.
+  @IsOptional()
+  @IsUUID()
+  supplierInvoiceId?: string;
 
   // Save without posting to the general ledger. The accounting entry is held as
   // a draft JEV until the DV is posted.

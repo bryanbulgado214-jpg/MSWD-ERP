@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
 import { listFundSources } from '../../budgeting/api';
@@ -10,12 +10,18 @@ import {
   getBankAccounts,
   getChartOfAccounts,
   getDisbursement,
+  getSupplierInvoice,
   updateDisbursement,
   uploadDvAttachment,
 } from '../api';
 import { bankAccountLabel } from '../bank-account-label';
 import { formatAccounting, parseMoney, unformatMoney } from '../money-format';
-import type { BankAccount, ChartOfAccount, CreateDisbursementInput } from '../types';
+import type {
+  BankAccount,
+  ChartOfAccount,
+  CreateDisbursementInput,
+  SupplierInvoiceDetail,
+} from '../types';
 
 import { AccountCombobox } from './AccountCombobox';
 import { AccountingSubNav } from './AccountingSubNav';
@@ -47,6 +53,9 @@ function peso(n: number): string {
 export default function NewDisbursementPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  // When present, this DV pays a supplier's invoice (launched from that invoice).
+  const supplierInvoiceId = searchParams.get('supplierInvoiceId');
   const isEdit = Boolean(id);
   const { permissions } = useAuth();
   const canCreate = permissions.has('accounting.dv.create');
@@ -87,6 +96,8 @@ export default function NewDisbursementPage() {
   const [attachFiles, setAttachFiles] = useState<File[]>([]);
   // Withholding-tax assistant panel.
   const [showWht, setShowWht] = useState(false);
+  // The supplier invoice being paid (when launched from an invoice).
+  const [payingInvoice, setPayingInvoice] = useState<SupplierInvoiceDetail | null>(null);
 
   function applyWht(rows: WhtRow[]) {
     setLines(
@@ -119,6 +130,28 @@ export default function NewDisbursementPage() {
           setManualNumbering(s.manualDocumentNumbering);
         } catch {
           /* numbering setting optional */
+        }
+      }
+
+      // Paying a supplier's invoice — prefill from the invoice: payee, particulars,
+      // and a Dr Accounts Payable line for the outstanding balance.
+      if (!id && supplierInvoiceId) {
+        const inv = await getSupplierInvoice(supplierInvoiceId);
+        setPayingInvoice(inv);
+        setPayeeName(inv.supplierName);
+        setPayeeTin(inv.supplierTin ?? '');
+        setPayeeAddress(inv.supplierAddress ?? '');
+        setParticulars(`Payment of Supplier's Invoice ${inv.invoiceNumber} — ${inv.supplierName}`);
+        const bal = Number(inv.balance);
+        if (inv.apAccountId) {
+          setLines([
+            {
+              chartOfAccountId: inv.apAccountId,
+              debitAmount: bal > 0 ? formatAccounting(String(bal)) : '',
+              creditAmount: '',
+              description: `Accounts Payable settled — SI ${inv.invoiceNumber}`,
+            },
+          ]);
         }
       }
 
@@ -170,7 +203,7 @@ export default function NewDisbursementPage() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, supplierInvoiceId]);
 
   useEffect(() => {
     load();
@@ -225,6 +258,7 @@ export default function NewDisbursementPage() {
         paymentMode,
         bankAccountId,
         ...(fundSourceId ? { fundSourceId } : {}),
+        ...(supplierInvoiceId ? { supplierInvoiceId } : {}),
         ...(asDraft ? { asDraft: true } : {}),
         lines: filledLines.map((l) => ({
           chartOfAccountId: l.chartOfAccountId,
@@ -242,9 +276,13 @@ export default function NewDisbursementPage() {
           await uploadDvAttachment(created.id, file);
         }
       }
-      // Always return to the register; the row's own Print/View actions take it
-      // from there (previously a posted DV jumped straight to the printout).
-      navigate('/accounting/disbursements');
+      // Paying an invoice returns to that invoice (so the balance/payment shows);
+      // otherwise back to the DV register.
+      navigate(
+        supplierInvoiceId
+          ? `/accounting/supplier-invoices/${supplierInvoiceId}`
+          : '/accounting/disbursements',
+      );
     } catch (e) {
       setError(
         e instanceof AccountingApiError ? e.message : 'Failed to save disbursement voucher.',
@@ -281,12 +319,40 @@ export default function NewDisbursementPage() {
   return (
     <div className="acct-page">
       <AccountingSubNav />
-      <h1>{isEdit ? 'Edit Disbursement Voucher' : 'New Disbursement Voucher'}</h1>
-      <p style={{ color: '#667085', fontSize: 13, marginTop: -6, marginBottom: 18, maxWidth: 760 }}>
-        For non-procurement disbursements (travel, reimbursement, payroll, utilities, etc.). Enter
-        the accounts charged and any deductions withheld — the net is credited automatically to the
-        bank account you choose.
-      </p>
+      <h1>
+        {isEdit
+          ? 'Edit Disbursement Voucher'
+          : payingInvoice
+            ? "Pay Supplier's Invoice"
+            : 'New Disbursement Voucher'}
+      </h1>
+      {payingInvoice ? (
+        <div
+          style={{
+            marginBottom: 18,
+            padding: '12px 16px',
+            borderRadius: 8,
+            background: '#eff8ff',
+            border: '1px solid #b2ddff',
+            fontSize: 13,
+            color: '#175cd3',
+            maxWidth: 760,
+          }}
+        >
+          Paying <strong>{payingInvoice.invoiceNumber}</strong> — {payingInvoice.supplierName}.
+          Outstanding balance <strong>{peso(Number(payingInvoice.balance))}</strong>. The charge
+          line debits <strong>Accounts Payable</strong>; reduce it to pay part of the balance. To
+          withhold tax, open the assistant and set the account charged to Accounts Payable.
+        </div>
+      ) : (
+        <p
+          style={{ color: '#667085', fontSize: 13, marginTop: -6, marginBottom: 18, maxWidth: 760 }}
+        >
+          For non-procurement disbursements (travel, reimbursement, payroll, utilities, etc.). Enter
+          the accounts charged and any deductions withheld — the net is credited automatically to
+          the bank account you choose.
+        </p>
+      )}
 
       {checkCleared && (
         <div

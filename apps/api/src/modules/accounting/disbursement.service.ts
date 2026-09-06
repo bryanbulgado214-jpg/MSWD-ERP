@@ -493,6 +493,40 @@ export class DisbursementService {
       );
     }
 
+    // Paying a supplier's invoice: the debit must settle that invoice's Accounts
+    // Payable, and the amount applied cannot exceed the outstanding balance. The
+    // amount applied to the payable is the total debit (Dr Accounts Payable).
+    if (dto.supplierInvoiceId) {
+      const invoice = await this.prisma.supplierInvoice.findFirst({
+        where: { id: dto.supplierInvoiceId, organizationId: orgId },
+        select: {
+          id: true,
+          netAmount: true,
+          amountPaid: true,
+          apAccountId: true,
+          invoiceNumber: true,
+        },
+      });
+      if (!invoice) throw new BadRequestException('The supplier invoice being paid was not found.');
+      const apId = invoice.apAccountId;
+      const debitsNotToAp = dto.lines.some(
+        (l) => (l.debitAmount || 0) > 0 && l.chartOfAccountId !== apId,
+      );
+      if (!apId || debitsNotToAp) {
+        throw new BadRequestException(
+          'A payment for a supplier invoice must debit that invoice’s Accounts Payable account. ' +
+            'In the Withholding Tax Assistant, set the account charged to Accounts Payable.',
+        );
+      }
+      const balance = round2(Number(invoice.netAmount) - Number(invoice.amountPaid));
+      if (totalDebit > balance + 0.01) {
+        throw new BadRequestException(
+          `The payment (${pesoText(totalDebit)}) exceeds invoice ${invoice.invoiceNumber}'s ` +
+            `outstanding balance (${pesoText(balance)}).`,
+        );
+      }
+    }
+
     // Validate the charge/deduction accounts belong to the org and are postable.
     const accountIds = [...new Set(dto.lines.map((l) => l.chartOfAccountId))];
     const accounts = await this.prisma.chartOfAccount.findMany({
@@ -581,6 +615,7 @@ export class DisbursementService {
           otherDeductions: 0,
           netAmount: net,
           bankName: dvBankName,
+          ...(dto.supplierInvoiceId ? { supplierInvoiceId: dto.supplierInvoiceId } : {}),
           ...(dto.fundSourceId ? { fundSourceId: dto.fundSourceId } : {}),
           // Posting a DV never auto-releases it. It becomes "approved" and waits:
           // a check-paid DV is released when the cashier releases the printed
@@ -646,6 +681,10 @@ export class DisbursementService {
         });
       }
 
+      if (dto.supplierInvoiceId) {
+        await this.recomputeInvoicePaid(tx, dto.supplierInvoiceId);
+      }
+
       return dv.id;
     });
 
@@ -689,6 +728,7 @@ export class DisbursementService {
         dvNumber: true,
         payeeName: true,
         netAmount: true,
+        supplierInvoiceId: true,
         checks: { select: { id: true, status: true, bankAccountId: true } },
       },
     });
@@ -883,6 +923,11 @@ export class DisbursementService {
           },
         });
       }
+
+      // A payment's amount may have changed — re-settle the invoice's balance.
+      if (existing.supplierInvoiceId) {
+        await this.recomputeInvoicePaid(tx, existing.supplierInvoiceId);
+      }
     });
 
     return this.findOne(orgId, id);
@@ -895,6 +940,31 @@ export class DisbursementService {
    * deleted by the accountant (dv.post) as long as its check has NOT cleared the
    * bank. A cleared check is a settled payment — reverse it instead of deleting.
    */
+  /**
+   * Recompute a supplier invoice's settled amount and status from its payment
+   * DVs. Only posted, non-cancelled payments settle the payable (a draft DV
+   * hasn't hit the ledger). The amount applied is each payment's total debit to
+   * Accounts Payable, carried on the DV as its gross amount.
+   */
+  private async recomputeInvoicePaid(tx: Prisma.TransactionClient, invoiceId: string) {
+    const invoice = await tx.supplierInvoice.findUnique({
+      where: { id: invoiceId },
+      select: { netAmount: true },
+    });
+    if (!invoice) return;
+    const agg = await tx.disbursementVoucher.aggregate({
+      where: { supplierInvoiceId: invoiceId, status: { notIn: ['draft', 'cancelled'] } },
+      _sum: { grossAmount: true },
+    });
+    const paid = round2(Number(agg._sum.grossAmount ?? 0));
+    const net = Number(invoice.netAmount);
+    const status = paid >= net - 0.01 ? 'paid' : paid > 0.01 ? 'partially_paid' : 'unpaid';
+    await tx.supplierInvoice.update({
+      where: { id: invoiceId },
+      data: { amountPaid: paid, status },
+    });
+  }
+
   async remove(orgId: string, userId: string, id: string) {
     const dv = await this.prisma.disbursementVoucher.findFirst({
       where: { id, organizationId: orgId },
@@ -902,6 +972,7 @@ export class DisbursementService {
         id: true,
         status: true,
         dvNumber: true,
+        supplierInvoiceId: true,
         checks: { select: { id: true, status: true } },
       },
     });
@@ -938,6 +1009,10 @@ export class DisbursementService {
       });
       // The DV itself — dv_deductions cascade.
       await tx.disbursementVoucher.delete({ where: { id } });
+      // If it paid a supplier invoice, re-settle that invoice's balance/status.
+      if (dv.supplierInvoiceId) {
+        await this.recomputeInvoicePaid(tx, dv.supplierInvoiceId);
+      }
     });
     return { deleted: true };
   }
@@ -949,7 +1024,7 @@ export class DisbursementService {
   async postDraft(orgId: string, userId: string, id: string) {
     const dv = await this.prisma.disbursementVoucher.findFirst({
       where: { id, organizationId: orgId },
-      select: { id: true, status: true, version: true, paymentMode: true },
+      select: { id: true, status: true, version: true, paymentMode: true, supplierInvoiceId: true },
     });
     if (!dv) throw new NotFoundException('Disbursement voucher not found.');
     if (dv.status !== 'draft') {
@@ -994,6 +1069,10 @@ export class DisbursementService {
           version: { increment: 1 },
         },
       });
+      // Posting a draft payment now settles the supplier invoice's payable.
+      if (dv.supplierInvoiceId) {
+        await this.recomputeInvoicePaid(tx, dv.supplierInvoiceId);
+      }
     });
 
     return this.findOne(orgId, id);

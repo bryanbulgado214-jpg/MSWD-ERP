@@ -96,7 +96,42 @@ export class SupplierInvoiceService {
       }
     }
 
-    return { ...this.toSummary(inv), journalEntry };
+    // Payments made against this invoice — the DVs that settle its payable.
+    const paymentRows = await this.prisma.disbursementVoucher.findMany({
+      where: { supplierInvoiceId: id },
+      orderBy: [{ dvDate: 'asc' }, { createdAt: 'asc' }],
+      select: {
+        id: true,
+        dvNumber: true,
+        dvDate: true,
+        grossAmount: true,
+        taxAmount: true,
+        netAmount: true,
+        status: true,
+        checks: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { status: true, checkNumber: true, checkDate: true },
+        },
+      },
+    });
+    const payments = paymentRows.map((p) => {
+      const check = p.checks[0] ?? null;
+      return {
+        id: p.id,
+        dvNumber: p.dvNumber,
+        dvDate: p.dvDate,
+        applied: String(p.grossAmount), // amount settled against Accounts Payable
+        taxWithheld: String(p.taxAmount),
+        cashPaid: String(p.netAmount),
+        dvStatus: p.status,
+        checkStatus: check?.status ?? null,
+        checkNumber: check?.checkNumber ?? null,
+        checkDate: check?.checkDate ?? null,
+      };
+    });
+
+    return { ...this.toSummary(inv), journalEntry, payments };
   }
 
   async create(organizationId: string, userId: string, dto: CreateSupplierInvoiceDto) {
@@ -281,6 +316,7 @@ export class SupplierInvoiceService {
     glLines: Prisma.JsonValue;
     dueSchedule: Prisma.JsonValue;
     journalEntryId: string | null;
+    apAccountId: string | null;
     createdAt: Date;
   }) {
     return {
@@ -296,10 +332,12 @@ export class SupplierInvoiceService {
       taxAmount: String(r.taxAmount),
       netAmount: String(r.netAmount),
       amountPaid: String(r.amountPaid),
+      balance: String(round2(Number(r.netAmount) - Number(r.amountPaid))),
       status: r.status,
       glLines: (r.glLines as unknown as PostedLine[]) ?? [],
       dueSchedule: (r.dueSchedule as unknown as DueItem[] | null) ?? [],
       journalEntryId: r.journalEntryId,
+      apAccountId: r.apAccountId,
       createdAt: r.createdAt,
     };
   }

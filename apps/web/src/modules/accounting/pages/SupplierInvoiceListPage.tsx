@@ -21,8 +21,9 @@ function formatPeso(value: string | number): string {
 
 const STATUS_LABELS: Record<string, string> = {
   unpaid: 'Unpaid',
-  partial: 'Partially Paid',
+  partially_paid: 'Partially Paid',
   paid: 'Paid',
+  cancelled: 'Cancelled',
 };
 
 /** Earliest still-upcoming (or any) due date from the payment schedule. */
