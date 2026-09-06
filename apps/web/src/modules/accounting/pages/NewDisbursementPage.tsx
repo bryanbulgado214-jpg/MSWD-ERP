@@ -10,6 +10,7 @@ import {
   getBankAccounts,
   getChartOfAccounts,
   getDisbursement,
+  getPayees,
   getSupplierInvoice,
   updateDisbursement,
   uploadDvAttachment,
@@ -170,6 +171,20 @@ export default function NewDisbursementPage() {
         setPayeeTin(inv.supplierTin ?? '');
         setPayeeAddress(inv.supplierAddress ?? '');
         setParticulars(`Payment of Supplier's Invoice ${inv.invoiceNumber} — ${inv.supplierName}`);
+        // The invoice stores the supplier's name/TIN but not its VAT status;
+        // resolve it from the payee master (by TIN, else name) so the Withholding
+        // Tax Assistant auto-detects it, exactly as when a payee is picked.
+        try {
+          const payees = await getPayees();
+          const tin = (inv.supplierTin ?? '').trim();
+          const name = inv.supplierName.trim().toLowerCase();
+          const match =
+            (tin ? payees.find((p) => (p.tin ?? '').trim() === tin) : undefined) ??
+            payees.find((p) => p.name.trim().toLowerCase() === name);
+          if (match) setPayeeVat(match.vatRegistered);
+        } catch {
+          /* payee master optional */
+        }
 
         const hasPlan = inv.schedule.length > 1;
         const firstUnpaid = hasPlan
