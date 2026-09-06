@@ -35,7 +35,7 @@ export function PayeesPage() {
   const [busy, setBusy] = useState(false);
 
   const [edit, setEdit] = useState<EditState>(null);
-  const [form, setForm] = useState({ name: '', address: '', tin: '' });
+  const [form, setForm] = useState({ name: '', address: '', tin: '', vatRegistered: false });
   const [mergeSource, setMergeSource] = useState<Payee | null>(null);
   const [mergeTargetId, setMergeTargetId] = useState('');
 
@@ -54,12 +54,17 @@ export function PayeesPage() {
   }, [search, showInactive]);
 
   function openNew() {
-    setForm({ name: '', address: '', tin: '' });
+    setForm({ name: '', address: '', tin: '', vatRegistered: false });
     setEdit({ mode: 'new' });
     setMergeSource(null);
   }
   function openEdit(p: Payee) {
-    setForm({ name: p.name, address: p.address ?? '', tin: p.tin ?? '' });
+    setForm({
+      name: p.name,
+      address: p.address ?? '',
+      tin: p.tin ?? '',
+      vatRegistered: p.vatRegistered,
+    });
     setEdit({ mode: 'edit', payee: p });
     setMergeSource(null);
   }
@@ -74,12 +79,14 @@ export function PayeesPage() {
           name: form.name.trim(),
           ...(form.address.trim() ? { address: form.address.trim() } : {}),
           ...(form.tin.trim() ? { tin: form.tin.trim() } : {}),
+          vatRegistered: form.vatRegistered,
         });
       } else {
         await updatePayee(edit.payee.id, {
           name: form.name.trim(),
           address: form.address.trim(),
           tin: form.tin.trim(),
+          vatRegistered: form.vatRegistered,
         });
       }
       setEdit(null);
@@ -203,6 +210,29 @@ export function PayeesPage() {
                 onChange={(e) => setForm({ ...form, address: e.target.value })}
               />
             </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: '1 / -1' }}>
+              <span style={label}>VAT status</span>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: 13,
+                  color: '#344054',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={form.vatRegistered}
+                  onChange={(e) => setForm({ ...form, vatRegistered: e.target.checked })}
+                />
+                Payee is VAT-registered
+              </label>
+              <span style={{ fontSize: 11, color: '#98a2b3' }}>
+                Drives the Withholding Tax Assistant — final VAT (GMP 5%) for VAT-registered payees,
+                percentage tax (3%) otherwise.
+              </span>
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
             <button
@@ -287,6 +317,7 @@ export function PayeesPage() {
                 <th>Payee Name</th>
                 <th>Address</th>
                 <th>TIN</th>
+                <th>VAT</th>
                 <th>Status</th>
                 <th></th>
               </tr>
@@ -297,6 +328,25 @@ export function PayeesPage() {
                   <td style={{ fontWeight: 600 }}>{p.name}</td>
                   <td>{p.address || '—'}</td>
                   <td style={{ fontFamily: 'monospace' }}>{p.tin || '—'}</td>
+                  <td>
+                    {p.vatRegistered ? (
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          padding: '2px 8px',
+                          borderRadius: 12,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          background: '#eff4ff',
+                          color: '#175cd3',
+                        }}
+                      >
+                        VAT-registered
+                      </span>
+                    ) : (
+                      <span style={{ color: '#98a2b3' }}>Non-VAT</span>
+                    )}
+                  </td>
                   <td>
                     <span className="acct-badge">{p.isActive ? 'Active' : 'Inactive'}</span>
                   </td>
