@@ -26,7 +26,9 @@ const JEV_SELECT = {
   createdAt: true,
   updatedAt: true,
   version: true,
-  accountingPeriod: { select: { id: true, name: true, periodNumber: true } },
+  accountingPeriod: {
+    select: { id: true, name: true, periodNumber: true, status: true, lockedAt: true },
+  },
   responsibilityCenter: { select: { id: true, code: true, name: true } },
   fundSource: { select: { id: true, code: true, name: true } },
   creator: { select: { id: true, username: true } },
@@ -261,9 +263,18 @@ export class JevService {
   ) {
     const jev = await this.prisma.journalEntryVoucher.findFirst({
       where: { id, organizationId },
+      include: { accountingPeriod: true },
     });
     if (!jev) throw new NotFoundException('JEV not found.');
-    if (jev.status !== 'draft') throw new BadRequestException('Only draft JEVs can be edited.');
+    // The accountant may edit any JEV — including a posted one — since the
+    // ledger is derived directly from the JEVs. The only barrier is a closed
+    // or locked accounting period, which freezes that period's books.
+    if (jev.accountingPeriod.status !== 'open') {
+      throw new BadRequestException('Cannot edit a JEV in a closed accounting period.');
+    }
+    if (jev.accountingPeriod.lockedAt) {
+      throw new BadRequestException('Cannot edit a JEV in a locked accounting period.');
+    }
     if (jev.version !== data.expectedVersion) {
       throw new ConflictException('JEV was modified by another user. Please refresh.');
     }
@@ -319,6 +330,35 @@ export class JevService {
         select: JEV_DETAIL_SELECT,
       });
     });
+  }
+
+  /**
+   * Delete a JEV outright — including a posted one. The ledger is derived
+   * directly from the JEVs (posted/reversed), so removing a JEV and its lines
+   * cleanly removes its ledger impact. The only barrier is a closed or locked
+   * accounting period, which freezes that period's books. Mirrors the DV
+   * register's delete affordance.
+   */
+  async remove(organizationId: string, id: string, userId: string) {
+    const jev = await this.prisma.journalEntryVoucher.findFirst({
+      where: { id, organizationId },
+      include: { accountingPeriod: true },
+    });
+    if (!jev) throw new NotFoundException('JEV not found.');
+    if (jev.accountingPeriod.status !== 'open') {
+      throw new BadRequestException('Cannot delete a JEV in a closed accounting period.');
+    }
+    if (jev.accountingPeriod.lockedAt) {
+      throw new BadRequestException('Cannot delete a JEV in a locked accounting period.');
+    }
+
+    await runAudited(this.prisma, userId, async (tx) => {
+      // JevLine cascades on JEV delete, but remove explicitly so the audit log
+      // records the line removals too.
+      await tx.jevLine.deleteMany({ where: { jevId: id } });
+      await tx.journalEntryVoucher.delete({ where: { id } });
+    });
+    return { id };
   }
 
   async submit(organizationId: string, id: string, userId: string, expectedVersion: number) {

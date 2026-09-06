@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
 import {
@@ -14,6 +14,7 @@ import {
   postJev,
   reverseJev,
   submitJev,
+  updateJev,
   updateJevNumber,
   voidJev,
 } from '../api';
@@ -53,6 +54,7 @@ export default function JevDetailPage() {
   const { id } = useParams<{ id: string }>();
   const isNew = !id;
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { permissions } = useAuth();
 
   const canCreate = permissions.has('accounting.jev.create');
@@ -76,6 +78,8 @@ export default function JevDetailPage() {
   // Accountant's GL assignments for unclassified "Other" collection lines
   // (lineId → chartOfAccountId).
   const [classify, setClassify] = useState<Record<string, string>>({});
+  // Editing an existing JEV in place (the same form the create flow uses).
+  const [editing, setEditing] = useState(false);
 
   // Form state
   const [jevDate, setJevDate] = useState(new Date().toISOString().slice(0, 10));
@@ -83,6 +87,22 @@ export default function JevDetailPage() {
   const [jevNumber, setJevNumber] = useState('');
   const [manualNumbering, setManualNumbering] = useState(false);
   const [lines, setLines] = useState<LineDraft[]>([emptyLine(), emptyLine()]);
+
+  // Seed the editable form fields from a loaded JEV — used on first load and
+  // whenever the accountant enters (or cancels out of) edit mode.
+  const prefillForm = useCallback((data: JevDetail) => {
+    setJevDate(new Date(data.jevDate).toISOString().slice(0, 10));
+    setParticulars(data.particulars);
+    setJevNumber(data.jevNumber);
+    setLines(
+      data.lines.map((l) => ({
+        chartOfAccountId: l.chartOfAccount.id,
+        debitAmount: Number(l.debitAmount) > 0 ? formatAccounting(l.debitAmount) : '',
+        creditAmount: Number(l.creditAmount) > 0 ? formatAccounting(l.creditAmount) : '',
+        description: l.description || '',
+      })),
+    );
+  }, []);
 
   const loadRef = useCallback(async () => {
     try {
@@ -95,23 +115,14 @@ export default function JevDetailPage() {
       if (!isNew && id) {
         const data = await getJev(id);
         setJev(data);
-        setJevDate(new Date(data.jevDate).toISOString().slice(0, 10));
-        setParticulars(data.particulars);
-        setLines(
-          data.lines.map((l) => ({
-            chartOfAccountId: l.chartOfAccount.id,
-            debitAmount: Number(l.debitAmount) > 0 ? formatAccounting(l.debitAmount) : '',
-            creditAmount: Number(l.creditAmount) > 0 ? formatAccounting(l.creditAmount) : '',
-            description: l.description || '',
-          })),
-        );
+        prefillForm(data);
       }
     } catch (e) {
       setError(e instanceof AccountingApiError ? e.message : 'Failed to load.');
     } finally {
       setLoading(false);
     }
-  }, [id, isNew]);
+  }, [id, isNew, prefillForm]);
 
   useEffect(() => {
     if (isNew) {
@@ -124,6 +135,34 @@ export default function JevDetailPage() {
   useEffect(() => {
     loadRef();
   }, [loadRef]);
+
+  // A JEV can be edited/deleted only while its accounting period is open and
+  // unlocked — even after posting. A closed or locked period freezes its books.
+  const periodEditable =
+    !!jev && jev.accountingPeriod.status === 'open' && !jev.accountingPeriod.lockedAt;
+
+  // Deep link ?edit=1 (the pen on the JEV list) opens straight into edit mode.
+  useEffect(() => {
+    if (jev && !editing && canCreate && periodEditable && searchParams.get('edit') === '1') {
+      setEditing(true);
+    }
+  }, [jev, editing, canCreate, periodEditable, searchParams]);
+
+  function beginEdit() {
+    if (jev) prefillForm(jev);
+    setError('');
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    if (jev) prefillForm(jev);
+    setError('');
+    setEditing(false);
+    if (searchParams.get('edit')) {
+      searchParams.delete('edit');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }
 
   function addLine() {
     setLines([...lines, emptyLine()]);
@@ -158,21 +197,47 @@ export default function JevDetailPage() {
     setError('');
     setSaving(true);
     try {
-      const payload = {
-        jevDate,
-        particulars,
-        ...(manualNumbering && jevNumber.trim() ? { jevNumber: jevNumber.trim() } : {}),
-        lines: lines
-          .filter((l) => l.chartOfAccountId)
-          .map((l) => ({
-            chartOfAccountId: l.chartOfAccountId,
-            debitAmount: parseMoney(l.debitAmount),
-            creditAmount: parseMoney(l.creditAmount),
-            ...(l.description ? { description: l.description } : {}),
-          })),
-      };
-      const result = await createJev(payload);
-      navigate(`/accounting/jev/${result.id}`, { replace: true });
+      const cleanLines = lines
+        .filter((l) => l.chartOfAccountId)
+        .map((l) => ({
+          chartOfAccountId: l.chartOfAccountId,
+          debitAmount: parseMoney(l.debitAmount),
+          creditAmount: parseMoney(l.creditAmount),
+          ...(l.description ? { description: l.description } : {}),
+        }));
+
+      if (editing && jev) {
+        // Edit in place — allowed for any JEV (even posted) while its period is
+        // open. The document number is edited here too; there is no separate
+        // "Edit #" step.
+        const trimmedNumber = jevNumber.trim();
+        if (trimmedNumber && trimmedNumber !== jev.jevNumber) {
+          await updateJevNumber(jev.id, trimmedNumber);
+        }
+        const updated = await updateJev(jev.id, {
+          expectedVersion: jev.version,
+          jevDate,
+          particulars,
+          lines: cleanLines,
+        });
+        // Re-fetch so we pick up the freshest number/version and period info.
+        const fresh = await getJev(updated.id);
+        setJev(fresh);
+        prefillForm(fresh);
+        setEditing(false);
+        if (searchParams.get('edit')) {
+          searchParams.delete('edit');
+          setSearchParams(searchParams, { replace: true });
+        }
+      } else {
+        const result = await createJev({
+          jevDate,
+          particulars,
+          ...(manualNumbering && jevNumber.trim() ? { jevNumber: jevNumber.trim() } : {}),
+          lines: cleanLines,
+        });
+        navigate(`/accounting/jev/${result.id}`, { replace: true });
+      }
     } catch (e) {
       setError(e instanceof AccountingApiError ? e.message : 'Failed to save.');
     } finally {
@@ -288,15 +353,15 @@ export default function JevDetailPage() {
       </div>
     );
 
-  // ── Create Form ──
-  if (isNew) {
+  // ── Create / Edit Form ──
+  if (isNew || editing) {
     return (
       <div className="acct-page">
         <AccountingSubNav />
-        <h1>New Journal Entry Voucher</h1>
+        <h1>{isNew ? 'New Journal Entry Voucher' : 'Edit Journal Entry Voucher'}</h1>
         {error && <div className="acct-error">{error}</div>}
         <form className="acct-form" onSubmit={handleSave}>
-          {manualNumbering && (
+          {(manualNumbering || editing) && (
             <div className="acct-form-row">
               <div className="acct-field">
                 <label>JEV Number</label>
@@ -307,7 +372,9 @@ export default function JevDetailPage() {
                   placeholder="e.g. JEV-2026-01-001"
                 />
                 <div style={{ fontSize: 12, color: '#98a2b3', marginTop: 4 }}>
-                  Manual numbering is on — type the actual JEV number.
+                  {editing
+                    ? 'Change the JEV number if you need to; it must stay unique.'
+                    : 'Manual numbering is on — type the actual JEV number.'}
                 </div>
               </div>
             </div>
@@ -461,15 +528,21 @@ export default function JevDetailPage() {
           </button>
 
           <div className="acct-form-actions">
-            <Link to="/accounting/jev" className="acct-btn">
-              Cancel
-            </Link>
+            {editing ? (
+              <button type="button" className="acct-btn" onClick={cancelEdit} disabled={saving}>
+                Cancel
+              </button>
+            ) : (
+              <Link to="/accounting/jev" className="acct-btn">
+                Cancel
+              </Link>
+            )}
             <button
               type="submit"
               className="acct-btn acct-btn--primary"
               disabled={saving || !isBalanced}
             >
-              {saving ? 'Saving...' : 'Create JEV'}
+              {saving ? 'Saving...' : editing ? 'Save Changes' : 'Create JEV'}
             </button>
           </div>
         </form>
@@ -530,27 +603,14 @@ export default function JevDetailPage() {
         <span className={`acct-badge acct-badge--${jev.status}`}>
           {STATUS_LABELS[jev.status] || jev.status}
         </span>
-        {canCreate && (
+        {canCreate && periodEditable && (
           <button
             type="button"
             className="acct-btn acct-btn--sm"
-            title="Edit the JEV number"
-            onClick={async () => {
-              const next = window.prompt('Edit JEV number:', jev.jevNumber);
-              if (next === null) return;
-              const t = next.trim();
-              if (!t || t === jev.jevNumber) return;
-              try {
-                await updateJevNumber(jev.id, t);
-                window.location.reload();
-              } catch (e) {
-                window.alert(
-                  e instanceof AccountingApiError ? e.message : 'Could not update the JEV number.',
-                );
-              }
-            }}
+            title="Edit this JEV — date, particulars, number and lines"
+            onClick={beginEdit}
           >
-            Edit #
+            Edit
           </button>
         )}
       </div>

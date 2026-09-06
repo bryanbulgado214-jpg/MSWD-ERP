@@ -100,7 +100,13 @@ export interface JevListItem {
   createdAt: string;
   updatedAt: string;
   version: number;
-  accountingPeriod: { id: string; name: string; periodNumber: number };
+  accountingPeriod: {
+    id: string;
+    name: string;
+    periodNumber: number;
+    status: 'open' | 'closed';
+    lockedAt: string | null;
+  };
   responsibilityCenter: { id: string; code: string; name: string } | null;
   fundSource: { id: string; code: string; name: string } | null;
   creator: { id: string; username: string } | null;

@@ -321,6 +321,12 @@ export async function updateJevNumber(
   return res.json();
 }
 
+/** Delete a JEV (any status, even posted) while its accounting period is open and unlocked. */
+export async function deleteJev(id: string): Promise<{ id: string }> {
+  const res = await authFetchMutate(`/accounting/jev/${id}`, 'DELETE');
+  return res.json();
+}
+
 /** Edit a DV's document number directly (accountant, no approval, any status). */
 export async function updateDvNumber(id: string, dvNumber: string): Promise<{ dvNumber: string }> {
   const res = await authFetchMutate(`/accounting/disbursements/${id}/number`, 'PATCH', {

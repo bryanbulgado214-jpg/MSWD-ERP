@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -97,6 +98,12 @@ export class JevController {
     @Body() dto: UpdateJevNumberDto,
   ) {
     return this.jevService.updateNumber(user.organizationId, user.userId, id, dto.jevNumber);
+  }
+
+  @Delete(':id')
+  @RequirePermissions('accounting.jev.create')
+  remove(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.jevService.remove(user.organizationId, id, user.userId);
   }
 
   @Post(':id/submit')
