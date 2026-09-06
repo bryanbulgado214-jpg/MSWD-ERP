@@ -93,6 +93,9 @@ export default function CashierCollectionPrintPage() {
                       {l.collectionTypeLabel}
                       {l.description ? `: ${l.description}` : ''}
                       {e.glLines.length > 1 ? ` (${peso(l.amount)})` : ''}
+                      {l.orFrom
+                        ? ` — OR ${l.orTo && l.orTo !== l.orFrom ? `${l.orFrom}–${l.orTo}` : l.orFrom}`
+                        : ''}
                     </div>
                   ))}
                 </td>

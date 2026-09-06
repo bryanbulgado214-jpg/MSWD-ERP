@@ -54,6 +54,17 @@ export interface CollectionLine {
   collectionType: string;
   amount: number;
   description?: string;
+  // OR range covering this collection type (orTo omitted for a single receipt).
+  orFrom?: string;
+  orTo?: string;
+}
+
+/** Human label for an OR range: "3822" for a single receipt, "3822 to 3827" for a span. */
+function orLabel(from?: string, to?: string): string {
+  const f = (from ?? '').trim();
+  const t = (to ?? '').trim();
+  if (!f) return '';
+  return t && t !== f ? `${f} to ${t}` : f;
 }
 function checksTotal(checks: CheckItem[] | null | undefined): number {
   if (!Array.isArray(checks)) return 0;
@@ -372,6 +383,8 @@ export class CashierCollectionService {
             gl?.name ?? (classifiedByAccountant ? 'To be classified by accountant' : '(unmapped)'),
           classifiedByAccountant,
           amount: round2(Number(l.amount)),
+          orFrom: l.orFrom ?? '',
+          orTo: l.orTo ?? l.orFrom ?? '',
         };
       });
       const checks = (e.checks as CheckItem[] | null) ?? [];
@@ -512,10 +525,17 @@ export class CashierCollectionService {
       if (type.requiresDescription && !description) {
         throw new BadRequestException(`Describe the collection for "${type.label}".`);
       }
+      const orFrom = l.orFrom?.trim();
+      if (!orFrom) {
+        throw new BadRequestException(`Enter the OR (from) for "${type.label}".`);
+      }
+      const orTo = l.orTo?.trim() || orFrom;
       return {
         collectionType: l.collectionType,
         amount: amt,
         ...(description ? { description } : {}),
+        orFrom,
+        orTo,
       };
     });
     const amount = round2(lines.reduce((s, l) => s + l.amount, 0));
@@ -524,12 +544,17 @@ export class CashierCollectionService {
     const ct = checksTotal(dto.checks as CheckItem[] | undefined);
     if (ct > amount + 0.005)
       throw new BadRequestException('The checks total cannot exceed the total remittance.');
-    return { amount, lines };
+    // Entry-level OR summary derived from the per-line ranges (distinct, capped).
+    const orSeries =
+      [...new Set(lines.map((l) => orLabel(l.orFrom, l.orTo)).filter(Boolean))]
+        .join('; ')
+        .slice(0, 200) || '—';
+    return { amount, lines, orSeries };
   }
 
   async addEntry(orgId: string, reportId: string, userId: string, dto: UpsertCashierEntryDto) {
     await this.requireDraft(orgId, reportId);
-    const { amount, lines } = await this.validateEntry(orgId, dto);
+    const { amount, lines, orSeries } = await this.validateEntry(orgId, dto);
     await runAudited(this.prisma, userId, async (tx) => {
       const count = await tx.cashierCollectionEntry.count({ where: { reportId } });
       await tx.cashierCollectionEntry.create({
@@ -539,7 +564,7 @@ export class CashierCollectionService {
           ...(dto.collectionAreaId ? { collectionAreaId: dto.collectionAreaId } : {}),
           collectionDate: new Date(dto.collectionDate),
           glLines: lines as unknown as object[],
-          orSeries: dto.orSeries.trim(),
+          orSeries,
           amount,
           checks: (dto.checks as object[] | undefined) ?? [],
           cashCount: dto.cashCount,
@@ -564,7 +589,7 @@ export class CashierCollectionService {
       select: { id: true },
     });
     if (!entry) throw new NotFoundException('Entry not found.');
-    const { amount, lines } = await this.validateEntry(orgId, dto);
+    const { amount, lines, orSeries } = await this.validateEntry(orgId, dto);
     await runAudited(this.prisma, userId, async (tx) => {
       await tx.cashierCollectionEntry.update({
         where: { id: entryId },
@@ -573,7 +598,7 @@ export class CashierCollectionService {
           collectionAreaId: dto.collectionAreaId ?? null,
           collectionDate: new Date(dto.collectionDate),
           glLines: lines as unknown as object[],
-          orSeries: dto.orSeries.trim(),
+          orSeries,
           amount,
           checks: (dto.checks as object[] | undefined) ?? [],
           cashCount: dto.cashCount,
@@ -698,12 +723,15 @@ export class CashierCollectionService {
       ((e.glLines as CollectionLine[] | null) ?? []).map((l) => {
         const type = collectionTypeByKey.get(l.collectionType);
         const collector = cName.get(e.collectorId) ?? 'Collector';
+        // Cite this line's own OR range (falls back to the entry summary for
+        // legacy lines saved before per-line OR ranges existed).
+        const or = orLabel(l.orFrom, l.orTo) || e.orSeries;
         if (type?.classifiedByAccountant) {
           return {
             chartOfAccountId: holding!.id,
             debitAmount: 0,
             creditAmount: round2(Number(l.amount)),
-            description: `Other — ${l.description ?? ''} (${collector}, OR ${e.orSeries})`.trim(),
+            description: `Other — ${l.description ?? ''} (${collector}, OR ${or})`.trim(),
             pendingClassification: true,
           };
         }
@@ -717,7 +745,7 @@ export class CashierCollectionService {
           chartOfAccountId: gl.id,
           debitAmount: 0,
           creditAmount: round2(Number(l.amount)),
-          description: `${collector} — OR ${e.orSeries}`,
+          description: `${collector} — OR ${or}`,
         };
       }),
     );

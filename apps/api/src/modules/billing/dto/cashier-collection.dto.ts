@@ -100,6 +100,20 @@ export class CollectionLineDto {
   @Min(0.01)
   amount!: number;
 
+  // OR range covering THIS collection type. A single series may split across
+  // several types (e.g. 3822-3824 water sales, 3825-3827 penalties), so the OR
+  // range is captured per line, not per entry. `orTo` defaults to `orFrom` for a
+  // single receipt.
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(60)
+  orFrom!: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(60)
+  orTo?: string;
+
   // Required for the "Other" type: the cashier describes the collection so the
   // accountant can assign the correct GL account during review.
   @IsString()
@@ -119,10 +133,12 @@ export class UpsertCashierEntryDto {
   @IsDateString()
   collectionDate!: string;
 
+  // Entry-level OR summary is now DERIVED server-side from each line's OR range.
+  // Accepted but optional for backward compatibility.
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @MaxLength(200)
-  orSeries!: string;
+  orSeries?: string;
 
   // Breakdown of the remittance by type of collection (one or more). Their sum
   // is the declared total remittance per the teller's report.

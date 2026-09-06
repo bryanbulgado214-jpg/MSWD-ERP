@@ -109,6 +109,8 @@ export interface CollectionLineInput {
   collectionType: string;
   amount: number;
   description?: string;
+  orFrom: string;
+  orTo?: string;
 }
 export interface CollectionLineDetail {
   collectionType: string;
@@ -118,6 +120,8 @@ export interface CollectionLineDetail {
   glAccountName: string;
   classifiedByAccountant: boolean;
   amount: number;
+  orFrom: string;
+  orTo: string;
 }
 export interface CashierEntry {
   id: string;
@@ -161,7 +165,8 @@ export interface EntryInput {
   collectorId: string;
   collectionAreaId?: string;
   collectionDate: string;
-  orSeries: string;
+  // Derived server-side from the per-line OR ranges; no longer sent by the client.
+  orSeries?: string;
   lines: CollectionLineInput[];
   checks?: CheckItem[];
   cashCount: Record<string, number>;

@@ -48,27 +48,61 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 };
 
-type LineDraft = { collectionType: string; amount: string; description: string };
+type LineDraft = {
+  collectionType: string;
+  amount: string;
+  description: string;
+  orFrom: string;
+  orTo: string;
+};
 type Draft = {
   collectorId: string;
   collectionAreaId: string;
   collectionDate: string;
-  orSeries: string;
   lines: LineDraft[];
   checks: CheckItem[];
   cashCount: Record<string, number>;
 };
+
+const emptyLine = (): LineDraft => ({
+  collectionType: '',
+  amount: '',
+  description: '',
+  orFrom: '',
+  orTo: '',
+});
 
 function emptyDraft(reportDate: string): Draft {
   return {
     collectorId: '',
     collectionAreaId: '',
     collectionDate: reportDate,
-    orSeries: '',
-    lines: [{ collectionType: '', amount: '', description: '' }],
+    lines: [emptyLine()],
     checks: [],
     cashCount: {},
   };
+}
+
+/**
+ * Next OR number after `s`, preserving the prefix and zero-padding of the
+ * trailing digits (e.g. "2026-3824" → "2026-3825", "0099" → "0100"). Returns ''
+ * when there is no trailing number to advance.
+ */
+function nextOr(s: string): string {
+  const m = /^(.*?)(\d+)(\D*)$/.exec(s.trim());
+  if (!m) return '';
+  const [, head, digits, tail] = m;
+  const next = String(Number(digits) + 1).padStart(digits!.length, '0');
+  return `${head}${next}${tail}`;
+}
+
+/** Count of receipts in an inclusive OR range, when both ends share a numeric tail. */
+function orCount(from: string, to: string): number | null {
+  const mf = /(\d+)(\D*)$/.exec(from.trim());
+  const mt = /(\d+)(\D*)$/.exec(to.trim());
+  if (!mf || !mt) return null;
+  const n = Number(mt[1]) - Number(mf[1]) + 1;
+  return n >= 1 && n <= 100000 ? n : null;
 }
 
 /** Shortage/(overage) label for a signed variance (counted − expected). */
@@ -230,11 +264,12 @@ export default function CashierCollectionReportPage() {
       collectorId: e.collectorId,
       collectionAreaId: e.collectionAreaId ?? '',
       collectionDate: e.collectionDate.slice(0, 10),
-      orSeries: e.orSeries,
       lines: e.glLines.map((l) => ({
         collectionType: l.collectionType,
         amount: String(l.amount),
         description: l.description ?? '',
+        orFrom: l.orFrom ?? '',
+        orTo: l.orTo && l.orTo !== l.orFrom ? l.orTo : '',
       })),
       checks: e.checks ?? [],
       cashCount: e.cashCount ?? {},
@@ -256,9 +291,10 @@ export default function CashierCollectionReportPage() {
   const draftValid =
     !!draft &&
     !!draft.collectorId &&
-    !!draft.orSeries.trim() &&
     draft.lines.some((l) => l.collectionType && (parseFloat(l.amount) || 0) > 0) &&
     draft.lines.every((l) => !l.collectionType || (parseFloat(l.amount) || 0) > 0) &&
+    // Every collection line must carry the OR (from) it was receipted under.
+    draft.lines.every((l) => !l.collectionType || l.orFrom.trim().length > 0) &&
     // "Other" lines must carry a description.
     draft.lines.every(
       (l) => !typeRequiresDesc(l.collectionType) || l.description.trim().length > 0,
@@ -276,13 +312,14 @@ export default function CashierCollectionReportPage() {
         collectorId: draft.collectorId,
         ...(draft.collectionAreaId ? { collectionAreaId: draft.collectionAreaId } : {}),
         collectionDate: draft.collectionDate,
-        orSeries: draft.orSeries.trim(),
         lines: draft.lines
           .filter((l) => l.collectionType && (parseFloat(l.amount) || 0) > 0)
           .map((l) => ({
             collectionType: l.collectionType,
             amount: parseFloat(l.amount) || 0,
             ...(l.description.trim() ? { description: l.description.trim() } : {}),
+            orFrom: l.orFrom.trim(),
+            ...(l.orTo.trim() ? { orTo: l.orTo.trim() } : {}),
           })),
         checks: draft.checks
           .filter((c) => c.checkNumber.trim())
@@ -473,6 +510,12 @@ export default function CashierCollectionReportPage() {
                         {l.collectionTypeLabel}
                         {l.description ? `: ${l.description}` : ''}
                         <span style={{ color: '#667085' }}> — {peso(l.amount)}</span>
+                        {l.orFrom && (
+                          <span style={{ color: '#667085' }}>
+                            {' · OR '}
+                            {l.orTo && l.orTo !== l.orFrom ? `${l.orFrom}–${l.orTo}` : l.orFrom}
+                          </span>
+                        )}
                         <div
                           style={{
                             fontSize: 11,
@@ -619,25 +662,19 @@ export default function CashierCollectionReportPage() {
               />
             </div>
           </div>
-          <div style={{ marginBottom: 12 }}>
-            <label style={labelStyle}>OR series covered *</label>
-            <input
-              style={{ ...inputStyle, maxWidth: 340 }}
-              placeholder="e.g. 2026-3822 to 2026-3827"
-              value={draft.orSeries}
-              onChange={(e) => setDraft({ ...draft, orSeries: e.target.value })}
-            />
-          </div>
-
           {/* Collection breakdown — by nature of collection, auto-summing to the remittance.
-              Each type maps to a GL account (set by the accountant in Account Mappings). */}
+              Each type maps to a GL account (set by the accountant in Account Mappings).
+              Each line carries its own OR range so a single series can be split across
+              types (e.g. 3822-3824 water sales, 3825-3827 penalties). */}
           <div style={{ marginBottom: 12 }}>
-            <table className="bill-table" style={{ maxWidth: 620 }}>
+            <table className="bill-table" style={{ maxWidth: 780 }}>
               <thead>
                 <tr>
                   <th>Nature of collection (recorded to) *</th>
-                  <th style={{ textAlign: 'right', width: 150 }}>Amount</th>
-                  <th style={{ width: 30 }}></th>
+                  <th style={{ textAlign: 'right', width: 120 }}>Amount</th>
+                  <th style={{ width: 100 }}>OR From *</th>
+                  <th style={{ width: 100 }}>OR To</th>
+                  <th style={{ width: 26 }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -706,6 +743,40 @@ export default function CashierCollectionReportPage() {
                         />
                       </td>
                       <td>
+                        <input
+                          style={{ ...inputStyle, padding: '4px 6px' }}
+                          placeholder="e.g. 2026-3822"
+                          value={l.orFrom}
+                          onChange={(e) => {
+                            const lines = [...draft.lines];
+                            lines[i] = { ...lines[i]!, orFrom: e.target.value };
+                            setDraft({ ...draft, lines });
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          style={{ ...inputStyle, padding: '4px 6px' }}
+                          placeholder="(same)"
+                          value={l.orTo}
+                          onChange={(e) => {
+                            const lines = [...draft.lines];
+                            lines[i] = { ...lines[i]!, orTo: e.target.value };
+                            setDraft({ ...draft, lines });
+                          }}
+                        />
+                        {(() => {
+                          const n = l.orFrom.trim()
+                            ? orCount(l.orFrom, l.orTo.trim() || l.orFrom)
+                            : null;
+                          return n && n > 1 ? (
+                            <div style={{ fontSize: 11, color: '#98a2b3', marginTop: 2 }}>
+                              {n} receipts
+                            </div>
+                          ) : null;
+                        })()}
+                      </td>
+                      <td>
                         {draft.lines.length > 1 && (
                           <button
                             type="button"
@@ -733,7 +804,7 @@ export default function CashierCollectionReportPage() {
                   <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>
                     {peso(draftRemit)}
                   </td>
-                  <td></td>
+                  <td colSpan={3}></td>
                 </tr>
               </tbody>
             </table>
@@ -741,12 +812,15 @@ export default function CashierCollectionReportPage() {
               type="button"
               className="bill-btn bill-btn--sm"
               style={{ marginTop: 6 }}
-              onClick={() =>
+              onClick={() => {
+                // Auto-advance the next line's OR (from) to continue the series.
+                const last = draft.lines[draft.lines.length - 1];
+                const prevTo = last?.orTo?.trim() || last?.orFrom?.trim() || '';
                 setDraft({
                   ...draft,
-                  lines: [...draft.lines, { collectionType: '', amount: '', description: '' }],
-                })
-              }
+                  lines: [...draft.lines, { ...emptyLine(), orFrom: prevTo ? nextOr(prevTo) : '' }],
+                });
+              }}
             >
               + Add collection type
             </button>
