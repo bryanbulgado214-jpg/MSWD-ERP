@@ -144,6 +144,73 @@ export interface AccountingPeriod {
   endDate: string;
 }
 
+// ── Supplier's Invoices (bills / payables) ──
+
+export interface SupplierInvoicePostedLine {
+  chartOfAccountId: string;
+  debitAmount: number;
+  creditAmount: number;
+  description: string;
+}
+
+export interface SupplierInvoiceDueItem {
+  dueDate: string;
+  amount: number;
+}
+
+export interface SupplierInvoiceSummary {
+  id: string;
+  invoiceNumber: string;
+  supplierName: string;
+  supplierTin: string | null;
+  supplierAddress: string | null;
+  invoiceDate: string;
+  term: string | null;
+  particulars: string;
+  grossAmount: string;
+  taxAmount: string;
+  netAmount: string;
+  amountPaid: string;
+  status: string;
+  glLines: SupplierInvoicePostedLine[];
+  dueSchedule: SupplierInvoiceDueItem[];
+  journalEntryId: string | null;
+  createdAt: string;
+}
+
+export interface SupplierInvoiceDetail extends SupplierInvoiceSummary {
+  journalEntry: {
+    id: string;
+    jevNumber: string;
+    status: string;
+    lines: Array<{
+      chartOfAccountId: string;
+      accountCode: string;
+      accountName: string;
+      debitAmount: string;
+      creditAmount: string;
+      description: string | null;
+    }>;
+  } | null;
+}
+
+export interface CreateSupplierInvoicePayload {
+  invoiceNumber: string;
+  supplierName: string;
+  supplierTin?: string;
+  supplierAddress?: string;
+  invoiceDate: string;
+  term?: string;
+  particulars: string;
+  lines: Array<{
+    chartOfAccountId: string;
+    debitAmount: number;
+    creditAmount: number;
+    description?: string;
+  }>;
+  dueSchedule?: Array<{ dueDate: string; amount: number }>;
+}
+
 // ── GL / Trial Balance / Subsidiary Ledger ──
 
 export interface FiscalYearOption {

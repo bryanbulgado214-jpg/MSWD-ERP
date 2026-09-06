@@ -17,10 +17,13 @@ import DisbursementListPage from './pages/DisbursementListPage';
 import JevDetailPage from './pages/JevDetailPage';
 import JevListPage from './pages/JevListPage';
 import NewDisbursementPage from './pages/NewDisbursementPage';
+import NewSupplierInvoicePage from './pages/NewSupplierInvoicePage';
 import PeriodManagementPage from './pages/PeriodManagementPage';
 import { PrintCheckPage } from './pages/PrintCheckPage';
 import { PrintDisbursementPage } from './pages/PrintDisbursementPage';
 import { PrintJevPage } from './pages/PrintJevPage';
+import SupplierInvoiceDetailPage from './pages/SupplierInvoiceDetailPage';
+import SupplierInvoiceListPage from './pages/SupplierInvoiceListPage';
 
 /** Preserves the old per-account subsidiary bookmark by forwarding the param. */
 function SubsidiaryRedirect() {
@@ -62,6 +65,9 @@ export const accountingRoutes: RouteObject[] = [
   { path: '/accounting/disbursements/:id/print', element: <PrintDisbursementPage /> },
   { path: '/accounting/disbursements/:id/edit', element: <NewDisbursementPage /> },
   { path: '/accounting/disbursements/:id', element: <DisbursementDetailPage /> },
+  { path: '/accounting/supplier-invoices', element: <SupplierInvoiceListPage /> },
+  { path: '/accounting/supplier-invoices/new', element: <NewSupplierInvoicePage /> },
+  { path: '/accounting/supplier-invoices/:id', element: <SupplierInvoiceDetailPage /> },
   { path: '/accounting/checks', element: <CheckRegisterPage /> },
   { path: '/accounting/checks/:id/print', element: <PrintCheckPage /> },
   { path: '/accounting/reconciliations', element: <BankReconciliationPage /> },

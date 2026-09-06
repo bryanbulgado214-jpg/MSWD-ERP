@@ -29,11 +29,14 @@ import type {
   FiscalYearDetail,
   FiscalYearOption,
   GeneralLedgerRow,
+  CreateSupplierInvoicePayload,
   JevDetail,
   JevListItem,
   PeriodDetail,
   PeriodOption,
   SubsidiaryLedgerResult,
+  SupplierInvoiceDetail,
+  SupplierInvoiceSummary,
   TrialBalanceRow,
 } from './types';
 
@@ -324,6 +327,25 @@ export async function updateJevNumber(
 /** Delete a JEV (any status, even posted) while its accounting period is open and unlocked. */
 export async function deleteJev(id: string): Promise<{ id: string }> {
   const res = await authFetchMutate(`/accounting/jev/${id}`, 'DELETE');
+  return res.json();
+}
+
+// ── Supplier's Invoices (bills / payables) ──
+
+export async function getSupplierInvoices(): Promise<SupplierInvoiceSummary[]> {
+  const res = await authFetch('/accounting/supplier-invoices');
+  return res.json();
+}
+
+export async function getSupplierInvoice(id: string): Promise<SupplierInvoiceDetail> {
+  const res = await authFetch(`/accounting/supplier-invoices/${id}`);
+  return res.json();
+}
+
+export async function createSupplierInvoice(
+  payload: CreateSupplierInvoicePayload,
+): Promise<SupplierInvoiceSummary> {
+  const res = await authFetchMutate('/accounting/supplier-invoices', 'POST', payload);
   return res.json();
 }
 

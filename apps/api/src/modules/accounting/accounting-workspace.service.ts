@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 
 import { PrismaService } from '../../database/prisma.service';
 
+import { SupplierInvoiceService } from './supplier-invoice.service';
+
 /** Server-local today as a date-only Date. */
 function today(): Date {
   const n = new Date();
@@ -18,10 +20,13 @@ function today(): Date {
  */
 @Injectable()
 export class AccountingWorkspaceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly supplierInvoices: SupplierInvoiceService,
+  ) {}
 
   async getWorkspace(orgId: string, userId: string) {
-    const [note, reminders, systemDueDates] = await Promise.all([
+    const [note, reminders, periodDueDates, invoiceDueDates] = await Promise.all([
       this.prisma.userNote.findUnique({
         where: { organizationId_userId: { organizationId: orgId, userId } },
       }),
@@ -30,7 +35,19 @@ export class AccountingWorkspaceService {
         orderBy: [{ done: 'asc' }, { dueDate: 'asc' }],
       }),
       this.systemDueDates(orgId),
+      this.supplierInvoices.upcomingDueDates(orgId, today()),
     ]);
+
+    // System-derived deadlines shown read-only in "Upcoming Due Dates": open
+    // accounting-period closes plus supplier-invoice payment due dates.
+    const systemDueDates = [
+      ...periodDueDates,
+      ...invoiceDueDates.map((d) => ({
+        label: d.label,
+        dueDate: d.dueDate,
+        source: 'system' as const,
+      })),
+    ].sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
     return {
       notes: note?.content ?? '',
       notesUpdatedAt: note?.updatedAt ?? null,

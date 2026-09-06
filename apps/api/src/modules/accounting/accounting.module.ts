@@ -44,6 +44,8 @@ import { PeriodController } from './period.controller';
 import { PeriodService } from './period.service';
 import { AccountingReportsController } from './reports.controller';
 import { AccountingReportsService } from './reports.service';
+import { SupplierInvoiceController } from './supplier-invoice.controller';
+import { SupplierInvoiceService } from './supplier-invoice.service';
 
 @Module({
   imports: [NotificationModule],
@@ -68,6 +70,7 @@ import { AccountingReportsService } from './reports.service';
     AccountingReportsController,
     LoanController,
     PayeeController,
+    SupplierInvoiceController,
   ],
   providers: [
     AccountingWorkspaceService,
@@ -92,6 +95,7 @@ import { AccountingReportsService } from './reports.service';
     AccountingReportsService,
     LoanService,
     PayeeService,
+    SupplierInvoiceService,
   ],
   exports: [
     ChartOfAccountService,

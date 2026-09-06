@@ -56,6 +56,11 @@ export const ACCOUNTING_LINKS: AccountingLink[] = [
     label: 'Disbursement Vouchers',
     visible: has('accounting.dv.read'),
   },
+  {
+    to: '/accounting/supplier-invoices',
+    label: "Supplier's Invoices",
+    visible: has('accounting.read'),
+  },
   { to: '/accounting/banks', label: 'Bank Accounts', visible: has('accounting.read') },
   { to: '/accounting/checks', label: 'Checks', visible: has('accounting.check.read') },
   {

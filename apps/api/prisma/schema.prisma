@@ -2774,6 +2774,46 @@ enum JevStatus {
   @@map("jev_status")
 }
 
+/// A supplier's invoice (a payable / bill). The accountant records the invoice
+/// and it posts the payable to the GL (Dr the charges / Cr Accounts Payable).
+/// Payment is later made from this module — no manual Disbursement Voucher. This
+/// client has no Procurement module, so invoices are captured here in Accounting.
+model SupplierInvoice {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  // The supplier's own invoice/reference number (as printed on their invoice).
+  invoiceNumber   String   @map("invoice_number") @db.VarChar(60)
+  supplierName    String   @map("supplier_name") @db.VarChar(200)
+  supplierTin     String?  @map("supplier_tin") @db.VarChar(30)
+  supplierAddress String?  @map("supplier_address") @db.VarChar(255)
+  invoiceDate     DateTime @map("invoice_date") @db.Date
+  // Optional credit terms, free text (e.g. "3/10, n/15").
+  term            String?  @db.VarChar(60)
+  particulars     String
+  grossAmount     Decimal  @map("gross_amount") @db.Decimal(18, 2)
+  taxAmount       Decimal  @default(0) @map("tax_amount") @db.Decimal(18, 2)
+  netAmount       Decimal  @map("net_amount") @db.Decimal(18, 2)
+  amountPaid      Decimal  @default(0) @map("amount_paid") @db.Decimal(18, 2)
+  // unpaid | partially_paid | paid | cancelled
+  status          String   @default("unpaid") @db.VarChar(20)
+  // Charge/deduction lines: [{ chartOfAccountId, debitAmount, creditAmount, description }].
+  glLines         Json     @map("gl_lines")
+  // Payment schedule / due dates: [{ dueDate: 'YYYY-MM-DD', amount }] (one entry
+  // for a single due date, several for installments).
+  dueSchedule     Json?    @map("due_schedule")
+  // The posted payable JEV and the Accounts Payable account it credited.
+  journalEntryId  String?  @map("journal_entry_id") @db.Uuid
+  apAccountId     String?  @map("ap_account_id") @db.Uuid
+  createdBy       String?  @map("created_by") @db.Uuid
+  updatedBy       String?  @map("updated_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([organizationId])
+  @@index([status])
+  @@map("supplier_invoices")
+}
+
 enum JevSourceType {
   manual
   // Budgetary only: obligations live in BudgetTransactionLog (the RAOD-style
