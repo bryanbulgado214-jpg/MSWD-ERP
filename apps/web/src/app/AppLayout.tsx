@@ -46,12 +46,22 @@ export function AppLayout() {
   // sub-nav rails (and page content) line up under the first header tab, on every
   // page, regardless of viewport width or brand width.
   const linksRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
     function measure() {
       const el = linksRef.current;
       if (el) {
         const left = Math.round(el.getBoundingClientRect().left);
         document.documentElement.style.setProperty('--subnav-left', `${left}px`);
+      }
+      // Publish the real header height (district strip + optional demo banner +
+      // nav) so the fixed left sub-navs sit exactly below it — on live and demo.
+      const h = headerRef.current;
+      if (h) {
+        document.documentElement.style.setProperty(
+          '--app-header-h',
+          `${Math.round(h.getBoundingClientRect().height)}px`,
+        );
       }
     }
     measure();
@@ -60,7 +70,7 @@ export function AppLayout() {
     // re-measure then so the rails don't stay pinned to the fallback position.
     document.fonts?.ready.then(measure).catch(() => {});
     return () => window.removeEventListener('resize', measure);
-  }, [loading, user, organization?.name]);
+  }, [loading, user, organization?.name, organization?.logoUrl]);
 
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
@@ -100,12 +110,20 @@ export function AppLayout() {
 
   return (
     <div className="app-layout">
-      <header className="app-header">
+      <header className="app-header" ref={headerRef}>
         {import.meta.env.DEV && (
           <div className="app-demo-banner" role="note">
             DEMONSTRATION DATA — NOT ACTUAL WATER DISTRICT RECORDS
           </div>
         )}
+        {organization?.name ? (
+          <div className="app-district" role="note">
+            {organization.logoUrl ? (
+              <img className="app-district__logo" src={organization.logoUrl} alt="" />
+            ) : null}
+            <span className="app-district__name">{organization.name}</span>
+          </div>
+        ) : null}
         <nav className="app-nav">
           <div className="app-nav__left">
             <Link
@@ -125,9 +143,6 @@ export function AppLayout() {
                 style={{ height: 30, width: 'auto', display: 'block' }}
               />
               AquaBooks
-              {organization?.name ? (
-                <span className="app-nav__org"> · {organization.name}</span>
-              ) : null}
             </Link>
             <div className="app-nav__links" ref={linksRef}>
               {showHome && (

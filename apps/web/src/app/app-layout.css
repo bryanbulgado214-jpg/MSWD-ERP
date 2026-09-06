@@ -379,13 +379,39 @@
   border-bottom: 1px solid #f79009;
   text-transform: uppercase;
 }
-.app-nav__org {
-  font-weight: 500;
-  opacity: 0.8;
-  font-size: 13px;
+/* District masthead — a thin strip above the navy bar carrying the water
+   district's name (and its logo), right-aligned. Keeps the district visible on
+   every page without the name crowding the module tabs. */
+.app-district {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  height: 26px;
+  padding: 0 20px;
+  background: #04266b; /* a deeper shade of --mswd-navy so it reads as one masthead */
+  color: rgba(255, 255, 255, 0.92);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+.app-district__logo {
+  height: 18px;
+  width: auto;
+  display: block;
+  object-fit: contain;
+}
+.app-district__name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 70vw;
 }
 @media print {
   .app-demo-banner { background: #fff; color: #7a2e0e; }
+  /* The district strip is chrome, not document content — hide it when printing. */
+  .app-district { display: none; }
 }
 
 /* ── Header quick-search box ── */
