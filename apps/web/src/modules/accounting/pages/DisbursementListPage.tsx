@@ -5,6 +5,7 @@ import { useAuth } from '../../../app/auth';
 import { AccountingApiError, deleteDisbursement, getDisbursements } from '../api';
 import { amountSearchTokens, matchesQuery } from '../search';
 import { compareDocNumber, sortArrow, type SortDir } from '../sort-utils';
+import { statusLabel } from '../status-format';
 import type { DisbursementSummary } from '../types';
 
 import { AccountingSubNav } from './AccountingSubNav';
@@ -68,26 +69,6 @@ function formatPeso(value: string | number): string {
   const num = typeof value === 'string' ? parseFloat(value) : value;
   return num.toLocaleString('en-PH', { style: 'currency', currency: 'PHP' });
 }
-
-const STATUS_LABELS: Record<string, string> = {
-  // DV lifecycle (accountant / procurement side)
-  draft: 'Draft',
-  for_certification: 'For Certification',
-  certified: 'Certified',
-  for_approval: 'For Approval',
-  approved: 'Approved',
-  released: 'Released',
-  cancelled: 'Cancelled',
-  // Check lifecycle (cashier side) — shown once a check has been issued so the
-  // DV register mirrors the cashier's Check Register.
-  pending: 'Pending (for printing)',
-  assigned: 'Assigned',
-  printed: 'Printed',
-  cleared: 'Cleared',
-  stale_dated: 'Stale-dated',
-  spoiled: 'Spoiled',
-  voided: 'Voided',
-};
 
 /**
  * Once a check has been issued for a DV, its status (the cashier's payment
@@ -313,9 +294,7 @@ export default function DisbursementListPage() {
                           gap: 3,
                         }}
                       >
-                        <span className="acct-badge">
-                          {STATUS_LABELS[effectiveStatus(dv)] ?? effectiveStatus(dv)}
-                        </span>
+                        <span className="acct-badge">{statusLabel(effectiveStatus(dv))}</span>
                         {dv.checkStatusDate && (
                           <span style={{ color: '#667085', fontSize: 12 }}>
                             {new Date(dv.checkStatusDate).toLocaleDateString('en-PH')}

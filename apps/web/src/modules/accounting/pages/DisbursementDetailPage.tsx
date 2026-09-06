@@ -18,6 +18,7 @@ import {
   type DvAttachment,
   type DvNote,
 } from '../api';
+import { statusLabel } from '../status-format';
 import type { DisbursementDetail } from '../types';
 
 import { AccountingSubNav } from './AccountingSubNav';
@@ -51,26 +52,6 @@ const PAYMENT_MODE_LABELS: Record<string, string> = {
   ada: 'ADA — Advice to Debit Account',
   others: 'Others',
 };
-const STATUS_LABELS: Record<string, string> = {
-  // DV lifecycle
-  draft: 'Draft',
-  for_certification: 'For Certification',
-  certified: 'Certified',
-  for_approval: 'For Approval',
-  approved: 'Approved',
-  released: 'Released',
-  cancelled: 'Cancelled',
-  // Check lifecycle — shown once a check exists so the DV mirrors the Check
-  // Register (e.g. a released DV whose check has since cleared reads "Cleared").
-  pending: 'Pending (for printing)',
-  assigned: 'Assigned',
-  printed: 'Printed',
-  cleared: 'Cleared',
-  stale_dated: 'Stale-dated',
-  spoiled: 'Spoiled',
-  voided: 'Voided',
-};
-
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -286,7 +267,7 @@ export default function DisbursementDetailPage() {
         <h1 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
           {dv.dvNumber}
           <span className="acct-badge" style={{ fontSize: 12 }}>
-            {STATUS_LABELS[effStatus] ?? effStatus.replace(/_/g, ' ')}
+            {statusLabel(effStatus)}
           </span>
         </h1>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -457,7 +438,7 @@ export default function DisbursementDetailPage() {
             style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: '#667085' }}
           >
             {'   '}
-            {je.status === 'posted' ? 'Posted to GL' : (STATUS_LABELS[je.status] ?? je.status)}
+            {je.status === 'posted' ? 'Posted to GL' : statusLabel(je.status)}
             {je.status !== 'posted' && ' (not yet posted to the ledger)'}
           </span>
         )}

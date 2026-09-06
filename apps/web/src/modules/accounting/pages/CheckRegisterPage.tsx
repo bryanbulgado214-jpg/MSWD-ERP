@@ -7,6 +7,7 @@ import { AccountingSubNav } from './AccountingSubNav';
 
 import './accounting.css';
 import { getChecks, printCheck, transitionCheck, updateCheckNumber, voidCheck } from '../api';
+import { checkStatusDate, formatStatusDate, statusLabel } from '../status-format';
 import type { CheckListItem } from '../types';
 
 function formatPeso(value: string | number): string {
@@ -38,6 +39,9 @@ export default function CheckRegisterPage() {
   const canPrint = permissions.has('accounting.check.print');
   const canRelease = permissions.has('accounting.check.record_release');
   const canVoid = permissions.has('accounting.check.void');
+  // Only the cashier acts on checks (print, edit #, release, clear, void). The
+  // accountant's view is read-only, so the Actions column is hidden for them.
+  const hasActions = canPrint || canRelease || canVoid;
 
   const [state, setState] = useState<LoadState>({ status: 'idle' });
   const [filterBank, setFilterBank] = useState('');
@@ -457,8 +461,8 @@ export default function CheckRegisterPage() {
                 <th>Payee</th>
                 <th>Bank</th>
                 <th className="acct-text-right">Amount</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th style={{ textAlign: 'center' }}>Status</th>
+                {hasActions && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -495,75 +499,98 @@ export default function CheckRegisterPage() {
                       {c.bankAccount.bank.code} — {c.bankAccount.accountName}
                     </td>
                     <td className="acct-text-right acct-text-mono">{formatPeso(c.amount)}</td>
-                    <td>
-                      <span className={`acct-badge acct-badge--${c.status}`}>
-                        {c.status.replace(/_/g, ' ')}
-                      </span>
-                    </td>
-                    <td>
+                    <td style={{ textAlign: 'center' }}>
                       <div
-                        style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}
+                        style={{
+                          display: 'inline-flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: 3,
+                        }}
                       >
-                        {isPending && canPrint && !dvDraft && (
-                          <button
-                            className="acct-btn acct-btn--sm acct-btn--primary"
-                            onClick={() => openPrint(c)}
-                          >
-                            Print Check
-                          </button>
-                        )}
-                        {isPending && dvDraft && (
-                          <span style={{ fontSize: 11, color: '#98a2b3' }}>DV not yet posted</span>
-                        )}
-                        {!isPending && canPrint && (
-                          <Link
-                            to={`/accounting/checks/${c.id}/print`}
-                            className="acct-table__link"
-                          >
-                            Print
-                          </Link>
-                        )}
-                        {canPrint &&
-                          c.checkNumber &&
-                          !['cleared', 'stale_dated', 'voided', 'spoiled'].includes(c.status) && (
-                            <button
-                              className="acct-btn acct-btn--sm"
-                              title="Correct the check number (e.g. after a print jam)"
-                              disabled={busy === c.id}
-                              onClick={() => handleEditNumber(c)}
-                            >
-                              Edit #
-                            </button>
-                          )}
-                        {canRelease && c.status === 'printed' && (
-                          <button
-                            className="acct-btn acct-btn--sm"
-                            disabled={busy === c.id}
-                            onClick={() => handleRelease(c, 'released')}
-                          >
-                            release
-                          </button>
-                        )}
-                        {canRelease && c.status === 'released' && (
-                          <button
-                            className="acct-btn acct-btn--sm"
-                            disabled={busy === c.id}
-                            onClick={() => handleRelease(c, 'cleared')}
-                          >
-                            cleared
-                          </button>
-                        )}
-                        {voidable && (
-                          <button
-                            className="acct-btn acct-btn--sm acct-btn--danger"
-                            disabled={busy === c.id}
-                            onClick={() => handleVoid(c, 'voided')}
-                          >
-                            void
-                          </button>
+                        <span className={`acct-badge acct-badge--${c.status}`}>
+                          {statusLabel(c.status)}
+                        </span>
+                        {checkStatusDate(c) && (
+                          <span style={{ color: '#667085', fontSize: 12 }}>
+                            {formatStatusDate(checkStatusDate(c))}
+                          </span>
                         )}
                       </div>
                     </td>
+                    {hasActions && (
+                      <td>
+                        <div
+                          style={{
+                            display: 'flex',
+                            gap: 6,
+                            alignItems: 'center',
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          {isPending && canPrint && !dvDraft && (
+                            <button
+                              className="acct-btn acct-btn--sm acct-btn--primary"
+                              onClick={() => openPrint(c)}
+                            >
+                              Print Check
+                            </button>
+                          )}
+                          {isPending && dvDraft && (
+                            <span style={{ fontSize: 11, color: '#98a2b3' }}>
+                              DV not yet posted
+                            </span>
+                          )}
+                          {!isPending && canPrint && (
+                            <Link
+                              to={`/accounting/checks/${c.id}/print`}
+                              className="acct-table__link"
+                            >
+                              Print
+                            </Link>
+                          )}
+                          {canPrint &&
+                            c.checkNumber &&
+                            !['cleared', 'stale_dated', 'voided', 'spoiled'].includes(c.status) && (
+                              <button
+                                className="acct-btn acct-btn--sm"
+                                title="Correct the check number (e.g. after a print jam)"
+                                disabled={busy === c.id}
+                                onClick={() => handleEditNumber(c)}
+                              >
+                                Edit #
+                              </button>
+                            )}
+                          {canRelease && c.status === 'printed' && (
+                            <button
+                              className="acct-btn acct-btn--sm"
+                              disabled={busy === c.id}
+                              onClick={() => handleRelease(c, 'released')}
+                            >
+                              release
+                            </button>
+                          )}
+                          {canRelease && c.status === 'released' && (
+                            <button
+                              className="acct-btn acct-btn--sm"
+                              disabled={busy === c.id}
+                              onClick={() => handleRelease(c, 'cleared')}
+                            >
+                              cleared
+                            </button>
+                          )}
+                          {voidable && (
+                            <button
+                              className="acct-btn acct-btn--sm acct-btn--danger"
+                              disabled={busy === c.id}
+                              onClick={() => handleVoid(c, 'voided')}
+                            >
+                              void
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}

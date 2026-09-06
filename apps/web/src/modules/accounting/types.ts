@@ -317,7 +317,10 @@ export interface CheckListItem {
   amount: string;
   payeeName: string;
   status: string;
+  printedAt: string | null;
+  releasedAt: string | null;
   clearedDate: string | null;
+  voidedAt: string | null;
   voidReason: string | null;
   createdAt: string;
   version: number;
@@ -334,8 +337,6 @@ export interface CheckListItem {
 }
 
 export interface CheckDetail extends CheckListItem {
-  releasedAt: string | null;
-  voidedAt: string | null;
   statusHistory: Array<{
     id: string;
     fromStatus: string | null;
