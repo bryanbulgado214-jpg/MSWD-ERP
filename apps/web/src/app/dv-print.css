@@ -1,13 +1,15 @@
 /* Metro Siquijor Water District Disbursement Voucher — an exact reproduction of
- * the district's pre-printed form, sized to fill one Letter page (8.5×11,
- * portrait) with no blank space at the bottom. The middle accounting-entry grid
- * flexes to absorb the remaining height; the certification band stays pinned to
- * the foot. */
+ * the district's pre-printed form on one Letter page (8.5×11, portrait). The
+ * whole form is wrapped in a single box (the outer border of the pre-printed
+ * form) sitting inside a small white margin; the form takes its natural height,
+ * and the leftover is the bottom margin. */
 
 .dv-print-sheet {
   width: 8.5in;
   min-height: 11in;
   margin: 0 auto;
+  /* The page padding is the white MARGIN between the paper edge and the form's
+   * enclosing box (.dv-sheet-frame). */
   padding: 0.4in;
   background: #fff;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
@@ -16,19 +18,11 @@
   color: #000;
   line-height: 1.25;
   box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
 }
 
-/* The accounting-entry table is the flexible middle of the sheet: it grows to
- * absorb the leftover height so the certification band sits flush at the foot. */
-.dv-acct {
-  flex: 1 1 auto;
-  display: flex;
-  min-height: 0;
-}
-.dv-acct > table {
-  height: 100%;
+/* The single box that encloses the whole form (header → certifications). */
+.dv-sheet-frame {
+  border: 1px solid #000;
 }
 
 @media print {
@@ -44,8 +38,7 @@
   .dv-print-sheet {
     page: dvsheet;
     width: 8.5in;
-    height: 11in;
-    min-height: 0;
+    min-height: 11in;
     margin: 0;
     padding: 0.4in;
     box-shadow: none;
