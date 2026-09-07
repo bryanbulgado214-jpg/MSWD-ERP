@@ -1,4 +1,16 @@
-import { IsBoolean, IsEnum, IsInt, IsNumber, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsDateString,
+  IsEnum,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  MaxLength,
+  Min,
+  MinLength,
+} from 'class-validator';
 
 export class CreateInventoryItemDto {
   @IsString()
@@ -66,4 +78,17 @@ export class UpdateInventoryItemDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+}
+
+export class BeginningBalanceDto {
+  @IsNumber()
+  @IsPositive()
+  quantity!: number;
+
+  @IsNumber()
+  @Min(0)
+  unitCost!: number;
+
+  @IsDateString()
+  asOfDate!: string;
 }

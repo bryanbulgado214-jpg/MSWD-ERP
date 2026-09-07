@@ -61,7 +61,7 @@ afterAll(async () => {
     const jevs = await prisma.journalEntryVoucher.findMany({
       where: {
         sourceId: { in: ids },
-        sourceTable: { in: ['stock_receipts', 'requisition_issue_slips'] },
+        sourceTable: { in: ['stock_receipts', 'requisition_issue_slips', 'inventory_gl_runs'] },
       },
       select: { id: true },
     });
@@ -129,5 +129,35 @@ describe('Inventory → GL', () => {
 
     expect(debit(expenseId)).toBeCloseTo(500, 2); // 10 * 50
     expect(credit(expendableInvId)).toBeCloseTo(500, 2);
+  });
+
+  it('month-end run aggregates issuances into one Dr expense / Cr inventory JEV', async () => {
+    const runId = randomUUID();
+    createdSourceIds.add(runId);
+    await runAudited(prisma, userId, (tx) =>
+      autoJev.onInventoryIssuancesPosted(tx, organizationId, userId, {
+        id: runId,
+        runNumber: 'TEST-RSMI-1',
+        periodMonth: 8,
+        periodYear: 2026,
+        issues: [
+          { totalCost: 1240, accountCode: null, classification: 'expendable' },
+          { totalCost: 260, accountCode: null, classification: 'expendable' },
+        ],
+      }),
+    );
+
+    const jev = await prisma.journalEntryVoucher.findFirstOrThrow({
+      where: { organizationId, sourceTable: 'inventory_gl_runs', sourceId: runId },
+      include: { lines: true },
+    });
+    const debit = (acc: string) =>
+      Number(jev.lines.find((l) => l.chartOfAccountId === acc)?.debitAmount ?? 0);
+    const credit = (acc: string) =>
+      Number(jev.lines.find((l) => l.chartOfAccountId === acc)?.creditAmount ?? 0);
+
+    // Both issuances roll into one line per account: 1240 + 260 = 1500.
+    expect(debit(expenseId)).toBeCloseTo(1500, 2);
+    expect(credit(expendableInvId)).toBeCloseTo(1500, 2);
   });
 });

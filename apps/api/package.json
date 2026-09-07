@@ -11,6 +11,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
+    "inventory:access": "ts-node prisma/ensure-inventory-access.ts",
     "seed:demo": "ts-node prisma/seed-demo-sbwd.ts && ts-node prisma/seed-sbwd-fy2025.ts && ts-node prisma/seed-sbwd-report-data.ts",
     "seed:demo:reset": "ts-node prisma/seed-demo-sbwd.ts && ts-node prisma/seed-sbwd-fy2025.ts && ts-node prisma/seed-sbwd-report-data.ts",
     "seed:demo:reports": "ts-node prisma/seed-sbwd-report-data.ts",

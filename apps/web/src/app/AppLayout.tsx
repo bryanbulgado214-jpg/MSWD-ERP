@@ -28,7 +28,6 @@ const MODULE_NAV = [
 const LIVE_HIDDEN_MODULES = new Set<string>([
   'budgeting',
   'procurement',
-  'inventory',
   'hr',
   'workorder',
   'complaint',

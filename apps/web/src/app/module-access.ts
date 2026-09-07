@@ -39,6 +39,7 @@ export const MODULE_GATES = {
     'inventory.physical_count.manage',
     'inventory.dispose.manage',
     'inventory.reports',
+    'inventory.gl.post',
   ],
   billing: [
     'billing.read',

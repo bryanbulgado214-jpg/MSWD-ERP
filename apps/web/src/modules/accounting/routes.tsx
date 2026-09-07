@@ -25,6 +25,7 @@ import { PrintDisbursementPage } from './pages/PrintDisbursementPage';
 import { PrintJevPage } from './pages/PrintJevPage';
 import SupplierInvoiceDetailPage from './pages/SupplierInvoiceDetailPage';
 import SupplierInvoiceListPage from './pages/SupplierInvoiceListPage';
+import SupplyLedgerCardPage from './pages/SupplyLedgerCardPage';
 
 /** Preserves the old per-account subsidiary bookmark by forwarding the param. */
 function SubsidiaryRedirect() {
@@ -75,6 +76,7 @@ export const accountingRoutes: RouteObject[] = [
   { path: '/accounting/reconciliations', element: <BankReconciliationPage /> },
   { path: '/accounting/reconciliations/:id', element: <BankReconciliationPage /> },
   { path: '/accounting/periods', element: <PeriodManagementPage /> },
+  { path: '/accounting/supply-ledger', element: <SupplyLedgerCardPage /> },
 
   // Reporting outputs moved to the Reports module. Keep the old URLs working as
   // redirects so existing bookmarks / drill-down links don't break.

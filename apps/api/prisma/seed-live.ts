@@ -37,7 +37,7 @@ const CFG = {
   password: process.env.LIVE_PASSWORD || 'ChangeMe!2026',
 };
 
-const LIVE_LOGINS = ['admin', 'accountant', 'cashier'];
+const LIVE_LOGINS = ['admin', 'accountant', 'cashier', 'warehouseman', 'stockcards'];
 
 // Collection/cashiering permissions (mirror the ensure-*.ts scripts) and the
 // roles that hold each. Segregation of duties: the CASHIER consolidates but does

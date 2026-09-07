@@ -343,6 +343,86 @@ export class AutoJevService {
     });
   }
 
+  /**
+   * Month-end inventory issuances (the RSMI entry), triggered by the stock-card
+   * personnel. Aggregates a month's FIFO-costed issuances into ONE JEV:
+   *   Dr Supplies Expense (by classification)
+   *   Cr Inventory (by item account)
+   * The caller (InventoryGlService) has already verified the period is open and
+   * unlocked, so this posts into that period.
+   */
+  async onInventoryIssuancesPosted(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    userId: string,
+    run: {
+      id: string;
+      runNumber: string;
+      periodMonth: number;
+      periodYear: number;
+      issues: Array<{ totalCost: number; accountCode: string | null; classification: string }>;
+    },
+  ) {
+    const periodLabel = `${run.periodYear}-${String(run.periodMonth).padStart(2, '0')}`;
+    const ref = `RSMI ${periodLabel} (${run.runNumber})`;
+
+    const expenseByAccount = new Map<string, number>();
+    const inventoryByAccount = new Map<string, number>();
+    for (const item of run.issues) {
+      if (item.totalCost <= 0) continue;
+      const inv = await this.resolveInventoryAccount(tx, organizationId, item, ref);
+      const expKey = EXPENSE_MAPPING_KEY[item.classification] ?? 'expense.expendable';
+      const exp = await this.requireMapping(
+        organizationId,
+        expKey,
+        `Supplies expense (${item.classification})`,
+        ref,
+      );
+      inventoryByAccount.set(inv.id, (inventoryByAccount.get(inv.id) ?? 0) + item.totalCost);
+      expenseByAccount.set(exp.id, (expenseByAccount.get(exp.id) ?? 0) + item.totalCost);
+    }
+    const total = [...expenseByAccount.values()].reduce((s, v) => s + v, 0);
+    if (total <= 0) return null;
+
+    const lines: Array<{
+      chartOfAccountId: string;
+      debitAmount: number;
+      creditAmount: number;
+      description: string;
+    }> = [];
+    for (const [chartOfAccountId, amount] of expenseByAccount) {
+      lines.push({
+        chartOfAccountId,
+        debitAmount: Math.round(amount * 100) / 100,
+        creditAmount: 0,
+        description: `Supplies expense — issuances ${periodLabel}`,
+      });
+    }
+    for (const [chartOfAccountId, amount] of inventoryByAccount) {
+      lines.push({
+        chartOfAccountId,
+        debitAmount: 0,
+        creditAmount: Math.round(amount * 100) / 100,
+        description: `Inventory issued — ${periodLabel}`,
+      });
+    }
+
+    this.assertBalanced(lines, ref);
+
+    // Post-date to the last day of the run's month (the RSMI cut-off).
+    const lastDay = new Date(run.periodYear, run.periodMonth, 0);
+    return this.createAutoJev(tx, {
+      organizationId,
+      userId,
+      jevDate: lastDay,
+      sourceType: 'stock_issue',
+      sourceTable: 'inventory_gl_runs',
+      sourceId: run.id,
+      particulars: `Monthly Supplies & Materials Issued (RSMI) — ${periodLabel} (${run.runNumber})`,
+      lines,
+    });
+  }
+
   async onPayrollPaid(
     tx: Prisma.TransactionClient,
     organizationId: string,

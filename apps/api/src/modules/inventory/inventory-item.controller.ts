@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import type { InventoryClassification } from '@prisma/client';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -6,7 +16,12 @@ import { RequirePermissions } from '../../common/decorators/require-permissions.
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
-import { CreateInventoryItemDto, UpdateInventoryItemDto } from './dto/inventory-item.dto';
+
+import {
+  BeginningBalanceDto,
+  CreateInventoryItemDto,
+  UpdateInventoryItemDto,
+} from './dto/inventory-item.dto';
 import { InventoryItemService } from './inventory-item.service';
 
 @Controller('inventory/items')
@@ -31,19 +46,13 @@ export class InventoryItemController {
 
   @Get(':id')
   @RequirePermissions('inventory.read')
-  findOne(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
+  findOne(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.itemService.findOne(user.organizationId, id);
   }
 
   @Post()
   @RequirePermissions('inventory.item.manage')
-  create(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body() dto: CreateInventoryItemDto,
-  ) {
+  create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateInventoryItemDto) {
     return this.itemService.create(user.organizationId, user.userId, dto);
   }
 
@@ -55,5 +64,16 @@ export class InventoryItemController {
     @Body() dto: UpdateInventoryItemDto,
   ) {
     return this.itemService.update(user.organizationId, id, user.userId, dto);
+  }
+
+  // Stock-card personnel seeds the item's opening stock (one-time, no GL).
+  @Post(':id/beginning-balance')
+  @RequirePermissions('inventory.item.manage')
+  setBeginningBalance(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: BeginningBalanceDto,
+  ) {
+    return this.itemService.setBeginningBalance(user.organizationId, id, user.userId, dto);
   }
 }

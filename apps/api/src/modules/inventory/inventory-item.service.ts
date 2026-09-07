@@ -1,8 +1,15 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { InventoryClassification } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { runAudited } from '../budgeting/audit-actor.util';
+
+import { InventoryCostingService } from './inventory-costing.service';
 
 const ITEM_SELECT = {
   id: true,
@@ -23,11 +30,18 @@ const ITEM_SELECT = {
 
 @Injectable()
 export class InventoryItemService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly costing: InventoryCostingService,
+  ) {}
 
   async findAll(
     organizationId: string,
-    filters?: { classification?: InventoryClassification; includeInactive?: boolean; search?: string },
+    filters?: {
+      classification?: InventoryClassification;
+      includeInactive?: boolean;
+      search?: string;
+    },
   ) {
     return this.prisma.inventoryItem.findMany({
       where: {
@@ -136,7 +150,9 @@ export class InventoryItemService {
     });
     if (!item) throw new NotFoundException('Inventory item not found.');
     if (item.version !== data.expectedVersion) {
-      throw new ConflictException('Item was modified by another user. Please refresh and try again.');
+      throw new ConflictException(
+        'Item was modified by another user. Please refresh and try again.',
+      );
     }
 
     return runAudited(this.prisma, userId, async (tx) => {
@@ -168,5 +184,90 @@ export class InventoryItemService {
 
       return updated;
     });
+  }
+
+  /**
+   * Seed an item's opening stock (quantity + unit cost) as the first FIFO layer.
+   * A go-live/setup action for the stock-card personnel — allowed only while the
+   * item has no movement yet. No GL entry: the GL Inventory opening balance comes
+   * from the accountant's opening trial balance.
+   */
+  async setBeginningBalance(
+    organizationId: string,
+    id: string,
+    userId: string,
+    data: { quantity: number; unitCost: number; asOfDate: string },
+  ) {
+    const item = await this.prisma.inventoryItem.findFirst({
+      where: { id, organizationId },
+      include: { stockCard: true },
+    });
+    if (!item) throw new NotFoundException('Inventory item not found.');
+    if (!item.stockCard) throw new BadRequestException('Item has no stock card.');
+    if (data.quantity <= 0 || data.unitCost < 0) {
+      throw new BadRequestException('Quantity must be positive and unit cost non-negative.');
+    }
+    const movements = await this.prisma.stockCardEntry.count({
+      where: { stockCardId: item.stockCard.id },
+    });
+    if (movements > 0 || Number(item.stockCard.balanceQuantity) !== 0) {
+      throw new BadRequestException(
+        'A beginning balance can only be set while the item has no stock movements yet.',
+      );
+    }
+
+    const stockCardId = item.stockCard.id;
+    const asOf = new Date(data.asOfDate);
+    const totalCost = Math.round(data.quantity * data.unitCost * 100) / 100;
+
+    await runAudited(this.prisma, userId, async (tx) => {
+      await this.costing.addLayer(tx, {
+        organizationId,
+        inventoryItemId: id,
+        sourceType: 'beginning_balance',
+        sourceId: null,
+        referenceNumber: 'BEG-BAL',
+        layerDate: asOf,
+        quantity: data.quantity,
+        unitCost: data.unitCost,
+        userId,
+      });
+      const bal = await this.costing.itemValue(tx, organizationId, id);
+      await tx.stockCardEntry.create({
+        data: {
+          stockCardId,
+          entryDate: asOf,
+          entryType: 'beginning_balance',
+          referenceType: 'beginning_balance',
+          referenceNumber: 'BEG-BAL',
+          receiptQuantity: data.quantity,
+          receiptUnitCost: data.unitCost,
+          receiptTotalCost: totalCost,
+          balanceQuantity: bal.quantity,
+          balanceUnitCost: bal.unitCost,
+          balanceTotalCost: bal.totalCost,
+          createdBy: userId,
+        },
+      });
+      await tx.stockCard.update({
+        where: { id: stockCardId },
+        data: {
+          balanceQuantity: bal.quantity,
+          balanceUnitCost: bal.unitCost,
+          balanceTotalCost: bal.totalCost,
+        },
+      });
+      await tx.inventoryItem.update({
+        where: { id },
+        data: {
+          onHandQuantity: bal.quantity,
+          unitCost: bal.unitCost,
+          updatedBy: userId,
+          version: { increment: 1 },
+        },
+      });
+    });
+
+    return this.findOne(organizationId, id);
   }
 }

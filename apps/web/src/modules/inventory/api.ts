@@ -2,6 +2,8 @@ import type {
   AccountabilityListItem,
   AccountabilityRecord,
   DisposalListItem,
+  InventoryGlPreview,
+  InventoryGlRun,
   InventoryItem,
   InventorySummary,
   PhysicalCountListItem,
@@ -10,6 +12,9 @@ import type {
   RisListItem,
   StockReceipt,
   StockReceiptListItem,
+  SupplyLedgerCard,
+  SupplyLedgerItem,
+  SupplyLedgerReconciliation,
 } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
@@ -126,6 +131,14 @@ export async function updateInventoryItem(
   },
 ): Promise<InventoryItem> {
   const res = await authFetchMutate(`/inventory/items/${id}`, 'PATCH', data);
+  return res.json();
+}
+
+export async function setBeginningBalance(
+  id: string,
+  data: { quantity: number; unitCost: number; asOfDate: string },
+): Promise<InventoryItem> {
+  const res = await authFetchMutate(`/inventory/items/${id}/beginning-balance`, 'POST', data);
   return res.json();
 }
 
@@ -291,5 +304,55 @@ export async function getInventorySummary(): Promise<InventorySummary> {
 
 export async function getStockCardReport(inventoryItemId: string): Promise<unknown> {
   const res = await authFetch(`/inventory/reports/stock-card/${inventoryItemId}`);
+  return res.json();
+}
+
+// ── Month-End Inventory JEV (RSMI) ──
+
+export async function getInventoryGlRuns(): Promise<InventoryGlRun[]> {
+  const res = await authFetch('/inventory/gl/runs');
+  return res.json();
+}
+
+export async function previewInventoryGl(month: number, year: number): Promise<InventoryGlPreview> {
+  const res = await authFetch(`/inventory/gl/preview?month=${month}&year=${year}`);
+  return res.json();
+}
+
+export async function postInventoryGl(month: number, year: number): Promise<InventoryGlRun> {
+  const res = await authFetchMutate('/inventory/gl/post', 'POST', { month, year });
+  return res.json();
+}
+
+export async function voidInventoryGl(
+  id: string,
+  expectedVersion: number,
+): Promise<InventoryGlRun> {
+  const res = await authFetchMutate(`/inventory/gl/runs/${id}/void`, 'POST', { expectedVersion });
+  return res.json();
+}
+
+// ── Supplies Ledger Card (accountant) ──
+
+export async function getSupplyLedgerItems(): Promise<SupplyLedgerItem[]> {
+  const res = await authFetch('/accounting/supply-ledger/items');
+  return res.json();
+}
+
+export async function getSupplyLedgerCard(
+  id: string,
+  from?: string,
+  to?: string,
+): Promise<SupplyLedgerCard> {
+  const qs = new URLSearchParams();
+  if (from) qs.set('from', from);
+  if (to) qs.set('to', to);
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  const res = await authFetch(`/accounting/supply-ledger/items/${id}${suffix}`);
+  return res.json();
+}
+
+export async function getSupplyLedgerReconciliation(): Promise<SupplyLedgerReconciliation> {
+  const res = await authFetch('/accounting/supply-ledger/reconciliation');
   return res.json();
 }

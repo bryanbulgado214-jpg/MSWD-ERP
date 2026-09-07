@@ -1,16 +1,31 @@
 export type InventoryClassification = 'expendable' | 'semi_expendable' | 'ppe';
 export type StockReceiptStatus = 'draft' | 'received' | 'cancelled';
-export type RisStatus = 'draft' | 'submitted' | 'approved' | 'issued' | 'partially_issued' | 'cancelled';
+export type RisStatus =
+  'draft' | 'submitted' | 'approved' | 'issued' | 'partially_issued' | 'cancelled';
 export type AccountabilityType = 'par' | 'ics';
 export type AccountabilityStatus = 'active' | 'returned' | 'transferred' | 'disposed' | 'lost';
-export type PropertyCondition = 'brand_new' | 'serviceable' | 'unserviceable' | 'poor' | 'beyond_repair';
+export type PropertyCondition =
+  'brand_new' | 'serviceable' | 'unserviceable' | 'poor' | 'beyond_repair';
 export type PhysicalCountStatus = 'draft' | 'in_progress' | 'completed' | 'approved';
-export type CountType = 'semi_annual_supplies' | 'annual_ppe' | 'annual_semi_expendable' | 'spot_check';
-export type DisposalStatus = 'draft' | 'for_appraisal' | 'appraised' | 'for_approval' | 'approved' | 'disposed' | 'cancelled';
-export type DisposalMethod = 'public_auction' | 'negotiated_sale' | 'barter' | 'donation' | 'destruction' | 'transfer_to_agency';
+export type CountType =
+  'semi_annual_supplies' | 'annual_ppe' | 'annual_semi_expendable' | 'spot_check';
+export type DisposalStatus =
+  'draft' | 'for_appraisal' | 'appraised' | 'for_approval' | 'approved' | 'disposed' | 'cancelled';
+export type DisposalMethod =
+  | 'public_auction'
+  | 'negotiated_sale'
+  | 'barter'
+  | 'donation'
+  | 'destruction'
+  | 'transfer_to_agency';
 
-export interface UserRef { username: string }
-export interface UserRefWithId { id: string; username: string }
+export interface UserRef {
+  username: string;
+}
+export interface UserRefWithId {
+  id: string;
+  username: string;
+}
 
 export interface InventoryItem {
   id: string;
@@ -113,7 +128,12 @@ export interface PropertyRecord {
   createdAt: string;
   updatedAt: string;
   version: number;
-  inventoryItem: { id: string; itemCode: string; description: string; classification: InventoryClassification };
+  inventoryItem: {
+    id: string;
+    itemCode: string;
+    description: string;
+    classification: InventoryClassification;
+  };
   location: { id: string; name: string } | null;
   accountableUser: UserRefWithId | null;
 }
@@ -182,4 +202,99 @@ export interface InventorySummary {
   semiExpendable: InventoryItem[];
   ppe: InventoryItem[];
   belowReorderPoint: InventoryItem[];
+}
+
+// ── Month-End Inventory JEV (RSMI) ──
+
+export interface InventoryGlRun {
+  id: string;
+  runNumber: string;
+  periodMonth: number;
+  periodYear: number;
+  status: 'draft' | 'posted' | 'voided';
+  totalAmount: string;
+  issueCount: number;
+  jevId: string | null;
+  postedAt?: string | null;
+  version: number;
+  jev?: { jevNumber: string } | null;
+}
+
+export interface InventoryGlPreview {
+  periodMonth: number;
+  periodYear: number;
+  periodLabel: string;
+  pendingCount: number;
+  pendingTotal: number;
+  items: Array<{
+    stockNumber: string;
+    description: string;
+    classification: string;
+    quantity: number;
+    totalCost: number;
+  }>;
+  rsmi: Array<{
+    entryDate: string;
+    risNumber: string | null;
+    stockNumber: string;
+    description: string;
+    quantity: number;
+    totalCost: number;
+  }>;
+  existingRun: {
+    id: string;
+    runNumber: string;
+    status: 'draft' | 'posted' | 'voided';
+    jevId: string | null;
+    jev?: { jevNumber: string } | null;
+  } | null;
+  period: { status: string; locked: boolean; name: string } | null;
+}
+
+// ── Supplies Ledger Card (accountant) ──
+
+export interface SupplyLedgerItem {
+  id: string;
+  itemCode: string;
+  description: string;
+  unitOfMeasure: string;
+  classification: string;
+  isActive: boolean;
+  balanceQuantity: number;
+  balanceAmount: number;
+}
+
+export interface SupplyLedgerCard {
+  item: {
+    id: string;
+    itemCode: string;
+    description: string;
+    unitOfMeasure: string;
+    classification: string;
+  };
+  opening: { quantity: number; amount: number };
+  rows: Array<{
+    entryDate: string;
+    entryType: string;
+    reference: string | null;
+    receiptQuantity: number | null;
+    receiptAmount: number | null;
+    issueQuantity: number | null;
+    issueAmount: number | null;
+    balanceQuantity: number;
+    balanceAmount: number;
+    journalized: boolean;
+  }>;
+  closing: { quantity: number; amount: number };
+}
+
+export interface SupplyLedgerReconciliation {
+  rows: Array<{
+    accountCode: string;
+    accountName: string;
+    slcBalance: number;
+    glBalance: number;
+    variance: number;
+  }>;
+  totals: { slcBalance: number; glBalance: number; variance: number };
 }

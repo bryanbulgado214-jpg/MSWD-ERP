@@ -7,8 +7,9 @@ import {
 import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
-import { AutoJevService } from '../accounting/auto-jev.service';
 import { runAudited } from '../budgeting/audit-actor.util';
+
+import { InventoryCostingService } from './inventory-costing.service';
 
 const RECEIPT_SELECT = {
   id: true,
@@ -44,7 +45,7 @@ const RECEIPT_SELECT = {
 export class StockReceiptService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly autoJev: AutoJevService,
+    private readonly costing: InventoryCostingService,
   ) {}
 
   async findAll(organizationId: string, filters?: { status?: string }) {
@@ -161,14 +162,21 @@ export class StockReceiptService {
             `No stock card found for item ${item.inventoryItem.itemCode}.`,
           );
 
-        const prevBalance = Number(stockCard.balanceTotalCost);
-        const prevQty = Number(stockCard.balanceQuantity);
-        const recvQty = Number(item.quantityReceived);
-        const recvCost = Number(item.totalCost);
+        // Perpetual FIFO: each received line becomes a dated cost layer.
+        await this.costing.addLayer(tx, {
+          organizationId,
+          inventoryItemId: item.inventoryItemId,
+          sourceType: 'stock_receipt',
+          sourceId: receipt.id,
+          referenceNumber: receipt.receiptNumber,
+          layerDate: receipt.receiptDate,
+          quantity: Number(item.quantityReceived),
+          unitCost: Number(item.unitCost),
+          userId,
+        });
 
-        const newQty = prevQty + recvQty;
-        const newTotalCost = prevBalance + recvCost;
-        const newUnitCost = newQty > 0 ? newTotalCost / newQty : 0;
+        // Refresh the running balance from the item's remaining layers.
+        const bal = await this.costing.itemValue(tx, organizationId, item.inventoryItemId);
 
         await tx.stockCardEntry.create({
           data: {
@@ -178,12 +186,12 @@ export class StockReceiptService {
             referenceType: 'stock_receipt',
             referenceId: receipt.id,
             referenceNumber: receipt.receiptNumber,
-            receiptQuantity: recvQty,
+            receiptQuantity: Number(item.quantityReceived),
             receiptUnitCost: Number(item.unitCost),
-            receiptTotalCost: recvCost,
-            balanceQuantity: newQty,
-            balanceUnitCost: newUnitCost,
-            balanceTotalCost: newTotalCost,
+            receiptTotalCost: Number(item.totalCost),
+            balanceQuantity: bal.quantity,
+            balanceUnitCost: bal.unitCost,
+            balanceTotalCost: bal.totalCost,
             createdBy: userId,
           },
         });
@@ -191,33 +199,26 @@ export class StockReceiptService {
         await tx.stockCard.update({
           where: { id: stockCard.id },
           data: {
-            balanceQuantity: newQty,
-            balanceUnitCost: newUnitCost,
-            balanceTotalCost: newTotalCost,
+            balanceQuantity: bal.quantity,
+            balanceUnitCost: bal.unitCost,
+            balanceTotalCost: bal.totalCost,
           },
         });
 
         await tx.inventoryItem.update({
           where: { id: item.inventoryItemId },
           data: {
-            onHandQuantity: newQty,
-            unitCost: newUnitCost,
+            onHandQuantity: bal.quantity,
+            unitCost: bal.unitCost,
             updatedBy: userId,
             version: { increment: 1 },
           },
         });
       }
 
-      await this.autoJev.onStockReceiptPosted(tx, organizationId, userId, {
-        id: receipt.id,
-        receiptNumber: receipt.receiptNumber,
-        receiptDate: receipt.receiptDate,
-        items: receipt.items.map((i) => ({
-          totalCost: Number(i.totalCost),
-          accountCode: i.inventoryItem.accountCode,
-          classification: i.inventoryItem.classification,
-        })),
-      });
+      // No GL posting here: inventory purchases are booked Dr Inventory / Cr A/P
+      // through the Supplier's Invoice module. The receipt only updates the
+      // perpetual FIFO sub-ledger.
 
       return tx.stockReceipt.update({
         where: { id },

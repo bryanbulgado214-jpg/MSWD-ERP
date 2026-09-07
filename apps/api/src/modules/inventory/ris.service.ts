@@ -6,8 +6,9 @@ import {
 } from '@nestjs/common';
 
 import { PrismaService } from '../../database/prisma.service';
-import { AutoJevService } from '../accounting/auto-jev.service';
 import { runAudited } from '../budgeting/audit-actor.util';
+
+import { InventoryCostingService } from './inventory-costing.service';
 
 const RIS_SELECT = {
   id: true,
@@ -44,7 +45,7 @@ const RIS_SELECT = {
 export class RisService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly autoJev: AutoJevService,
+    private readonly costing: InventoryCostingService,
   ) {}
 
   async findAll(organizationId: string, filters?: { status?: string; departmentId?: string }) {
@@ -240,11 +241,14 @@ export class RisService {
           );
         }
 
-        const unitCost = Number(stockCard.balanceUnitCost);
-        const issueTotalCost = toIssue * unitCost;
-        const newQty = currentQty - toIssue;
-        const newTotalCost = Number(stockCard.balanceTotalCost) - issueTotalCost;
-        const newUnitCost = newQty > 0 ? newTotalCost / newQty : 0;
+        // Perpetual FIFO: consume the oldest layers for the exact issue cost.
+        const { totalCost: issueTotalCost } = await this.costing.consumeFifo(tx, {
+          organizationId,
+          inventoryItemId: risItem.inventoryItemId,
+          quantity: toIssue,
+        });
+        const unitCost = toIssue > 0 ? Math.round((issueTotalCost / toIssue) * 100) / 100 : 0;
+        const bal = await this.costing.itemValue(tx, organizationId, risItem.inventoryItemId);
 
         await tx.stockCardEntry.create({
           data: {
@@ -257,27 +261,28 @@ export class RisService {
             issueQuantity: toIssue,
             issueUnitCost: unitCost,
             issueTotalCost: issueTotalCost,
-            balanceQuantity: newQty,
-            balanceUnitCost: newUnitCost,
-            balanceTotalCost: newTotalCost,
+            balanceQuantity: bal.quantity,
+            balanceUnitCost: bal.unitCost,
+            balanceTotalCost: bal.totalCost,
             createdBy: userId,
+            // glRunId stays null: the issuance is journalized in the month-end run.
           },
         });
 
         await tx.stockCard.update({
           where: { id: stockCard.id },
           data: {
-            balanceQuantity: newQty,
-            balanceUnitCost: newUnitCost,
-            balanceTotalCost: newTotalCost,
+            balanceQuantity: bal.quantity,
+            balanceUnitCost: bal.unitCost,
+            balanceTotalCost: bal.totalCost,
           },
         });
 
         await tx.inventoryItem.update({
           where: { id: risItem.inventoryItemId },
           data: {
-            onHandQuantity: newQty,
-            unitCost: newUnitCost,
+            onHandQuantity: bal.quantity,
+            unitCost: bal.unitCost,
             updatedBy: userId,
             version: { increment: 1 },
           },
@@ -289,19 +294,8 @@ export class RisService {
         });
       }
 
-      await this.autoJev.onRisIssued(tx, organizationId, userId, {
-        id: ris.id,
-        risNumber: ris.risNumber,
-        issuedItems: items.map((issueItem) => {
-          const risItem = ris.items.find((i) => i.id === issueItem.risItemId)!;
-          return {
-            quantityIssued: issueItem.quantityIssued,
-            unitCost: Number(risItem.unitCost),
-            accountCode: risItem.inventoryItem.accountCode,
-            classification: risItem.inventoryItem.classification,
-          };
-        }),
-      });
+      // No GL posting here: issuances are journalized in one month-end JEV
+      // triggered by the stock-card personnel (see InventoryGlService).
 
       const updatedItems = await tx.risItem.findMany({ where: { risId: id } });
       const allFullyIssued = updatedItems.every(

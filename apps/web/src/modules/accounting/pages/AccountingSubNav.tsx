@@ -68,6 +68,11 @@ export const ACCOUNTING_LINKS: AccountingLink[] = [
     label: 'Bank Reconciliation',
     visible: has('accounting.bank.manage'),
   },
+  {
+    to: '/accounting/supply-ledger',
+    label: 'Supplies Ledger',
+    visible: has('accounting.supply_ledger.read'),
+  },
   { to: '/accounting/periods', label: 'Accounting Periods', visible: has('accounting.read') },
   // Configuration — separated from daily operations.
   {

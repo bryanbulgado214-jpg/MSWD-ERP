@@ -185,6 +185,8 @@ model Organization {
   assetCategories       AssetCategory[]
   depreciationRuns      DepreciationRun[]
   assetTransfers        AssetTransfer[]
+  inventoryCostLayers   InventoryCostLayer[]
+  inventoryGlRuns       InventoryGlRun[]
 
   @@map("organizations")
 }
@@ -536,6 +538,9 @@ model User {
   assetTransfersTo                              AssetTransfer[]        @relation("AssetTransfersTo")
   assetTransfersApproved                        AssetTransfer[]        @relation("AssetTransfersApprover")
   assetTransfersCreated                         AssetTransfer[]        @relation("AssetTransfersCreatedBy")
+  inventoryGlRunsPosted                         InventoryGlRun[]       @relation("InventoryGlRunsPostedBy")
+  inventoryGlRunsVoided                         InventoryGlRun[]       @relation("InventoryGlRunsVoidedBy")
+  inventoryGlRunsCreated                        InventoryGlRun[]       @relation("InventoryGlRunsCreatedBy")
 
   @@unique([organizationId, username])
   @@unique([organizationId, email])
@@ -2263,6 +2268,24 @@ enum DisposalMethod {
   @@map("disposal_method")
 }
 
+/// Source of a FIFO cost layer.
+enum InventoryLayerSource {
+  stock_receipt
+  beginning_balance
+  return_entry
+
+  @@map("inventory_layer_source")
+}
+
+/// State of a month-end inventory GL run (the RSMI issuance JEV).
+enum InventoryGlRunStatus {
+  draft
+  posted
+  voided
+
+  @@map("inventory_gl_run_status")
+}
+
 /// Master catalog of inventory items. Each item is classified as
 /// expendable, semi-expendable, or PPE per COA Circular 2024-006.
 /// on_hand_quantity and unit_cost are maintained by the system via
@@ -2296,6 +2319,7 @@ model InventoryItem {
   propertyRecords      PropertyRecord[]
   physicalCountItems   PhysicalCountItem[]
   workOrderMaterials   WorkOrderMaterial[]
+  costLayers           InventoryCostLayer[]
 
   @@unique([organizationId, itemCode])
   @@index([organizationId])
@@ -2410,16 +2434,101 @@ model StockCardEntry {
   balanceQuantity  Decimal            @map("balance_quantity") @db.Decimal(12, 4)
   balanceUnitCost  Decimal            @map("balance_unit_cost") @db.Decimal(18, 2)
   balanceTotalCost Decimal            @map("balance_total_cost") @db.Decimal(18, 2)
+  // For `issue` entries: the month-end GL run that journalized this issuance
+  // (Dr expense / Cr inventory). Null = pending, not yet posted to the ledger.
+  glRunId          String?            @map("gl_run_id") @db.Uuid
   createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   createdBy        String?            @map("created_by") @db.Uuid
 
-  stockCard StockCard @relation(fields: [stockCardId], references: [id], onDelete: Restrict)
-  creator   User?     @relation("StockCardEntriesCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  stockCard StockCard        @relation(fields: [stockCardId], references: [id], onDelete: Restrict)
+  glRun     InventoryGlRun?  @relation(fields: [glRunId], references: [id], onDelete: SetNull)
+  creator   User?            @relation("StockCardEntriesCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
 
   @@index([stockCardId])
   @@index([entryDate])
   @@index([referenceType, referenceId])
+  @@index([glRunId])
   @@map("stock_card_entries")
+}
+
+/// FIFO cost layer. Each receipt (or beginning balance / return) of an item
+/// creates a dated layer; issuances consume the oldest remaining layers first.
+/// The sum of (remainingQuantity × unitCost) across an item's layers is that
+/// item's inventory value under FIFO.
+model InventoryCostLayer {
+  id                String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String               @map("organization_id") @db.Uuid
+  inventoryItemId   String               @map("inventory_item_id") @db.Uuid
+  sourceType        InventoryLayerSource @map("source_type")
+  sourceId          String?              @map("source_id") @db.Uuid
+  referenceNumber   String?              @map("reference_number") @db.VarChar(50)
+  layerDate         DateTime             @map("layer_date") @db.Date
+  originalQuantity  Decimal              @map("original_quantity") @db.Decimal(12, 4)
+  remainingQuantity Decimal              @map("remaining_quantity") @db.Decimal(12, 4)
+  unitCost          Decimal              @map("unit_cost") @db.Decimal(18, 4)
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy         String?              @map("created_by") @db.Uuid
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId])
+  @@index([inventoryItemId, layerDate])
+  @@map("inventory_cost_layers")
+}
+
+/// Month-end inventory GL run — one per organization per period. The stock-card
+/// personnel triggers it to post a single JEV (Dr supplies expense / Cr
+/// inventory) summarizing the period's issuances (the RSMI entry). Mirrors the
+/// asset module's DepreciationRun.
+model InventoryGlRun {
+  id             String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String               @map("organization_id") @db.Uuid
+  runNumber      String               @map("run_number") @db.VarChar(30)
+  periodMonth    Int                  @map("period_month")
+  periodYear     Int                  @map("period_year")
+  status         InventoryGlRunStatus @default(draft)
+  totalAmount    Decimal              @default(0) @map("total_amount") @db.Decimal(18, 2)
+  issueCount     Int                  @default(0) @map("issue_count")
+  jevId          String?              @map("jev_id") @db.Uuid
+  postedBy       String?              @map("posted_by") @db.Uuid
+  postedAt       DateTime?            @map("posted_at") @db.Timestamptz(6)
+  voidedBy       String?              @map("voided_by") @db.Uuid
+  voidedAt       DateTime?            @map("voided_at") @db.Timestamptz(6)
+  createdBy      String?              @map("created_by") @db.Uuid
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  version        Int                  @default(1)
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  jev          JournalEntryVoucher? @relation(fields: [jevId], references: [id], onDelete: SetNull)
+  poster       User?                @relation("InventoryGlRunsPostedBy", fields: [postedBy], references: [id], onDelete: SetNull)
+  voider       User?                @relation("InventoryGlRunsVoidedBy", fields: [voidedBy], references: [id], onDelete: SetNull)
+  creator      User?                @relation("InventoryGlRunsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  items           InventoryGlRunItem[]
+  stockCardEntries StockCardEntry[]
+
+  @@unique([organizationId, periodMonth, periodYear])
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@map("inventory_gl_runs")
+}
+
+/// Per-account total on a month-end inventory GL run (one row per GL account
+/// touched), kept for the audit trail behind the summary JEV.
+model InventoryGlRunItem {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  inventoryGlRunId String  @map("inventory_gl_run_id") @db.Uuid
+  chartOfAccountId String  @map("chart_of_account_id") @db.Uuid
+  side            String   @db.VarChar(6) // 'debit' | 'credit'
+  amount          Decimal  @db.Decimal(18, 2)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  inventoryGlRun InventoryGlRun @relation(fields: [inventoryGlRunId], references: [id], onDelete: Cascade)
+  chartOfAccount ChartOfAccount @relation(fields: [chartOfAccountId], references: [id], onDelete: Restrict)
+
+  @@index([inventoryGlRunId])
+  @@map("inventory_gl_run_items")
 }
 
 /// Requisition and Issue Slip (GAM Appendix 63). A department requests
@@ -2913,6 +3022,7 @@ model ChartOfAccount {
   accountMappings AccountMapping[]
   bankAccounts    BankAccount[]    @relation("BankAccountGl")
   dvDeductions    DvDeduction[]
+  inventoryGlRunItems InventoryGlRunItem[]
 
   @@unique([organizationId, accountCode])
   @@index([organizationId])
@@ -3059,6 +3169,7 @@ model JournalEntryVoucher {
 
   lines            JevLine[]
   depreciationRuns DepreciationRun[]
+  inventoryGlRuns  InventoryGlRun[]
 
   @@unique([organizationId, jevNumber])
   @@index([organizationId])
