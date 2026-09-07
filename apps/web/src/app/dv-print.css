@@ -26,19 +26,16 @@
 }
 
 @media print {
-  /* The DV prints on Letter (8.5×11). A dedicated NAMED page keeps this size +
-     zero margin scoped to the DV sheet (the shared gov-form @page in
-     print-forms.css stays as-is for the other forms). Zero margin also removes
-     Chrome's own header/footer — the date, the "AquaBooks" title and the page
-     URL that were printing in the top/bottom margins. */
-  @page dvsheet {
-    size: 8.5in 11in;
-    margin: 0;
-  }
+  /* The @page rule (Letter, zero margin) is injected inline by the sheet
+     component while it is on screen — see DisbursementVoucherSheet — so it is
+     scoped to the DV and does not disturb the other forms' page sizes (e.g. the
+     BIR 2307 at 8.5×13). A plain @page is applied reliably by the printer, unlike
+     a named one, which fell back to the shared 0.4in-margin Letter page and
+     pushed the 11in sheet onto a second sheet. */
   .dv-print-sheet {
-    page: dvsheet;
     width: 8.5in;
-    min-height: 11in;
+    height: 11in;
+    min-height: 0;
     margin: 0;
     padding: 0.4in;
     box-shadow: none;

@@ -181,6 +181,11 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
 
   return (
     <div className="gov-print-page">
+      {/* Scoped print page: Letter, zero margin — only while the DV sheet is on
+          screen, so it never changes the page size of the other print forms
+          (e.g. the BIR 2307 at 8.5×13). A plain @page is honored by the printer;
+          a named one was not (it fell back and spilled onto a 2nd sheet). */}
+      <style>{`@media print { @page { size: 8.5in 11in; margin: 0; } }`}</style>
       <div className="dv-print-sheet">
         <div className="dv-sheet-frame">
           {/* ── Header + Mode of Payment ── */}
