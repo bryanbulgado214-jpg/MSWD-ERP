@@ -2,6 +2,7 @@ import {
   IsBoolean,
   IsEnum,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   MaxLength,
@@ -107,4 +108,13 @@ export class UpdateBankAccountDto {
   @IsOptional()
   @IsEnum(['active', 'inactive', 'closed'])
   status?: 'active' | 'inactive' | 'closed';
+}
+
+/** The check-printing layout blob saved from the Check Alignment screen. Its
+ * inner shape (field positions in inches + font sizes) is owned by the web
+ * client; the API just stores it verbatim, so it is validated only as an
+ * object. */
+export class UpdateCheckLayoutDto {
+  @IsObject()
+  checkLayout!: Record<string, unknown>;
 }

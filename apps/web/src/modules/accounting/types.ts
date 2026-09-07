@@ -1,3 +1,5 @@
+import type { CheckLayout } from './check-layout';
+
 export interface ChartOfAccount {
   id: string;
   accountCode: string;
@@ -66,6 +68,8 @@ export interface BankAccount {
   bank: { id: string; code: string; name: string };
   fundSource: { id: string; code: string; name: string } | null;
   chartOfAccount: { id: string; accountCode: string; name: string } | null;
+  /** Per-account check-printing calibration; null until the cashier sets it. */
+  checkLayout?: CheckLayout | null;
 }
 
 export interface AccountMapping {
@@ -328,6 +332,7 @@ export interface CheckListItem {
     id: string;
     accountNumber: string;
     accountName: string;
+    checkLayout?: CheckLayout | null;
     bank: { code: string; name: string };
   };
   disbursementVoucher: {

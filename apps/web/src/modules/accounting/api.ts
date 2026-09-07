@@ -1,3 +1,4 @@
+import type { CheckLayout } from './check-layout';
 import type {
   AccountMapping,
   AccountingDashboardResult,
@@ -238,6 +239,23 @@ export async function updateBankAccount(
   },
 ): Promise<BankAccount> {
   const res = await authFetchMutate(`/accounting/banks/accounts/${id}`, 'PATCH', data);
+  return res.json();
+}
+
+// ── Check-printing alignment (cashier) ──
+
+/** Bank accounts the cashier can calibrate check printing for. Reachable with
+ * only the check-print permission (unlike the accountant's bank-account list). */
+export async function getBankAccountsForCheckPrinting(): Promise<BankAccount[]> {
+  const res = await authFetch('/accounting/banks/accounts-for-check-printing');
+  return res.json();
+}
+
+/** Save one bank account's calibrated check-printing layout. */
+export async function saveCheckLayout(id: string, checkLayout: CheckLayout): Promise<BankAccount> {
+  const res = await authFetchMutate(`/accounting/banks/accounts/${id}/check-layout`, 'PATCH', {
+    checkLayout,
+  });
   return res.json();
 }
 

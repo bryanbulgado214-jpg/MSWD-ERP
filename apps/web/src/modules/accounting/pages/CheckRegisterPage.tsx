@@ -210,7 +210,19 @@ export default function CheckRegisterPage() {
   return (
     <div className="acct-page">
       <AccountingSubNav />
-      <h1>Check Register</h1>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
+        <h1>Check Register</h1>
+        {canPrint && (
+          <Link
+            to="/accounting/checks/alignment"
+            className="acct-table__link"
+            style={{ fontSize: 13 }}
+            title="Calibrate where data prints on the pre-printed check"
+          >
+            Check Alignment →
+          </Link>
+        )}
+      </div>
       <p style={{ color: '#667085', fontSize: 13, marginTop: -6, marginBottom: 16, maxWidth: 780 }}>
         Every check is backed by a Disbursement Voucher — checks are never created manually. A DV
         paid by check appears here as <strong>pending</strong>; the cashier assigns the check number

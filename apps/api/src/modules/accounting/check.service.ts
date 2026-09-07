@@ -31,6 +31,9 @@ const CHECK_SELECT = {
       id: true,
       accountNumber: true,
       accountName: true,
+      // The saved check-printing layout, so the print page can overlay the
+      // data at this account's calibrated positions.
+      checkLayout: true,
       bank: { select: { code: true, name: true } },
     },
   },

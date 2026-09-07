@@ -9,6 +9,7 @@ import Bir2307ListPage from './pages/Bir2307ListPage';
 import Bir2307Page from './pages/Bir2307Page';
 import CashierDashboardPage from './pages/CashierDashboardPage';
 import ChartOfAccountsPage from './pages/ChartOfAccountsPage';
+import { CheckAlignmentPage } from './pages/CheckAlignmentPage';
 import CheckRegisterPage from './pages/CheckRegisterPage';
 import CollectionBatchDetailPage from './pages/CollectionBatchDetailPage';
 import CollectionsHubPage from './pages/CollectionsHubPage';
@@ -69,6 +70,7 @@ export const accountingRoutes: RouteObject[] = [
   { path: '/accounting/supplier-invoices/new', element: <NewSupplierInvoicePage /> },
   { path: '/accounting/supplier-invoices/:id', element: <SupplierInvoiceDetailPage /> },
   { path: '/accounting/checks', element: <CheckRegisterPage /> },
+  { path: '/accounting/checks/alignment', element: <CheckAlignmentPage /> },
   { path: '/accounting/checks/:id/print', element: <PrintCheckPage /> },
   { path: '/accounting/reconciliations', element: <BankReconciliationPage /> },
   { path: '/accounting/reconciliations/:id', element: <BankReconciliationPage /> },

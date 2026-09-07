@@ -2956,6 +2956,10 @@ model BankAccount {
   currentBalance Decimal           @default(0) @map("current_balance") @db.Decimal(18, 2)
   status         BankAccountStatus @default(active)
   isDefault      Boolean           @default(false) @map("is_default")
+  // Positions (in inches) of the fields printed onto this account's pre-printed
+  // check stock, plus font sizes — set by the cashier via the Check Alignment
+  // screen. Null = use the built-in default layout.
+  checkLayout    Json?             @map("check_layout")
   createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   createdBy      String?           @map("created_by") @db.Uuid

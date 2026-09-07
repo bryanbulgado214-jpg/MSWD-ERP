@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 
 import { AccountingApiError, getCheck } from '../api';
+import { checkAmountWords, normalizeCheckLayout } from '../check-layout';
+import { CheckFace } from '../CheckFace';
 import type { CheckDetail } from '../types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -10,109 +12,10 @@ import type { CheckDetail } from '../types';
 // The physical DBP check (8" × 3", fed top-edge first) already has the bank
 // name, "PAY TO THE ORDER OF", the ₱ box, the date grid and the signature line
 // printed on it. So we print ONLY the fill-in data, positioned to land in the
-// blanks. Everything is placed on an 8in × 3in page with absolute coordinates.
-//
-// CALIBRATION: the positions below are in INCHES from the top-left of the check.
-// Print onto plain paper, hold it against a real check to a window, and nudge
-// these numbers until each value sits in its blank. Only these constants and
-// FONT need tuning — nothing else.
+// blanks. Positions and font sizes come from this bank account's saved layout
+// (calibrated on the Check Alignment screen); an un-calibrated account uses the
+// measured defaults. See check-layout.ts.
 // ─────────────────────────────────────────────────────────────────────────────
-const POS = {
-  // Date grid (top-right). The 8 digits (MM DD YYYY) are spread evenly across the
-  // grid, one per box: `gridLeft` = left edge of the first box, `gridRight` = right
-  // edge of the last box (both inches from the check's left edge), `top` = inches
-  // from the top edge. Each digit is centered in its cell = grid width / 8.
-  // From the DBP check measurements (15.0 / 19.8 / 1.75 cm → ÷2.54 inches).
-  // `top` is the box centre; digits are centred on it.
-  date: { top: 0.69, gridLeft: 5.91, gridRight: 7.8 },
-  // Payee, on the "PAY TO THE ORDER OF" line.
-  payee: { left: 1.55, top: 0.9 },
-  // Amount in figures, in the ₱ box (top-right) — sized separately (looks right, leave it).
-  amountRight: 7.55,
-  amountTop: 0.98,
-  // Amount in words, on the "PESOS" line.
-  words: { left: 1.35, top: 1.28 },
-};
-// Payee, amount-in-figures and amount-in-words share one size (the amount-in-words
-// is the basis). Date digits are sized to fit their boxes.
-const FONT = {
-  family: "'Courier New', monospace",
-  payeeSize: 17,
-  wordsSize: 17,
-  amountSize: 17,
-  dateSize: 15,
-};
-
-const IN = (n: number) => `${n}in`;
-
-function convertToWords(num: number): string {
-  const ones = [
-    '',
-    'One',
-    'Two',
-    'Three',
-    'Four',
-    'Five',
-    'Six',
-    'Seven',
-    'Eight',
-    'Nine',
-    'Ten',
-    'Eleven',
-    'Twelve',
-    'Thirteen',
-    'Fourteen',
-    'Fifteen',
-    'Sixteen',
-    'Seventeen',
-    'Eighteen',
-    'Nineteen',
-  ];
-  const tens = [
-    '',
-    '',
-    'Twenty',
-    'Thirty',
-    'Forty',
-    'Fifty',
-    'Sixty',
-    'Seventy',
-    'Eighty',
-    'Ninety',
-  ];
-  if (num === 0) return 'Zero';
-  if (num < 20) return ones[num]!;
-  if (num < 100) return tens[Math.floor(num / 10)]! + (num % 10 ? ' ' + ones[num % 10]! : '');
-  if (num < 1000)
-    return (
-      ones[Math.floor(num / 100)]! + ' Hundred' + (num % 100 ? ' ' + convertToWords(num % 100) : '')
-    );
-  if (num < 1_000_000)
-    return (
-      convertToWords(Math.floor(num / 1000)) +
-      ' Thousand' +
-      (num % 1000 ? ' ' + convertToWords(num % 1000) : '')
-    );
-  if (num < 1_000_000_000)
-    return (
-      convertToWords(Math.floor(num / 1_000_000)) +
-      ' Million' +
-      (num % 1_000_000 ? ' ' + convertToWords(num % 1_000_000) : '')
-    );
-  return (
-    convertToWords(Math.floor(num / 1_000_000_000)) +
-    ' Billion' +
-    (num % 1_000_000_000 ? ' ' + convertToWords(num % 1_000_000_000) : '')
-  );
-}
-
-/** Check-style amount in words: "ONE THOUSAND THREE HUNDRED PESOS & 50/100 ONLY". */
-function checkAmountWords(n: number): string {
-  const whole = Math.floor(Math.abs(n));
-  const cents = Math.round((Math.abs(n) - whole) * 100);
-  const base = `${convertToWords(whole)} PESOS`.toUpperCase();
-  return cents > 0 ? `${base} & ${String(cents).padStart(2, '0')}/100 ONLY` : `${base} ONLY`;
-}
 
 export function PrintCheckPage() {
   const { id } = useParams<{ id: string }>();
@@ -129,6 +32,8 @@ export function PrintCheckPage() {
   if (error) return <div style={{ padding: 32, color: '#b42318' }}>{error}</div>;
   if (!check) return <div style={{ padding: 32, color: '#667085' }}>Loading...</div>;
 
+  const layout = normalizeCheckLayout(check.bankAccount.checkLayout);
+
   // Use the calendar date as stored (avoid timezone shifting the day).
   const iso = new Date(check.checkDate).toISOString().slice(0, 10);
   const [yyyy, mm, dd] = iso.split('-') as [string, string, string];
@@ -138,20 +43,6 @@ export function PrintCheckPage() {
   });
   const words = checkAmountWords(Number(check.amount));
 
-  const fieldBase: React.CSSProperties = {
-    position: 'absolute',
-    fontFamily: FONT.family,
-    fontWeight: 700,
-    // Pure black (not the app's dark-grey text) so the dot-matrix prints it solid.
-    color: '#000',
-    whiteSpace: 'nowrap',
-  };
-  // Each date digit centered in its own cell (grid width / 8 boxes).
-  const dz = POS.date;
-  const cellW = (dz.gridRight - dz.gridLeft) / 8;
-  const dateCenters = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => dz.gridLeft + (i + 0.5) * cellW);
-  const dateDigits = `${mm}${dd}${yyyy}`.split('');
-
   return (
     <>
       <style>{`
@@ -160,13 +51,10 @@ export function PrintCheckPage() {
         .chk-sheet { position: relative; width: 8in; height: 3in; background: #fff;
           color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact;
           box-shadow: 0 2px 10px rgba(16,24,40,.18); }
-        .chk-guide { position: absolute; inset: 0; pointer-events: none; }
-        .chk-guide .lbl { position: absolute; font: 8px system-ui, sans-serif; color: #b42318;
-          letter-spacing: .04em; text-transform: uppercase; }
-        .chk-guide .box { position: absolute; border: 1px dashed #f0a9a0; }
         .chk-controls { display: flex; gap: 10px; }
-        .chk-controls button { padding: 8px 18px; border: 1px solid #d0d5dd; border-radius: 6px;
-          background: #fff; cursor: pointer; font-size: 14px; }
+        .chk-controls button, .chk-controls a { padding: 8px 18px; border: 1px solid #d0d5dd;
+          border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; color: #1f2937;
+          text-decoration: none; display: inline-block; }
         .chk-controls button.primary { background: var(--mswd-navy,#0a2a66); color: #fff; border: none; }
         .chk-note { font-size: 12px; color: #667085; max-width: 8in; text-align: center; }
         @media print {
@@ -176,99 +64,34 @@ export function PrintCheckPage() {
           .chk-sheet, .chk-sheet * { visibility: visible !important; }
           .chk-sheet { position: absolute; left: 0; top: 0; box-shadow: none; }
           .chk-screen { padding: 0; background: #fff; }
-          .chk-guide, .chk-controls, .chk-note { display: none !important; }
+          .chk-controls, .chk-note { display: none !important; }
         }
       `}</style>
 
       <div className="chk-screen">
         <div className="chk-sheet">
-          {/* On-screen guides only — never printed. */}
-          <div className="chk-guide">
-            <span
-              className="lbl"
-              style={{ left: IN(POS.date.gridLeft), top: IN(POS.date.top - 0.22) }}
-            >
-              Date (MM DD YYYY)
-            </span>
-            <span
-              className="lbl"
-              style={{ left: IN(POS.payee.left), top: IN(POS.payee.top - 0.2) }}
-            >
-              Payee
-            </span>
-            <span
-              className="lbl"
-              style={{ left: IN(POS.amountRight - 1.1), top: IN(POS.amountTop - 0.2) }}
-            >
-              Amount
-            </span>
-            <span
-              className="lbl"
-              style={{ left: IN(POS.words.left), top: IN(POS.words.top - 0.2) }}
-            >
-              Amount in words
-            </span>
-          </div>
-
-          {/* The only things that print: the fill-in data. */}
-          {/* Date — one digit per box, centered on the box. */}
-          {dateDigits.map((ch, i) => (
-            <div
-              key={i}
-              style={{
-                ...fieldBase,
-                left: IN(dateCenters[i]!),
-                top: IN(dz.top),
-                transform: 'translate(-50%, -50%)',
-                lineHeight: 1,
-                fontSize: FONT.dateSize,
-              }}
-            >
-              {ch}
-            </div>
-          ))}
-
-          <div
-            style={{
-              ...fieldBase,
-              left: IN(POS.payee.left),
-              top: IN(POS.payee.top),
-              fontSize: FONT.payeeSize,
-            }}
-          >
-            {check.payeeName}
-          </div>
-          <div
-            style={{
-              ...fieldBase,
-              right: IN(8 - POS.amountRight),
-              top: IN(POS.amountTop),
-              fontSize: FONT.amountSize,
-            }}
-          >
-            {amountFigures}
-          </div>
-          <div
-            style={{
-              ...fieldBase,
-              left: IN(POS.words.left),
-              top: IN(POS.words.top),
-              fontSize: FONT.wordsSize,
-            }}
-          >
-            {words}
-          </div>
+          <CheckFace
+            layout={layout}
+            data={{ dateDigits: `${mm}${dd}${yyyy}`, payee: check.payeeName, amountFigures, words }}
+          />
         </div>
 
         <div className="chk-note">
           Load the DBP check into the printer (8&quot; × 3&quot;, top edge first). Only the data
-          above prints — the bank details, boxes and labels are already on the check. Do a test
-          print on plain paper first and align it to a real check before printing for real.
+          above prints — the bank details, boxes and labels are already on the check. If anything
+          lands off its line, open{' '}
+          <Link to={`/accounting/checks/alignment?bankAccountId=${check.bankAccount.id}`}>
+            Check Alignment
+          </Link>{' '}
+          to nudge it into place.
         </div>
         <div className="chk-controls">
           <button className="primary" onClick={() => window.print()}>
             Print
           </button>
+          <Link to={`/accounting/checks/alignment?bankAccountId=${check.bankAccount.id}`}>
+            Adjust alignment
+          </Link>
           <button onClick={() => window.history.back()}>Back</button>
         </div>
       </div>

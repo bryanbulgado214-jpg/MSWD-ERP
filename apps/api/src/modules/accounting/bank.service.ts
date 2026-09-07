@@ -27,6 +27,7 @@ const BANK_ACCOUNT_SELECT = {
   currentBalance: true,
   status: true,
   isDefault: true,
+  checkLayout: true,
   createdAt: true,
   updatedAt: true,
   version: true,
@@ -234,5 +235,34 @@ export class BankService {
         select: BANK_ACCOUNT_SELECT,
       });
     });
+  }
+
+  /**
+   * Save the check-printing layout (field positions + font sizes) for one bank
+   * account. Set by the cashier from the Check Alignment screen, so it is gated
+   * on the check-print permission (not the accountant's bank-management one) and
+   * needs no version — it only touches the layout blob.
+   */
+  async updateCheckLayout(
+    organizationId: string,
+    id: string,
+    userId: string,
+    checkLayout: Record<string, unknown>,
+  ) {
+    const account = await this.prisma.bankAccount.findFirst({
+      where: { id, organizationId },
+      select: { id: true },
+    });
+    if (!account) throw new NotFoundException('Bank account not found.');
+    return runAudited(this.prisma, userId, (tx) =>
+      tx.bankAccount.update({
+        where: { id },
+        data: {
+          checkLayout: checkLayout as never,
+          updatedBy: userId,
+        },
+        select: BANK_ACCOUNT_SELECT,
+      }),
+    );
   }
 }
