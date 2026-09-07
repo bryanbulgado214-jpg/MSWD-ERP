@@ -159,6 +159,7 @@ export class DisbursementService {
         dvDate: true,
         dvType: true,
         particulars: true,
+        paymentMode: true,
         grossAmount: true,
         taxAmount: true,
         netAmount: true,

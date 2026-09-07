@@ -294,7 +294,9 @@ export default function DisbursementListPage() {
                           gap: 3,
                         }}
                       >
-                        <span className="acct-badge">{statusLabel(effectiveStatus(dv))}</span>
+                        <span className="acct-badge">
+                          {statusLabel(effectiveStatus(dv), { isAda: dv.paymentMode === 'ada' })}
+                        </span>
                         {dv.checkStatusDate && (
                           <span style={{ color: '#667085', fontSize: 12 }}>
                             {new Date(dv.checkStatusDate).toLocaleDateString('en-PH')}

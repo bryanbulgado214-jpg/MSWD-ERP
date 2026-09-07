@@ -520,9 +520,11 @@ export default function CheckRegisterPage() {
                         }}
                       >
                         <span className={`acct-badge acct-badge--${c.status}`}>
-                          {statusLabel(c.status)}
+                          {statusLabel(c.status, { isAda })}
                         </span>
-                        {checkStatusDate(c) && (
+                        {/* For an ADA, only show a date once it has cleared (the
+                            passbook date); before that it is simply "For Clearing". */}
+                        {(isAda ? c.status === 'cleared' : true) && checkStatusDate(c) && (
                           <span style={{ color: '#667085', fontSize: 12 }}>
                             {formatStatusDate(checkStatusDate(c))}
                           </span>
@@ -552,11 +554,20 @@ export default function CheckRegisterPage() {
                               DV not yet posted
                             </span>
                           )}
-                          {isPending && isAda && !dvDraft && (
-                            <span style={{ fontSize: 11, color: '#98a2b3' }}>
-                              Released on posting
-                            </span>
-                          )}
+                          {/* ADA: released on posting, awaiting the passbook. The
+                              cashier marks it cleared with the debit date. */}
+                          {isAda &&
+                            !dvDraft &&
+                            canRelease &&
+                            !['cleared', 'voided', 'spoiled'].includes(c.status) && (
+                              <button
+                                className="acct-btn acct-btn--sm acct-btn--primary"
+                                disabled={busy === c.id}
+                                onClick={() => handleRelease(c, 'cleared')}
+                              >
+                                Cleared
+                              </button>
+                            )}
                           {!isPending && canPrint && !isAda && (
                             <Link
                               to={`/accounting/checks/${c.id}/print`}
@@ -587,7 +598,7 @@ export default function CheckRegisterPage() {
                               release
                             </button>
                           )}
-                          {canRelease && c.status === 'released' && (
+                          {canRelease && !isAda && c.status === 'released' && (
                             <button
                               className="acct-btn acct-btn--sm"
                               disabled={busy === c.id}

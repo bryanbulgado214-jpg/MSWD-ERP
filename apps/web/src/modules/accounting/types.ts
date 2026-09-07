@@ -540,6 +540,7 @@ export interface DisbursementSummary {
   dvDate: string;
   dvType: string;
   particulars: string;
+  paymentMode: string;
   grossAmount: string;
   taxAmount: string;
   netAmount: string;

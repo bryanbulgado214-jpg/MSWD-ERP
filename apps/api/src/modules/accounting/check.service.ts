@@ -281,7 +281,7 @@ export class CheckService {
   ) {
     const check = await this.prisma.check.findFirst({
       where: { id, organizationId },
-      include: { disbursementVoucher: { select: { dvDate: true } } },
+      include: { disbursementVoucher: { select: { dvDate: true, paymentMode: true } } },
     });
     if (!check) throw new NotFoundException('Check not found.');
     if (check.version !== data.expectedVersion) {
@@ -296,8 +296,17 @@ export class CheckService {
       );
     }
 
+    // An ADA debit has no print/release step — it is "For Clearing" as soon as
+    // the DV is posted, and the cashier marks it Cleared when it reflects in the
+    // passbook. So allow it to clear directly from pending or released, outside
+    // the check-only state machine.
+    const isAda = check.disbursementVoucher?.paymentMode === 'ada';
+    const adaClear =
+      isAda &&
+      data.toStatus === 'cleared' &&
+      (check.status === 'pending' || check.status === 'released');
     const allowed = VALID_TRANSITIONS[check.status] ?? [];
-    if (!allowed.includes(data.toStatus)) {
+    if (!adaClear && !allowed.includes(data.toStatus)) {
       throw new BadRequestException(`Cannot transition from ${check.status} to ${data.toStatus}.`);
     }
 

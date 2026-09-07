@@ -22,7 +22,18 @@ export const STATUS_LABELS: Record<string, string> = {
   voided: 'Voided',
 };
 
-export function statusLabel(status: string): string {
+export function statusLabel(status: string, opts?: { isAda?: boolean }): string {
+  // An ADA (Advice to Debit Account) has no printed check and no cashier
+  // print/release step — the bank debits the account directly. So any state
+  // before it reflects in the passbook reads "For Clearing", never
+  // "Pending (for printing)" or "Released".
+  if (opts?.isAda) {
+    if (status === 'cleared') return 'Cleared';
+    if (status === 'voided') return 'Voided';
+    if (status === 'spoiled') return 'Spoiled';
+    if (status === 'stale_dated') return 'Stale-dated';
+    return 'For Clearing';
+  }
   return STATUS_LABELS[status] ?? status.replace(/_/g, ' ');
 }
 

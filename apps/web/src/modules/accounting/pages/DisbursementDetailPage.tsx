@@ -267,7 +267,7 @@ export default function DisbursementDetailPage() {
         <h1 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
           {dv.dvNumber}
           <span className="acct-badge" style={{ fontSize: 12 }}>
-            {statusLabel(effStatus)}
+            {statusLabel(effStatus, { isAda: dv.paymentMode === 'ada' })}
           </span>
         </h1>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
