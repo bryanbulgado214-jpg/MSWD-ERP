@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
@@ -295,13 +296,16 @@ export function CheckAlignmentPage() {
           background: #fff; cursor: pointer; font-size: 16px; line-height: 1; }
         .chk-field-lbl { display:block; font-size: 11px; font-weight: 600; color: #667085;
           text-transform: uppercase; letter-spacing: .03em; margin-bottom: 4px; }
-        .chk-print-only { position: fixed; left: -10000px; top: 0; }
+        /* The print copy is portalled to <body>; on screen it is simply hidden. */
+        .chk-print-portal { display: none; }
         @media print {
           @page { size: ${layout.sheet.width}in ${layout.sheet.height}in; margin: 0; }
           html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
-          body * { visibility: hidden !important; }
-          .chk-print-only, .chk-print-only * { visibility: visible !important; }
-          .chk-print-only { left: 0 !important; box-shadow: none; }
+          /* Print ONLY the check: hide the whole app, show the portalled copy.
+             Using display (not visibility) collapses the page so nothing else
+             takes up sheets — the check prints on exactly one page. */
+          body > *:not(.chk-print-portal) { display: none !important; }
+          .chk-print-portal { display: block !important; }
         }
       `}</style>
 
@@ -531,11 +535,15 @@ export function CheckAlignmentPage() {
         </div>
       </div>
 
-      {/* Off-screen clean copy used for the test print — no guides, no tints, so
-          it prints exactly like a real check. */}
-      <div className="chk-print-only">
-        <CheckFace layout={layout} data={faceData} />
-      </div>
+      {/* Clean copy used for the test print — no guides, no tints — portalled to
+          <body> so that in print it can be the only thing on the page (see the
+          print CSS above), which keeps it to exactly one sheet. */}
+      {createPortal(
+        <div className="chk-print-portal">
+          <CheckFace layout={layout} data={faceData} />
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

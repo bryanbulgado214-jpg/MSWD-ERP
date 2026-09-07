@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useParams } from 'react-router-dom';
 
 import { AccountingApiError, getCheck } from '../api';
@@ -58,14 +59,16 @@ export function PrintCheckPage() {
           text-decoration: none; display: inline-block; }
         .chk-controls button.primary { background: var(--mswd-navy,#0a2a66); color: #fff; border: none; }
         .chk-note { font-size: 12px; color: #667085; max-width: 8in; text-align: center; }
+        /* The print copy is portalled to <body>; on screen it is simply hidden. */
+        .chk-print-portal { display: none; }
         @media print {
           @page { size: ${sheetW}in ${sheetH}in; margin: 0; }
           html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
-          body * { visibility: hidden !important; }
-          .chk-sheet, .chk-sheet * { visibility: visible !important; }
-          .chk-sheet { position: absolute; left: 0; top: 0; box-shadow: none; }
-          .chk-screen { padding: 0; background: #fff; }
-          .chk-controls, .chk-note { display: none !important; }
+          /* Print ONLY the check: hide the whole app, show the portalled copy.
+             Using display (not visibility) collapses the page so the check prints
+             on exactly one sheet — never spilling onto blank pages. */
+          body > *:not(.chk-print-portal) { display: none !important; }
+          .chk-print-portal { display: block !important; }
         }
       `}</style>
 
@@ -96,6 +99,18 @@ export function PrintCheckPage() {
           <button onClick={() => window.history.back()}>Back</button>
         </div>
       </div>
+
+      {/* Clean copy portalled to <body> so it can be the only thing on the page
+          in print — keeps the check to exactly one sheet. */}
+      {createPortal(
+        <div className="chk-print-portal">
+          <CheckFace
+            layout={layout}
+            data={{ dateDigits: `${mm}${dd}${yyyy}`, payee: check.payeeName, amountFigures, words }}
+          />
+        </div>,
+        document.body,
+      )}
     </>
   );
 }
