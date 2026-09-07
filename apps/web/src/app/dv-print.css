@@ -1,11 +1,12 @@
 /* Metro Siquijor Water District Disbursement Voucher — an exact reproduction of
- * the district's pre-printed form, sized to fill one Letter page (portrait) with
- * no blank space at the bottom. The middle accounting-entry grid flexes to
- * absorb the remaining height; the certification band stays pinned to the foot. */
+ * the district's pre-printed form, sized to fill one 8.5×13 long-bond page
+ * (portrait) with no blank space at the bottom. The middle accounting-entry grid
+ * flexes to absorb the remaining height; the certification band stays pinned to
+ * the foot. */
 
 .dv-print-sheet {
   width: 8.5in;
-  min-height: 11in;
+  min-height: 13in;
   margin: 0 auto;
   padding: 0.4in;
   background: #fff;
@@ -30,12 +31,22 @@
 }
 
 @media print {
-  .dv-print-sheet {
-    width: 100%;
-    min-height: 0;
-    height: 10.2in; /* Letter (11in) minus the shared @page 0.4in top+bottom */
+  /* MSWD prints the DV on 8.5×13 long bond. A dedicated NAMED page keeps this
+     size + zero margin scoped to the DV sheet (the shared gov-form @page in
+     print-forms.css stays Letter for the other forms). Zero margin also removes
+     Chrome's own header/footer — the date, the "AquaBooks" title and the page
+     URL that were printing in the top/bottom margins. */
+  @page dvsheet {
+    size: 8.5in 13in;
     margin: 0;
-    padding: 0;
+  }
+  .dv-print-sheet {
+    page: dvsheet;
+    width: 8.5in;
+    height: 13in;
+    min-height: 0;
+    margin: 0;
+    padding: 0.4in;
     box-shadow: none;
   }
 }
