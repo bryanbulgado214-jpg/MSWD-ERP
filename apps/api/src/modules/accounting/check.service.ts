@@ -34,7 +34,9 @@ const CHECK_SELECT = {
       bank: { select: { code: true, name: true } },
     },
   },
-  disbursementVoucher: { select: { id: true, dvNumber: true, status: true, dvDate: true } },
+  disbursementVoucher: {
+    select: { id: true, dvNumber: true, status: true, dvDate: true, paymentMode: true },
+  },
   releaser: { select: { username: true } },
   voider: { select: { username: true } },
   creator: { select: { username: true } },

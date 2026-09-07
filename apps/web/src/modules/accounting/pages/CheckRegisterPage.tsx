@@ -215,7 +215,9 @@ export default function CheckRegisterPage() {
         Every check is backed by a Disbursement Voucher — checks are never created manually. A DV
         paid by check appears here as <strong>pending</strong>; the cashier assigns the check number
         and prints it. Voiding a check requires the General Manager (and never the person who
-        printed or released it).
+        printed or released it). ADA debits appear here without a check number — they are released
+        as soon as the DV is posted, and you mark them cleared once the debit reflects in the bank
+        passbook.
         {!canPrint && !canVoid && ' (You have view-only access.)'}
       </p>
 
@@ -275,10 +277,16 @@ export default function CheckRegisterPage() {
               boxShadow: '0 10px 40px rgba(16,24,40,0.2)',
             }}
           >
-            <h2 style={{ margin: '0 0 4px', fontSize: 17 }}>Mark Check Cleared</h2>
+            <h2 style={{ margin: '0 0 4px', fontSize: 17 }}>
+              {clearTarget.disbursementVoucher?.paymentMode === 'ada'
+                ? 'Mark ADA Cleared'
+                : 'Mark Check Cleared'}
+            </h2>
             <p style={{ fontSize: 12.5, color: '#667085', margin: '0 0 16px' }}>
-              {clearTarget.disbursementVoucher?.dvNumber} · {clearTarget.checkNumber} ·{' '}
-              {formatPeso(clearTarget.amount)}
+              {clearTarget.disbursementVoucher?.dvNumber} ·{' '}
+              {clearTarget.checkNumber ??
+                (clearTarget.disbursementVoucher?.paymentMode === 'ada' ? 'ADA' : '')}{' '}
+              · {formatPeso(clearTarget.amount)}
             </p>
             {clearError && (
               <div className="acct-error" style={{ marginBottom: 12 }}>
@@ -469,13 +477,16 @@ export default function CheckRegisterPage() {
               {checks.map((c) => {
                 const dvDraft = c.disbursementVoucher?.status === 'draft';
                 const isPending = c.status === 'pending';
+                // An ADA debit has no printed check — it is released on posting and
+                // the cashier only marks it cleared when it reflects in the passbook.
+                const isAda = c.disbursementVoucher?.paymentMode === 'ada';
                 const voidable = canVoid && !['voided', 'spoiled', 'cleared'].includes(c.status);
                 return (
                   <tr key={c.id}>
                     <td style={{ fontWeight: 600 }}>
                       {c.checkNumber ?? (
                         <span style={{ color: '#98a2b3', fontStyle: 'italic', fontWeight: 400 }}>
-                          — pending —
+                          {isAda ? 'ADA' : '— pending —'}
                         </span>
                       )}
                     </td>
@@ -528,7 +539,7 @@ export default function CheckRegisterPage() {
                             flexWrap: 'wrap',
                           }}
                         >
-                          {isPending && canPrint && !dvDraft && (
+                          {isPending && canPrint && !dvDraft && !isAda && (
                             <button
                               className="acct-btn acct-btn--sm acct-btn--primary"
                               onClick={() => openPrint(c)}
@@ -541,7 +552,12 @@ export default function CheckRegisterPage() {
                               DV not yet posted
                             </span>
                           )}
-                          {!isPending && canPrint && (
+                          {isPending && isAda && !dvDraft && (
+                            <span style={{ fontSize: 11, color: '#98a2b3' }}>
+                              Released on posting
+                            </span>
+                          )}
+                          {!isPending && canPrint && !isAda && (
                             <Link
                               to={`/accounting/checks/${c.id}/print`}
                               className="acct-table__link"
@@ -550,6 +566,7 @@ export default function CheckRegisterPage() {
                             </Link>
                           )}
                           {canPrint &&
+                            !isAda &&
                             c.checkNumber &&
                             !['cleared', 'stale_dated', 'voided', 'spoiled'].includes(c.status) && (
                               <button

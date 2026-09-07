@@ -562,7 +562,12 @@ export class DisbursementService {
     // check — so posting it only takes it to "approved" with a pending check.
     // Non-check disbursements (ADA/others) have no check to print, so they release
     // on post.
-    const isCheckPayment = (dto.paymentMode ?? 'check') === 'check';
+    const mode = dto.paymentMode ?? 'check';
+    const isCheckPayment = mode === 'check';
+    const isAda = mode === 'ada';
+    // Non-check disbursements (ADA / others) have no check to print, so posting
+    // them releases the DV straight away (there is no cashier print step).
+    const autoRelease = !asDraft && !isCheckPayment;
 
     // Posting straight to the GL requires the Post permission. Data-entry staff
     // can only save a draft; the accountant reviews and posts it.
@@ -634,14 +639,19 @@ export class DisbursementService {
             ? { supplierInvoiceInstallment: dto.supplierInvoiceInstallment }
             : {}),
           ...(dto.fundSourceId ? { fundSourceId: dto.fundSourceId } : {}),
-          // Posting a DV never auto-releases it. It becomes "approved" and waits:
-          // a check-paid DV is released when the cashier releases the printed
-          // check; a non-check DV (ADA/others) is released via the DV Release
-          // action. The releaser is therefore never the posting accountant.
-          status: asDraft ? 'draft' : 'approved',
+          // A check-paid DV posts to "approved" and waits for the cashier to
+          // print + release the check. A non-check DV (ADA / others) has no
+          // check to print, so posting it releases it immediately.
+          status: asDraft ? 'draft' : autoRelease ? 'released' : 'approved',
           ...(asDraft
             ? {}
-            : { certifiedBy: userId, certifiedAt: now, approvedBy: userId, approvedAt: now }),
+            : {
+                certifiedBy: userId,
+                certifiedAt: now,
+                approvedBy: userId,
+                approvedAt: now,
+                ...(autoRelease ? { releasedBy: userId, releasedAt: now } : {}),
+              }),
           createdBy: userId,
           updatedBy: userId,
         },
@@ -694,6 +704,39 @@ export class DisbursementService {
             toStatus: 'pending',
             changedBy: userId,
             remarks: `Pending check raised from DV ${dv.dvNumber}`,
+          },
+        });
+      } else if (isAda) {
+        // ADA has no printed check. Raise a debit record so the cashier can mark
+        // it CLEARED once it reflects in the bank passbook, and so it flows into
+        // bank reconciliation like a check. It is 'released' as soon as the DV is
+        // posted (nothing to print); a draft's record waits at 'pending' until
+        // the DV is posted.
+        const adaStatus = asDraft ? 'pending' : 'released';
+        const ada = await tx.check.create({
+          data: {
+            organizationId: orgId,
+            disbursementVoucherId: dv.id,
+            bankAccountId: dto.bankAccountId,
+            checkNumber: null,
+            amount: net,
+            checkDate: dvDate,
+            payeeName: dto.payeeName,
+            status: adaStatus as never,
+            ...(asDraft ? {} : { releasedBy: userId, releasedAt: now }),
+            createdBy: userId,
+            updatedBy: userId,
+          },
+          select: { id: true },
+        });
+        await tx.checkStatusHistory.create({
+          data: {
+            checkId: ada.id,
+            toStatus: adaStatus as never,
+            changedBy: userId,
+            remarks: asDraft
+              ? `ADA debit queued from draft DV ${dv.dvNumber}`
+              : `ADA debit released on posting DV ${dv.dvNumber}`,
           },
         });
       }
@@ -1066,6 +1109,10 @@ export class DisbursementService {
     });
     if (!period) throw new BadRequestException('No open accounting period for the DV date.');
 
+    // A check-paid DV posts to "approved" and is released when the cashier
+    // releases the printed check. A non-check DV (ADA / others) has no check to
+    // print, so posting it releases it immediately.
+    const autoRelease = dv.paymentMode !== 'check';
     const now = new Date();
     await runAudited(this.prisma, userId, async (tx) => {
       await tx.journalEntryVoucher.update({
@@ -1075,17 +1122,44 @@ export class DisbursementService {
       await tx.disbursementVoucher.update({
         where: { id, version: dv.version },
         data: {
-          // Posting never auto-releases — the DV becomes "approved" and is
-          // released downstream (check release, or the DV Release action).
-          status: 'approved',
+          status: autoRelease ? 'released' : 'approved',
           certifiedBy: userId,
           certifiedAt: now,
           approvedBy: userId,
           approvedAt: now,
+          ...(autoRelease ? { releasedBy: userId, releasedAt: now } : {}),
           updatedBy: userId,
           version: { increment: 1 },
         },
       });
+      // An ADA debit record was raised (pending) when the draft was created;
+      // posting releases it so the cashier can later mark it cleared.
+      if (dv.paymentMode === 'ada') {
+        const ada = await tx.check.findFirst({
+          where: { disbursementVoucherId: id, status: 'pending' },
+          select: { id: true },
+        });
+        if (ada) {
+          await tx.check.update({
+            where: { id: ada.id },
+            data: {
+              status: 'released' as never,
+              releasedBy: userId,
+              releasedAt: now,
+              updatedBy: userId,
+            },
+          });
+          await tx.checkStatusHistory.create({
+            data: {
+              checkId: ada.id,
+              fromStatus: 'pending' as never,
+              toStatus: 'released' as never,
+              changedBy: userId,
+              remarks: `ADA debit released on posting DV`,
+            },
+          });
+        }
+      }
       // Posting a draft payment now settles the supplier invoice's payable.
       if (dv.supplierInvoiceId) {
         await this.recomputeInvoicePaid(tx, dv.supplierInvoiceId);
