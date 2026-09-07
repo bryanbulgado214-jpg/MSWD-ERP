@@ -1,7 +1,6 @@
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 
 import {
-  CHECK_HEIGHT_IN,
   CHECK_WIDTH_IN,
   DEFAULT_CHECK_LAYOUT,
   dateCellCenters,
@@ -81,14 +80,20 @@ export function CheckFace({
   };
 
   const centers = dateCellCenters(layout);
+  const w = layout.sheet.width;
+  const h = layout.sheet.height;
+  // The pre-printed elements on the right of the cheque (date boxes, ₱ box,
+  // signature line) sit near the right edge, so on a wider-than-default cheque
+  // they shift right with it; the horizontal fill lines simply grow.
+  const rightShift = w - CHECK_WIDTH_IN;
 
   return (
     <div
       className="chk-face"
       style={{
         position: 'relative',
-        width: IN(CHECK_WIDTH_IN),
-        height: IN(CHECK_HEIGHT_IN),
+        width: IN(w),
+        height: IN(h),
         background: '#fff',
       }}
     >
@@ -101,7 +106,9 @@ export function CheckFace({
           {/* Bank name (top-left). */}
           <span style={tmplLabel(0.45, 0.28, 11)}>DEVELOPMENT BANK OF THE PHILIPPINES</span>
           {/* "DATE" caption + the 8 date boxes (top-right). */}
-          <span style={tmplLabel(REF.date.gridLeft, REF.date.top - 0.32, 7)}>DATE</span>
+          <span style={tmplLabel(REF.date.gridLeft + rightShift, REF.date.top - 0.32, 7)}>
+            DATE
+          </span>
           {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
             const cellW = (REF.date.gridRight - REF.date.gridLeft) / 8;
             return (
@@ -109,7 +116,7 @@ export function CheckFace({
                 key={i}
                 style={{
                   position: 'absolute',
-                  left: IN(REF.date.gridLeft + i * cellW),
+                  left: IN(REF.date.gridLeft + rightShift + i * cellW),
                   top: IN(REF.date.top - 0.14),
                   width: IN(cellW),
                   height: IN(0.28),
@@ -121,12 +128,12 @@ export function CheckFace({
           })}
           {/* "PAY TO THE ORDER OF" line. */}
           <span style={tmplLabel(0.45, REF.payee.top + 0.02, 7)}>PAY TO THE ORDER OF</span>
-          <div style={tmplLine(1.5, REF.payee.top + 0.22, 5.9)} />
+          <div style={tmplLine(1.5, REF.payee.top + 0.22, 5.9 + rightShift)} />
           {/* ₱ figures box (top-right). */}
           <div
             style={{
               position: 'absolute',
-              left: IN(REF.amount.right - 1.55),
+              left: IN(REF.amount.right - 1.55 + rightShift),
               top: IN(REF.amount.top - 0.05),
               width: IN(1.7),
               height: IN(0.34),
@@ -134,13 +141,15 @@ export function CheckFace({
               boxSizing: 'border-box',
             }}
           />
-          <span style={tmplLabel(REF.amount.right - 1.5, REF.amount.top + 0.02, 11)}>₱</span>
+          <span style={tmplLabel(REF.amount.right - 1.5 + rightShift, REF.amount.top + 0.02, 11)}>
+            ₱
+          </span>
           {/* "PESOS" line. */}
-          <div style={tmplLine(1.3, REF.words.top + 0.22, 5.2)} />
-          <span style={tmplLabel(6.65, REF.words.top + 0.04, 7)}>PESOS</span>
+          <div style={tmplLine(1.3, REF.words.top + 0.22, 5.2 + rightShift)} />
+          <span style={tmplLabel(6.65 + rightShift, REF.words.top + 0.04, 7)}>PESOS</span>
           {/* Signature line (bottom-right). */}
-          <div style={tmplLine(5.2, 2.55, 2.4)} />
-          <span style={tmplLabel(5.9, 2.6, 7)}>AUTHORIZED SIGNATURE</span>
+          <div style={tmplLine(5.2 + rightShift, h - 0.45, 2.4)} />
+          <span style={tmplLabel(5.9 + rightShift, h - 0.4, 7)}>AUTHORIZED SIGNATURE</span>
           {/* Outer edge of the check. */}
           <div style={{ position: 'absolute', inset: 0, border: '0.5px solid #e3e5e9' }} />
         </div>
@@ -192,7 +201,7 @@ export function CheckFace({
         onPointerDown={onDown('amount')}
         style={{
           ...fieldBase,
-          right: IN(CHECK_WIDTH_IN - layout.amount.right),
+          right: IN(w - layout.amount.right),
           top: IN(layout.amount.top),
           fontSize: layout.font.amountSize,
           ...interactiveStyle('amount'),

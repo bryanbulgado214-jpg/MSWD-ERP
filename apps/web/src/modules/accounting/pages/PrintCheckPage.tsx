@@ -42,13 +42,14 @@ export function PrintCheckPage() {
     maximumFractionDigits: 2,
   });
   const words = checkAmountWords(Number(check.amount));
+  const { width: sheetW, height: sheetH } = layout.sheet;
 
   return (
     <>
       <style>{`
         .chk-screen { background: #eef0f3; min-height: 100vh; padding: 24px; display: flex;
           flex-direction: column; align-items: center; gap: 14px; }
-        .chk-sheet { position: relative; width: 8in; height: 3in; background: #fff;
+        .chk-sheet { position: relative; width: ${sheetW}in; height: ${sheetH}in; background: #fff;
           color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact;
           box-shadow: 0 2px 10px rgba(16,24,40,.18); }
         .chk-controls { display: flex; gap: 10px; }
@@ -58,7 +59,7 @@ export function PrintCheckPage() {
         .chk-controls button.primary { background: var(--mswd-navy,#0a2a66); color: #fff; border: none; }
         .chk-note { font-size: 12px; color: #667085; max-width: 8in; text-align: center; }
         @media print {
-          @page { size: 8in 3in; margin: 0; }
+          @page { size: ${sheetW}in ${sheetH}in; margin: 0; }
           html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
           body * { visibility: hidden !important; }
           .chk-sheet, .chk-sheet * { visibility: visible !important; }
@@ -77,9 +78,9 @@ export function PrintCheckPage() {
         </div>
 
         <div className="chk-note">
-          Load the DBP check into the printer (8&quot; × 3&quot;, top edge first). Only the data
-          above prints — the bank details, boxes and labels are already on the check. If anything
-          lands off its line, open{' '}
+          Load the DBP check into the printer ({sheetW}&quot; × {sheetH}&quot;, top edge first).
+          Only the data above prints — the bank details, boxes and labels are already on the check.
+          If anything lands off its line, open{' '}
           <Link to={`/accounting/checks/alignment?bankAccountId=${check.bankAccount.id}`}>
             Check Alignment
           </Link>{' '}

@@ -4,9 +4,9 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../app/auth';
 import { getBankAccountsForCheckPrinting, saveCheckLayout } from '../api';
 import {
-  CHECK_HEIGHT_IN,
-  CHECK_WIDTH_IN,
   DEFAULT_CHECK_LAYOUT,
+  SHEET_MAX,
+  SHEET_MIN,
   checkAmountWords,
   normalizeCheckLayout,
   type CheckLayout,
@@ -28,7 +28,13 @@ const FIELD_LABELS: Record<CheckFieldKey, string> = {
 const round = (n: number) => Math.round(n * 1000) / 1000;
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
-/** Apply a movement (in inches) to one field, keeping it on the check. */
+// A field may be nudged this far past the check edge, so calibration can chase a
+// printer whose offset would otherwise land data right at (or a touch beyond) the
+// paper edge.
+const OVERSCAN = 0.5;
+
+/** Apply a movement (in inches) to one field, keeping it within the check plus a
+ * small overscan margin. Bounds come from the check's own configured size. */
 function applyDelta(l: CheckLayout, key: CheckFieldKey, dx: number, dy: number): CheckLayout {
   const next: CheckLayout = {
     date: { ...l.date },
@@ -36,24 +42,27 @@ function applyDelta(l: CheckLayout, key: CheckFieldKey, dx: number, dy: number):
     amount: { ...l.amount },
     words: { ...l.words },
     font: { ...l.font },
+    sheet: { ...l.sheet },
   };
+  const maxX = l.sheet.width + OVERSCAN;
+  const maxY = l.sheet.height + OVERSCAN;
   if (key === 'date') {
     const width = l.date.gridRight - l.date.gridLeft;
-    const gl = clamp(l.date.gridLeft + dx, 0, CHECK_WIDTH_IN - width);
+    const gl = clamp(l.date.gridLeft + dx, -OVERSCAN, maxX - width);
     next.date.gridLeft = round(gl);
     next.date.gridRight = round(gl + width);
-    next.date.top = round(clamp(l.date.top + dy, 0, CHECK_HEIGHT_IN));
+    next.date.top = round(clamp(l.date.top + dy, -OVERSCAN, maxY));
   } else if (key === 'payee') {
-    next.payee.left = round(clamp(l.payee.left + dx, 0, CHECK_WIDTH_IN));
-    next.payee.top = round(clamp(l.payee.top + dy, 0, CHECK_HEIGHT_IN));
+    next.payee.left = round(clamp(l.payee.left + dx, -OVERSCAN, maxX));
+    next.payee.top = round(clamp(l.payee.top + dy, -OVERSCAN, maxY));
   } else if (key === 'words') {
-    next.words.left = round(clamp(l.words.left + dx, 0, CHECK_WIDTH_IN));
-    next.words.top = round(clamp(l.words.top + dy, 0, CHECK_HEIGHT_IN));
+    next.words.left = round(clamp(l.words.left + dx, -OVERSCAN, maxX));
+    next.words.top = round(clamp(l.words.top + dy, -OVERSCAN, maxY));
   } else if (key === 'amount') {
     // amount.right is a left-origin x-coordinate of the text's right edge, so a
     // rightward drag increases it.
-    next.amount.right = round(clamp(l.amount.right + dx, 0, CHECK_WIDTH_IN));
-    next.amount.top = round(clamp(l.amount.top + dy, 0, CHECK_HEIGHT_IN));
+    next.amount.right = round(clamp(l.amount.right + dx, -OVERSCAN, maxX));
+    next.amount.top = round(clamp(l.amount.top + dy, -OVERSCAN, maxY));
   }
   return next;
 }
@@ -91,7 +100,7 @@ export function CheckAlignmentPage() {
 
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
-  const [scale, setScale] = useState(1);
+  const [availPx, setAvailPx] = useState(0);
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
   const dragRef = useRef<{
@@ -132,17 +141,13 @@ export function CheckAlignmentPage() {
     setSaveState('idle');
   }, [accountId, accounts]);
 
-  // Scale the check to fit the stage width so the whole face is visible without
-  // horizontal scrolling. Drag math reads the sheet's measured size, so it stays
-  // correct at any scale.
+  // Measure the stage so we can scale the check to fit its width (the whole face
+  // visible without horizontal scrolling). Drag math reads the sheet's measured
+  // size, so it stays correct at any scale.
   useEffect(() => {
     const el = stageRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
-    const natural = CHECK_WIDTH_IN * 96;
-    const recompute = () => {
-      const avail = el.clientWidth - 44; // stage padding (22px each side)
-      setScale(Math.min(1, Math.max(0.4, avail / natural)));
-    };
+    const recompute = () => setAvailPx(el.clientWidth - 44); // stage padding (22px each side)
     const ro = new ResizeObserver(recompute);
     ro.observe(el);
     recompute();
@@ -171,7 +176,7 @@ export function CheckAlignmentPage() {
         startX: e.clientX,
         startY: e.clientY,
         startLayout: layoutRef.current,
-        pxPerIn: rect.width / CHECK_WIDTH_IN,
+        pxPerIn: rect.width / layoutRef.current.sheet.width,
       };
       setSelected(key);
       window.addEventListener('pointermove', onMove);
@@ -241,6 +246,18 @@ export function CheckAlignmentPage() {
   const dateDigits = `${mm}${dd}${yyyy}`;
   const faceData = { dateDigits, payee: samplePayee, amountFigures, words };
 
+  // Fit the (possibly wider-than-default) check to the measured stage width.
+  const scale = availPx ? clamp(Math.min(1, availPx / (layout.sheet.width * 96)), 0.4, 1) : 1;
+
+  function setSheet(dim: 'width' | 'height', value: number) {
+    if (!Number.isFinite(value)) return;
+    const bounded =
+      dim === 'width'
+        ? clamp(value, SHEET_MIN.width, SHEET_MAX.width)
+        : clamp(value, SHEET_MIN.height, SHEET_MAX.height);
+    setLayout((l) => ({ ...l, sheet: { ...l.sheet, [dim]: round(bounded) } }));
+  }
+
   if (!canPrint) {
     return (
       <div className="acct-page">
@@ -263,8 +280,8 @@ export function CheckAlignmentPage() {
       <style>{`
         .chk-align-stage { background: #eef0f3; border: 1px solid #e4e7ec; border-radius: 10px;
           padding: 22px; overflow: hidden; }
-        .chk-align-sheet { position: relative; width: ${CHECK_WIDTH_IN}in; height: ${CHECK_HEIGHT_IN}in;
-          background: #fff; box-shadow: 0 2px 12px rgba(16,24,40,.18); touch-action: none; }
+        .chk-align-sheet { position: relative; background: #fff;
+          box-shadow: 0 2px 12px rgba(16,24,40,.18); touch-action: none; }
         .chk-align-grid { display: grid; grid-template-columns: minmax(0,1fr) 300px; gap: 20px;
           align-items: start; }
         @media (max-width: 900px) { .chk-align-grid { grid-template-columns: 1fr; } }
@@ -280,7 +297,7 @@ export function CheckAlignmentPage() {
           text-transform: uppercase; letter-spacing: .03em; margin-bottom: 4px; }
         .chk-print-only { position: fixed; left: -10000px; top: 0; }
         @media print {
-          @page { size: ${CHECK_WIDTH_IN}in ${CHECK_HEIGHT_IN}in; margin: 0; }
+          @page { size: ${layout.sheet.width}in ${layout.sheet.height}in; margin: 0; }
           html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
           body * { visibility: hidden !important; }
           .chk-print-only, .chk-print-only * { visibility: visible !important; }
@@ -344,15 +361,20 @@ export function CheckAlignmentPage() {
           <div className="chk-align-stage" ref={stageRef}>
             <div
               style={{
-                width: CHECK_WIDTH_IN * 96 * scale,
-                height: CHECK_HEIGHT_IN * 96 * scale,
+                width: layout.sheet.width * 96 * scale,
+                height: layout.sheet.height * 96 * scale,
                 margin: '0 auto',
               }}
             >
               <div
                 className="chk-align-sheet"
                 ref={sheetRef}
-                style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}
+                style={{
+                  width: `${layout.sheet.width}in`,
+                  height: `${layout.sheet.height}in`,
+                  transform: `scale(${scale})`,
+                  transformOrigin: 'top left',
+                }}
               >
                 <CheckFace
                   layout={layout}
@@ -402,6 +424,41 @@ export function CheckAlignmentPage() {
                 Click a field on the check (or a chip above) to select it.
               </p>
             )}
+          </div>
+
+          <div className="chk-panel">
+            <h3>Check size (inches)</h3>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <span className="chk-field-lbl">Width</span>
+                <input
+                  type="number"
+                  step="0.05"
+                  min={SHEET_MIN.width}
+                  max={SHEET_MAX.width}
+                  value={layout.sheet.width}
+                  onChange={(e) => setSheet('width', parseFloat(e.target.value))}
+                  style={inputStyle}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <span className="chk-field-lbl">Height</span>
+                <input
+                  type="number"
+                  step="0.05"
+                  min={SHEET_MIN.height}
+                  max={SHEET_MAX.height}
+                  value={layout.sheet.height}
+                  onChange={(e) => setSheet('height', parseFloat(e.target.value))}
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+            <p style={{ fontSize: 11.5, color: '#98a2b3', margin: '10px 0 0' }}>
+              Measure your actual check stock and set it here. This sets the printed page size and
+              how far a field can be moved — increase the width if the date needs to sit further
+              right than the check currently allows.
+            </p>
           </div>
 
           <div className="chk-panel">

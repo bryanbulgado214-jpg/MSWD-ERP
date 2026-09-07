@@ -26,7 +26,16 @@ export interface CheckLayout {
   words: { left: number; top: number };
   /** Print sizes in px (the sheet renders at real inches, 96px = 1in). */
   font: { payeeSize: number; wordsSize: number; amountSize: number; dateSize: number };
+  /** The physical size of the check stock, in inches. Different banks' cheques
+   * are different sizes (and some are wider than the 8" we started from), so the
+   * cashier sets this to match their stock — it drives the printed page size and
+   * how far a field can be positioned. */
+  sheet: { width: number; height: number };
 }
+
+/** The default overall check face, in inches (a common DBP commercial cheque). */
+export const CHECK_WIDTH_IN = 8;
+export const CHECK_HEIGHT_IN = 3;
 
 /** The measured DBP check positions — the starting point before any calibration. */
 export const DEFAULT_CHECK_LAYOUT: CheckLayout = {
@@ -35,11 +44,12 @@ export const DEFAULT_CHECK_LAYOUT: CheckLayout = {
   amount: { right: 7.55, top: 0.98 },
   words: { left: 1.35, top: 1.28 },
   font: { payeeSize: 17, wordsSize: 17, amountSize: 17, dateSize: 15 },
+  sheet: { width: CHECK_WIDTH_IN, height: CHECK_HEIGHT_IN },
 };
 
-/** The overall check face, in inches. */
-export const CHECK_WIDTH_IN = 8;
-export const CHECK_HEIGHT_IN = 3;
+/** Sensible bounds for the configurable check size (inches). */
+export const SHEET_MIN = { width: 5, height: 2 };
+export const SHEET_MAX = { width: 12, height: 6 };
 
 /**
  * Coerce whatever is stored on the bank account (a loose JSON blob, possibly
@@ -76,6 +86,10 @@ export function normalizeCheckLayout(raw: unknown): CheckLayout {
       wordsSize: num(r.font?.wordsSize, d.font.wordsSize),
       amountSize: num(r.font?.amountSize, d.font.amountSize),
       dateSize: num(r.font?.dateSize, d.font.dateSize),
+    },
+    sheet: {
+      width: num(r.sheet?.width, d.sheet.width),
+      height: num(r.sheet?.height, d.sheet.height),
     },
   };
 }
