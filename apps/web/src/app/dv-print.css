@@ -1,12 +1,12 @@
 /* Metro Siquijor Water District Disbursement Voucher — an exact reproduction of
- * the district's pre-printed form, sized to fill one 8.5×13 long-bond page
- * (portrait) with no blank space at the bottom. The middle accounting-entry grid
+ * the district's pre-printed form, sized to fill one Letter page (8.5×11,
+ * portrait) with no blank space at the bottom. The middle accounting-entry grid
  * flexes to absorb the remaining height; the certification band stays pinned to
  * the foot. */
 
 .dv-print-sheet {
   width: 8.5in;
-  min-height: 13in;
+  min-height: 11in;
   margin: 0 auto;
   padding: 0.4in;
   background: #fff;
@@ -20,7 +20,8 @@
   flex-direction: column;
 }
 
-/* The accounting-entry table is the flexible middle of the sheet. */
+/* The accounting-entry table is the flexible middle of the sheet: it grows to
+ * absorb the leftover height so the certification band sits flush at the foot. */
 .dv-acct {
   flex: 1 1 auto;
   display: flex;
@@ -31,19 +32,19 @@
 }
 
 @media print {
-  /* MSWD prints the DV on 8.5×13 long bond. A dedicated NAMED page keeps this
-     size + zero margin scoped to the DV sheet (the shared gov-form @page in
-     print-forms.css stays Letter for the other forms). Zero margin also removes
+  /* The DV prints on Letter (8.5×11). A dedicated NAMED page keeps this size +
+     zero margin scoped to the DV sheet (the shared gov-form @page in
+     print-forms.css stays as-is for the other forms). Zero margin also removes
      Chrome's own header/footer — the date, the "AquaBooks" title and the page
      URL that were printing in the top/bottom margins. */
   @page dvsheet {
-    size: 8.5in 13in;
+    size: 8.5in 11in;
     margin: 0;
   }
   .dv-print-sheet {
     page: dvsheet;
     width: 8.5in;
-    height: 13in;
+    height: 11in;
     min-height: 0;
     margin: 0;
     padding: 0.4in;

@@ -105,10 +105,11 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
   const jeLines = dv.journalEntry?.lines ?? [];
   const jeTotalDebit = jeLines.reduce((s, l) => s + parseFloat(l.debitAmount || '0'), 0);
   const jeTotalCredit = jeLines.reduce((s, l) => s + parseFloat(l.creditAmount || '0'), 0);
-  // Blank ruled rows that continue the accounting grid; they stretch (the table
-  // is height:100% inside the flexible .dv-acct) so the section fills the page
-  // to the foot with no gap, and the TOTAL row sits directly above Box A/B/C.
-  const blankCount = Math.max(4, 15 - jeLines.length);
+  // A few blank ruled rows continue the accounting grid; the LAST one stretches
+  // (height:100% inside the flexible .dv-acct) so the section fills the page to
+  // the foot with no gap and no overflow, with the TOTAL row directly above Box
+  // A/B/C. Keep the fixed count small so the grid never exceeds the Letter page.
+  const blankCount = Math.max(2, 8 - jeLines.length);
 
   // The Amount printed on the DV (and on the check) is what is CREDITED to the
   // Cash in Bank / MDS account — not the gross claim, and not the total credits.
@@ -390,9 +391,11 @@ export function DisbursementVoucherSheet({ dv }: { dv: DvSheetData }) {
                   </td>
                 </tr>
               ))}
-              {/* Ruled blank rows that stretch to fill the page to the foot. */}
+              {/* Ruled blank rows; the last one stretches (height:100%) to fill
+                  the page to the foot, so the TOTAL row lands just above Box A/B/C
+                  with no gap and no overflow. */}
               {Array.from({ length: blankCount }).map((_, i) => (
-                <tr key={`b${i}`}>
+                <tr key={`b${i}`} style={i === blankCount - 1 ? { height: '100%' } : undefined}>
                   <td style={{ border: BORDER, padding: '3px 8px' }}>&nbsp;</td>
                   <td style={{ border: BORDER }}></td>
                   <td style={{ border: BORDER }}></td>
