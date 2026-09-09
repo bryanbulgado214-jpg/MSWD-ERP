@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { createPayee, getPayees, type Payee } from '../api';
+import { useComboKeyboard } from '../combobox-keyboard';
 
 import './accounting.css';
 
@@ -37,6 +38,7 @@ export function PayeeCombobox({
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
   const wrapRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     getPayees()
@@ -63,6 +65,27 @@ export function PayeeCombobox({
   // payee name — so the user can't create a duplicate of an existing payee.
   const hasExactMatch = payees.some((p) => p.name.trim().toLowerCase() === q);
   const showAdd = trimmed.length > 0 && !hasExactMatch;
+
+  function pickPayee(p: Payee) {
+    onPick({ name: p.name, tin: p.tin, address: p.address, vatRegistered: p.vatRegistered });
+    setOpen(false);
+  }
+  // Navigable items = the filtered payees, plus the "Add" row when shown.
+  const navCount = filtered.length + (showAdd ? 1 : 0);
+  const { highlight, setHighlight, onKeyDown } = useComboKeyboard({
+    count: navCount,
+    open,
+    setOpen,
+    onSelect: (i) => (i < filtered.length ? pickPayee(filtered[i]!) : openAdd()),
+  });
+  useEffect(() => setHighlight(-1), [name, setHighlight]);
+  useEffect(() => {
+    if (highlight >= 0) {
+      listRef.current
+        ?.querySelectorAll('[data-opt]')
+        [highlight]?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [highlight]);
 
   const defaultInput: React.CSSProperties = {
     width: '100%',
@@ -119,10 +142,12 @@ export function PayeeCombobox({
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
+        onKeyDown={onKeyDown}
       />
 
       {open && (
         <div
+          ref={listRef}
           style={{
             position: 'absolute',
             zIndex: 30,
@@ -138,20 +163,21 @@ export function PayeeCombobox({
             boxShadow: '0 6px 20px rgba(16,24,40,0.12)',
           }}
         >
-          {filtered.map((p) => (
+          {filtered.map((p, idx) => (
             <div
               key={p.id}
+              data-opt
               onMouseDown={(e) => {
                 e.preventDefault();
-                onPick({
-                  name: p.name,
-                  tin: p.tin,
-                  address: p.address,
-                  vatRegistered: p.vatRegistered,
-                });
-                setOpen(false);
+                pickPayee(p);
               }}
-              style={{ padding: '7px 10px', cursor: 'pointer', borderBottom: '1px solid #f2f4f7' }}
+              onMouseEnter={() => setHighlight(idx)}
+              style={{
+                padding: '7px 10px',
+                cursor: 'pointer',
+                borderBottom: '1px solid #f2f4f7',
+                background: idx === highlight ? '#eef4ff' : 'transparent',
+              }}
             >
               <div style={{ fontSize: 13, fontWeight: 600, color: '#101828' }}>
                 {p.name}
@@ -185,10 +211,12 @@ export function PayeeCombobox({
           {showAdd && (
             <button
               type="button"
+              data-opt
               onMouseDown={(e) => {
                 e.preventDefault();
                 openAdd();
               }}
+              onMouseEnter={() => setHighlight(filtered.length)}
               style={{
                 display: 'block',
                 width: '100%',
@@ -196,7 +224,7 @@ export function PayeeCombobox({
                 padding: '8px 10px',
                 border: 'none',
                 borderTop: '1px solid #eaecf0',
-                background: '#f9fafb',
+                background: highlight === filtered.length ? '#eef4ff' : '#f9fafb',
                 color: 'var(--mswd-blue, #175cd3)',
                 fontWeight: 600,
                 fontSize: 12.5,

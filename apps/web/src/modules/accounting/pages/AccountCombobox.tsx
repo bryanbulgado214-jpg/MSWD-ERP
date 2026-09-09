@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { useComboKeyboard } from '../combobox-keyboard';
+
 interface AccountOption {
   id: string;
   accountCode: string;
@@ -25,6 +27,7 @@ export function AccountCombobox({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const wrapRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const selected = accounts.find((a) => a.id === value);
   const label = selected ? `${selected.accountCode} — ${selected.name}` : '';
@@ -46,6 +49,27 @@ export function AccountCombobox({
       : accounts;
     return list.slice(0, 60);
   }, [accounts, query]);
+
+  function pick(a: AccountOption) {
+    onChange(a.id);
+    setOpen(false);
+    setQuery('');
+  }
+  const { highlight, setHighlight, onKeyDown } = useComboKeyboard({
+    count: filtered.length,
+    open,
+    setOpen,
+    onSelect: (i) => filtered[i] && pick(filtered[i]!),
+  });
+  // Reset the highlight on each new query, and keep it scrolled into view.
+  useEffect(() => setHighlight(-1), [query, setHighlight]);
+  useEffect(() => {
+    if (highlight >= 0) {
+      listRef.current
+        ?.querySelectorAll('[data-opt]')
+        [highlight]?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [highlight]);
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
@@ -70,9 +94,11 @@ export function AccountCombobox({
           setQuery(e.target.value);
           setOpen(true);
         }}
+        onKeyDown={onKeyDown}
       />
       {open && (
         <div
+          ref={listRef}
           style={{
             position: 'absolute',
             zIndex: 20,
@@ -93,19 +119,19 @@ export function AccountCombobox({
               No matching accounts
             </div>
           )}
-          {filtered.map((a) => (
+          {filtered.map((a, idx) => (
             <div
               key={a.id}
+              data-opt
               onMouseDown={(e) => {
                 e.preventDefault();
-                onChange(a.id);
-                setOpen(false);
-                setQuery('');
+                pick(a);
               }}
+              onMouseEnter={() => setHighlight(idx)}
               style={{
                 padding: '6px 10px',
                 cursor: 'pointer',
-                background: a.id === value ? '#eef4ff' : 'transparent',
+                background: idx === highlight || a.id === value ? '#eef4ff' : 'transparent',
                 borderBottom: '1px solid #f2f4f7',
               }}
             >

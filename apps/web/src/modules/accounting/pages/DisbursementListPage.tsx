@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
@@ -73,10 +73,12 @@ function formatPeso(value: string | number): string {
 /**
  * Once a check has been issued for a DV, its status (the cashier's payment
  * lifecycle: pending → printed → released → cleared) is what both the cashier
- * and the accountant should see. Fall back to the DV's own status before any
- * check exists.
+ * and the accountant should see. But a DRAFT DV is always "Draft" — a check may
+ * already exist in `pending`, and that must never override the draft status
+ * (otherwise a draft reads as "Pending (for printing)").
  */
 function effectiveStatus(dv: DisbursementSummary): string {
+  if (dv.status === 'draft') return dv.status;
   return dv.checkStatus ?? dv.status;
 }
 
@@ -119,6 +121,22 @@ export default function DisbursementListPage() {
   };
   const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const pageRef = useRef<HTMLDivElement>(null);
+
+  // Land at the top when arriving here (e.g. straight after creating a DV) —
+  // the app scrolls inside a container, so reset that container, not the window.
+  useEffect(() => {
+    let el = pageRef.current?.parentElement as HTMLElement | null;
+    while (el) {
+      const oy = getComputedStyle(el).overflowY;
+      if (oy === 'auto' || oy === 'scroll') {
+        el.scrollTop = 0;
+        break;
+      }
+      el = el.parentElement;
+    }
+    window.scrollTo(0, 0);
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -161,7 +179,7 @@ export default function DisbursementListPage() {
   }
 
   return (
-    <div className="acct-page">
+    <div className="acct-page" ref={pageRef}>
       <AccountingSubNav />
       <h1>Disbursement Vouchers</h1>
       <p style={{ color: '#667085', fontSize: 13, marginTop: -6, marginBottom: 18, maxWidth: 720 }}>

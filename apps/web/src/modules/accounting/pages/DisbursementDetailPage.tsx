@@ -240,7 +240,8 @@ export default function DisbursementDetailPage() {
   const isDraft = dv.status === 'draft';
   // Once a check exists its lifecycle (pending→printed→released→cleared) is the
   // status shown — matching the DV register and the cashier's Check Register.
-  const effStatus = dv.checkStatus ?? dv.status;
+  // A draft always reads "Draft", even if a pending check already exists.
+  const effStatus = isDraft ? dv.status : (dv.checkStatus ?? dv.status);
   const payee = dv.supplier?.name ?? dv.payeeName ?? '—';
   const payeeTin = dv.supplier?.tin ?? dv.payeeTin ?? '—';
   const payeeAddress = dv.supplier?.address ?? dv.payeeAddress ?? '—';

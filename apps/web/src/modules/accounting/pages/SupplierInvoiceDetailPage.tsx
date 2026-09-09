@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
-import { AccountingApiError, getSupplierInvoice } from '../api';
+import { AccountingApiError, deleteSupplierInvoice, getSupplierInvoice } from '../api';
 import type { SupplierInvoiceDetail } from '../types';
 
 import { AccountingSubNav } from './AccountingSubNav';
@@ -64,9 +64,30 @@ export default function SupplierInvoiceDetailPage() {
   const navigate = useNavigate();
   const { permissions } = useAuth();
   const canPay = permissions.has('accounting.dv.create');
+  const canDelete = permissions.has('accounting.jev.create');
   const [inv, setInv] = useState<SupplierInvoiceDetail | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    if (!inv) return;
+    if (
+      !window.confirm(
+        `Delete supplier invoice ${inv.invoiceNumber}? This also reverses its payable journal entry. This cannot be undone.`,
+      )
+    )
+      return;
+    setDeleting(true);
+    setError('');
+    try {
+      await deleteSupplierInvoice(inv.id);
+      navigate('/accounting/supplier-invoices');
+    } catch (e) {
+      setError(e instanceof AccountingApiError ? e.message : 'Failed to delete the invoice.');
+      setDeleting(false);
+    }
+  }
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -134,6 +155,17 @@ export default function SupplierInvoiceDetailPage() {
               title="Pay this invoice — records a disbursement voucher and raises a check"
             >
               Record Payment
+            </button>
+          )}
+          {canDelete && inv.payments.length === 0 && (
+            <button
+              type="button"
+              className="acct-btn acct-btn--danger"
+              onClick={handleDelete}
+              disabled={deleting}
+              title="Delete this invoice and reverse its payable entry"
+            >
+              {deleting ? 'Deleting…' : 'Delete'}
             </button>
           )}
         </div>

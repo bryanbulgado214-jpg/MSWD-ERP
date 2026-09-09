@@ -367,6 +367,11 @@ export async function createSupplierInvoice(
   return res.json();
 }
 
+export async function deleteSupplierInvoice(id: string): Promise<{ id: string }> {
+  const res = await authFetchMutate(`/accounting/supplier-invoices/${id}`, 'DELETE');
+  return res.json();
+}
+
 /** Edit a DV's document number directly (accountant, no approval, any status). */
 export async function updateDvNumber(id: string, dvNumber: string): Promise<{ dvNumber: string }> {
   const res = await authFetchMutate(`/accounting/disbursements/${id}/number`, 'PATCH', {

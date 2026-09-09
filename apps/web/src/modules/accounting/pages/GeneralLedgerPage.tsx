@@ -42,6 +42,7 @@ export default function GeneralLedgerPage() {
   const [fiscalYears, setFiscalYears] = useState<FiscalYearOption[]>([]);
   const [selectedFY, setSelectedFY] = useState('');
   const [accountType, setAccountType] = useState('');
+  const [search, setSearch] = useState('');
   const [state, setState] = useState<LoadState>({ status: 'idle' });
 
   useEffect(() => {
@@ -111,6 +112,15 @@ export default function GeneralLedgerPage() {
     };
   }, [rows]);
 
+  // Filter the rendered rows by account code or name.
+  const visibleGroups = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return accountGroups;
+    return accountGroups.filter(
+      (a) => a.accountCode.toLowerCase().includes(q) || a.accountName.toLowerCase().includes(q),
+    );
+  }, [accountGroups, search]);
+
   return (
     <div className="acct-page acct-page--embedded">
       <h1>General Ledger</h1>
@@ -131,6 +141,15 @@ export default function GeneralLedgerPage() {
             </option>
           ))}
         </select>
+
+        <input
+          type="search"
+          placeholder="Search account code or name…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ minWidth: 240, flex: '1 1 240px' }}
+          aria-label="Search accounts"
+        />
       </div>
 
       {state.status === 'error' && <div className="acct-error">{state.message}</div>}
@@ -139,8 +158,11 @@ export default function GeneralLedgerPage() {
       {state.status === 'loaded' && accountGroups.length === 0 && (
         <div className="acct-empty">No posted transactions found for the selected fiscal year.</div>
       )}
+      {state.status === 'loaded' && accountGroups.length > 0 && visibleGroups.length === 0 && (
+        <div className="acct-empty">No accounts match “{search}”.</div>
+      )}
 
-      {state.status === 'loaded' && accountGroups.length > 0 && (
+      {state.status === 'loaded' && visibleGroups.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
           <table className="acct-table" style={{ minWidth: 600 + periodColumns.length * 120 }}>
             <thead>
@@ -160,7 +182,7 @@ export default function GeneralLedgerPage() {
               </tr>
             </thead>
             <tbody>
-              {accountGroups.map((acct) => (
+              {visibleGroups.map((acct) => (
                 <tr key={acct.accountId}>
                   <td style={{ position: 'sticky', left: 0, background: '#fff', zIndex: 1 }}>
                     <Link

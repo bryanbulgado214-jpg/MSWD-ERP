@@ -169,6 +169,54 @@ export class SupplierInvoiceService {
     return { ...this.toSummary(inv), journalEntry, payments, schedule };
   }
 
+  /**
+   * Delete a supplier invoice and reverse its payable entry. Only allowed when
+   * no payment DV has been recorded against it and its accounting period is
+   * still open and unlocked — otherwise the accountant must undo those first.
+   */
+  async remove(organizationId: string, id: string, userId: string) {
+    const inv = await this.prisma.supplierInvoice.findFirst({ where: { id, organizationId } });
+    if (!inv) throw new NotFoundException('Supplier invoice not found.');
+
+    const paymentCount = await this.prisma.disbursementVoucher.count({
+      where: { supplierInvoiceId: id },
+    });
+    if (paymentCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete: ${paymentCount} payment voucher(s) are recorded against this invoice. Delete the payment DV(s) first.`,
+      );
+    }
+
+    if (inv.journalEntryId) {
+      const jev = await this.prisma.journalEntryVoucher.findUnique({
+        where: { id: inv.journalEntryId },
+        include: { accountingPeriod: true },
+      });
+      if (jev?.accountingPeriod) {
+        if (jev.accountingPeriod.status !== 'open') {
+          throw new BadRequestException(
+            'Cannot delete: this invoice is in a closed accounting period.',
+          );
+        }
+        if (jev.accountingPeriod.lockedAt) {
+          throw new BadRequestException(
+            'Cannot delete: this invoice is in a locked accounting period.',
+          );
+        }
+      }
+    }
+
+    return runAudited(this.prisma, userId, async (tx) => {
+      const jevId = inv.journalEntryId;
+      await tx.supplierInvoice.delete({ where: { id } });
+      if (jevId) {
+        await tx.jevLine.deleteMany({ where: { jevId } });
+        await tx.journalEntryVoucher.delete({ where: { id: jevId } }).catch(() => {});
+      }
+      return { id };
+    });
+  }
+
   async create(organizationId: string, userId: string, dto: CreateSupplierInvoiceDto) {
     const invoiceNumber = dto.invoiceNumber.trim();
     const supplierName = dto.supplierName.trim();

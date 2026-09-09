@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
@@ -32,5 +41,13 @@ export class SupplierInvoiceController {
   @RequirePermissions('accounting.jev.create')
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateSupplierInvoiceDto) {
     return this.service.create(user.organizationId, user.userId, dto);
+  }
+
+  // Delete an invoice and reverse its payable entry (accountant only; blocked
+  // once it has payments or its period is closed/locked).
+  @Delete(':id')
+  @RequirePermissions('accounting.jev.create')
+  remove(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.service.remove(user.organizationId, id, user.userId);
   }
 }

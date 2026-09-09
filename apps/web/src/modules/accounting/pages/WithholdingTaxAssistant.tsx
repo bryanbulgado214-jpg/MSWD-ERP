@@ -58,6 +58,19 @@ export function WithholdingTaxAssistant({
   const [vatReg, setVatReg] = useState(payeeVatRegistered ?? false);
   const [nature, setNature] = useState<(typeof NATURES)[number]['key']>('services');
   const [expenseId, setExpenseId] = useState('');
+  // Manual overrides for the computed amounts (null = use the computed value).
+  // The accountant can correct rounding here — especially the net/cash paid.
+  const [ewtEdit, setEwtEdit] = useState<string | null>(null);
+  const [otherEdit, setOtherEdit] = useState<string | null>(null);
+  const [netEdit, setNetEdit] = useState<string | null>(null);
+
+  // Whenever the inputs that drive the computation change, drop any overrides
+  // so the fields show freshly-computed values again.
+  useEffect(() => {
+    setEwtEdit(null);
+    setOtherEdit(null);
+    setNetEdit(null);
+  }, [amount, mode, vatReg, nature]);
 
   // Follow the payee's VAT status from the master whenever a payee is picked, so
   // the accountant needn't look it up. They can still override the checkbox.
@@ -75,28 +88,39 @@ export function WithholdingTaxAssistant({
   const otherRate = vatReg ? 0.05 : 0.03; // final VAT (GMP) vs percentage tax
   const amt = parseFloat(amount) || 0;
 
+  // Tax base (net of 12% VAT for VAT-registered payees).
   let base = 0;
-  let expense = 0;
-  let cash = 0;
   if (amt > 0) {
-    if (mode === 'grossup') {
-      base = vatReg ? amt / (1.12 - ewtRate - otherRate) : amt / (1 - ewtRate - otherRate);
-      expense = vatReg ? base * 1.12 : base;
-      cash = amt;
-    } else {
-      base = vatReg ? amt / 1.12 : amt;
-      expense = amt;
-      cash = expense - base * ewtRate - base * otherRate;
-    }
+    base =
+      mode === 'grossup'
+        ? vatReg
+          ? amt / (1.12 - ewtRate - otherRate)
+          : amt / (1 - ewtRate - otherRate)
+        : vatReg
+          ? amt / 1.12
+          : amt;
   }
-  const ewt = round2(base * ewtRate);
-  const other = round2(base * otherRate);
+  // Computed (suggested) amounts. The net is derived from the ROUNDED taxes so
+  // it always ties out to the posted entry (this is the rounding bug fix):
+  //  • gross-up: the payee nets the entered amount exactly;
+  //  • invoice:  net = invoice − rounded EWT − rounded other tax.
+  const ewtSuggested = round2(base * ewtRate);
+  const otherSuggested = round2(base * otherRate);
+  const netSuggested = round2(mode === 'grossup' ? amt : amt - ewtSuggested - otherSuggested);
   base = round2(base);
-  expense = round2(expense);
-  cash = round2(cash);
+
+  // Final amounts = the accountant's overrides, else the computed values. The
+  // expense (Dr) is always the sum so the entry balances and the cash credited
+  // (expense − EWT − other) equals the net shown here.
+  const numOr = (s: string | null, fallback: number) =>
+    s === null ? fallback : parseFloat(s) || 0;
+  const ewt = numOr(ewtEdit, ewtSuggested);
+  const other = numOr(otherEdit, otherSuggested);
+  const net = numOr(netEdit, netSuggested);
+  const expense = round2(ewt + other + net);
 
   const missing = !ewtAcct || !otherAcct;
-  const canApply = amt > 0 && !!expenseId && !missing && cash > 0;
+  const canApply = amt > 0 && !!expenseId && !missing && net > 0 && expense > 0;
   const otherLabel = vatReg ? 'Final VAT withheld (GMP, 5%)' : 'Percentage tax withheld (GMP, 3%)';
 
   function apply() {
@@ -138,6 +162,16 @@ export function WithholdingTaxAssistant({
     border: '1px solid #d0d5dd',
     borderRadius: 6,
     fontSize: 13,
+    boxSizing: 'border-box',
+  };
+  const amtInput: React.CSSProperties = {
+    width: 130,
+    padding: '4px 6px',
+    border: '1px solid #d0d5dd',
+    borderRadius: 5,
+    fontSize: 12.5,
+    textAlign: 'right',
+    fontFamily: "'Courier New', monospace",
     boxSizing: 'border-box',
   };
 
@@ -236,35 +270,72 @@ export function WithholdingTaxAssistant({
         </div>
       </div>
 
-      {/* Computed breakdown */}
+      {/* Computed breakdown — the withheld taxes and the cash paid are editable
+          so the accountant can correct any centavo rounding. */}
       {amt > 0 && (
-        <table
-          className="acct-table"
-          style={{ width: '100%', marginTop: 14, maxWidth: 560, fontSize: 13 }}
-        >
-          <tbody>
-            <tr>
-              <td>Tax base {vatReg ? '(net of 12% VAT)' : ''}</td>
-              <td className="acct-text-right acct-text-mono">{peso(base)}</td>
-            </tr>
-            <tr>
-              <td>Expense charged (Dr)</td>
-              <td className="acct-text-right acct-text-mono">{peso(expense)}</td>
-            </tr>
-            <tr style={{ color: '#b42318' }}>
-              <td>Less: EWT {(ewtRate * 100).toFixed(0)}% (Cr)</td>
-              <td className="acct-text-right acct-text-mono">({peso(ewt)})</td>
-            </tr>
-            <tr style={{ color: '#b42318' }}>
-              <td>Less: {otherLabel} (Cr)</td>
-              <td className="acct-text-right acct-text-mono">({peso(other)})</td>
-            </tr>
-            <tr style={{ fontWeight: 700, borderTop: '2px solid var(--mswd-navy)' }}>
-              <td>Net paid to payee</td>
-              <td className="acct-text-right acct-text-mono">{peso(cash)}</td>
-            </tr>
-          </tbody>
-        </table>
+        <>
+          <table
+            className="acct-table"
+            style={{ width: '100%', marginTop: 14, maxWidth: 560, fontSize: 13 }}
+          >
+            <tbody>
+              <tr>
+                <td>Tax base {vatReg ? '(net of 12% VAT)' : ''}</td>
+                <td className="acct-text-right acct-text-mono">{peso(base)}</td>
+              </tr>
+              <tr>
+                <td>Expense charged (Dr)</td>
+                <td className="acct-text-right acct-text-mono">{peso(expense)}</td>
+              </tr>
+              <tr style={{ color: '#b42318' }}>
+                <td>Less: EWT {(ewtRate * 100).toFixed(0)}% (Cr)</td>
+                <td className="acct-text-right">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={ewtEdit ?? ewtSuggested.toFixed(2)}
+                    onChange={(e) => setEwtEdit(e.target.value)}
+                    style={amtInput}
+                    aria-label="EWT amount"
+                  />
+                </td>
+              </tr>
+              <tr style={{ color: '#b42318' }}>
+                <td>Less: {otherLabel} (Cr)</td>
+                <td className="acct-text-right">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={otherEdit ?? otherSuggested.toFixed(2)}
+                    onChange={(e) => setOtherEdit(e.target.value)}
+                    style={amtInput}
+                    aria-label="Other tax withheld amount"
+                  />
+                </td>
+              </tr>
+              <tr style={{ fontWeight: 700, borderTop: '2px solid var(--mswd-navy)' }}>
+                <td>Net paid to payee (cash credited)</td>
+                <td className="acct-text-right">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={netEdit ?? netSuggested.toFixed(2)}
+                    onChange={(e) => setNetEdit(e.target.value)}
+                    style={{ ...amtInput, fontWeight: 700 }}
+                    aria-label="Net paid to payee (cash credited)"
+                  />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p style={{ fontSize: 11.5, color: '#98a2b3', margin: '6px 0 0' }}>
+            Amounts are editable — adjust the withheld taxes or the cash paid to fix any centavo
+            rounding. The expense charged (Dr) updates so the entry always balances.
+          </p>
+        </>
       )}
 
       {missing && (
