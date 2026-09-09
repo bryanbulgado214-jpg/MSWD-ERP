@@ -81,6 +81,11 @@ export class GlService {
    * of the day before `startDate` (Beginning Balance), the debits and credits
    * posted within [startDate, endDate], and the resulting Ending Balance — each
    * signed by the account's normal balance. Filtered by JEV date (jev_date).
+   *
+   * Opening-balance entries (source_table = 'opening_balance') are the imported
+   * brought-forward position, not period transactions — so they always count in
+   * Beginning Balance and are excluded from the period Debit/Credit, regardless
+   * of the date they were imported on.
    */
   async getTrialBalance(
     organizationId: string,
@@ -92,12 +97,13 @@ export class GlService {
         SELECT
           c.id             AS account_id,
           c.account_code, c.name, c.account_type, c.normal_balance, c.level, c.is_header,
-          -- brought forward: everything strictly before the start date
-          COALESCE(SUM(l.debit_amount)  FILTER (WHERE j.jev_date < $2::date), 0)  AS beg_debit,
-          COALESCE(SUM(l.credit_amount) FILTER (WHERE j.jev_date < $2::date), 0)  AS beg_credit,
-          -- movement within the period
-          COALESCE(SUM(l.debit_amount)  FILTER (WHERE j.jev_date BETWEEN $2::date AND $3::date), 0)  AS per_debit,
-          COALESCE(SUM(l.credit_amount) FILTER (WHERE j.jev_date BETWEEN $2::date AND $3::date), 0)  AS per_credit
+          -- brought forward: everything strictly before the start date, plus the
+          -- imported opening balances whenever they were dated
+          COALESCE(SUM(l.debit_amount)  FILTER (WHERE j.jev_date < $2::date OR j.source_table = 'opening_balance'), 0)  AS beg_debit,
+          COALESCE(SUM(l.credit_amount) FILTER (WHERE j.jev_date < $2::date OR j.source_table = 'opening_balance'), 0)  AS beg_credit,
+          -- movement within the period (opening balances are not period activity)
+          COALESCE(SUM(l.debit_amount)  FILTER (WHERE j.jev_date BETWEEN $2::date AND $3::date AND j.source_table IS DISTINCT FROM 'opening_balance'), 0)  AS per_debit,
+          COALESCE(SUM(l.credit_amount) FILTER (WHERE j.jev_date BETWEEN $2::date AND $3::date AND j.source_table IS DISTINCT FROM 'opening_balance'), 0)  AS per_credit
         FROM chart_of_accounts c
         LEFT JOIN jev_lines l ON l.chart_of_account_id = c.id
         LEFT JOIN journal_entry_vouchers j
