@@ -478,7 +478,7 @@ export default function FinancialStatementsPage() {
                 <StatementRowView
                   key={row.code ? `${row.code}-${i}` : `${row.kind}-${i}`}
                   row={row}
-                  onDrill={win ? handleDrill : undefined}
+                  onDrill={handleDrill}
                 />
               ))}
             </tbody>
