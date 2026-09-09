@@ -27,7 +27,6 @@ const jevService = new JevService(
 const runId = Date.now().toString(36);
 
 let organizationId: string;
-let fiscalYearId: string;
 let creatorId: string;
 let posterId: string;
 let debitAccountId: string;
@@ -42,11 +41,6 @@ let otherOrgId: string | undefined;
 beforeAll(async () => {
   const org = await prisma.organization.findFirstOrThrow({ where: { code: 'SBWD' } });
   organizationId = org.id;
-
-  const fy = await prisma.fiscalYear.findFirstOrThrow({
-    where: { organizationId, status: 'open' },
-  });
-  fiscalYearId = fy.id;
 
   const users = await prisma.user.findMany({
     where: { organizationId },
@@ -128,7 +122,10 @@ describe('GlService.getTrialBalance', () => {
     await makePostedJev(1000);
     await makePostedJev(2500);
 
-    const rows = await gl.getTrialBalance(organizationId, { fiscalYearId });
+    const rows = await gl.getTrialBalance(organizationId, {
+      startDate: '2026-08-01',
+      endDate: '2026-08-31',
+    });
     expect(rows.length).toBeGreaterThan(0);
 
     const sumDebit = rows.reduce((s, r) => s + Number(r.totalDebit), 0);
@@ -212,13 +209,19 @@ describe('GlService.getTrialBalance', () => {
     });
 
     // MSWD's trial balance must not contain the other org's accounts.
-    const mswdRows = await gl.getTrialBalance(organizationId, { fiscalYearId });
+    const mswdRows = await gl.getTrialBalance(organizationId, {
+      startDate: '2026-08-01',
+      endDate: '2026-08-31',
+    });
     const leaked = mswdRows.filter((r) => r.accountId === oDebit.id || r.accountId === oCredit.id);
     expect(leaked).toHaveLength(0);
 
     // The other org's own trial balance DOES see them (sanity check the
     // activity really exists and is scoped, not simply absent everywhere).
-    const otherRows = await gl.getTrialBalance(otherOrg.id, { fiscalYearId: otherFy.id });
+    const otherRows = await gl.getTrialBalance(otherOrg.id, {
+      startDate: '2097-01-01',
+      endDate: '2097-01-31',
+    });
     const otherDebitRow = otherRows.find((r) => r.accountId === oDebit.id);
     expect(otherDebitRow).toBeDefined();
     expect(Number(otherDebitRow!.totalDebit)).toBe(9999);

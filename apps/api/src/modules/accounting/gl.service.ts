@@ -15,9 +15,10 @@ export interface TrialBalanceRow {
   normalBalance: string;
   level: number;
   isHeader: boolean;
+  beginningBalance: string;
   totalDebit: string;
   totalCredit: string;
-  balance: string;
+  endingBalance: string;
 }
 
 export interface GeneralLedgerRow {
@@ -75,54 +76,62 @@ export class GlService {
     private readonly autoJev: AutoJevService,
   ) {}
 
+  /**
+   * Date-range trial balance: for each account, the balance brought forward as
+   * of the day before `startDate` (Beginning Balance), the debits and credits
+   * posted within [startDate, endDate], and the resulting Ending Balance — each
+   * signed by the account's normal balance. Filtered by JEV date (jev_date).
+   */
   async getTrialBalance(
     organizationId: string,
-    filters: { periodId?: string; fiscalYearId?: string },
+    filters: { startDate: string; endDate: string },
   ): Promise<TrialBalanceRow[]> {
-    const periodClause = filters.periodId
-      ? `AND j.accounting_period_id = $2::uuid`
-      : filters.fiscalYearId
-        ? `AND ap.fiscal_year_id = $2::uuid`
-        : '';
-
-    const param2 = filters.periodId ?? filters.fiscalYearId;
-    const params: unknown[] = param2 ? [organizationId, param2] : [organizationId];
-
     const rows = await this.prisma.$queryRawUnsafe<TrialBalanceRow[]>(
       `
+      WITH activity AS (
+        SELECT
+          c.id             AS account_id,
+          c.account_code, c.name, c.account_type, c.normal_balance, c.level, c.is_header,
+          -- brought forward: everything strictly before the start date
+          COALESCE(SUM(l.debit_amount)  FILTER (WHERE j.jev_date < $2::date), 0)  AS beg_debit,
+          COALESCE(SUM(l.credit_amount) FILTER (WHERE j.jev_date < $2::date), 0)  AS beg_credit,
+          -- movement within the period
+          COALESCE(SUM(l.debit_amount)  FILTER (WHERE j.jev_date BETWEEN $2::date AND $3::date), 0)  AS per_debit,
+          COALESCE(SUM(l.credit_amount) FILTER (WHERE j.jev_date BETWEEN $2::date AND $3::date), 0)  AS per_credit
+        FROM chart_of_accounts c
+        LEFT JOIN jev_lines l ON l.chart_of_account_id = c.id
+        LEFT JOIN journal_entry_vouchers j
+          ON j.id = l.jev_id
+          AND j.organization_id = $1::uuid
+          AND j.status IN ('posted', 'reversed')
+          AND j.jev_date <= $3::date
+        WHERE c.organization_id = $1::uuid
+          AND c.is_active = true
+          AND c.is_header = false
+        GROUP BY c.id, c.account_code, c.name, c.account_type, c.normal_balance, c.level, c.is_header
+      )
       SELECT
-        c.id             AS "accountId",
-        c.account_code   AS "accountCode",
-        c.name           AS "accountName",
-        c.account_type   AS "accountType",
-        c.normal_balance AS "normalBalance",
-        c.level,
-        c.is_header      AS "isHeader",
-        COALESCE(SUM(l.debit_amount), 0)::text  AS "totalDebit",
-        COALESCE(SUM(l.credit_amount), 0)::text AS "totalCredit",
-        CASE c.normal_balance
-          WHEN 'debit'  THEN (COALESCE(SUM(l.debit_amount), 0) - COALESCE(SUM(l.credit_amount), 0))::text
-          WHEN 'credit' THEN (COALESCE(SUM(l.credit_amount), 0) - COALESCE(SUM(l.debit_amount), 0))::text
-        END AS "balance"
-      FROM chart_of_accounts c
-      LEFT JOIN jev_lines l ON l.chart_of_account_id = c.id
-        AND EXISTS (
-          SELECT 1 FROM journal_entry_vouchers j
-          JOIN accounting_periods ap ON ap.id = j.accounting_period_id
-          WHERE j.id = l.jev_id
-            AND j.organization_id = $1::uuid
-            AND j.status IN ('posted', 'reversed')
-            ${periodClause}
-        )
-      WHERE c.organization_id = $1::uuid
-        AND c.is_active = true
-        AND c.is_header = false
-      GROUP BY c.id, c.account_code, c.name, c.account_type, c.normal_balance, c.level, c.is_header
-      HAVING COALESCE(SUM(l.debit_amount), 0) != 0
-         OR COALESCE(SUM(l.credit_amount), 0) != 0
-      ORDER BY c.account_code
+        account_id      AS "accountId",
+        account_code    AS "accountCode",
+        name            AS "accountName",
+        account_type    AS "accountType",
+        normal_balance  AS "normalBalance",
+        level,
+        is_header       AS "isHeader",
+        (CASE normal_balance WHEN 'debit' THEN beg_debit - beg_credit ELSE beg_credit - beg_debit END)::text AS "beginningBalance",
+        per_debit::text  AS "totalDebit",
+        per_credit::text AS "totalCredit",
+        (CASE normal_balance
+           WHEN 'debit'  THEN (beg_debit - beg_credit) + (per_debit - per_credit)
+           ELSE (beg_credit - beg_debit) + (per_credit - per_debit)
+         END)::text AS "endingBalance"
+      FROM activity
+      WHERE beg_debit != 0 OR beg_credit != 0 OR per_debit != 0 OR per_credit != 0
+      ORDER BY account_code
       `,
-      ...params,
+      organizationId,
+      filters.startDate,
+      filters.endDate,
     );
 
     return rows;

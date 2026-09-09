@@ -270,9 +270,10 @@ export interface TrialBalanceRow {
   normalBalance: string;
   level: number;
   isHeader: boolean;
+  beginningBalance: string;
   totalDebit: string;
   totalCredit: string;
-  balance: string;
+  endingBalance: string;
 }
 
 export interface GeneralLedgerRow {

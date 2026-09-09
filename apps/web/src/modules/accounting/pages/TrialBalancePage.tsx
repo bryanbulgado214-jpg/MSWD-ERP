@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
 import './accounting.css';
-import { getTrialBalance, getGlFiscalYears, getGlPeriods } from '../api';
-import type { TrialBalanceRow, FiscalYearOption, PeriodOption } from '../types';
+import { getTrialBalance } from '../api';
+import type { TrialBalanceRow } from '../types';
 
 import { OpeningBalanceUploadModal } from './OpeningBalanceUploadModal';
 
@@ -13,6 +13,28 @@ function formatPeso(value: string | number): string {
   if (isNaN(num) || num === 0) return '—';
   return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(num);
 }
+
+const iso = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+// Format a 'YYYY-MM-DD' string for display without a timezone shift.
+const fmtDate = (s: string) =>
+  s
+    ? new Date(`${s}T00:00:00`).toLocaleDateString('en-PH', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      })
+    : '';
+
+// The day immediately before a 'YYYY-MM-DD' string — the beginning balance is
+// brought forward "as of" the day before the From date.
+const dayBefore = (s: string) => {
+  if (!s) return '';
+  const d = new Date(`${s}T00:00:00`);
+  d.setDate(d.getDate() - 1);
+  return iso(d);
+};
 
 type LoadState =
   | { status: 'idle' }
@@ -23,68 +45,63 @@ type LoadState =
 export default function TrialBalancePage() {
   const { permissions } = useAuth();
   const canUploadOpening = permissions.has('accounting.jev.create');
-  const [fiscalYears, setFiscalYears] = useState<FiscalYearOption[]>([]);
-  const [periods, setPeriods] = useState<PeriodOption[]>([]);
-  const [selectedFY, setSelectedFY] = useState('');
-  const [selectedPeriod, setSelectedPeriod] = useState('');
+  const now = new Date();
+  const [startDate, setStartDate] = useState(iso(new Date(now.getFullYear(), 0, 1)));
+  const [endDate, setEndDate] = useState(iso(now));
   const [state, setState] = useState<LoadState>({ status: 'idle' });
   const [showUpload, setShowUpload] = useState(false);
   const [flash, setFlash] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    getGlFiscalYears().then((fy) => {
-      setFiscalYears(fy);
-      const first = fy[0];
-      if (first) setSelectedFY(first.id);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!selectedFY) return;
-    setSelectedPeriod('');
-    getGlPeriods(selectedFY).then(setPeriods);
-  }, [selectedFY]);
-
-  useEffect(() => {
-    if (!selectedFY) return;
-    setState({ status: 'loading' });
-    const params = new URLSearchParams();
-    if (selectedPeriod) {
-      params.set('periodId', selectedPeriod);
-    } else {
-      params.set('fiscalYearId', selectedFY);
+    if (!startDate || !endDate) return;
+    if (startDate > endDate) {
+      setState({
+        status: 'error',
+        message: 'The beginning date must be on or before the ending date.',
+      });
+      return;
     }
+    setState({ status: 'loading' });
+    const params = new URLSearchParams({ startDate, endDate });
     getTrialBalance(params.toString())
       .then((data) => setState({ status: 'loaded', data }))
       .catch((err) => setState({ status: 'error', message: err.message }));
-  }, [selectedFY, selectedPeriod, reloadKey]);
+  }, [startDate, endDate, reloadKey]);
 
   const rows = state.status === 'loaded' ? state.data : [];
+  const totalBeginning = rows.reduce((s, r) => s + parseFloat(r.beginningBalance), 0);
   const totalDebit = rows.reduce((s, r) => s + parseFloat(r.totalDebit), 0);
   const totalCredit = rows.reduce((s, r) => s + parseFloat(r.totalCredit), 0);
+  const totalEnding = rows.reduce((s, r) => s + parseFloat(r.endingBalance), 0);
 
   return (
     <div className="acct-page acct-page--embedded">
       <h1>Trial Balance</h1>
 
       <div className="acct-toolbar">
-        <select value={selectedFY} onChange={(e) => setSelectedFY(e.target.value)}>
-          {fiscalYears.map((fy) => (
-            <option key={fy.id} value={fy.id}>
-              FY {fy.year} — {fy.name}
-            </option>
-          ))}
-        </select>
-
-        <select value={selectedPeriod} onChange={(e) => setSelectedPeriod(e.target.value)}>
-          <option value="">All Periods</option>
-          {periods.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+        <label
+          style={{ fontSize: 13, color: '#475467', display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          From
+          <input
+            type="date"
+            value={startDate}
+            max={endDate}
+            onChange={(e) => setStartDate(e.target.value)}
+          />
+        </label>
+        <label
+          style={{ fontSize: 13, color: '#475467', display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          To
+          <input
+            type="date"
+            value={endDate}
+            min={startDate}
+            onChange={(e) => setEndDate(e.target.value)}
+          />
+        </label>
 
         {canUploadOpening && (
           <button
@@ -118,7 +135,9 @@ export default function TrialBalancePage() {
       {state.status === 'loading' && <div className="acct-empty">Loading...</div>}
 
       {state.status === 'loaded' && rows.length === 0 && (
-        <div className="acct-empty">No posted transactions found for the selected period.</div>
+        <div className="acct-empty">
+          No account activity or balances in the selected date range.
+        </div>
       )}
 
       {state.status === 'loaded' && rows.length > 0 && (
@@ -129,9 +148,24 @@ export default function TrialBalancePage() {
                 <th>Account Code</th>
                 <th>Account Name</th>
                 <th>Type</th>
+                <th className="acct-text-right">
+                  Beginning Balance
+                  <span
+                    style={{ display: 'block', fontWeight: 400, fontSize: 11, color: '#667085' }}
+                  >
+                    as of {fmtDate(dayBefore(startDate))}
+                  </span>
+                </th>
                 <th className="acct-text-right">Debit</th>
                 <th className="acct-text-right">Credit</th>
-                <th className="acct-text-right">Balance</th>
+                <th className="acct-text-right">
+                  Ending Balance
+                  <span
+                    style={{ display: 'block', fontWeight: 400, fontSize: 11, color: '#667085' }}
+                  >
+                    as of {fmtDate(endDate)}
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -151,10 +185,13 @@ export default function TrialBalancePage() {
                       {row.accountType}
                     </span>
                   </td>
+                  <td className="acct-text-right acct-text-mono">
+                    {formatPeso(row.beginningBalance)}
+                  </td>
                   <td className="acct-text-right acct-text-mono">{formatPeso(row.totalDebit)}</td>
                   <td className="acct-text-right acct-text-mono">{formatPeso(row.totalCredit)}</td>
                   <td className="acct-text-right acct-text-mono" style={{ fontWeight: 600 }}>
-                    {formatPeso(row.balance)}
+                    {formatPeso(row.endingBalance)}
                   </td>
                 </tr>
               ))}
@@ -162,14 +199,19 @@ export default function TrialBalancePage() {
             <tfoot>
               <tr style={{ fontWeight: 700, borderTop: '2px solid var(--mswd-navy)' }}>
                 <td colSpan={3}>Total</td>
+                <td className="acct-text-right acct-text-mono">{formatPeso(totalBeginning)}</td>
                 <td className="acct-text-right acct-text-mono">{formatPeso(totalDebit)}</td>
                 <td className="acct-text-right acct-text-mono">{formatPeso(totalCredit)}</td>
-                <td className="acct-text-right acct-text-mono">
+                <td className="acct-text-right acct-text-mono">{formatPeso(totalEnding)}</td>
+              </tr>
+              <tr>
+                <td colSpan={4}></td>
+                <td colSpan={3} className="acct-text-right" style={{ fontSize: 12 }}>
                   {Math.abs(totalDebit - totalCredit) < 0.01 ? (
-                    <span style={{ color: '#067647' }}>Balanced</span>
+                    <span style={{ color: '#067647' }}>Debits and credits balanced</span>
                   ) : (
                     <span style={{ color: '#b42318' }}>
-                      Off by {formatPeso(Math.abs(totalDebit - totalCredit))}
+                      Debits vs credits off by {formatPeso(Math.abs(totalDebit - totalCredit))}
                     </span>
                   )}
                 </td>

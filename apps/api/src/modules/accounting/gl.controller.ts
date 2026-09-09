@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -27,13 +28,13 @@ export class GlController {
   @RequirePermissions('accounting.read')
   getTrialBalance(
     @CurrentUser() user: AuthenticatedUser,
-    @Query('periodId') periodId?: string,
-    @Query('fiscalYearId') fiscalYearId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ) {
-    return this.glService.getTrialBalance(user.organizationId, {
-      ...(periodId ? { periodId } : {}),
-      ...(fiscalYearId ? { fiscalYearId } : {}),
-    });
+    if (!startDate || !endDate) {
+      throw new BadRequestException('A beginning date and an ending date are required.');
+    }
+    return this.glService.getTrialBalance(user.organizationId, { startDate, endDate });
   }
 
   @Get('general-ledger')
