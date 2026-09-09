@@ -450,6 +450,13 @@ export interface DetailedStatementRow {
   kind: 'section' | 'header' | 'account' | 'total' | 'grand_total' | 'spacer';
   current: number;
   compare: number;
+  // Present for real chart-of-account rows, enabling drill-down to postings.
+  accountId?: string | null;
+}
+
+export interface StatementWindow {
+  startDate: string;
+  endDate: string;
 }
 
 export interface DetailedStatement {
@@ -463,6 +470,8 @@ export interface DetailedStatement {
   period: { id: string; name: string; periodNumber: number };
   rows: DetailedStatementRow[];
   totals: Record<string, number>;
+  // Date bounds behind each column, for drill-down. Present for SFP/SCI.
+  window?: { current: StatementWindow; compare: StatementWindow };
   preparedBy: string;
   notedBy: string;
 }

@@ -28,6 +28,16 @@ export interface StatementRow {
   kind: 'section' | 'header' | 'account' | 'total' | 'grand_total' | 'spacer';
   current: number; // column 1
   compare: number; // column 2 (prior year for SFP; YTD for SCI)
+  // Set for real chart-of-account rows ('account'/'header'), enabling the
+  // drill-down to the postings that constitute the amount. Null for the
+  // computed section/subtotal/spacer rows.
+  accountId?: string | null;
+}
+
+/** Date bounds (inclusive) behind each statement column, for drill-down. */
+export interface StatementWindow {
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
 }
 
 export interface DetailedStatementResult {
@@ -42,6 +52,9 @@ export interface DetailedStatementResult {
   rows: StatementRow[];
   // convenience totals for callers / drill-down
   totals: Record<string, number>;
+  // Date bounds behind each column, so a clicked amount can open the exact
+  // postings that make it up. Present for SFP/SCI; omitted for SCF.
+  window?: { current: StatementWindow; compare: StatementWindow };
   preparedBy: string;
   notedBy: string;
 }
@@ -170,7 +183,7 @@ export class DetailedStatementsService {
     const periods = await this.prisma.accountingPeriod.findMany({
       where: { fiscalYearId: fiscalYear.id },
       orderBy: { periodNumber: 'asc' },
-      select: { id: true, name: true, periodNumber: true, endDate: true },
+      select: { id: true, name: true, periodNumber: true, startDate: true, endDate: true },
     });
     if (periods.length === 0) {
       throw new Error('No accounting periods found for this fiscal year.');
@@ -287,6 +300,7 @@ export class DetailedStatementsService {
           kind: a.isHeader ? 'header' : 'account',
           current: round2(c1),
           compare: round2(c2),
+          accountId: a.id,
         });
       }
       let t1 = round2(cur.get(rootCode) ?? 0);
@@ -318,6 +332,29 @@ export class DetailedStatementsService {
     const monthName = MONTHS[selected.periodNumber - 1] ?? selected.name.toUpperCase();
     const asOfDate = selected.endDate ? new Date(selected.endDate) : new Date();
     const asOfStr = `${monthName} ${asOfDate.getUTCDate()}, ${fiscalYear.year}`;
+
+    // Date bounds behind each column, so a clicked amount opens exactly the
+    // postings that make it up. Mirrors the windowedSums logic above:
+    //   SFP  → current = FY start … period end (cumulative); compare = prior FY
+    //   SCI  → current = the month;                          compare = FY start … period end (YTD)
+    //   annual → current = whole FY;                         compare = whole prior FY
+    const ymd = (d: Date): string => new Date(d).toISOString().slice(0, 10);
+    const fyStart = `${fiscalYear.year}-01-01`;
+    const fyEnd = `${fiscalYear.year}-12-31`;
+    const priorWin: StatementWindow = {
+      startDate: `${fiscalYear.year - 1}-01-01`,
+      endDate: `${fiscalYear.year - 1}-12-31`,
+    };
+    const selStart = selected.startDate ? ymd(selected.startDate) : fyStart;
+    const selEnd = selected.endDate ? ymd(selected.endDate) : fyEnd;
+    const window: { current: StatementWindow; compare: StatementWindow } = annual
+      ? { current: { startDate: fyStart, endDate: fyEnd }, compare: priorWin }
+      : kind === 'sfp'
+        ? { current: { startDate: fyStart, endDate: selEnd }, compare: priorWin }
+        : {
+            current: { startDate: selStart, endDate: selEnd },
+            compare: { startDate: fyStart, endDate: selEnd },
+          };
 
     if (kind === 'sfp') {
       // Interim surplus/(deficit): year-to-date Income − Expenses, not yet closed
@@ -364,6 +401,7 @@ export class DetailedStatementsService {
         period: { id: selected.id, name: selected.name, periodNumber: selected.periodNumber },
         rows,
         totals,
+        window,
         preparedBy: 'Accountant',
         notedBy: 'General Manager',
       };
@@ -398,6 +436,7 @@ export class DetailedStatementsService {
       period: { id: selected.id, name: selected.name, periodNumber: selected.periodNumber },
       rows,
       totals,
+      window,
       preparedBy: 'Accountant',
       notedBy: 'General Manager',
     };

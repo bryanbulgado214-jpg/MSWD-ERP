@@ -5,6 +5,8 @@ import './accounting.css';
 import { getGeneralLedger, getGlFiscalYears } from '../api';
 import type { GeneralLedgerRow, FiscalYearOption } from '../types';
 
+import { BreakdownModal, type BreakdownTarget } from './BreakdownModal';
+
 function formatPeso(value: string | number): string {
   const num = typeof value === 'string' ? parseFloat(value) : value;
   if (isNaN(num) || num === 0) return '—';
@@ -44,6 +46,7 @@ export default function GeneralLedgerPage() {
   const [accountType, setAccountType] = useState('');
   const [search, setSearch] = useState('');
   const [state, setState] = useState<LoadState>({ status: 'idle' });
+  const [drill, setDrill] = useState<BreakdownTarget | null>(null);
 
   useEffect(() => {
     getGlFiscalYears().then((fy) => {
@@ -202,9 +205,33 @@ export default function GeneralLedgerPage() {
                   </td>
                   {periodColumns.map((col) => {
                     const p = acct.periods.get(col.id);
+                    const hasActivity = p && parseFloat(p.balance) !== 0;
                     return (
                       <td key={col.id} className="acct-text-right acct-text-mono">
-                        {p ? formatPeso(p.balance) : '—'}
+                        {hasActivity ? (
+                          <button
+                            type="button"
+                            className="acct-linkish"
+                            title="Show the transactions that make up this amount"
+                            onClick={() =>
+                              setDrill({
+                                accountId: acct.accountId,
+                                accountCode: acct.accountCode,
+                                accountName: acct.accountName,
+                                normalBalance: acct.normalBalance,
+                                amount: parseFloat(p!.balance),
+                                periodId: col.id,
+                                windowLabel: col.name,
+                              })
+                            }
+                          >
+                            {formatPeso(p!.balance)}
+                          </button>
+                        ) : p ? (
+                          formatPeso(p.balance)
+                        ) : (
+                          '—'
+                        )}
                       </td>
                     );
                   })}
@@ -217,6 +244,8 @@ export default function GeneralLedgerPage() {
           </table>
         </div>
       )}
+
+      {drill && <BreakdownModal target={drill} onClose={() => setDrill(null)} />}
     </div>
   );
 }

@@ -19,6 +19,8 @@ import type {
   PeriodOption,
 } from '../types';
 
+import { BreakdownModal, type BreakdownTarget } from './BreakdownModal';
+
 type ViewMode = 'sfp' | 'sci' | 'scf' | 'sce';
 type Detail = 'detailed' | 'condensed';
 const ANNUAL = 'annual';
@@ -40,7 +42,13 @@ type LoadState =
   | { status: 'loaded'; data: DetailedStatement }
   | { status: 'sce'; data: ChangesInEquityResult };
 
-function StatementRowView({ row }: { row: DetailedStatementRow }) {
+function StatementRowView({
+  row,
+  onDrill,
+}: {
+  row: DetailedStatementRow;
+  onDrill?: (row: DetailedStatementRow, column: 'current' | 'compare') => void;
+}) {
   if (row.kind === 'spacer') {
     return (
       <tr aria-hidden>
@@ -74,6 +82,26 @@ function StatementRowView({ row }: { row: DetailedStatementRow }) {
     padding: '3px 10px 3px 4px',
   };
 
+  // Leaf account rows drill down to the postings behind the figure.
+  const drillable = row.kind === 'account' && !!row.accountId && !!onDrill;
+  const amountCell = (column: 'current' | 'compare') => {
+    const value = column === 'current' ? row.current : row.compare;
+    if (isSection) return '';
+    if (drillable && Math.abs(value) >= 0.005) {
+      return (
+        <button
+          type="button"
+          className="acct-linkish"
+          title="Show the transactions that make up this amount"
+          onClick={() => onDrill!(row, column)}
+        >
+          {money(value)}
+        </button>
+      );
+    }
+    return money(value);
+  };
+
   return (
     <tr>
       <td style={labelStyle}>
@@ -84,8 +112,8 @@ function StatementRowView({ row }: { row: DetailedStatementRow }) {
         )}
         {row.label}
       </td>
-      <td style={numStyle}>{isSection ? '' : money(row.current)}</td>
-      <td style={numStyle}>{isSection ? '' : money(row.compare)}</td>
+      <td style={numStyle}>{amountCell('current')}</td>
+      <td style={numStyle}>{amountCell('compare')}</td>
     </tr>
   );
 }
@@ -253,6 +281,7 @@ export default function FinancialStatementsPage() {
   const [selectedFY, setSelectedFY] = useState('');
   const [selectedPeriod, setSelectedPeriod] = useState(''); // '' interim(latest), ANNUAL, or a periodId
   const [state, setState] = useState<LoadState>({ status: 'idle' });
+  const [drill, setDrill] = useState<BreakdownTarget | null>(null);
 
   const isSce = viewMode === 'sce';
   const annual = selectedPeriod === ANNUAL || isSce;
@@ -305,6 +334,25 @@ export default function FinancialStatementsPage() {
     organization?.legalName ||
     organization?.name ||
     'Water District';
+
+  // Drill-down: a clicked account amount opens the postings behind it, scoped to
+  // the same date window the column represents (present on SFP/SCI, not SCF).
+  const win = state.status === 'loaded' ? state.data.window : undefined;
+  const curLabel = state.status === 'loaded' ? state.data.currentLabel : '';
+  const cmpLabel = state.status === 'loaded' ? state.data.compareLabel : '';
+  const handleDrill = (row: DetailedStatementRow, column: 'current' | 'compare') => {
+    if (!win || !row.accountId) return;
+    const w = column === 'current' ? win.current : win.compare;
+    setDrill({
+      accountId: row.accountId,
+      accountCode: row.code ?? '',
+      accountName: row.label,
+      amount: column === 'current' ? row.current : row.compare,
+      startDate: w.startDate,
+      endDate: w.endDate,
+      windowLabel: column === 'current' ? curLabel : cmpLabel,
+    });
+  };
 
   return (
     <div className="acct-page acct-page--embedded">
@@ -430,6 +478,7 @@ export default function FinancialStatementsPage() {
                 <StatementRowView
                   key={row.code ? `${row.code}-${i}` : `${row.kind}-${i}`}
                   row={row}
+                  onDrill={win ? handleDrill : undefined}
                 />
               ))}
             </tbody>
@@ -437,6 +486,8 @@ export default function FinancialStatementsPage() {
           <Signatories prepared={state.data.preparedBy} noted={state.data.notedBy} />
         </div>
       )}
+
+      {drill && <BreakdownModal target={drill} onClose={() => setDrill(null)} />}
     </div>
   );
 }

@@ -199,6 +199,25 @@
 
 .acct-table__link:hover { text-decoration: underline; }
 
+/* An amount rendered as a drill-down trigger: looks like the surrounding
+   figure, but is clickable and underlines on hover. */
+.acct-linkish {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  text-decoration-color: var(--mswd-blue);
+  text-underline-offset: 2px;
+}
+.acct-linkish:hover {
+  color: var(--mswd-blue);
+  text-decoration: underline;
+}
+
 /* Indentation for tree view */
 .acct-indent-1 { padding-left: 12px; }
 .acct-indent-2 { padding-left: 32px; }
