@@ -79,8 +79,10 @@ export class GlService {
   /**
    * Date-range trial balance: for each account, the balance brought forward as
    * of the day before `startDate` (Beginning Balance), the debits and credits
-   * posted within [startDate, endDate], and the resulting Ending Balance — each
-   * signed by the account's normal balance. Filtered by JEV date (jev_date).
+   * posted within [startDate, endDate], and the resulting Ending Balance.
+   * Beginning and Ending are net-signed — debit balances positive, credit
+   * balances negative — so each of those columns foots to zero when every
+   * voucher is balanced. Filtered by JEV date (jev_date).
    *
    * Opening-balance entries (source_table = 'opening_balance') are the imported
    * brought-forward position, not period transactions — so they always count in
@@ -124,13 +126,13 @@ export class GlService {
         normal_balance  AS "normalBalance",
         level,
         is_header       AS "isHeader",
-        (CASE normal_balance WHEN 'debit' THEN beg_debit - beg_credit ELSE beg_credit - beg_debit END)::text AS "beginningBalance",
+        -- Beginning and Ending are net-signed: debit balances positive, credit
+        -- balances negative (not signed by normal balance). Each column then
+        -- foots to zero when every voucher is balanced.
+        (beg_debit - beg_credit)::text AS "beginningBalance",
         per_debit::text  AS "totalDebit",
         per_credit::text AS "totalCredit",
-        (CASE normal_balance
-           WHEN 'debit'  THEN (beg_debit - beg_credit) + (per_debit - per_credit)
-           ELSE (beg_credit - beg_debit) + (per_credit - per_debit)
-         END)::text AS "endingBalance"
+        ((beg_debit - beg_credit) + (per_debit - per_credit))::text AS "endingBalance"
       FROM activity
       WHERE beg_debit != 0 OR beg_credit != 0 OR per_debit != 0 OR per_credit != 0
       ORDER BY account_code

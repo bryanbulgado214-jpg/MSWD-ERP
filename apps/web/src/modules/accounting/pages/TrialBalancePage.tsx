@@ -14,6 +14,17 @@ function formatPeso(value: string | number): string {
   return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(num);
 }
 
+// The Beginning / Ending columns are net-signed (debit +, credit −), so their
+// total should foot to zero. Show the zero in green; flag any residual in red.
+function footBalance(total: number) {
+  const balanced = Math.abs(total) < 0.005;
+  return (
+    <span style={{ color: balanced ? '#067647' : '#b42318' }}>
+      {balanced ? '₱0.00' : formatPeso(total)}
+    </span>
+  );
+}
+
 const iso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
@@ -199,10 +210,10 @@ export default function TrialBalancePage() {
             <tfoot>
               <tr style={{ fontWeight: 700, borderTop: '2px solid var(--mswd-navy)' }}>
                 <td colSpan={3}>Total</td>
-                <td className="acct-text-right acct-text-mono">{formatPeso(totalBeginning)}</td>
+                <td className="acct-text-right acct-text-mono">{footBalance(totalBeginning)}</td>
                 <td className="acct-text-right acct-text-mono">{formatPeso(totalDebit)}</td>
                 <td className="acct-text-right acct-text-mono">{formatPeso(totalCredit)}</td>
-                <td className="acct-text-right acct-text-mono">{formatPeso(totalEnding)}</td>
+                <td className="acct-text-right acct-text-mono">{footBalance(totalEnding)}</td>
               </tr>
               <tr>
                 <td colSpan={4}></td>
