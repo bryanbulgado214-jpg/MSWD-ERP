@@ -766,6 +766,16 @@
   background: #f5f7fa;
 }
 
+/* Inside the breakdown modal the scroll container is the modal body, not the
+   page — so the page-header offset above would float the sticky header down
+   into the rows. Pin it to the top of the modal body instead. */
+.bd-modal__scroll .acct-table thead th {
+  top: 0;
+}
+.bd-modal__scroll div:has(> .acct-table) {
+  overflow-x: auto;
+}
+
 /* Clickable DV rows — the whole line opens the voucher. */
 /* Only the data cells open the voucher — NOT the last cell (edit/delete). The
    pointer and the blue hover highlight cover just that range. */

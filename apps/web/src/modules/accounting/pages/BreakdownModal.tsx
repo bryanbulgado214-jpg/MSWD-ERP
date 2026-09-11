@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom';
 import { getSubsidiaryLedger } from '../api';
 import type { SubsidiaryLedgerResult } from '../types';
 
+import { JevPeekModal } from './JevPeekModal';
+
 function formatPeso(value: string | number): string {
   const num = typeof value === 'string' ? parseFloat(value) : value;
   if (isNaN(num) || num === 0) return '—';
@@ -66,6 +68,8 @@ export function BreakdownModal({
   onClose: () => void;
 }) {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
+  // A voucher opened as a floating peek layered over this modal.
+  const [peekJevId, setPeekJevId] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -81,12 +85,14 @@ export function BreakdownModal({
       );
   }, [target.accountId, target.periodId, target.startDate, target.endDate, target.excludeOpening]);
 
-  // Close on Escape.
+  // Close on Escape — but if a voucher peek is open, let it take the Escape.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !peekJevId) onClose();
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, peekJevId]);
 
   const normal =
     state.status === 'loaded' ? state.data.account.normalBalance : target.normalBalance;
@@ -111,133 +117,140 @@ export function BreakdownModal({
     (ledgerQuery.toString() ? `?${ledgerQuery.toString()}` : '');
 
   return (
-    <div style={overlay} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={card} role="dialog" aria-modal="true" aria-label="Amount breakdown">
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            gap: 12,
-            padding: '16px 20px',
-            borderBottom: '1px solid #eaecf0',
-          }}
-        >
-          <div>
-            <div style={{ fontWeight: 700, color: 'var(--mswd-navy, #0b3a67)', fontSize: 15 }}>
-              {target.accountCode} — {target.accountName}
+    <>
+      <div style={overlay} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+        <div style={card} role="dialog" aria-modal="true" aria-label="Amount breakdown">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: 12,
+              padding: '16px 20px',
+              borderBottom: '1px solid #eaecf0',
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 700, color: 'var(--mswd-navy, #0b3a67)', fontSize: 15 }}>
+                {target.accountCode} — {target.accountName}
+              </div>
+              <div style={{ fontSize: 12, color: '#667085', marginTop: 2 }}>
+                Breakdown for {target.windowLabel}
+                {typeof target.amount === 'number' && (
+                  <>
+                    {' · '}
+                    <span style={{ fontWeight: 600 }}>{formatPeso(target.amount)}</span>
+                  </>
+                )}
+              </div>
             </div>
-            <div style={{ fontSize: 12, color: '#667085', marginTop: 2 }}>
-              Breakdown for {target.windowLabel}
-              {typeof target.amount === 'number' && (
-                <>
-                  {' · '}
-                  <span style={{ fontWeight: 600 }}>{formatPeso(target.amount)}</span>
-                </>
-              )}
-            </div>
+            <button
+              className="acct-btn acct-btn--sm"
+              onClick={onClose}
+              type="button"
+              aria-label="Close"
+            >
+              ✕
+            </button>
           </div>
-          <button
-            className="acct-btn acct-btn--sm"
-            onClick={onClose}
-            type="button"
-            aria-label="Close"
-          >
-            ✕
-          </button>
-        </div>
 
-        <div style={{ padding: '12px 20px', overflowY: 'auto' }}>
-          {state.status === 'error' && <div className="acct-error">{state.message}</div>}
-          {state.status === 'loading' && <div className="acct-empty">Loading…</div>}
+          <div className="bd-modal__scroll" style={{ padding: '0 20px 16px', overflowY: 'auto' }}>
+            {state.status === 'error' && <div className="acct-error">{state.message}</div>}
+            {state.status === 'loading' && <div className="acct-empty">Loading…</div>}
 
-          {state.status === 'loaded' && entries.length === 0 && (
-            <div className="acct-empty">No posted transactions in this window.</div>
-          )}
+            {state.status === 'loaded' && entries.length === 0 && (
+              <div className="acct-empty">No posted transactions in this window.</div>
+            )}
 
-          {state.status === 'loaded' && entries.length > 0 && (
-            <div style={{ overflowX: 'auto' }}>
-              <table className="acct-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>JEV #</th>
-                    <th>Particulars</th>
-                    <th>Source</th>
-                    <th className="acct-text-right">Debit</th>
-                    <th className="acct-text-right">Credit</th>
-                    <th className="acct-text-right">Running</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {withBalance.map((entry) => (
-                    <tr key={entry.jevLineId}>
-                      <td style={{ whiteSpace: 'nowrap' }}>
-                        {new Date(entry.jevDate).toLocaleDateString()}
-                      </td>
-                      <td>
-                        <Link
-                          to={`/accounting/jev/${entry.jevId}`}
-                          className="acct-table__link"
-                          onClick={onClose}
-                        >
-                          {entry.jevNumber}
-                        </Link>
-                      </td>
-                      <td>{entry.particulars}</td>
-                      <td>
-                        <span className={`acct-badge acct-badge--${entry.sourceType}`}>
-                          {entry.sourceType}
-                        </span>
-                      </td>
-                      <td className="acct-text-right acct-text-mono">
-                        {formatPeso(entry.debitAmount)}
-                      </td>
-                      <td className="acct-text-right acct-text-mono">
-                        {formatPeso(entry.creditAmount)}
-                      </td>
-                      <td className="acct-text-right acct-text-mono" style={{ fontWeight: 600 }}>
-                        {formatPeso(entry.running)}
-                      </td>
+            {state.status === 'loaded' && entries.length > 0 && (
+              <div style={{ overflowX: 'auto' }}>
+                <table className="acct-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>JEV #</th>
+                      <th>Particulars</th>
+                      <th>Source</th>
+                      <th className="acct-text-right">Debit</th>
+                      <th className="acct-text-right">Credit</th>
+                      <th className="acct-text-right">Running</th>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr style={{ fontWeight: 700, borderTop: '2px solid var(--mswd-navy, #0b3a67)' }}>
-                    <td colSpan={4}>Total ({entries.length} entries)</td>
-                    <td className="acct-text-right acct-text-mono">{formatPeso(totalDebit)}</td>
-                    <td className="acct-text-right acct-text-mono">{formatPeso(totalCredit)}</td>
-                    <td className="acct-text-right acct-text-mono">{formatPeso(running)}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
-        </div>
+                  </thead>
+                  <tbody>
+                    {withBalance.map((entry) => (
+                      <tr key={entry.jevLineId}>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          {new Date(entry.jevDate).toLocaleDateString()}
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="acct-linkish"
+                            style={{ color: 'var(--mswd-blue)', fontWeight: 600 }}
+                            title="Open this voucher in a floating window"
+                            onClick={() => setPeekJevId(entry.jevId)}
+                          >
+                            {entry.jevNumber}
+                          </button>
+                        </td>
+                        <td>{entry.particulars}</td>
+                        <td>
+                          <span className={`acct-badge acct-badge--${entry.sourceType}`}>
+                            {entry.sourceType}
+                          </span>
+                        </td>
+                        <td className="acct-text-right acct-text-mono">
+                          {formatPeso(entry.debitAmount)}
+                        </td>
+                        <td className="acct-text-right acct-text-mono">
+                          {formatPeso(entry.creditAmount)}
+                        </td>
+                        <td className="acct-text-right acct-text-mono" style={{ fontWeight: 600 }}>
+                          {formatPeso(entry.running)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr
+                      style={{ fontWeight: 700, borderTop: '2px solid var(--mswd-navy, #0b3a67)' }}
+                    >
+                      <td colSpan={4}>Total ({entries.length} entries)</td>
+                      <td className="acct-text-right acct-text-mono">{formatPeso(totalDebit)}</td>
+                      <td className="acct-text-right acct-text-mono">{formatPeso(totalCredit)}</td>
+                      <td className="acct-text-right acct-text-mono">{formatPeso(running)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
 
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: 12,
-            padding: '12px 20px',
-            borderTop: '1px solid #eaecf0',
-          }}
-        >
-          <Link
-            to={ledgerHref}
-            className="acct-table__link"
-            onClick={onClose}
-            style={{ fontSize: 13 }}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 12,
+              padding: '12px 20px',
+              borderTop: '1px solid #eaecf0',
+            }}
           >
-            View full subsidiary ledger →
-          </Link>
-          <button className="acct-btn acct-btn--sm" onClick={onClose} type="button">
-            Close
-          </button>
+            <Link
+              to={ledgerHref}
+              className="acct-table__link"
+              onClick={onClose}
+              style={{ fontSize: 13 }}
+            >
+              View full subsidiary ledger →
+            </Link>
+            <button className="acct-btn acct-btn--sm" onClick={onClose} type="button">
+              Close
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+      {peekJevId && <JevPeekModal jevId={peekJevId} onClose={() => setPeekJevId(null)} />}
+    </>
   );
 }
