@@ -46,6 +46,8 @@ export interface BreakdownTarget {
   periodId?: string;
   startDate?: string;
   endDate?: string;
+  /** Exclude imported opening balances (for period Debit/Credit drill-downs). */
+  excludeOpening?: boolean;
   /** Human label of the window, e.g. "August 2026" or "Jan 1 – Aug 31, 2026". */
   windowLabel: string;
 }
@@ -70,13 +72,14 @@ export function BreakdownModal({
     if (target.periodId) params.set('periodId', target.periodId);
     if (target.startDate) params.set('startDate', target.startDate);
     if (target.endDate) params.set('endDate', target.endDate);
+    if (target.excludeOpening) params.set('excludeOpening', '1');
     setState({ status: 'loading' });
     getSubsidiaryLedger(target.accountId, params.toString())
       .then((data) => setState({ status: 'loaded', data }))
       .catch((err) =>
         setState({ status: 'error', message: err?.message ?? 'Could not load the breakdown.' }),
       );
-  }, [target.accountId, target.periodId, target.startDate, target.endDate]);
+  }, [target.accountId, target.periodId, target.startDate, target.endDate, target.excludeOpening]);
 
   // Close on Escape.
   useEffect(() => {

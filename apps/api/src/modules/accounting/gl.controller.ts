@@ -58,11 +58,13 @@ export class GlController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('periodId') periodId?: string,
+    @Query('excludeOpening') excludeOpening?: string,
   ) {
     return this.glService.getSubsidiaryLedger(user.organizationId, accountId, {
       ...(startDate ? { startDate } : {}),
       ...(endDate ? { endDate } : {}),
       ...(periodId ? { periodId } : {}),
+      ...(excludeOpening === '1' ? { excludeOpening: true } : {}),
     });
   }
 

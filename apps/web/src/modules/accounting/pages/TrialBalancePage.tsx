@@ -6,6 +6,7 @@ import './accounting.css';
 import { getTrialBalance } from '../api';
 import type { TrialBalanceRow } from '../types';
 
+import { BreakdownModal, type BreakdownTarget } from './BreakdownModal';
 import { OpeningBalanceUploadModal } from './OpeningBalanceUploadModal';
 
 function formatPeso(value: string | number): string {
@@ -63,6 +64,22 @@ export default function TrialBalancePage() {
   const [showUpload, setShowUpload] = useState(false);
   const [flash, setFlash] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [drill, setDrill] = useState<BreakdownTarget | null>(null);
+
+  // Open the drill-down for a period Debit/Credit cell: the postings within the
+  // From–To range, excluding opening balances so the total ties to the column.
+  const drillPeriod = (row: TrialBalanceRow, amount: number) =>
+    setDrill({
+      accountId: row.accountId,
+      accountCode: row.accountCode,
+      accountName: row.accountName,
+      normalBalance: row.normalBalance,
+      amount,
+      startDate,
+      endDate,
+      excludeOpening: true,
+      windowLabel: `${fmtDate(startDate)} – ${fmtDate(endDate)}`,
+    });
 
   useEffect(() => {
     if (!startDate || !endDate) return;
@@ -199,8 +216,34 @@ export default function TrialBalancePage() {
                   <td className="acct-text-right acct-text-mono">
                     {formatPeso(row.beginningBalance)}
                   </td>
-                  <td className="acct-text-right acct-text-mono">{formatPeso(row.totalDebit)}</td>
-                  <td className="acct-text-right acct-text-mono">{formatPeso(row.totalCredit)}</td>
+                  <td className="acct-text-right acct-text-mono">
+                    {parseFloat(row.totalDebit) !== 0 ? (
+                      <button
+                        type="button"
+                        className="acct-linkish"
+                        title="Show the transactions that make up this amount"
+                        onClick={() => drillPeriod(row, parseFloat(row.totalDebit))}
+                      >
+                        {formatPeso(row.totalDebit)}
+                      </button>
+                    ) : (
+                      formatPeso(row.totalDebit)
+                    )}
+                  </td>
+                  <td className="acct-text-right acct-text-mono">
+                    {parseFloat(row.totalCredit) !== 0 ? (
+                      <button
+                        type="button"
+                        className="acct-linkish"
+                        title="Show the transactions that make up this amount"
+                        onClick={() => drillPeriod(row, parseFloat(row.totalCredit))}
+                      >
+                        {formatPeso(row.totalCredit)}
+                      </button>
+                    ) : (
+                      formatPeso(row.totalCredit)
+                    )}
+                  </td>
                   <td className="acct-text-right acct-text-mono" style={{ fontWeight: 600 }}>
                     {formatPeso(row.endingBalance)}
                   </td>
@@ -231,6 +274,8 @@ export default function TrialBalancePage() {
           </table>
         </div>
       )}
+
+      {drill && <BreakdownModal target={drill} onClose={() => setDrill(null)} />}
 
       {showUpload && (
         <OpeningBalanceUploadModal

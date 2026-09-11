@@ -204,7 +204,7 @@ export class GlService {
   async getSubsidiaryLedger(
     organizationId: string,
     accountId: string,
-    filters: { startDate?: string; endDate?: string; periodId?: string },
+    filters: { startDate?: string; endDate?: string; periodId?: string; excludeOpening?: boolean },
   ): Promise<{
     account: {
       id: string;
@@ -250,6 +250,11 @@ export class GlService {
       conditions.push(`j.jev_date <= $${idx}::date`);
       params.push(filters.endDate);
       idx++;
+    }
+    // Period Debit/Credit on the trial balance exclude the imported opening
+    // balances, so their drill-down must too, to tie out.
+    if (filters.excludeOpening) {
+      conditions.push(`j.source_table IS DISTINCT FROM 'opening_balance'`);
     }
 
     const extraWhere = conditions.length > 0 ? 'AND ' + conditions.join(' AND ') : '';
