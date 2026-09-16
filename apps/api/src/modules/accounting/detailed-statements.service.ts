@@ -97,6 +97,7 @@ interface Sums {
 interface CashFlowLine {
   jevId: string;
   periodNumber: number;
+  sourceTable: string;
   code: string;
   type: CoaRow['type'];
   debit: string;
@@ -119,43 +120,41 @@ const MONTHS = [
 ];
 
 /**
- * Display labels for the direct-method cash-flow line keys.
- *
- * The line set and per-account routing follow the water district's own COA →
- * Cash Flow Section mapping (FOR CASH FLOW.xlsx). See `classifyFlow` for the
- * account-code rules that feed these keys.
+ * Display labels for the direct-method cash-flow line keys, following the line
+ * set of the COA-prescribed water-district Detailed SCF template. See
+ * `classifyFlow` for the account-code + direction rules that feed these keys.
  */
 const CATEGORY_LABEL: Record<string, string> = {
   // operating inflows
   collect_income: 'Collection of service and business income',
-  collect_recv: 'Collection of Receivables',
   collect_other_recv: 'Collection of other receivables',
-  receipt_guaranty: 'Receipt of Guaranty/Security Deposits',
-  receipt_customer_dep: "Receipt of Customers' Deposit",
-  other_recv: 'Other Receipts',
+  receipt_guaranty: 'Receipt of guaranty/security deposits',
+  receipt_customer_dep: "Receipt of customers' deposits",
+  refund_cash_adv: 'Receipt of refund of cash advances',
+  other_recv: 'Other miscellaneous receipts',
   // operating outflows
   pay_ps: 'Payment of personnel services',
   pay_mooe: 'Payment of maintenance and other operating expenses',
   pay_fin: 'Payment of financial expenses',
+  pay_prior: 'Payment of expenses pertaining to/incurred in the prior years',
   pay_exp: 'Payment of other expenses',
   purch_inv: 'Purchase of inventory held for consumption',
   cash_adv: 'Grant of cash advances',
   prepay: 'Prepayments',
   pay_ap: 'Payment of accounts payable',
   remit_tax: 'Remittance of taxes withheld',
-  remit_gsis: 'Remittance of GSIS/Pag-ibig/Philhealth',
-  remit_other: 'Remittance of Other payables',
-  pay_prior: 'Payment of expenses pertaining to/incurred in the prior years',
-  other_disb: 'Other Disbursements',
+  remit_gsis: 'Remittance to GSIS/Pag-IBIG/PhilHealth',
+  remit_other: 'Remittance of other payables',
+  other_disb: 'Other disbursements',
   // investing
   sale_ppe: 'Proceeds from Sale/Disposal of Property, Plant and Equipment',
   sale_asset: 'Proceeds from Sale of Other Assets',
-  purch_ppe: 'Purchase/construction of PPE',
+  purch_ppe: 'Purchase/Construction of Property, Plant and Equipment',
   purch_intang: 'Purchase of Intangible Assets',
   // financing
   loan_proceeds: 'Proceeds from Loans/Borrowings',
   contrib: 'Receipt of Equity Contributions',
-  pay_loans: 'Payment of Domestic Loan',
+  pay_loans: 'Payment of Long-Term Liabilities',
   pay_interest: 'Payment of Interest on Loans',
 };
 
@@ -540,6 +539,12 @@ export class DetailedStatementsService {
       const nonCash = jl.filter((l) => !isCash(l.code));
       let delta = 0;
       for (const cl of cashLines) delta += Number(cl.debit) - Number(cl.credit);
+      // The opening-balance voucher carries every account's opening position, not
+      // a cash flow. Its net cash still belongs in the ending balance (and thus
+      // folds into "Cash, Beginning"), but its lines must NOT be classified into
+      // flow lines — otherwise the opening cash is smeared across the opening
+      // liability/equity balances and fabricates bogus inflows/outflows.
+      if (jl[0]?.sourceTable === 'opening_balance') return delta;
       const cashIn = cashLines.reduce((s, l) => s + Number(l.debit), 0);
       const cashOut = cashLines.reduce((s, l) => s + Number(l.credit), 0);
       if (cashIn > 0) {
@@ -684,16 +689,17 @@ export class DetailedStatementsService {
       'CASH FLOWS FROM OPERATING ACTIVITIES',
       [
         'collect_income',
-        'collect_recv',
         'collect_other_recv',
         'receipt_guaranty',
         'receipt_customer_dep',
+        'refund_cash_adv',
         'other_recv',
       ],
       [
         'pay_ps',
         'pay_mooe',
         'pay_fin',
+        'pay_prior',
         'pay_exp',
         'purch_inv',
         'cash_adv',
@@ -702,7 +708,6 @@ export class DetailedStatementsService {
         'remit_tax',
         'remit_gsis',
         'remit_other',
-        'pay_prior',
         'other_disb',
       ],
       'Net Cash Provided by (Used in) Operating Activities',
@@ -780,65 +785,67 @@ export class DetailedStatementsService {
   }
 
   /**
-   * Maps a contra account to a cash-flow line key (null = excluded from flows).
+   * Maps a contra account to a cash-flow line key (null = excluded from flows),
+   * following the water district's own COA → Cash Flow Section mapping and the
+   * line set of the COA-prescribed direct-method template (Detailed SCF).
    *
-   * The routing mirrors the water district's own COA → Cash Flow Section mapping
-   * (FOR CASH FLOW.xlsx): every account is attributed to a fixed statement line
-   * by its account code, independent of the direction of the individual movement
-   * (`dir` is only consulted for accounts the mapping does not cover). Two equity
-   * accounts are deliberately routed to operating lines (contributed capital and
-   * prior-year retained earnings); all other equity is an opening balance / plain
-   * capital movement and is folded into "Cash, Beginning".
+   * Direction matters: a receipt (`dir='in'`, contra on the credit side) and a
+   * payment (`dir='out'`, contra on the debit side) of the same account land on
+   * different statement lines — e.g. "Due to GSIS" is a *receipt* of employee
+   * shares when collected but a *remittance* when paid; Accounts Receivable is a
+   * *collection of service/business income* (water bills billed through A/R are
+   * still income collections), never shown as a receivable movement.
+   *
+   * Investing (PPE, intangibles) and financing (loans) accounts are classified
+   * first, since those activities are defined by account regardless of direction.
+   * The opening-balance voucher is excluded upstream (see `classifyJev`), so any
+   * equity seen here is a genuine capital movement.
    */
   private classifyFlow(type: CoaRow['type'], code: string, dir: 'in' | 'out'): string | null {
     if (code.startsWith('1-01')) return null; // internal cash transfer
 
-    // ── Explicit per-account routing (COA mapping) ─────────────────────────
-    // Assets
-    if (code.startsWith('1-03')) return 'collect_recv'; // Receivables
-    if (code.startsWith('1-04') || code.startsWith('1-05')) return 'purch_inv'; // Inventory
-    if (code.startsWith('1-06') || code.startsWith('1-07')) return 'purch_ppe'; // PPE (investing)
-    if (code.startsWith('1-08')) return 'purch_intang'; // Intangibles (investing)
-    if (code.startsWith('1-99-01')) return 'cash_adv'; // Advances to officers/employees
-    if (code.startsWith('1-99-02')) return 'prepay'; // Prepayments
+    // ── Investing ──────────────────────────────────────────────────────────
+    if (code.startsWith('1-06') || code.startsWith('1-07'))
+      return dir === 'in' ? 'sale_ppe' : 'purch_ppe';
+    if (code.startsWith('1-08')) return dir === 'in' ? 'sale_asset' : 'purch_intang';
 
-    // Liabilities
+    // ── Financing ──────────────────────────────────────────────────────────
+    if (code.startsWith('2-01-02')) return dir === 'in' ? 'loan_proceeds' : 'pay_loans';
+
+    if (dir === 'in') {
+      // ── Operating cash inflows (contra credited) ─────────────────────────
+      if (code.startsWith('1-03') || type === 'revenue') return 'collect_income'; // service/business income (incl. A/R collections)
+      if (code.startsWith('3-01-01-030')) return 'collect_other_recv'; // Contributed capital → other receivables
+      if (code.startsWith('2-04-01-040')) return 'receipt_guaranty'; // Guaranty/security deposits
+      if (code.startsWith('2-04-01-050')) return 'receipt_customer_dep'; // Customers' deposits
+      if (code.startsWith('1-99-01')) return 'refund_cash_adv'; // Refund of cash advances
+      if (type === 'equity') return null; // other capital → folded into Beginning
+      return 'other_recv'; // Other miscellaneous receipts
+    }
+
+    // ── Operating cash outflows (contra debited) ───────────────────────────
+    if (code.startsWith('5-05')) return null; // non-cash (depreciation)
+    if (code.startsWith('5-01') || code.startsWith('2-06')) return 'pay_ps'; // Personnel services (incl. leave benefits)
+    if (code.startsWith('5-02')) return 'pay_mooe'; // MOOE
+    if (code.startsWith('5-03')) return 'pay_fin'; // Financial expenses
+    if (code.startsWith('3-07-01-010')) return 'pay_prior'; // Prior-year expenses (Retained Earnings)
+    if (code.startsWith('1-04') || code.startsWith('1-05')) return 'purch_inv'; // Inventories
+    if (code.startsWith('1-99-01')) return 'cash_adv'; // Grant of cash advances
+    if (code.startsWith('1-99-02')) return 'prepay'; // Prepayments
     if (code.startsWith('2-01-01')) return 'pay_ap'; // Accounts payable
-    if (code.startsWith('2-01-02')) return 'pay_loans'; // Loans payable + penalties (financing)
-    if (code.startsWith('2-02-01-010')) return 'remit_tax'; // Due to BIR
+    if (code.startsWith('2-02-01-010')) return 'remit_tax'; // Remittance of taxes withheld (Due to BIR)
     if (
       code.startsWith('2-02-01-020') || // Due to GSIS
       code.startsWith('2-02-01-030') || // Due to Pag-IBIG
       code.startsWith('2-02-01-040') // Due to PhilHealth
     )
       return 'remit_gsis';
-    if (code.startsWith('2-02-01-050') || code.startsWith('2-02-02-020')) return 'remit_other'; // Due to NGAs / employees' loans
-    if (code.startsWith('2-04-01-040')) return 'receipt_guaranty'; // Guaranty/security deposits
-    if (code.startsWith('2-04-01-050')) return 'receipt_customer_dep'; // Customers' deposits
-    if (code.startsWith('2-06')) return 'pay_ps'; // Leave benefits payable → personnel services
-
-    // Equity — two accounts are mapped to operating; the rest fold into Beginning.
-    if (code.startsWith('3-01-01-030')) return 'collect_other_recv'; // Contributed capital
-    if (code.startsWith('3-07-01-010')) return 'pay_prior'; // Prior-year retained earnings/deficit
-    if (type === 'equity') return null;
-
-    // Revenue → collection of service and business income
-    if (type === 'revenue') return 'collect_income';
-
-    // Expenses
-    if (code.startsWith('5-01')) return 'pay_ps'; // Personnel services
-    if (code.startsWith('5-02')) return 'pay_mooe'; // MOOE
-    if (code.startsWith('5-03')) return 'pay_fin'; // Financial expenses
-    if (code.startsWith('5-05')) return null; // non-cash (depreciation)
+    if (code.startsWith('2-02-01-050')) return 'remit_other'; // Due to NGAs
+    if (code.startsWith('2-02-02-020')) return 'other_disb'; // Employees' loans → other disbursements
+    if (code.startsWith('2-04')) return 'other_disb'; // Refund of deposits
     if (type === 'expense') return 'pay_exp';
-
-    // ── Fallback for anything outside the mapping ──────────────────────────
-    if (type === 'liability') {
-      if (code.startsWith('2-02') || code.startsWith('2-04'))
-        return dir === 'in' ? 'other_recv' : 'remit_other';
-      return dir === 'in' ? 'other_recv' : 'other_disb';
-    }
-    return dir === 'in' ? 'other_recv' : 'other_disb';
+    if (type === 'equity') return null;
+    return 'other_disb';
   }
 
   // ── helpers ──────────────────────────────────────────────────────────────
@@ -931,6 +938,7 @@ export class DetailedStatementsService {
   ): Promise<CashFlowLine[]> {
     return this.prisma.$queryRawUnsafe<CashFlowLine[]>(
       `SELECT j.id AS "jevId", ap.period_number AS "periodNumber",
+              COALESCE(j.source_table, '') AS "sourceTable",
               c.account_code AS code, c.account_type AS type,
               l.debit_amount AS debit, l.credit_amount AS credit
          FROM journal_entry_vouchers j
