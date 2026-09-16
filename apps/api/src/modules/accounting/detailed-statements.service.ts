@@ -118,35 +118,45 @@ const MONTHS = [
   'DECEMBER',
 ];
 
-/** Display labels for the direct-method cash-flow line keys. */
+/**
+ * Display labels for the direct-method cash-flow line keys.
+ *
+ * The line set and per-account routing follow the water district's own COA →
+ * Cash Flow Section mapping (FOR CASH FLOW.xlsx). See `classifyFlow` for the
+ * account-code rules that feed these keys.
+ */
 const CATEGORY_LABEL: Record<string, string> = {
   // operating inflows
-  collect_income: 'Collection of Income / Revenues',
+  collect_income: 'Collection of service and business income',
   collect_recv: 'Collection of Receivables',
-  trust_recv: 'Trust Receipts',
+  collect_other_recv: 'Collection of other receivables',
+  receipt_guaranty: 'Receipt of Guaranty/Security Deposits',
+  receipt_customer_dep: "Receipt of Customers' Deposit",
   other_recv: 'Other Receipts',
   // operating outflows
-  pay_ps: 'Payment of Personnel Services',
-  pay_mooe: 'Payment of Maintenance & Other Operating Expenses',
-  pay_fin: 'Payment of Financial Expenses',
-  pay_exp: 'Payment of Expenses',
-  purch_inv: 'Purchase of Inventories',
-  cash_adv: 'Grant of Cash Advances',
+  pay_ps: 'Payment of personnel services',
+  pay_mooe: 'Payment of maintenance and other operating expenses',
+  pay_fin: 'Payment of financial expenses',
+  pay_exp: 'Payment of other expenses',
+  purch_inv: 'Purchase of inventory held for consumption',
+  cash_adv: 'Grant of cash advances',
   prepay: 'Prepayments',
-  pay_ap: 'Payment of Accounts Payable',
-  remit: 'Remittance of Contributions & Mandatory Deductions',
+  pay_ap: 'Payment of accounts payable',
+  remit_tax: 'Remittance of taxes withheld',
+  remit_gsis: 'Remittance of GSIS/Pag-ibig/Philhealth',
+  remit_other: 'Remittance of Other payables',
+  pay_prior: 'Payment of expenses pertaining to/incurred in the prior years',
   other_disb: 'Other Disbursements',
   // investing
-  sale_ppe: 'Proceeds from Sale / Disposal of Property, Plant & Equipment',
+  sale_ppe: 'Proceeds from Sale/Disposal of Property, Plant and Equipment',
   sale_asset: 'Proceeds from Sale of Other Assets',
-  purch_ppe: 'Purchase / Construction of Property, Plant & Equipment',
+  purch_ppe: 'Purchase/construction of PPE',
   purch_intang: 'Purchase of Intangible Assets',
   // financing
-  loan_proceeds: 'Proceeds from Loans / Borrowings',
+  loan_proceeds: 'Proceeds from Loans/Borrowings',
   contrib: 'Receipt of Equity Contributions',
-  pay_loans: 'Payment of Long-Term Liabilities',
-  redeem: 'Redemption of Bills / Bonds',
-  pay_interest: 'Payment of Interest',
+  pay_loans: 'Payment of Domestic Loan',
+  pay_interest: 'Payment of Interest on Loans',
 };
 
 @Injectable()
@@ -672,7 +682,14 @@ export class DetailedStatementsService {
 
     const op = activityBlock(
       'CASH FLOWS FROM OPERATING ACTIVITIES',
-      ['collect_income', 'collect_recv', 'trust_recv', 'other_recv'],
+      [
+        'collect_income',
+        'collect_recv',
+        'collect_other_recv',
+        'receipt_guaranty',
+        'receipt_customer_dep',
+        'other_recv',
+      ],
       [
         'pay_ps',
         'pay_mooe',
@@ -682,7 +699,10 @@ export class DetailedStatementsService {
         'cash_adv',
         'prepay',
         'pay_ap',
-        'remit',
+        'remit_tax',
+        'remit_gsis',
+        'remit_other',
+        'pay_prior',
         'other_disb',
       ],
       'Net Cash Provided by (Used in) Operating Activities',
@@ -696,7 +716,7 @@ export class DetailedStatementsService {
     const fin = activityBlock(
       'CASH FLOWS FROM FINANCING ACTIVITIES',
       ['loan_proceeds', 'contrib'],
-      ['pay_loans', 'redeem', 'pay_interest'],
+      ['pay_loans', 'pay_interest'],
       'Net Cash Provided by (Used in) Financing Activities',
     );
 
@@ -759,33 +779,63 @@ export class DetailedStatementsService {
     };
   }
 
-  /** Maps a contra account to a cash-flow line key (null = excluded from flows). */
+  /**
+   * Maps a contra account to a cash-flow line key (null = excluded from flows).
+   *
+   * The routing mirrors the water district's own COA → Cash Flow Section mapping
+   * (FOR CASH FLOW.xlsx): every account is attributed to a fixed statement line
+   * by its account code, independent of the direction of the individual movement
+   * (`dir` is only consulted for accounts the mapping does not cover). Two equity
+   * accounts are deliberately routed to operating lines (contributed capital and
+   * prior-year retained earnings); all other equity is an opening balance / plain
+   * capital movement and is folded into "Cash, Beginning".
+   */
   private classifyFlow(type: CoaRow['type'], code: string, dir: 'in' | 'out'): string | null {
-    if (type === 'equity') return null; // opening balances / capital → folded into Beginning
     if (code.startsWith('1-01')) return null; // internal cash transfer
+
+    // ── Explicit per-account routing (COA mapping) ─────────────────────────
+    // Assets
+    if (code.startsWith('1-03')) return 'collect_recv'; // Receivables
+    if (code.startsWith('1-04') || code.startsWith('1-05')) return 'purch_inv'; // Inventory
+    if (code.startsWith('1-06') || code.startsWith('1-07')) return 'purch_ppe'; // PPE (investing)
+    if (code.startsWith('1-08')) return 'purch_intang'; // Intangibles (investing)
+    if (code.startsWith('1-99-01')) return 'cash_adv'; // Advances to officers/employees
+    if (code.startsWith('1-99-02')) return 'prepay'; // Prepayments
+
+    // Liabilities
+    if (code.startsWith('2-01-01')) return 'pay_ap'; // Accounts payable
+    if (code.startsWith('2-01-02')) return 'pay_loans'; // Loans payable + penalties (financing)
+    if (code.startsWith('2-02-01-010')) return 'remit_tax'; // Due to BIR
+    if (
+      code.startsWith('2-02-01-020') || // Due to GSIS
+      code.startsWith('2-02-01-030') || // Due to Pag-IBIG
+      code.startsWith('2-02-01-040') // Due to PhilHealth
+    )
+      return 'remit_gsis';
+    if (code.startsWith('2-02-01-050') || code.startsWith('2-02-02-020')) return 'remit_other'; // Due to NGAs / employees' loans
+    if (code.startsWith('2-04-01-040')) return 'receipt_guaranty'; // Guaranty/security deposits
+    if (code.startsWith('2-04-01-050')) return 'receipt_customer_dep'; // Customers' deposits
+    if (code.startsWith('2-06')) return 'pay_ps'; // Leave benefits payable → personnel services
+
+    // Equity — two accounts are mapped to operating; the rest fold into Beginning.
+    if (code.startsWith('3-01-01-030')) return 'collect_other_recv'; // Contributed capital
+    if (code.startsWith('3-07-01-010')) return 'pay_prior'; // Prior-year retained earnings/deficit
+    if (type === 'equity') return null;
+
+    // Revenue → collection of service and business income
     if (type === 'revenue') return 'collect_income';
-    if (type === 'expense') {
-      if (code.startsWith('5-01')) return 'pay_ps';
-      if (code.startsWith('5-02')) return 'pay_mooe';
-      if (code.startsWith('5-03')) return 'pay_fin';
-      if (code.startsWith('5-05')) return null; // non-cash (depreciation)
-      return 'pay_exp';
-    }
-    if (type === 'asset') {
-      if (code.startsWith('1-03')) return 'collect_recv';
-      if (code.startsWith('1-04') || code.startsWith('1-05')) return 'purch_inv';
-      if (code.startsWith('1-06') || code.startsWith('1-07'))
-        return dir === 'in' ? 'sale_ppe' : 'purch_ppe';
-      if (code.startsWith('1-08')) return 'purch_intang';
-      if (code.startsWith('1-99-01')) return 'cash_adv';
-      if (code.startsWith('1-99-02')) return 'prepay';
-      return dir === 'in' ? 'other_recv' : 'other_disb';
-    }
+
+    // Expenses
+    if (code.startsWith('5-01')) return 'pay_ps'; // Personnel services
+    if (code.startsWith('5-02')) return 'pay_mooe'; // MOOE
+    if (code.startsWith('5-03')) return 'pay_fin'; // Financial expenses
+    if (code.startsWith('5-05')) return null; // non-cash (depreciation)
+    if (type === 'expense') return 'pay_exp';
+
+    // ── Fallback for anything outside the mapping ──────────────────────────
     if (type === 'liability') {
-      if (code.startsWith('2-01-02')) return dir === 'in' ? 'loan_proceeds' : 'pay_loans';
-      if (code.startsWith('2-01-01')) return 'pay_ap';
-      if (code.startsWith('2-02')) return dir === 'in' ? 'trust_recv' : 'remit';
-      if (code.startsWith('2-04')) return dir === 'in' ? 'trust_recv' : 'other_disb';
+      if (code.startsWith('2-02') || code.startsWith('2-04'))
+        return dir === 'in' ? 'other_recv' : 'remit_other';
       return dir === 'in' ? 'other_recv' : 'other_disb';
     }
     return dir === 'in' ? 'other_recv' : 'other_disb';
