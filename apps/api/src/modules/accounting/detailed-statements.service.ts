@@ -120,42 +120,248 @@ const MONTHS = [
 ];
 
 /**
- * Display labels for the direct-method cash-flow line keys, following the line
- * set of the COA-prescribed water-district Detailed SCF template. See
- * `classifyFlow` for the account-code + direction rules that feed these keys.
+ * COA-prescribed Detailed Statement of Cash Flows template (GAM for water
+ * districts). The report renders this exact structure — every activity, its
+ * cash-inflow / cash-outflow groups, and each group's standard sub-lines, in
+ * order — so the detailed output matches the district's own FS layout.
+ *
+ * `key` wires a line (or a group that has no sub-lines) to a classification
+ * bucket produced by `classifyFlow`; a line with no `key` is a fixed template
+ * placeholder that always shows zero. Anything that does not fit a specific
+ * line is routed to "Other miscellaneous receipts" / "Other disbursements".
  */
-const CATEGORY_LABEL: Record<string, string> = {
-  // operating inflows
-  collect_income: 'Collection of service and business income',
-  collect_other_recv: 'Collection of other receivables',
-  receipt_guaranty: 'Receipt of guaranty/security deposits',
-  receipt_customer_dep: "Receipt of customers' deposits",
-  refund_cash_adv: 'Receipt of refund of cash advances',
-  other_recv: 'Other miscellaneous receipts',
-  // operating outflows
-  pay_ps: 'Payment of personnel services',
-  pay_mooe: 'Payment of maintenance and other operating expenses',
-  pay_fin: 'Payment of financial expenses',
-  pay_prior: 'Payment of expenses pertaining to/incurred in the prior years',
-  pay_exp: 'Payment of other expenses',
-  purch_inv: 'Purchase of inventory held for consumption',
-  cash_adv: 'Grant of cash advances',
-  prepay: 'Prepayments',
-  pay_ap: 'Payment of accounts payable',
-  remit_tax: 'Remittance of taxes withheld',
-  remit_gsis: 'Remittance to GSIS/Pag-IBIG/PhilHealth',
-  remit_other: 'Remittance of other payables',
-  other_disb: 'Other disbursements',
-  // investing
-  sale_ppe: 'Proceeds from Sale/Disposal of Property, Plant and Equipment',
-  sale_asset: 'Proceeds from Sale of Other Assets',
-  purch_ppe: 'Purchase/Construction of Property, Plant and Equipment',
-  purch_intang: 'Purchase of Intangible Assets',
-  // financing
-  loan_proceeds: 'Proceeds from Loans/Borrowings',
-  contrib: 'Receipt of Equity Contributions',
-  pay_loans: 'Payment of Long-Term Liabilities',
-  pay_interest: 'Payment of Interest on Loans',
+interface ScfLine {
+  label: string;
+  key?: string;
+}
+interface ScfGroup {
+  label: string;
+  key?: string; // group total taken straight from this bucket (group has no sub-lines)
+  subs?: ScfLine[];
+}
+interface ScfSection {
+  title: string;
+  netLabel: string;
+  inflows: ScfGroup[];
+  outflows: ScfGroup[];
+}
+
+const SCF_TEMPLATE: { operating: ScfSection; investing: ScfSection; financing: ScfSection } = {
+  operating: {
+    title: 'CASH FLOWS FROM OPERATING ACTIVITIES',
+    netLabel: 'Net Cash Provided by (Used in) Operating Activities',
+    inflows: [
+      {
+        label: 'Collection of Income/Revenues',
+        subs: [
+          { label: 'Collection of service and business income', key: 'collect_income' },
+          { label: 'Receipt of shares, grants and donations' },
+          { label: "Receipt of prior years' income" },
+        ],
+      },
+      {
+        label: 'Collection of Receivables',
+        subs: [
+          { label: 'Collection of loans and receivables' },
+          { label: 'Collection of receivable from audit disallowances' },
+          { label: 'Collection of other receivables', key: 'collect_other_recv' },
+        ],
+      },
+      {
+        label: 'Receipt of Intra-Agency Fund Transfers',
+        subs: [{ label: 'Receipt of funds for other intra-agency transactions' }],
+      },
+      {
+        label: 'Trust Receipts',
+        subs: [
+          { label: 'Receipt of Disaster Risk Reduction and Management Fund' },
+          { label: 'Receipt of bail bonds' },
+          { label: 'Receipt of guaranty/security deposits', key: 'receipt_guaranty' },
+          { label: "Receipt of customers' deposits", key: 'receipt_customer_dep' },
+          { label: 'Collection of other trust receipts' },
+        ],
+      },
+      {
+        label: 'Other Receipts',
+        subs: [
+          { label: 'Refund of guaranty deposits' },
+          { label: 'Receipt of payment for liquidated damages' },
+          { label: 'Receipt of Other deferred credits' },
+          { label: 'Receipt of refund of overpayment of Personnel Services' },
+          {
+            label: 'Receipt of refund of overpayment of Maintenance and Other Operating Expenses',
+          },
+          { label: 'Receipt of refund of cash advances', key: 'refund_cash_adv' },
+          { label: 'Other miscellaneous receipts', key: 'other_recv' },
+        ],
+      },
+      {
+        label: 'Adjustments',
+        subs: [
+          { label: 'Restoration of cash for cancelled/lost/stale checks/ADA' },
+          { label: 'Restoration of cash for unreleased checks' },
+          { label: 'Other adjustments-Inflow' },
+        ],
+      },
+    ],
+    outflows: [
+      {
+        label: 'Payment of Expenses',
+        subs: [
+          { label: 'Payment of personnel services', key: 'pay_ps' },
+          { label: 'Payment of maintenance and other operating expenses', key: 'pay_mooe' },
+          { label: 'Payment of financial expenses', key: 'pay_fin' },
+          {
+            label: 'Payment of expenses pertaining to/incurred in the prior years',
+            key: 'pay_prior',
+          },
+          { label: "Liquidation of prior year's cash advances" },
+        ],
+      },
+      {
+        label: 'Purchase of Inventories',
+        subs: [
+          { label: 'Purchase of inventories for distribution' },
+          { label: 'Purchase of inventory held for consumption', key: 'purch_inv' },
+        ],
+      },
+      {
+        label: 'Grant of Cash Advances',
+        subs: [
+          { label: 'Advances for operating expenses' },
+          { label: 'Advances for payroll' },
+          { label: 'Advances for special purpose/time-bound undertakings' },
+          { label: 'Advances to officers and employees', key: 'cash_adv' },
+          { label: 'Advances to officers and employees obligated in prior year' },
+        ],
+      },
+      {
+        label: 'Prepayments',
+        subs: [
+          {
+            label:
+              'Advances to Contractors for repair and maintenance of property, plant and equipment (not capitalizable)',
+          },
+          { label: 'Prepaid Rent', key: 'prepay' },
+          { label: 'Prepaid Registration' },
+          { label: 'Prepaid Interest' },
+          { label: 'Prepaid Insurance' },
+          { label: 'Other Prepayments' },
+          { label: 'Prepayments obligated in prior year' },
+        ],
+      },
+      {
+        label: 'Refund of Deposits',
+        subs: [{ label: 'Payment of guaranty deposits' }, { label: 'Payment of other deposits' }],
+      },
+      { label: 'Payments of Accounts Payable', key: 'pay_ap' },
+      {
+        label: 'Remittance of Personnel Benefit Contributions and Mandatory Deductions',
+        subs: [
+          { label: 'Remittance of taxes withheld', key: 'remit_tax' },
+          { label: 'Remittance to GSIS/Pag-IBIG/PhilHealth', key: 'remit_gsis' },
+          { label: 'Remittance of personnel benefits contributions' },
+          { label: 'Remittance of other payables', key: 'remit_other' },
+        ],
+      },
+      {
+        label: 'Release of Intra-Agency Fund Transfers',
+        subs: [{ label: 'Release of other intra-agency fund transfers' }],
+      },
+      {
+        label: 'Other Disbursements',
+        subs: [
+          { label: 'Refund of excess Working Fund/fund transfers/Trust Fund' },
+          { label: 'Refund of bail bond' },
+          { label: 'Refund of guaranty/security deposits' },
+          { label: "Refund of customers' deposit" },
+          { label: 'Refund of cash advances' },
+          { label: 'Other disbursements', key: 'other_disb' },
+        ],
+      },
+      {
+        label: 'Adjustments',
+        subs: [
+          { label: 'Adjustment for dishonored checks' },
+          { label: 'Adjustment for cash shortage' },
+          { label: 'Reversing entry for unreleased checks in previous year' },
+          { label: 'Other adjustments - Outflow' },
+        ],
+      },
+    ],
+  },
+  investing: {
+    title: 'CASH FLOWS FROM INVESTING ACTIVITIES',
+    netLabel: 'Net Cash Provided by (Used in) Investing Activities',
+    inflows: [
+      {
+        label: 'Proceeds from Sale/Disposal of Property, Plant and Equipment',
+        key: 'sale_ppe',
+      },
+      { label: 'Proceeds from Sale of Other Assets', key: 'sale_asset' },
+      { label: 'Adjustments' },
+    ],
+    outflows: [
+      {
+        label: 'Purchase/Construction of Property, Plant and Equipment',
+        subs: [
+          { label: 'Purchase of land', key: 'ppe_land' },
+          { label: 'Payment for land improvements', key: 'ppe_landimp' },
+          { label: 'Construction of infrastructure assets', key: 'ppe_infra' },
+          { label: 'Construction of buildings and other structures', key: 'ppe_bldg' },
+          { label: 'Purchase of machinery and equipment', key: 'ppe_machinery' },
+          { label: 'Purchase of transportation equipment', key: 'ppe_transport' },
+          { label: 'Purchase of furniture, fixtures and books', key: 'ppe_furniture' },
+          { label: 'Payments for leased assets improvements' },
+          { label: 'Construction in progress', key: 'ppe_cip' },
+          { label: 'Purchase of other property, plant and equipment', key: 'ppe_other' },
+          { label: 'Payment of right-of-way' },
+          { label: 'Advances to contractors' },
+          { label: 'Payment of guaranty deposit' },
+          { label: 'Payment of retention fee to contractors' },
+          { label: 'Payment of other fees charged to the projects' },
+          { label: 'Payment of incidental expenses' },
+          {
+            label:
+              'Payment for rehabilitation of property, plant and equipment (capitalized repair)',
+          },
+          { label: 'Payment for property, plant and equipment obligated in prior year' },
+        ],
+      },
+      {
+        label: 'Purchase of Intangible Assets',
+        subs: [
+          { label: 'Purchase of computer software', key: 'purch_intang' },
+          { label: 'Purchase of other intangible assets' },
+          { label: 'Purchase of intangible assets obligated in prior year' },
+        ],
+      },
+    ],
+  },
+  financing: {
+    title: 'CASH FLOWS FROM FINANCING ACTIVITIES',
+    netLabel: 'Net Cash Provided by (Used in) Financing Activities',
+    inflows: [{ label: 'Adjustments' }],
+    outflows: [
+      {
+        label: 'Payment of Long-Term Liabilities',
+        subs: [
+          { label: 'Payment of notes payable' },
+          { label: 'Payment of domestic loans', key: 'pay_loans' },
+          { label: 'Payment of finance lease payable' },
+          { label: 'Payment of other long-term liabilities' },
+        ],
+      },
+      {
+        label: 'Redemption of Bills/Bonds Issued',
+        subs: [
+          { label: 'Payment for redemption of treasury bills' },
+          { label: 'Payment for redemption of bonds' },
+        ],
+      },
+      { label: 'Payment of Interest Expense (BTR/NG Debt)', key: 'pay_interest' },
+    ],
+  },
 };
 
 @Injectable()
@@ -591,91 +797,85 @@ export class DetailedStatementsService {
     const rows: StatementRow[] = [];
     const val = (m: Map<string, number>, k: string) => round2(m.get(k) ?? 0);
 
-    const activityBlock = (
-      title: string,
-      inflowKeys: string[],
-      outflowKeys: string[],
-      netLabel: string,
-    ): { cur: number; ytd: number } => {
-      rows.push({ code: null, label: title, level: 0, kind: 'section', current: 0, compare: 0 });
-
-      if (!condensed)
-        rows.push({
-          code: null,
-          label: 'Cash Inflows',
-          level: 1,
-          kind: 'header',
-          current: 0,
-          compare: 0,
-        });
-      let inCur = 0;
-      let inYtd = 0;
-      for (const k of inflowKeys) {
-        const c = val(cur, k);
-        const y = val(ytd, k);
-        inCur += c;
-        inYtd += y;
-        if (Math.abs(c) < 0.005 && Math.abs(y) < 0.005) continue;
-        if (!condensed)
-          rows.push({
-            code: null,
-            label: CATEGORY_LABEL[k]!,
-            level: 2,
-            kind: 'account',
-            current: c,
-            compare: y,
-          });
-      }
+    // Render one activity from the template. Detailed mode prints every group
+    // and sub-line (the full COA template, matching the district's FS); condensed
+    // mode prints only the non-zero group subtotals.
+    const renderSection = (section: ScfSection): { cur: number; ytd: number } => {
       rows.push({
         code: null,
-        label: 'Total Cash Inflows',
-        level: 1,
-        kind: 'total',
-        current: round2(inCur),
-        compare: round2(inYtd),
+        label: section.title,
+        level: 0,
+        kind: 'section',
+        current: 0,
+        compare: 0,
       });
 
-      if (!condensed)
-        rows.push({
-          code: null,
-          label: 'Cash Outflows',
-          level: 1,
-          kind: 'header',
-          current: 0,
-          compare: 0,
-        });
-      let outCur = 0;
-      let outYtd = 0;
-      for (const k of outflowKeys) {
-        const c = val(cur, k);
-        const y = val(ytd, k);
-        outCur += c;
-        outYtd += y;
-        if (Math.abs(c) < 0.005 && Math.abs(y) < 0.005) continue;
-        if (!condensed)
+      const renderSide = (heading: string, groups: ScfGroup[]): { cur: number; ytd: number } => {
+        rows.push({ code: null, label: heading, level: 1, kind: 'header', current: 0, compare: 0 });
+        let sideCur = 0;
+        let sideYtd = 0;
+        for (const g of groups) {
+          let gCur = g.key ? val(cur, g.key) : 0;
+          let gYtd = g.key ? val(ytd, g.key) : 0;
+          const subs = (g.subs ?? []).map((s) => {
+            const c = s.key ? val(cur, s.key) : 0;
+            const y = s.key ? val(ytd, s.key) : 0;
+            gCur += c;
+            gYtd += y;
+            return { label: s.label, c: round2(c), y: round2(y) };
+          });
+          gCur = round2(gCur);
+          gYtd = round2(gYtd);
+          sideCur += gCur;
+          sideYtd += gYtd;
+          if (condensed) {
+            if (Math.abs(gCur) < 0.005 && Math.abs(gYtd) < 0.005) continue;
+            rows.push({
+              code: null,
+              label: g.label,
+              level: 2,
+              kind: 'total',
+              current: gCur,
+              compare: gYtd,
+            });
+            continue;
+          }
           rows.push({
             code: null,
-            label: CATEGORY_LABEL[k]!,
+            label: g.label,
             level: 2,
-            kind: 'account',
-            current: c,
-            compare: y,
+            kind: 'total',
+            current: gCur,
+            compare: gYtd,
           });
-      }
-      rows.push({
-        code: null,
-        label: 'Total Cash Outflows',
-        level: 1,
-        kind: 'total',
-        current: round2(outCur),
-        compare: round2(outYtd),
-      });
+          for (const s of subs)
+            rows.push({
+              code: null,
+              label: s.label,
+              level: 3,
+              kind: 'account',
+              current: s.c,
+              compare: s.y,
+            });
+        }
+        rows.push({
+          code: null,
+          label: `Total ${heading}`,
+          level: 1,
+          kind: 'total',
+          current: round2(sideCur),
+          compare: round2(sideYtd),
+        });
+        return { cur: round2(sideCur), ytd: round2(sideYtd) };
+      };
 
-      const netC = round2(inCur - outCur);
-      const netY = round2(inYtd - outYtd);
+      const inRes = renderSide('Cash Inflows', section.inflows);
+      const outRes = renderSide('Cash Outflows', section.outflows);
+      const netC = round2(inRes.cur - outRes.cur);
+      const netY = round2(inRes.ytd - outRes.ytd);
       rows.push({
         code: null,
-        label: netLabel,
+        label: section.netLabel,
         level: 0,
         kind: 'total',
         current: netC,
@@ -685,45 +885,9 @@ export class DetailedStatementsService {
       return { cur: netC, ytd: netY };
     };
 
-    const op = activityBlock(
-      'CASH FLOWS FROM OPERATING ACTIVITIES',
-      [
-        'collect_income',
-        'collect_other_recv',
-        'receipt_guaranty',
-        'receipt_customer_dep',
-        'refund_cash_adv',
-        'other_recv',
-      ],
-      [
-        'pay_ps',
-        'pay_mooe',
-        'pay_fin',
-        'pay_prior',
-        'pay_exp',
-        'purch_inv',
-        'cash_adv',
-        'prepay',
-        'pay_ap',
-        'remit_tax',
-        'remit_gsis',
-        'remit_other',
-        'other_disb',
-      ],
-      'Net Cash Provided by (Used in) Operating Activities',
-    );
-    const inv = activityBlock(
-      'CASH FLOWS FROM INVESTING ACTIVITIES',
-      ['sale_ppe', 'sale_asset'],
-      ['purch_ppe', 'purch_intang'],
-      'Net Cash Provided by (Used in) Investing Activities',
-    );
-    const fin = activityBlock(
-      'CASH FLOWS FROM FINANCING ACTIVITIES',
-      ['loan_proceeds', 'contrib'],
-      ['pay_loans', 'pay_interest'],
-      'Net Cash Provided by (Used in) Financing Activities',
-    );
+    const op = renderSection(SCF_TEMPLATE.operating);
+    const inv = renderSection(SCF_TEMPLATE.investing);
+    const fin = renderSection(SCF_TEMPLATE.financing);
 
     const netFlowCur = round2(op.cur + inv.cur + fin.cur);
     const netFlowYtd = round2(op.ytd + inv.ytd + fin.ytd);
@@ -805,12 +969,25 @@ export class DetailedStatementsService {
     if (code.startsWith('1-01')) return null; // internal cash transfer
 
     // ── Investing ──────────────────────────────────────────────────────────
-    if (code.startsWith('1-06') || code.startsWith('1-07'))
-      return dir === 'in' ? 'sale_ppe' : 'purch_ppe';
+    if (code.startsWith('1-06') || code.startsWith('1-07')) {
+      if (dir === 'in') return 'sale_ppe';
+      // Outflow → the matching Purchase/Construction of PPE sub-line by UACS code.
+      if (code.startsWith('1-06-01')) return 'ppe_land';
+      if (code.startsWith('1-06-02')) return 'ppe_landimp';
+      if (code.startsWith('1-06-03')) return 'ppe_infra';
+      if (code.startsWith('1-06-04')) return 'ppe_bldg';
+      if (code.startsWith('1-06-05')) return 'ppe_machinery';
+      if (code.startsWith('1-06-06')) return 'ppe_transport';
+      if (code.startsWith('1-06-07')) return 'ppe_furniture';
+      if (code.startsWith('1-06-99')) return 'ppe_cip';
+      return 'ppe_other';
+    }
     if (code.startsWith('1-08')) return dir === 'in' ? 'sale_asset' : 'purch_intang';
 
     // ── Financing ──────────────────────────────────────────────────────────
-    if (code.startsWith('2-01-02')) return dir === 'in' ? 'loan_proceeds' : 'pay_loans';
+    // Only loan *payments* have a template line; a drawdown has no financing-
+    // inflow line, so it falls through to "Other miscellaneous receipts".
+    if (code.startsWith('2-01-02') && dir === 'out') return 'pay_loans';
 
     if (dir === 'in') {
       // ── Operating cash inflows (contra credited) ─────────────────────────
@@ -843,8 +1020,9 @@ export class DetailedStatementsService {
     if (code.startsWith('2-02-01-050')) return 'remit_other'; // Due to NGAs
     if (code.startsWith('2-02-02-020')) return 'other_disb'; // Employees' loans → other disbursements
     if (code.startsWith('2-04')) return 'other_disb'; // Refund of deposits
-    if (type === 'expense') return 'pay_exp';
     if (type === 'equity') return null;
+    // Any other expense/disbursement without a specific template line →
+    // "Other disbursements" (the district's fallback rule).
     return 'other_disb';
   }
 
