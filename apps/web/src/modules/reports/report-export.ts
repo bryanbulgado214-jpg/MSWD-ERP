@@ -61,6 +61,47 @@ function numericColumns(table: HTMLTableElement): Set<number> {
   return set;
 }
 
+/** Plain "Number" cell format (thousands separator, 2 decimals, no currency). */
+const NUMBER_FMT = '#,##0.00';
+
+/**
+ * Turn every amount cell into a real number formatted as plain Number — no
+ * currency sign. The rendered tables show pesos as "₱1,234.56" (and negatives in
+ * parentheses); in the spreadsheet those must be computable numbers, so we strip
+ * the sign/commas, read parentheses/leading-minus as negative, and stamp the
+ * Number format. Codes ("1-01-02-020"), dates ("9/16/2026"), percentages and the
+ * em-dash placeholder are left untouched.
+ */
+function numberizeSheet(ws: XLSX.WorkSheet): void {
+  const ref = ws['!ref'];
+  if (!ref) return;
+  const range = XLSX.utils.decode_range(ref);
+  for (let R = range.s.r; R <= range.e.r; R++) {
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })] as XLSX.CellObject | undefined;
+      if (!cell) continue;
+      if (cell.t === 'n') {
+        cell.z = NUMBER_FMT; // already numeric → just apply the Number format
+        delete cell.w;
+        continue;
+      }
+      if (cell.t !== 's' || typeof cell.v !== 'string') continue;
+      const raw = cell.v.trim();
+      if (!raw || raw === '—' || raw === '-' || raw.includes('%')) continue;
+      const negative = /^\(.*\)$/.test(raw);
+      const body = raw.replace(/[₱$,\s()]/g, '');
+      if (!/^-?\d*\.?\d+$/.test(body)) continue; // reject codes, dates, plain text
+      let num = Number(body);
+      if (!Number.isFinite(num)) continue;
+      if (negative) num = -Math.abs(num);
+      cell.t = 'n';
+      cell.v = num;
+      cell.z = NUMBER_FMT;
+      delete cell.w;
+    }
+  }
+}
+
 export function exportReportExcel(container: HTMLElement | null, meta: ExportMeta): void {
   const tables = collectTables(container);
   if (tables.length === 0) {
@@ -72,6 +113,7 @@ export function exportReportExcel(container: HTMLElement | null, meta: ExportMet
   tables.forEach((t, i) => {
     const ws = XLSX.utils.aoa_to_sheet([...lines.map((l) => [l]), []]);
     XLSX.utils.sheet_add_dom(ws, t, { origin: -1 });
+    numberizeSheet(ws);
     const name = tables.length > 1 ? `Table ${i + 1}` : 'Report';
     XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31));
   });
