@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
 import {
   AccountingApiError,
+  approvePettyCashReplenishment,
   cancelPettyCashReplenishment,
   cancelPettyCashVoucher,
   createPettyCashFund,
@@ -13,7 +15,6 @@ import {
   getPettyCashReplenishments,
   getPettyCashVouchers,
   getPostableAccounts,
-  postPettyCashReplenishment,
   preparePettyCashReplenishment,
   setPettyCashVoucherChargeAccount,
   updatePettyCashFund,
@@ -190,9 +191,9 @@ export default function PettyCashPage({ subNav }: { subNav?: ReactNode } = {}) {
       </div>
       <p style={{ color: '#667085', fontSize: 13, marginTop: 6, maxWidth: 860 }}>
         Imprest system — petty-cash vouchers are recorded as the custodian pays them, with{' '}
-        <strong>no journal entry</strong>. The journal entry is recorded only on{' '}
-        <strong>replenishment</strong>: the accountant posts one JEV (Dr expenses, Cr Cash in Bank),
-        restoring the fund to its imprest amount.
+        <strong>no journal entry</strong>. On <strong>replenishment</strong>, the accountant
+        approves it to raise a draft <strong>disbursement voucher</strong> (Dr expenses, Cr Cash in
+        Bank); posting that DV records the journal entry and restores the fund to its imprest amount.
       </p>
 
       {error && <div className="acct-error">{error}</div>}
@@ -487,7 +488,7 @@ function ReplenishmentsTab({
             <th>Date</th>
             <th className="acct-text-right">Total</th>
             <th>Status</th>
-            <th>JEV</th>
+            <th>DV</th>
             <th>Prepared by</th>
             <th>Posted by</th>
             <th></th>
@@ -502,7 +503,7 @@ function ReplenishmentsTab({
               <td>
                 <span className={`acct-badge acct-badge--${r.status}`}>{r.status}</span>
               </td>
-              <td className="acct-text-mono">{r.jevNumber ?? '—'}</td>
+              <td className="acct-text-mono">{r.dvNumber ?? '—'}</td>
               <td>{r.preparedName ?? '—'}</td>
               <td>{r.postedName ?? '—'}</td>
               <td>
@@ -896,6 +897,11 @@ function ReviewModal({
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', fontSize: 13 }}>
             <span className={`acct-badge acct-badge--${rep.status}`}>{rep.status}</span>
             <span>{fmtDate(rep.replDate)}</span>
+            {rep.dvNumber && (
+              <span>
+                DV: <span className="acct-text-mono">{rep.dvNumber}</span>
+              </span>
+            )}
             {rep.jevNumber && (
               <span>
                 JEV: <span className="acct-text-mono">{rep.jevNumber}</span>
@@ -906,8 +912,21 @@ function ReviewModal({
             </span>
           </div>
 
+          {rep.dvId && rep.status !== 'posted' && (
+            <div className="acct-note" style={{ marginTop: 12 }}>
+              A draft disbursement voucher{' '}
+              <Link to={`/accounting/disbursements/${rep.dvId}`} className="acct-text-mono">
+                {rep.dvNumber}
+              </Link>{' '}
+              was raised for this replenishment. Process it on the Disbursement Vouchers page —
+              posting it records the journal entry and restores the fund.
+            </div>
+          )}
+
           <h3 style={{ fontSize: 14, margin: '14px 0 6px' }}>
-            {rep.status === 'posted' ? 'Journal entry' : 'Proposed journal entry (posts on approval)'}
+            {rep.status === 'posted'
+              ? 'Journal entry'
+              : 'Proposed journal entry (recorded on the DV when approved)'}
           </h3>
           <table className="acct-table">
             <thead>
@@ -939,7 +958,8 @@ function ReviewModal({
           <h3 style={{ fontSize: 14, margin: '14px 0 6px' }}>Vouchers ({rep.vouchers.length})</h3>
           {rep.status === 'draft' && canManage && (
             <p style={{ fontSize: 12, color: '#667085', margin: '0 0 6px' }}>
-              Assign an expense account to each voucher, then post.
+              Assign an expense account to each voucher, then approve to raise the reimbursement
+              disbursement voucher.
             </p>
           )}
           <div style={{ overflowX: 'auto' }}>
@@ -1014,17 +1034,17 @@ function ReviewModal({
                   disabled={busy || rep.unassignedCount > 0}
                   onClick={() =>
                     run(
-                      () => postPettyCashReplenishment(rep.id),
-                      `Replenishment ${rep.replNumber} posted — JEV recorded.`,
+                      () => approvePettyCashReplenishment(rep.id),
+                      `Replenishment ${rep.replNumber} approved — a draft disbursement voucher was raised. Post it to record the JEV.`,
                     )
                   }
                 >
-                  Post &amp; record JEV
+                  Approve &amp; create DV
                 </button>
               )}
               {!canManage && (
                 <span style={{ fontSize: 12, color: '#667085', alignSelf: 'center' }}>
-                  Awaiting the accountant to review &amp; post.
+                  Awaiting the accountant to review &amp; approve.
                 </span>
               )}
             </div>

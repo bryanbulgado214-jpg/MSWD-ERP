@@ -873,10 +873,15 @@ export interface PettyCashReplenishment {
   fundId: string;
   replNumber: string;
   replDate: string;
-  status: 'draft' | 'posted' | 'cancelled';
+  status: 'draft' | 'approved' | 'posted' | 'cancelled';
   totalAmount: number;
   jevId: string | null;
   jevNumber: string | null;
+  /** The draft reimbursement DV raised on approval (null until approved). */
+  dvId: string | null;
+  dvNumber: string | null;
+  /** The linked DV's own status (draft/approved/released/…), or null. */
+  dvStatus: string | null;
   preparedBy: string | null;
   preparedName: string | null;
   postedBy: string | null;

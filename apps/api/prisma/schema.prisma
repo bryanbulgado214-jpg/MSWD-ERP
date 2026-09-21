@@ -5189,6 +5189,7 @@ enum PettyCashVoucherStatus {
 
 enum PettyCashReplenishmentStatus {
   draft
+  approved
   posted
   cancelled
 
@@ -5247,6 +5248,9 @@ model PettyCashReplenishment {
   status         PettyCashReplenishmentStatus @default(draft)
   totalAmount    Decimal                      @default(0) @map("total_amount") @db.Decimal(18, 2)
   jevId          String?                      @map("jev_id") @db.Uuid
+  // The draft reimbursement DV raised when the accountant approves. Posting that
+  // DV posts the imprest JEV, marks the vouchers replenished and restores the fund.
+  dvId           String?                      @map("dv_id") @db.Uuid
   preparedBy     String?                      @map("prepared_by") @db.Uuid
   preparedAt     DateTime?                    @map("prepared_at") @db.Timestamptz(6)
   postedBy       String?                      @map("posted_by") @db.Uuid
@@ -5261,5 +5265,6 @@ model PettyCashReplenishment {
 
   @@unique([organizationId, replNumber])
   @@index([organizationId, fundId, status])
+  @@index([dvId])
   @@map("petty_cash_replenishments")
 }

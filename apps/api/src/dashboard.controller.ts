@@ -382,7 +382,7 @@ export class DashboardController {
     if (perms.has('accounting.dv.post')) {
       const dvs = await this.prisma.disbursementVoucher.findMany({
         where: { organizationId: orgId, status: 'draft' },
-        orderBy: { dvDate: 'asc' },
+        orderBy: { createdAt: 'desc' },
         take: 20,
         select: {
           id: true,

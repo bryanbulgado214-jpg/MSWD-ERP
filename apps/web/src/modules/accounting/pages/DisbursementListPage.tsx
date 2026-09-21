@@ -102,9 +102,10 @@ export default function DisbursementListPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   // Back-entered out of order — sort by the manual DV number (read numerically)
-  // or by date. Default: DV number, earliest first.
+  // or by date. Default: DV number, newest first.
   const [sortKey, setSortKey] = useState<'dvNumber' | 'dvDate'>('dvNumber');
-  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [statusFilter, setStatusFilter] = useState('');
   const toggleSort = (key: 'dvNumber' | 'dvDate') => {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else {
@@ -178,6 +179,11 @@ export default function DisbursementListPage() {
     }
   }
 
+  // Status choices for the filter = the (effective) statuses actually present,
+  // so the dropdown never offers an empty option.
+  const statusOptions =
+    state.status === 'loaded' ? [...new Set(state.data.map(effectiveStatus))].sort() : [];
+
   return (
     <div className="acct-page" ref={pageRef}>
       <AccountingSubNav />
@@ -226,6 +232,19 @@ export default function DisbursementListPage() {
             Clear
           </button>
         </span>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          aria-label="Filter by status"
+          title="Filter by status"
+        >
+          <option value="">All statuses</option>
+          {statusOptions.map((s) => (
+            <option key={s} value={s}>
+              {statusLabel(s)}
+            </option>
+          ))}
+        </select>
         <button
           type="button"
           className="acct-btn"
@@ -282,6 +301,7 @@ export default function DisbursementListPage() {
             <tbody>
               {state.data
                 .filter((dv) => matchesSearch(dv, search))
+                .filter((dv) => !statusFilter || effectiveStatus(dv) === statusFilter)
                 .sort(compareDv)
                 .map((dv) => (
                   <tr

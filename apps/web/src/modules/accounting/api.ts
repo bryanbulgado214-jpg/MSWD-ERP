@@ -1513,11 +1513,12 @@ export async function preparePettyCashReplenishment(data: {
   return (await authFetchMutate('/accounting/petty-cash/replenishments', 'POST', data)).json();
 }
 
-export async function postPettyCashReplenishment(
+/** Accountant approves the replenishment — raises the draft reimbursement DV. */
+export async function approvePettyCashReplenishment(
   id: string,
 ): Promise<PettyCashReplenishmentDetail> {
   return (
-    await authFetchMutate(`/accounting/petty-cash/replenishments/${id}/post`, 'POST')
+    await authFetchMutate(`/accounting/petty-cash/replenishments/${id}/approve`, 'POST')
   ).json();
 }
 

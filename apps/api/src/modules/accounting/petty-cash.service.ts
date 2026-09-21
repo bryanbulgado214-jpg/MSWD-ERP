@@ -5,7 +5,7 @@ import { PrismaService } from '../../database/prisma.service';
 
 import { NotificationService } from '../notification/notification.service';
 
-import { AutoJevService } from './auto-jev.service';
+import { DisbursementService } from './disbursement.service';
 import {
   CreatePettyCashFundDto,
   CreatePettyCashVoucherDto,
@@ -29,8 +29,8 @@ const num = (v: Prisma.Decimal | number | null | undefined): number => (v == nul
 export class PettyCashService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly autoJev: AutoJevService,
     private readonly notifications: NotificationService,
+    private readonly disbursements: DisbursementService,
   ) {}
 
   /**
@@ -408,6 +408,11 @@ export class PettyCashService {
       select: { id: true, jevNumber: true },
     });
     const jevMap = new Map(jevs.map((j) => [j.id, j.jevNumber]));
+    const dvs = await this.prisma.disbursementVoucher.findMany({
+      where: { id: { in: reps.map((r) => r.dvId).filter((x): x is string => !!x) } },
+      select: { id: true, dvNumber: true, status: true },
+    });
+    const dvMap = new Map(dvs.map((d) => [d.id, d]));
     const users = await this.userMap(reps.flatMap((r) => [r.preparedBy, r.postedBy]));
     return reps.map((r) => ({
       id: r.id,
@@ -418,6 +423,9 @@ export class PettyCashService {
       totalAmount: num(r.totalAmount),
       jevId: r.jevId,
       jevNumber: r.jevId ? (jevMap.get(r.jevId) ?? null) : null,
+      dvId: r.dvId,
+      dvNumber: r.dvId ? (dvMap.get(r.dvId)?.dvNumber ?? null) : null,
+      dvStatus: r.dvId ? (dvMap.get(r.dvId)?.status ?? null) : null,
       preparedBy: r.preparedBy,
       preparedName: r.preparedBy ? (users.get(r.preparedBy) ?? null) : null,
       postedBy: r.postedBy,
@@ -446,6 +454,12 @@ export class PettyCashService {
       ? await this.prisma.journalEntryVoucher.findUnique({
           where: { id: rep.jevId },
           select: { id: true, jevNumber: true },
+        })
+      : null;
+    const dv = rep.dvId
+      ? await this.prisma.disbursementVoucher.findUnique({
+          where: { id: rep.dvId },
+          select: { id: true, dvNumber: true, status: true },
         })
       : null;
 
@@ -486,6 +500,9 @@ export class PettyCashService {
       totalAmount: num(rep.totalAmount),
       jevId: rep.jevId,
       jevNumber: jev?.jevNumber ?? null,
+      dvId: rep.dvId,
+      dvNumber: dv?.dvNumber ?? null,
+      dvStatus: dv?.status ?? null,
       preparedBy: rep.preparedBy,
       preparedName: rep.preparedBy ? (users.get(rep.preparedBy) ?? null) : null,
       postedBy: rep.postedBy,
@@ -587,12 +604,20 @@ export class PettyCashService {
     return this.getReplenishment(organizationId, rep.id);
   }
 
-  /** Accountant: review & post — records the ONE journal entry for the imprest cycle. */
-  async postReplenishment(organizationId: string, userId: string, id: string) {
+  /**
+   * Accountant: approve the replenishment. Rather than posting the imprest JEV
+   * directly, this raises a DRAFT reimbursement Disbursement Voucher — Dr each
+   * voucher's expense account (grouped), Cr Cash in Bank via the fund's bank
+   * account — held as a draft JEV with a pending check. The accountant then
+   * processes that DV on the Disbursement Voucher page; posting it posts the JEV,
+   * marks the vouchers replenished and restores the fund (see
+   * DisbursementService.postDraft / remove, which complete/revert this).
+   */
+  async approveReplenishment(organizationId: string, userId: string, id: string) {
     const rep = await this.prisma.pettyCashReplenishment.findFirst({ where: { organizationId, id } });
     if (!rep) throw new NotFoundException('Replenishment not found.');
     if (rep.status !== 'draft')
-      throw new BadRequestException('Only a draft replenishment can be posted.');
+      throw new BadRequestException('Only a draft replenishment can be approved.');
     const fund = await this.prisma.pettyCashFund.findFirst({
       where: { organizationId, id: rep.fundId },
     });
@@ -601,87 +626,85 @@ export class PettyCashService {
       where: { organizationId, replenishmentId: rep.id, status: 'unreplenished' },
     });
     if (vouchers.length === 0)
-      throw new BadRequestException('This replenishment has no vouchers to post.');
+      throw new BadRequestException('This replenishment has no vouchers to approve.');
     const unassigned = vouchers.filter((v) => !v.chargeAccountId).length;
     if (unassigned > 0)
       throw new BadRequestException(
-        `Assign an expense account to every voucher before posting (${unassigned} still unassigned).`,
+        `Assign an expense account to every voucher before approving (${unassigned} still unassigned).`,
       );
 
+    // The reimbursement check draws on the bank account linked to the fund's
+    // Cash-in-Bank ledger account (which the DV credits for the net).
+    const bankAccount = await this.prisma.bankAccount.findFirst({
+      where: { organizationId, chartOfAccountId: fund.cashInBankAccountId },
+      select: { id: true },
+    });
+    if (!bankAccount)
+      throw new BadRequestException(
+        "The fund's Cash-in-Bank account isn't linked to a bank account. " +
+          'Link one under Accounting → Bank Accounts before approving a replenishment.',
+      );
+
+    // Payee for the reimbursement check: the fund custodian (falls back to the
+    // fund name).
+    let payeeName = fund.name;
+    if (fund.custodianUserId) {
+      const cust = await this.prisma.user.findUnique({
+        where: { id: fund.custodianUserId },
+        select: { fullName: true, username: true },
+      });
+      if (cust) payeeName = cust.fullName?.trim() || cust.username;
+    }
+
+    // The DV's debit lines = the vouchers' charges grouped by expense account.
+    // create() adds the balancing Cash-in-Bank credit from the bank account.
     const byAccount = new Map<string, number>();
     for (const v of vouchers)
       byAccount.set(v.chargeAccountId!, (byAccount.get(v.chargeAccountId!) ?? 0) + num(v.amount));
     const total = [...byAccount.values()].reduce((s, a) => s + a, 0);
-    const lines = [
-      ...[...byAccount.entries()].map(([accountId, amt]) => ({
-        chartOfAccountId: accountId,
-        debitAmount: Math.round(amt * 100) / 100,
-        creditAmount: 0,
-        description: `Petty cash replenishment ${rep.replNumber}`,
-      })),
-      {
-        chartOfAccountId: fund.cashInBankAccountId,
-        debitAmount: 0,
-        creditAmount: Math.round(total * 100) / 100,
-        description: `Replenishment of ${fund.name}`,
-      },
-    ];
+    const lines = [...byAccount.entries()].map(([accountId, amt]) => ({
+      chartOfAccountId: accountId,
+      debitAmount: Math.round(amt * 100) / 100,
+      creditAmount: 0,
+      description: `Petty cash replenishment ${rep.replNumber}`,
+    }));
 
-    let jevNumber = '';
-    await this.prisma.$transaction(async (tx) => {
-      const jev = await this.autoJev.createAutoJev(tx, {
-        organizationId,
-        userId,
-        jevDate: new Date(rep.replDate),
-        sourceType: 'petty_cash',
-        sourceTable: 'petty_cash_replenishments',
-        sourceId: rep.id,
-        particulars: `Replenishment of ${fund.name} (${rep.replNumber}) — ${vouchers.length} voucher(s)`,
-        status: 'posted',
-        lines,
-      });
-      if (!jev)
-        throw new BadRequestException(
-          'Could not record the journal entry. Ensure an accounting period is open for the replenishment date.',
-        );
-      jevNumber = jev.jevNumber;
-      await tx.pettyCashReplenishment.update({
-        where: { id: rep.id },
-        data: {
-          status: 'posted',
-          jevId: jev.id,
-          totalAmount: total,
-          postedBy: userId,
-          postedAt: new Date(),
-          updatedBy: userId,
-          version: { increment: 1 },
-        },
-      });
-      await tx.pettyCashVoucher.updateMany({
-        where: { id: { in: vouchers.map((v) => v.id) } },
-        data: { status: 'replenished', updatedBy: userId },
-      });
+    // Raise the DRAFT reimbursement DV. asDraft skips the dv.post check, so
+    // approving needs only petty_cash.manage.
+    const dv = await this.disbursements.create(organizationId, userId, {
+      dvType: 'reimbursement',
+      dvDate: new Date(rep.replDate).toISOString(),
+      payeeName: payeeName.slice(0, 200),
+      particulars: `Replenishment of ${fund.name} (${rep.replNumber}) — ${vouchers.length} voucher(s)`,
+      paymentMode: 'check',
+      bankAccountId: bankAccount.id,
+      asDraft: true,
+      lines,
     });
-    // Vouchers are replenished and the replenishment posted — clear the
-    // custodian's per-voucher reminders and the accountant's review notice.
-    await this.notifications
-      .markReadByRelated(
-        organizationId,
-        'petty_cash_vouchers',
-        vouchers.map((v) => v.id),
-      )
-      .catch(() => undefined);
+
+    await this.prisma.pettyCashReplenishment.update({
+      where: { id: rep.id },
+      data: {
+        status: 'approved',
+        dvId: dv.id,
+        totalAmount: total,
+        updatedBy: userId,
+        version: { increment: 1 },
+      },
+    });
+
+    // The accountant has acted — clear their review notice.
     await this.notifications
       .markReadByRelated(organizationId, 'petty_cash_replenishments', [rep.id])
       .catch(() => undefined);
-    // Confirm back to the custodian who prepared it.
+    // Let the custodian know it was approved and a DV is being processed.
     if (rep.preparedBy && rep.preparedBy !== userId) {
       await this.notifications
         .create({
           organizationId,
           userId: rep.preparedBy,
-          title: `Petty cash replenishment ${rep.replNumber} posted`,
-          body: `The accountant posted the replenishment (${jevNumber}). The fund has been replenished.`,
+          title: `Petty cash replenishment ${rep.replNumber} approved`,
+          body: `The accountant approved it and raised disbursement voucher ${dv.dvNumber}. The fund is restored once that DV is posted.`,
           linkUrl: '/accounting/petty-cash',
           relatedTable: 'petty_cash_replenishments',
           relatedId: rep.id,

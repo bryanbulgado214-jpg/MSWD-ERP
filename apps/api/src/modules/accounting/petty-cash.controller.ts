@@ -146,10 +146,13 @@ export class PettyCashController {
     return this.service.prepareReplenishment(user.organizationId, user.userId, dto);
   }
 
-  @Post('replenishments/:id/post')
+  @Post('replenishments/:id/approve')
   @RequirePermissions('accounting.petty_cash.manage')
-  postReplenishment(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.service.postReplenishment(user.organizationId, user.userId, id);
+  approveReplenishment(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.approveReplenishment(user.organizationId, user.userId, id);
   }
 
   @Post('replenishments/:id/cancel')

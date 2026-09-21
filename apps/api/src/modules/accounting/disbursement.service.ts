@@ -1068,6 +1068,31 @@ export class DisbursementService {
       await tx.journalEntryVoucher.deleteMany({
         where: { organizationId: orgId, sourceType: 'disbursement', sourceId: id },
       });
+      // Petty cash: this DV reimburses a replenishment — deleting it unwinds the
+      // replenishment back to draft (freeing its vouchers) so the accountant can
+      // re-approve or the custodian can cancel.
+      const rep = await tx.pettyCashReplenishment.findFirst({
+        where: { organizationId: orgId, dvId: id, status: { in: ['approved', 'posted'] } },
+        select: { id: true },
+      });
+      if (rep) {
+        await tx.pettyCashVoucher.updateMany({
+          where: { organizationId: orgId, replenishmentId: rep.id, status: 'replenished' },
+          data: { status: 'unreplenished', updatedBy: userId },
+        });
+        await tx.pettyCashReplenishment.update({
+          where: { id: rep.id },
+          data: {
+            status: 'draft',
+            dvId: null,
+            jevId: null,
+            postedBy: null,
+            postedAt: null,
+            updatedBy: userId,
+            version: { increment: 1 },
+          },
+        });
+      }
       // The DV itself — dv_deductions cascade.
       await tx.disbursementVoucher.delete({ where: { id } });
       // If it paid a supplier invoice, re-settle that invoice's balance/status.
@@ -1115,6 +1140,14 @@ export class DisbursementService {
     // print, so posting it releases it immediately.
     const autoRelease = dv.paymentMode !== 'check';
     const now = new Date();
+    // If this DV reimburses a petty cash replenishment, posting it completes the
+    // imprest cycle — captured here for the post-commit notifications.
+    let pettyDone: {
+      repId: string;
+      replNumber: string;
+      preparedBy: string | null;
+      voucherIds: string[];
+    } | null = null;
     await runAudited(this.prisma, userId, async (tx) => {
       await tx.journalEntryVoucher.update({
         where: { id: jev.id },
@@ -1165,7 +1198,72 @@ export class DisbursementService {
       if (dv.supplierInvoiceId) {
         await this.recomputeInvoicePaid(tx, dv.supplierInvoiceId);
       }
+
+      // Petty cash: posting the reimbursement DV posts the imprest JEV, so the
+      // replenishment is complete — mark it posted, its vouchers replenished
+      // (which restores the fund's cash-on-hand).
+      const rep = await tx.pettyCashReplenishment.findFirst({
+        where: { organizationId: orgId, dvId: id, status: 'approved' },
+        select: { id: true, replNumber: true, preparedBy: true },
+      });
+      if (rep) {
+        const pcvs = await tx.pettyCashVoucher.findMany({
+          where: { organizationId: orgId, replenishmentId: rep.id, status: 'unreplenished' },
+          select: { id: true },
+        });
+        await tx.pettyCashReplenishment.update({
+          where: { id: rep.id },
+          data: {
+            status: 'posted',
+            jevId: jev.id,
+            postedBy: userId,
+            postedAt: now,
+            updatedBy: userId,
+            version: { increment: 1 },
+          },
+        });
+        await tx.pettyCashVoucher.updateMany({
+          where: { id: { in: pcvs.map((v) => v.id) } },
+          data: { status: 'replenished', updatedBy: userId },
+        });
+        pettyDone = {
+          repId: rep.id,
+          replNumber: rep.replNumber,
+          preparedBy: rep.preparedBy,
+          voucherIds: pcvs.map((v) => v.id),
+        };
+      }
     });
+
+    // Petty cash reimbursement posted — clear the reminders and confirm to the
+    // custodian who prepared the replenishment.
+    if (pettyDone) {
+      const done: {
+        repId: string;
+        replNumber: string;
+        preparedBy: string | null;
+        voucherIds: string[];
+      } = pettyDone;
+      await this.notifications
+        .markReadByRelated(orgId, 'petty_cash_vouchers', done.voucherIds)
+        .catch(() => undefined);
+      await this.notifications
+        .markReadByRelated(orgId, 'petty_cash_replenishments', [done.repId])
+        .catch(() => undefined);
+      if (done.preparedBy && done.preparedBy !== userId) {
+        await this.notifications
+          .create({
+            organizationId: orgId,
+            userId: done.preparedBy,
+            title: `Petty cash replenishment ${done.replNumber} posted`,
+            body: 'The reimbursement voucher was posted — the fund has been replenished.',
+            linkUrl: '/accounting/petty-cash',
+            relatedTable: 'petty_cash_replenishments',
+            relatedId: done.repId,
+          })
+          .catch(() => undefined);
+      }
+    }
 
     return this.findOne(orgId, id);
   }
