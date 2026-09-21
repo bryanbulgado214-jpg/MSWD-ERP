@@ -107,6 +107,7 @@ export const MODULE_GATES = {
     'accounting.period.manage',
     'accounting.reports',
     'accounting.reconcile',
+    'accounting.petty_cash.read',
     // The collection cashier reaches the Accounting module for the collection
     // batches, reconciliation, and cashier reports without the broad
     // accounting.read — the sub-nav then shows only those collection screens.

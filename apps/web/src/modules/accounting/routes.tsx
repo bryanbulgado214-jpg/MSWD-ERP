@@ -20,6 +20,7 @@ import JevListPage from './pages/JevListPage';
 import NewDisbursementPage from './pages/NewDisbursementPage';
 import NewSupplierInvoicePage from './pages/NewSupplierInvoicePage';
 import PeriodManagementPage from './pages/PeriodManagementPage';
+import PettyCashPage from './pages/PettyCashPage';
 import { PrintCheckPage } from './pages/PrintCheckPage';
 import { PrintDisbursementPage } from './pages/PrintDisbursementPage';
 import { PrintJevPage } from './pages/PrintJevPage';
@@ -39,6 +40,7 @@ export const accountingRoutes: RouteObject[] = [
   { path: '/accounting/coa', element: <ChartOfAccountsPage /> },
   { path: '/accounting/dashboard', element: <AccountingDashboardPage /> },
   { path: '/accounting/banks', element: <BanksPage /> },
+  { path: '/accounting/petty-cash', element: <PettyCashPage /> },
   { path: '/accounting/mappings', element: <AccountMappingsPage /> },
   { path: '/accounting/collections', element: <CollectionsHubPage /> },
   { path: '/accounting/collection-batches/:id', element: <CollectionBatchDetailPage /> },

@@ -410,6 +410,66 @@ export class DashboardController {
       }
     }
 
+    // ── Petty cash replenishments awaiting the accountant's review & posting ──
+    if (perms.has('accounting.petty_cash.manage')) {
+      const reps = await this.prisma.pettyCashReplenishment.findMany({
+        where: { organizationId: orgId, status: 'draft' },
+        orderBy: { preparedAt: 'asc' },
+        take: 20,
+        select: {
+          id: true,
+          replNumber: true,
+          totalAmount: true,
+          preparedAt: true,
+          createdAt: true,
+        },
+      });
+      for (const r of reps) {
+        items.push({
+          id: r.id,
+          module: 'accounting',
+          type: 'petty_cash_replenishment_review',
+          label: r.replNumber,
+          description: 'Petty cash replenishment — assign accounts & post',
+          amount: r.totalAmount.toString(),
+          createdAt: (r.preparedAt ?? r.createdAt).toISOString(),
+          actionLabel: 'Review & post',
+          link: '/accounting/petty-cash',
+        });
+      }
+    }
+
+    // ── Unreplenished petty cash vouchers awaiting the custodian's replenishment ──
+    if (perms.has('accounting.petty_cash.operate')) {
+      const grouped = await this.prisma.pettyCashVoucher.groupBy({
+        by: ['fundId'],
+        where: { organizationId: orgId, status: 'unreplenished', replenishmentId: null },
+        _count: { _all: true },
+        _sum: { amount: true },
+        _max: { createdAt: true },
+      });
+      if (grouped.length > 0) {
+        const funds = await this.prisma.pettyCashFund.findMany({
+          where: { organizationId: orgId, id: { in: grouped.map((g) => g.fundId) } },
+          select: { id: true, name: true },
+        });
+        const fundName = new Map(funds.map((f) => [f.id, f.name]));
+        for (const g of grouped) {
+          items.push({
+            id: g.fundId,
+            module: 'accounting',
+            type: 'petty_cash_voucher_replenish',
+            label: fundName.get(g.fundId) ?? 'Petty Cash Fund',
+            description: `${g._count._all} petty cash voucher(s) awaiting replenishment`,
+            amount: (g._sum.amount ?? 0).toString(),
+            createdAt: (g._max.createdAt ?? new Date()).toISOString(),
+            actionLabel: 'Open petty cash',
+            link: '/accounting/petty-cash',
+          });
+        }
+      }
+    }
+
     // ── Checks awaiting printing by the cashier ──
     if (perms.has('accounting.check.print')) {
       const checks = await this.prisma.check.findMany({
@@ -481,6 +541,8 @@ export class DashboardController {
       }
     }
 
+    // Latest first — the most recently created pending item on top.
+    items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return { items, total: items.length };
   }
 

@@ -829,3 +829,71 @@ export interface AccountingWorkspace {
   reminders: WorkspaceReminder[];
   systemDueDates: SystemDueDate[];
 }
+
+// ── Petty Cash Fund (imprest) ──
+export interface PettyCashAccountRef {
+  id: string;
+  accountCode: string;
+  name: string;
+}
+
+export interface PettyCashFund {
+  id: string;
+  name: string;
+  imprestAmount: number;
+  status: 'active' | 'closed';
+  version: number;
+  pettyCashAccountId: string;
+  pettyCashAccount: PettyCashAccountRef | null;
+  cashInBankAccountId: string;
+  cashInBankAccount: PettyCashAccountRef | null;
+  custodianUserId: string | null;
+  custodianName: string | null;
+  unreplenishedTotal: number;
+  cashOnHand: number;
+}
+
+export interface PettyCashVoucher {
+  id: string;
+  fundId: string;
+  pcvNumber: string;
+  pcvDate: string;
+  payeeName: string;
+  particulars: string;
+  amount: number;
+  chargeAccountId: string | null;
+  chargeAccount: PettyCashAccountRef | null;
+  status: 'unreplenished' | 'replenished' | 'cancelled';
+  replenishmentId: string | null;
+  version: number;
+}
+
+export interface PettyCashReplenishment {
+  id: string;
+  fundId: string;
+  replNumber: string;
+  replDate: string;
+  status: 'draft' | 'posted' | 'cancelled';
+  totalAmount: number;
+  jevId: string | null;
+  jevNumber: string | null;
+  preparedBy: string | null;
+  preparedName: string | null;
+  postedBy: string | null;
+  postedName: string | null;
+  version: number;
+}
+
+export interface PettyCashReplenishmentJeLine {
+  accountId: string;
+  account: PettyCashAccountRef | null;
+  debit: number;
+  credit: number;
+}
+
+export interface PettyCashReplenishmentDetail extends PettyCashReplenishment {
+  fundName: string | null;
+  unassignedCount: number;
+  vouchers: PettyCashVoucher[];
+  jeLines: PettyCashReplenishmentJeLine[];
+}

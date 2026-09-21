@@ -69,6 +69,11 @@ export const ACCOUNTING_LINKS: AccountingLink[] = [
     visible: has('accounting.bank.manage'),
   },
   {
+    to: '/accounting/petty-cash',
+    label: 'Petty Cash Fund',
+    visible: has('accounting.petty_cash.read'),
+  },
+  {
     to: '/accounting/supply-ledger',
     label: 'Supplies Ledger',
     visible: has('accounting.supply_ledger.read'),

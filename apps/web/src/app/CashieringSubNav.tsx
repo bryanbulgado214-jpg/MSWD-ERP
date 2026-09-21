@@ -14,6 +14,7 @@ const TABS: Array<{ to: string; label: string; perm: string; exact?: boolean }> 
   { to: '/billing/consumers', label: 'Consumers', perm: 'billing.read' },
   { to: '/accounting/disbursements', label: 'Disbursement Vouchers', perm: 'accounting.dv.read' },
   { to: '/accounting/checks', label: 'Checks', perm: 'accounting.check.read' },
+  { to: '/accounting/petty-cash', label: 'Petty Cash Fund', perm: 'accounting.petty_cash.read' },
 ];
 
 export default function CashieringSubNav() {

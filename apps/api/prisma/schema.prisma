@@ -2952,6 +2952,7 @@ enum JevSourceType {
   disposal
   billing
   collection
+  petty_cash
 
   @@map("jev_source_type")
 }
@@ -5160,4 +5161,105 @@ model UserReminder {
 
   @@index([organizationId, userId])
   @@map("user_reminders")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Petty Cash Fund — imprest system. Individual disbursements are recorded as
+// petty-cash vouchers (no journal entry). The journal entry is recorded ONLY on
+// replenishment: the accountant posts one JEV (Dr the vouchers' expense accounts,
+// Cr Cash in Bank), restoring the fund to its imprest amount.
+// FK columns are scalar (constraints live in the migration), matching the
+// UserReminder convention above.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum PettyCashFundStatus {
+  active
+  closed
+
+  @@map("petty_cash_fund_status")
+}
+
+enum PettyCashVoucherStatus {
+  unreplenished
+  replenished
+  cancelled
+
+  @@map("petty_cash_voucher_status")
+}
+
+enum PettyCashReplenishmentStatus {
+  draft
+  posted
+  cancelled
+
+  @@map("petty_cash_replenishment_status")
+}
+
+model PettyCashFund {
+  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String              @map("organization_id") @db.Uuid
+  name                String              @db.VarChar(120)
+  imprestAmount       Decimal             @map("imprest_amount") @db.Decimal(18, 2)
+  pettyCashAccountId  String              @map("petty_cash_account_id") @db.Uuid // COA: Petty Cash Fund
+  cashInBankAccountId String              @map("cash_in_bank_account_id") @db.Uuid // COA: Cash in Bank (credited on replenishment)
+  custodianUserId     String?             @map("custodian_user_id") @db.Uuid // the cashier / PCF custodian
+  status              PettyCashFundStatus @default(active)
+  createdBy           String?             @map("created_by") @db.Uuid
+  updatedBy           String?             @map("updated_by") @db.Uuid
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version             Int                 @default(1)
+
+  @@index([organizationId])
+  @@map("petty_cash_funds")
+}
+
+model PettyCashVoucher {
+  id              String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String                 @map("organization_id") @db.Uuid
+  fundId          String                 @map("fund_id") @db.Uuid
+  pcvNumber       String                 @map("pcv_number") @db.VarChar(30)
+  pcvDate         DateTime               @map("pcv_date") @db.Date
+  payeeName       String                 @map("payee_name") @db.VarChar(160)
+  particulars     String
+  amount          Decimal                @db.Decimal(18, 2)
+  chargeAccountId String?                @map("charge_account_id") @db.Uuid // expense account — assigned by the accountant at replenishment review
+  status          PettyCashVoucherStatus @default(unreplenished)
+  replenishmentId String?                @map("replenishment_id") @db.Uuid
+  createdBy       String?                @map("created_by") @db.Uuid
+  updatedBy       String?                @map("updated_by") @db.Uuid
+  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version         Int                    @default(1)
+
+  @@unique([organizationId, pcvNumber])
+  @@index([organizationId, fundId, status])
+  @@index([replenishmentId])
+  @@map("petty_cash_vouchers")
+}
+
+model PettyCashReplenishment {
+  id             String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String                       @map("organization_id") @db.Uuid
+  fundId         String                       @map("fund_id") @db.Uuid
+  replNumber     String                       @map("repl_number") @db.VarChar(30)
+  replDate       DateTime                     @map("repl_date") @db.Date
+  status         PettyCashReplenishmentStatus @default(draft)
+  totalAmount    Decimal                      @default(0) @map("total_amount") @db.Decimal(18, 2)
+  jevId          String?                      @map("jev_id") @db.Uuid
+  preparedBy     String?                      @map("prepared_by") @db.Uuid
+  preparedAt     DateTime?                    @map("prepared_at") @db.Timestamptz(6)
+  postedBy       String?                      @map("posted_by") @db.Uuid
+  postedAt       DateTime?                    @map("posted_at") @db.Timestamptz(6)
+  cancelledBy    String?                      @map("cancelled_by") @db.Uuid
+  cancelledAt    DateTime?                    @map("cancelled_at") @db.Timestamptz(6)
+  createdBy      String?                      @map("created_by") @db.Uuid
+  updatedBy      String?                      @map("updated_by") @db.Uuid
+  createdAt      DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime                     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version        Int                          @default(1)
+
+  @@unique([organizationId, replNumber])
+  @@index([organizationId, fundId, status])
+  @@map("petty_cash_replenishments")
 }

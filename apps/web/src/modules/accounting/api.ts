@@ -35,6 +35,11 @@ import type {
   JevListItem,
   PeriodDetail,
   PeriodOption,
+  PettyCashAccountRef,
+  PettyCashFund,
+  PettyCashReplenishment,
+  PettyCashReplenishmentDetail,
+  PettyCashVoucher,
   SubsidiaryLedgerResult,
   SupplierInvoiceDetail,
   SupplierInvoiceSummary,
@@ -1403,4 +1408,119 @@ export async function updateReminder(
 
 export async function deleteReminder(id: string): Promise<void> {
   await authFetchMutate(`/accounting/workspace/reminders/${id}`, 'DELETE');
+}
+
+// ── Petty Cash Fund (imprest) ──
+export async function getPettyCashExpenseAccounts(): Promise<PettyCashAccountRef[]> {
+  return (await authFetch('/accounting/petty-cash/expense-accounts')).json();
+}
+
+export async function getPettyCashFunds(): Promise<PettyCashFund[]> {
+  return (await authFetch('/accounting/petty-cash/funds')).json();
+}
+
+export async function createPettyCashFund(data: {
+  name: string;
+  imprestAmount: number;
+  pettyCashAccountId: string;
+  cashInBankAccountId: string;
+  custodianUserId?: string;
+}): Promise<PettyCashFund> {
+  return (await authFetchMutate('/accounting/petty-cash/funds', 'POST', data)).json();
+}
+
+export async function updatePettyCashFund(
+  id: string,
+  data: Partial<{
+    name: string;
+    imprestAmount: number;
+    pettyCashAccountId: string;
+    cashInBankAccountId: string;
+    custodianUserId: string;
+    status: 'active' | 'closed';
+  }>,
+): Promise<PettyCashFund> {
+  return (await authFetchMutate(`/accounting/petty-cash/funds/${id}`, 'PATCH', data)).json();
+}
+
+export async function getPettyCashVouchers(
+  fundId?: string,
+  status?: string,
+): Promise<PettyCashVoucher[]> {
+  const qs = new URLSearchParams();
+  if (fundId) qs.set('fundId', fundId);
+  if (status) qs.set('status', status);
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return (await authFetch(`/accounting/petty-cash/vouchers${suffix}`)).json();
+}
+
+export async function createPettyCashVoucher(data: {
+  fundId: string;
+  pcvDate: string;
+  payeeName: string;
+  particulars: string;
+  amount: number;
+  chargeAccountId?: string;
+}): Promise<PettyCashVoucher> {
+  return (await authFetchMutate('/accounting/petty-cash/vouchers', 'POST', data)).json();
+}
+
+/** Accountant assigns a voucher's expense account (at replenishment review). */
+export async function setPettyCashVoucherChargeAccount(
+  id: string,
+  chargeAccountId: string,
+): Promise<void> {
+  await authFetchMutate(`/accounting/petty-cash/vouchers/${id}/charge-account`, 'PATCH', {
+    chargeAccountId,
+  });
+}
+
+export async function updatePettyCashVoucher(
+  id: string,
+  data: Partial<{
+    pcvDate: string;
+    payeeName: string;
+    particulars: string;
+    amount: number;
+    chargeAccountId: string;
+  }>,
+): Promise<PettyCashVoucher> {
+  return (await authFetchMutate(`/accounting/petty-cash/vouchers/${id}`, 'PATCH', data)).json();
+}
+
+export async function cancelPettyCashVoucher(id: string): Promise<void> {
+  await authFetchMutate(`/accounting/petty-cash/vouchers/${id}/cancel`, 'POST');
+}
+
+export async function getPettyCashReplenishments(
+  fundId?: string,
+): Promise<PettyCashReplenishment[]> {
+  const suffix = fundId ? `?fundId=${encodeURIComponent(fundId)}` : '';
+  return (await authFetch(`/accounting/petty-cash/replenishments${suffix}`)).json();
+}
+
+export async function getPettyCashReplenishment(
+  id: string,
+): Promise<PettyCashReplenishmentDetail> {
+  return (await authFetch(`/accounting/petty-cash/replenishments/${id}`)).json();
+}
+
+export async function preparePettyCashReplenishment(data: {
+  fundId: string;
+  replDate: string;
+  voucherIds: string[];
+}): Promise<PettyCashReplenishmentDetail> {
+  return (await authFetchMutate('/accounting/petty-cash/replenishments', 'POST', data)).json();
+}
+
+export async function postPettyCashReplenishment(
+  id: string,
+): Promise<PettyCashReplenishmentDetail> {
+  return (
+    await authFetchMutate(`/accounting/petty-cash/replenishments/${id}/post`, 'POST')
+  ).json();
+}
+
+export async function cancelPettyCashReplenishment(id: string): Promise<void> {
+  await authFetchMutate(`/accounting/petty-cash/replenishments/${id}/cancel`, 'POST');
 }

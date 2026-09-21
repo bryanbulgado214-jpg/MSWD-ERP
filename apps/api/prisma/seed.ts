@@ -391,6 +391,18 @@ async function main() {
       module: 'accounting',
     },
     { code: 'accounting.reconcile', name: 'Perform Bank Reconciliation', module: 'accounting' },
+    // Petty Cash Fund (imprest system)
+    { code: 'accounting.petty_cash.read', name: 'View Petty Cash Fund', module: 'accounting' },
+    {
+      code: 'accounting.petty_cash.operate',
+      name: 'Operate Petty Cash Fund (record vouchers, prepare replenishment)',
+      module: 'accounting',
+    },
+    {
+      code: 'accounting.petty_cash.manage',
+      name: 'Manage Petty Cash Fund (set up fund, post replenishment)',
+      module: 'accounting',
+    },
     // Inventory & Property Management
     { code: 'inventory.read', name: 'View Inventory Data', module: 'inventory' },
     { code: 'inventory.item.manage', name: 'Manage Inventory Items', module: 'inventory' },
@@ -514,6 +526,7 @@ async function main() {
     'accounting.jev.reverse',
     'accounting.period.manage',
     'accounting.reconcile',
+    'accounting.petty_cash.manage', // posts the replenishment JEV — accountant's, not admin's
     'billing.payment.void',
     'billing.bill.adjust',
     'billing.disconnect.manage',
@@ -534,6 +547,10 @@ async function main() {
     'accounting.dv.read',
     'accounting.check.print',
     'accounting.check.record_release',
+    // Petty Cash Fund custodian: records petty-cash vouchers and prepares the
+    // replenishment (the accountant reviews & posts the JEV).
+    'accounting.petty_cash.read',
+    'accounting.petty_cash.operate',
   ]) {
     await grant('CASHIER', code);
   }
@@ -660,6 +677,9 @@ async function main() {
     'accounting.period.manage',
     'accounting.reports',
     'accounting.reconcile',
+    // Petty Cash Fund: set up the fund + review and post the replenishment JEV.
+    'accounting.petty_cash.read',
+    'accounting.petty_cash.manage',
     'asset.reports', // fixed-asset lapsing (depreciation) schedule — under Reports
     'billing.reports', // aging of receivables — under Reports
   ]) {

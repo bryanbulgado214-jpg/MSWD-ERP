@@ -151,4 +151,19 @@ export class NotificationService {
       data: { isRead: true, readAt: new Date() },
     });
   }
+
+  /**
+   * Mark every unread notification tied to a source record (or records) as read
+   * — used to auto-clear the bell when the underlying task is done (e.g. a petty
+   * cash voucher gets replenished, or a replenishment is posted), regardless of
+   * whether the user ever opened the notification.
+   */
+  async markReadByRelated(organizationId: string, relatedTable: string, relatedIds: string[]) {
+    const ids = relatedIds.filter(Boolean);
+    if (ids.length === 0) return;
+    await this.prisma.notification.updateMany({
+      where: { organizationId, relatedTable, relatedId: { in: ids }, isRead: false },
+      data: { isRead: true, readAt: new Date() },
+    });
+  }
 }

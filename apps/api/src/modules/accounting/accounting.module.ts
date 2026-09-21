@@ -42,6 +42,8 @@ import { PayeeController } from './payee.controller';
 import { PayeeService } from './payee.service';
 import { PeriodController } from './period.controller';
 import { PeriodService } from './period.service';
+import { PettyCashController } from './petty-cash.controller';
+import { PettyCashService } from './petty-cash.service';
 import { AccountingReportsController } from './reports.controller';
 import { AccountingReportsService } from './reports.service';
 import { SupplierInvoiceController } from './supplier-invoice.controller';
@@ -71,6 +73,7 @@ import { SupplierInvoiceService } from './supplier-invoice.service';
     LoanController,
     PayeeController,
     SupplierInvoiceController,
+    PettyCashController,
   ],
   providers: [
     AccountingWorkspaceService,
@@ -96,6 +99,7 @@ import { SupplierInvoiceService } from './supplier-invoice.service';
     LoanService,
     PayeeService,
     SupplierInvoiceService,
+    PettyCashService,
   ],
   exports: [
     ChartOfAccountService,
