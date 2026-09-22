@@ -118,31 +118,37 @@ export default function CashierCollectionPrintPage() {
             </tr>
           </thead>
           <tbody>
-            {report.entries.map((e) => (
-              <tr key={e.id}>
-                <td style={cell}>{e.orSeries}</td>
-                <td style={cell}>{e.collectorName}</td>
-                <td style={cell}>{e.collectionAreaName ?? '—'}</td>
-                <td style={cell}>
-                  {e.glLines.map((l, i) => (
-                    <div key={i}>
-                      {l.collectionTypeLabel}
-                      {l.description ? `: ${l.description}` : ''}
-                      {e.glLines.length > 1 ? ` (${peso(l.amount)})` : ''}
-                      {l.orFrom
-                        ? ` — OR ${l.orTo && l.orTo !== l.orFrom ? `${l.orFrom}–${l.orTo}` : l.orFrom}`
-                        : ''}
-                    </div>
-                  ))}
-                </td>
-                <td style={num}>{peso(e.amount)}</td>
-                <td style={cell}>
-                  {e.glLines.map((l, i) => (
-                    <div key={i}>{l.remarks || ' '}</div>
-                  ))}
-                </td>
-              </tr>
-            ))}
+            {report.entries.map((e) =>
+              // One row per collection line; the Teller and Area span the entry's
+              // lines so each OR / nature / amount / remark reads on its own row.
+              e.glLines.map((l, li) => (
+                <tr key={`${e.id}-${li}`}>
+                  <td style={cell}>
+                    {l.orFrom
+                      ? l.orTo && l.orTo !== l.orFrom
+                        ? `${l.orFrom}–${l.orTo}`
+                        : l.orFrom
+                      : '—'}
+                  </td>
+                  {li === 0 && (
+                    <>
+                      <td style={cell} rowSpan={e.glLines.length}>
+                        {e.collectorName}
+                      </td>
+                      <td style={cell} rowSpan={e.glLines.length}>
+                        {e.collectionAreaName ?? '—'}
+                      </td>
+                    </>
+                  )}
+                  <td style={cell}>
+                    {l.collectionTypeLabel}
+                    {l.description ? `: ${l.description}` : ''}
+                  </td>
+                  <td style={num}>{peso(l.amount)}</td>
+                  <td style={cell}>{l.remarks || '\u00A0'}</td>
+                </tr>
+              )),
+            )}
             {report.entries.length === 0 && (
               <tr>
                 <td style={{ ...cell, textAlign: 'center', color: '#888' }} colSpan={6}>
