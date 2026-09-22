@@ -57,6 +57,8 @@ export interface CollectionLine {
   // OR range covering this collection type (orTo omitted for a single receipt).
   orFrom?: string;
   orTo?: string;
+  // Free-text note the teller adds for this line (shown on the summary).
+  remarks?: string;
 }
 
 /** Human label for an OR range: "3822" for a single receipt, "3822 to 3827" for a span. */
@@ -262,6 +264,71 @@ export class CashierCollectionService {
 
   // ── Reports ──
 
+  /**
+   * Self-heal reports whose accountant postings were deleted outside the normal
+   * flow (e.g. before the JEV-delete safeguard existed, or via a bulk cleanup): a
+   * submitted report whose collection JEV no longer exists is reverted to draft so
+   * the cashier can edit or delete it again; one whose deposit JEV is gone just has
+   * its deposit step cleared. Only writes when a posting is actually missing, and
+   * mutates the passed rows so the caller's response reflects the repair.
+   */
+  private async healOrphanedPostings(
+    reports: Array<{
+      id: string;
+      status: string;
+      journalEntryId: string | null;
+      depositJournalEntryId: string | null;
+      submittedAt: Date | null;
+      depositRecordedAt: Date | null;
+      depositDate: Date | null;
+    }>,
+    existingJevIds: Set<string>,
+  ): Promise<void> {
+    for (const r of reports) {
+      if (r.status !== 'submitted') continue;
+      const collectionGone = !r.journalEntryId || !existingJevIds.has(r.journalEntryId);
+      const depositGone = !!r.depositJournalEntryId && !existingJevIds.has(r.depositJournalEntryId);
+      if (collectionGone) {
+        await this.prisma.cashierCollectionReport.update({
+          where: { id: r.id },
+          data: {
+            status: 'draft',
+            journalEntryId: null,
+            submittedAt: null,
+            submittedBy: null,
+            depositJournalEntryId: null,
+            depositRecordedAt: null,
+            depositDate: null,
+            depositBankAccountId: null,
+            depositRecordedBy: null,
+            version: { increment: 1 },
+          },
+        });
+        r.status = 'draft';
+        r.journalEntryId = null;
+        r.submittedAt = null;
+        r.depositJournalEntryId = null;
+        r.depositRecordedAt = null;
+        r.depositDate = null;
+      } else if (depositGone) {
+        await this.prisma.cashierCollectionReport.update({
+          where: { id: r.id },
+          data: {
+            depositJournalEntryId: null,
+            depositRecordedAt: null,
+            depositDate: null,
+            depositBankAccountId: null,
+            depositRecordedBy: null,
+            version: { increment: 1 },
+          },
+        });
+        r.depositJournalEntryId = null;
+        r.depositRecordedAt = null;
+        r.depositDate = null;
+      }
+    }
+  }
+
   async listReports(orgId: string) {
     const reports = await this.prisma.cashierCollectionReport.findMany({
       where: { organizationId: orgId },
@@ -283,6 +350,8 @@ export class CashierCollectionService {
         })
       : [];
     const jevById = new Map(jevs.map((j) => [j.id, { jevNumber: j.jevNumber, status: j.status }]));
+    // Revert any report whose accountant posting was deleted back to draft.
+    await this.healOrphanedPostings(reports, new Set(jevs.map((j) => j.id)));
     return reports.map((r) => ({
       id: r.id,
       reportNumber: r.reportNumber,
@@ -364,6 +433,20 @@ export class CashierCollectionService {
     const cMap = new Map(collectors.map((c) => [c.id, c.name]));
     const aMap = new Map(areas.map((a) => [a.id, a.name]));
 
+    // Self-heal: if the accountant deleted this report's posting(s) outside the
+    // normal flow, revert it (to draft when the collection JEV is gone) so the
+    // cashier can edit or delete it again.
+    const existingJevIds = new Set<string>();
+    if (jev && report.journalEntryId) existingJevIds.add(report.journalEntryId);
+    if (report.depositJournalEntryId) {
+      const dep = await this.prisma.journalEntryVoucher.findUnique({
+        where: { id: report.depositJournalEntryId },
+        select: { id: true },
+      });
+      if (dep) existingJevIds.add(report.depositJournalEntryId);
+    }
+    await this.healOrphanedPostings([report], existingJevIds);
+
     let combined: Record<string, number> = {};
     let combinedChecks = 0;
     const entries = report.entries.map((e) => {
@@ -385,6 +468,7 @@ export class CashierCollectionService {
           amount: round2(Number(l.amount)),
           orFrom: l.orFrom ?? '',
           orTo: l.orTo ?? l.orFrom ?? '',
+          remarks: l.remarks ?? '',
         };
       });
       const checks = (e.checks as CheckItem[] | null) ?? [];
@@ -456,11 +540,23 @@ export class CashierCollectionService {
 
   async updateReport(orgId: string, id: string, userId: string, dto: UpdateCashierReportDto) {
     await this.requireDraft(orgId, id);
+    // The cashier may override the auto-assigned CDR number — keep it unique.
+    let reportNumber: string | undefined;
+    if (dto.reportNumber !== undefined) {
+      reportNumber = dto.reportNumber.trim();
+      if (!reportNumber) throw new BadRequestException('The CDR number cannot be blank.');
+      const clash = await this.prisma.cashierCollectionReport.findFirst({
+        where: { organizationId: orgId, reportNumber, id: { not: id } },
+        select: { id: true },
+      });
+      if (clash) throw new ConflictException(`CDR number "${reportNumber}" is already in use.`);
+    }
     await runAudited(this.prisma, userId, (tx) =>
       tx.cashierCollectionReport.update({
         where: { id },
         data: {
           ...(dto.reportDate ? { reportDate: new Date(dto.reportDate) } : {}),
+          ...(reportNumber ? { reportNumber } : {}),
           ...(dto.remarks !== undefined ? { remarks: dto.remarks } : {}),
           updatedBy: userId,
         },
@@ -530,12 +626,14 @@ export class CashierCollectionService {
         throw new BadRequestException(`Enter the OR (from) for "${type.label}".`);
       }
       const orTo = l.orTo?.trim() || orFrom;
+      const remarks = l.remarks?.trim();
       return {
         collectionType: l.collectionType,
         amount: amt,
         ...(description ? { description } : {}),
         orFrom,
         orTo,
+        ...(remarks ? { remarks } : {}),
       };
     });
     const amount = round2(lines.reduce((s, l) => s + l.amount, 0));

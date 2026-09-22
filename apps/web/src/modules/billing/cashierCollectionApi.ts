@@ -111,6 +111,7 @@ export interface CollectionLineInput {
   description?: string;
   orFrom: string;
   orTo?: string;
+  remarks?: string;
 }
 export interface CollectionLineDetail {
   collectionType: string;
@@ -122,6 +123,7 @@ export interface CollectionLineDetail {
   amount: number;
   orFrom: string;
   orTo: string;
+  remarks: string;
 }
 export interface CashierEntry {
   id: string;
@@ -201,8 +203,10 @@ export const listReports = () => req<CashierReportListItem[]>(`${BASE}/reports`)
 export const createReport = (reportDate: string, remarks?: string) =>
   req<CashierReport>(`${BASE}/reports`, 'POST', { reportDate, ...(remarks ? { remarks } : {}) });
 export const getReport = (id: string) => req<CashierReport>(`${BASE}/reports/${id}`);
-export const updateReport = (id: string, data: { reportDate?: string; remarks?: string }) =>
-  req<CashierReport>(`${BASE}/reports/${id}`, 'PATCH', data);
+export const updateReport = (
+  id: string,
+  data: { reportDate?: string; reportNumber?: string; remarks?: string },
+) => req<CashierReport>(`${BASE}/reports/${id}`, 'PATCH', data);
 export const deleteReport = (id: string) => req(`${BASE}/reports/${id}`, 'DELETE');
 export const addEntry = (reportId: string, data: EntryInput) =>
   req<CashierReport>(`${BASE}/reports/${reportId}/entries`, 'POST', data);

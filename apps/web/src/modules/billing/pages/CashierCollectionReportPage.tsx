@@ -12,6 +12,7 @@ import {
   getReport,
   submitReport,
   updateEntry,
+  updateReport,
   type CashierEntry,
   type CashierReport,
   type CheckItem,
@@ -54,6 +55,7 @@ type LineDraft = {
   description: string;
   orFrom: string;
   orTo: string;
+  remarks: string;
 };
 type Draft = {
   collectorId: string;
@@ -70,6 +72,7 @@ const emptyLine = (): LineDraft => ({
   description: '',
   orFrom: '',
   orTo: '',
+  remarks: '',
 });
 
 function emptyDraft(reportDate: string): Draft {
@@ -234,6 +237,34 @@ export default function CashierCollectionReportPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Inline edit of the CDR number (draft only). null = not editing.
+  const [numDraft, setNumDraft] = useState<string | null>(null);
+  const [savingNum, setSavingNum] = useState(false);
+
+  async function saveNumber() {
+    if (!report || numDraft === null) return;
+    const next = numDraft.trim();
+    if (!next) {
+      setError('The CDR number cannot be blank.');
+      return;
+    }
+    if (next === report.reportNumber) {
+      setNumDraft(null);
+      return;
+    }
+    setSavingNum(true);
+    setError('');
+    try {
+      const r = await updateReport(report.id, { reportNumber: next });
+      setReport(r);
+      setNumDraft(null);
+      setOk('CDR number updated.');
+    } catch (e) {
+      setError(e instanceof CashierCollectionApiError ? e.message : 'Failed to update the CDR number.');
+    } finally {
+      setSavingNum(false);
+    }
+  }
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -270,6 +301,7 @@ export default function CashierCollectionReportPage() {
         description: l.description ?? '',
         orFrom: l.orFrom ?? '',
         orTo: l.orTo && l.orTo !== l.orFrom ? l.orTo : '',
+        remarks: l.remarks ?? '',
       })),
       checks: e.checks ?? [],
       cashCount: e.cashCount ?? {},
@@ -320,6 +352,7 @@ export default function CashierCollectionReportPage() {
             ...(l.description.trim() ? { description: l.description.trim() } : {}),
             orFrom: l.orFrom.trim(),
             ...(l.orTo.trim() ? { orTo: l.orTo.trim() } : {}),
+            ...(l.remarks.trim() ? { remarks: l.remarks.trim() } : {}),
           })),
         checks: draft.checks
           .filter((c) => c.checkNumber.trim())
@@ -406,7 +439,50 @@ export default function CashierCollectionReportPage() {
         }}
       >
         <h1 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
-          {report.reportNumber}
+          {numDraft !== null ? (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <input
+                autoFocus
+                value={numDraft}
+                onChange={(e) => setNumDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void saveNumber();
+                  if (e.key === 'Escape') setNumDraft(null);
+                }}
+                style={{ fontSize: 20, fontWeight: 700, padding: '2px 8px', width: 220 }}
+              />
+              <button
+                type="button"
+                className="bill-btn bill-btn--sm bill-btn--primary"
+                disabled={savingNum}
+                onClick={() => void saveNumber()}
+              >
+                {savingNum ? '…' : 'Save'}
+              </button>
+              <button
+                type="button"
+                className="bill-btn bill-btn--sm"
+                disabled={savingNum}
+                onClick={() => setNumDraft(null)}
+              >
+                Cancel
+              </button>
+            </span>
+          ) : (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              {report.reportNumber}
+              {isDraft && (
+                <button
+                  type="button"
+                  className="bill-btn bill-btn--sm"
+                  title="Edit the CDR number"
+                  onClick={() => setNumDraft(report.reportNumber)}
+                >
+                  ✎ Edit #
+                </button>
+              )}
+            </span>
+          )}
           <span
             style={{
               fontSize: 12,
@@ -674,6 +750,7 @@ export default function CashierCollectionReportPage() {
                   <th style={{ textAlign: 'right', width: 120 }}>Amount</th>
                   <th style={{ width: 100 }}>OR From *</th>
                   <th style={{ width: 100 }}>OR To</th>
+                  <th style={{ width: 160 }}>Remarks</th>
                   <th style={{ width: 26 }}></th>
                 </tr>
               </thead>
@@ -775,6 +852,18 @@ export default function CashierCollectionReportPage() {
                             </div>
                           ) : null;
                         })()}
+                      </td>
+                      <td>
+                        <input
+                          style={{ ...inputStyle, padding: '4px 6px' }}
+                          placeholder="Remarks (optional)"
+                          value={l.remarks}
+                          onChange={(e) => {
+                            const lines = [...draft.lines];
+                            lines[i] = { ...lines[i]!, remarks: e.target.value };
+                            setDraft({ ...draft, lines });
+                          }}
+                        />
                       </td>
                       <td>
                         {draft.lines.length > 1 && (

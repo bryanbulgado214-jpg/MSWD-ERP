@@ -68,6 +68,13 @@ export class UpdateCashierReportDto {
   @IsOptional()
   reportDate?: string;
 
+  // The cashier can override the auto-assigned CDR number (e.g. to match a manual
+  // DCR series). Kept unique within the organization.
+  @IsString()
+  @IsOptional()
+  @MaxLength(30)
+  reportNumber?: string;
+
   @IsString()
   @IsOptional()
   remarks?: string;
@@ -120,6 +127,12 @@ export class CollectionLineDto {
   @IsOptional()
   @MaxLength(200)
   description?: string;
+
+  // Optional free-text note the teller adds for this line (shown on the summary).
+  @IsString()
+  @IsOptional()
+  @MaxLength(200)
+  remarks?: string;
 }
 
 export class UpsertCashierEntryDto {

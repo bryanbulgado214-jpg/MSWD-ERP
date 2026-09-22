@@ -56,7 +56,11 @@ export default function CashierCollectionPrintPage() {
   };
 
   return (
-    <div className="gov-print-page">
+    <div className="gov-print-page cdr-landscape">
+      <style>{`
+        .cdr-landscape .gov-print-sheet { width: 11in; }
+        @media print { @page { size: letter landscape; } }
+      `}</style>
       <div className="gov-print-sheet" style={{ fontFamily: "'Arial','Helvetica',sans-serif" }}>
         <div style={{ textAlign: 'center', marginBottom: 8 }}>
           <GovLetterhead entityStyle={{ fontSize: 13 }} subStyle={{ fontSize: 9 }} />
@@ -79,6 +83,7 @@ export default function CashierCollectionPrintPage() {
               <th style={th}>Nature of Collection</th>
               <th style={th}>Checks</th>
               <th style={th}>Amount Collected</th>
+              <th style={th}>Remarks</th>
             </tr>
           </thead>
           <tbody>
@@ -101,11 +106,16 @@ export default function CashierCollectionPrintPage() {
                 </td>
                 <td style={num}>{e.checksTotal ? peso(e.checksTotal) : '—'}</td>
                 <td style={num}>{peso(e.amount)}</td>
+                <td style={cell}>
+                  {e.glLines.map((l, i) => (
+                    <div key={i}>{l.remarks || ' '}</div>
+                  ))}
+                </td>
               </tr>
             ))}
             {report.entries.length === 0 && (
               <tr>
-                <td style={{ ...cell, textAlign: 'center', color: '#888' }} colSpan={6}>
+                <td style={{ ...cell, textAlign: 'center', color: '#888' }} colSpan={7}>
                   No collections recorded.
                 </td>
               </tr>
@@ -118,6 +128,7 @@ export default function CashierCollectionPrintPage() {
                 {report.combinedChecksTotal ? peso(report.combinedChecksTotal) : '—'}
               </td>
               <td style={{ ...num, fontWeight: 700 }}>{peso(report.totalAmount)}</td>
+              <td style={cell}></td>
             </tr>
           </tbody>
         </table>
