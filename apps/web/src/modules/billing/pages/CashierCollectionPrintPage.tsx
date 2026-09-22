@@ -81,7 +81,6 @@ export default function CashierCollectionPrintPage() {
               <th style={th}>Teller / Collector</th>
               <th style={th}>Area</th>
               <th style={th}>Nature of Collection</th>
-              <th style={th}>Checks</th>
               <th style={th}>Amount Collected</th>
               <th style={th}>Remarks</th>
             </tr>
@@ -104,7 +103,6 @@ export default function CashierCollectionPrintPage() {
                     </div>
                   ))}
                 </td>
-                <td style={num}>{e.checksTotal ? peso(e.checksTotal) : '—'}</td>
                 <td style={num}>{peso(e.amount)}</td>
                 <td style={cell}>
                   {e.glLines.map((l, i) => (
@@ -115,7 +113,7 @@ export default function CashierCollectionPrintPage() {
             ))}
             {report.entries.length === 0 && (
               <tr>
-                <td style={{ ...cell, textAlign: 'center', color: '#888' }} colSpan={7}>
+                <td style={{ ...cell, textAlign: 'center', color: '#888' }} colSpan={6}>
                   No collections recorded.
                 </td>
               </tr>
@@ -123,9 +121,6 @@ export default function CashierCollectionPrintPage() {
             <tr>
               <td style={{ ...th, textAlign: 'right' }} colSpan={4}>
                 TOTAL
-              </td>
-              <td style={{ ...num, fontWeight: 700 }}>
-                {report.combinedChecksTotal ? peso(report.combinedChecksTotal) : '—'}
               </td>
               <td style={{ ...num, fontWeight: 700 }}>{peso(report.totalAmount)}</td>
               <td style={cell}></td>

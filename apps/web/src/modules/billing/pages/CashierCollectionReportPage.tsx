@@ -49,6 +49,18 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 };
 
+// Small inline "single invoice ↔ range" toggle in the OR-To cell.
+const toggleBtn: React.CSSProperties = {
+  fontSize: 11,
+  color: '#175cd3',
+  background: 'none',
+  border: 'none',
+  padding: 0,
+  cursor: 'pointer',
+  textDecoration: 'underline',
+  whiteSpace: 'nowrap',
+};
+
 type LineDraft = {
   collectionType: string;
   amount: string;
@@ -56,6 +68,9 @@ type LineDraft = {
   orFrom: string;
   orTo: string;
   remarks: string;
+  // A single-invoice line (one OR, no range) hides the OR-To field. UI-only —
+  // when true, orTo is left blank so the receipt reads as just the one OR.
+  single: boolean;
 };
 type Draft = {
   collectorId: string;
@@ -73,6 +88,8 @@ const emptyLine = (): LineDraft => ({
   orFrom: '',
   orTo: '',
   remarks: '',
+  // New lines start as a single invoice — click "Range" to enter an OR span.
+  single: true,
 });
 
 function emptyDraft(reportDate: string): Draft {
@@ -302,6 +319,8 @@ export default function CashierCollectionReportPage() {
         orFrom: l.orFrom ?? '',
         orTo: l.orTo && l.orTo !== l.orFrom ? l.orTo : '',
         remarks: l.remarks ?? '',
+        // A range only when orTo names a different receipt than orFrom.
+        single: !(l.orTo && l.orTo !== l.orFrom),
       })),
       checks: e.checks ?? [],
       cashCount: e.cashCount ?? {},
@@ -351,7 +370,7 @@ export default function CashierCollectionReportPage() {
             amount: parseFloat(l.amount) || 0,
             ...(l.description.trim() ? { description: l.description.trim() } : {}),
             orFrom: l.orFrom.trim(),
-            ...(l.orTo.trim() ? { orTo: l.orTo.trim() } : {}),
+            ...(!l.single && l.orTo.trim() ? { orTo: l.orTo.trim() } : {}),
             ...(l.remarks.trim() ? { remarks: l.remarks.trim() } : {}),
           })),
         checks: draft.checks
@@ -832,26 +851,63 @@ export default function CashierCollectionReportPage() {
                         />
                       </td>
                       <td>
-                        <input
-                          style={{ ...inputStyle, padding: '4px 6px' }}
-                          placeholder="(same)"
-                          value={l.orTo}
-                          onChange={(e) => {
-                            const lines = [...draft.lines];
-                            lines[i] = { ...lines[i]!, orTo: e.target.value };
-                            setDraft({ ...draft, lines });
-                          }}
-                        />
-                        {(() => {
-                          const n = l.orFrom.trim()
-                            ? orCount(l.orFrom, l.orTo.trim() || l.orFrom)
-                            : null;
-                          return n && n > 1 ? (
-                            <div style={{ fontSize: 11, color: '#98a2b3', marginTop: 2 }}>
-                              {n} receipts
+                        {l.single ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 11, color: '#98a2b3' }}>single invoice</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const lines = [...draft.lines];
+                                lines[i] = { ...lines[i]!, single: false };
+                                setDraft({ ...draft, lines });
+                              }}
+                              style={toggleBtn}
+                            >
+                              + Range
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <input
+                              style={{ ...inputStyle, padding: '4px 6px' }}
+                              placeholder="e.g. 2026-3824"
+                              value={l.orTo}
+                              onChange={(e) => {
+                                const lines = [...draft.lines];
+                                lines[i] = { ...lines[i]!, orTo: e.target.value };
+                                setDraft({ ...draft, lines });
+                              }}
+                            />
+                            <div
+                              style={{
+                                fontSize: 11,
+                                color: '#98a2b3',
+                                marginTop: 2,
+                                display: 'flex',
+                                gap: 8,
+                                alignItems: 'center',
+                              }}
+                            >
+                              {(() => {
+                                const n = l.orFrom.trim()
+                                  ? orCount(l.orFrom, l.orTo.trim() || l.orFrom)
+                                  : null;
+                                return n && n > 1 ? <span>{n} receipts</span> : null;
+                              })()}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const lines = [...draft.lines];
+                                  lines[i] = { ...lines[i]!, single: true, orTo: '' };
+                                  setDraft({ ...draft, lines });
+                                }}
+                                style={toggleBtn}
+                              >
+                                single invoice
+                              </button>
                             </div>
-                          ) : null;
-                        })()}
+                          </>
+                        )}
                       </td>
                       <td>
                         <input
