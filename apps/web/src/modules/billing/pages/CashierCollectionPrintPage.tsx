@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
@@ -25,6 +25,7 @@ export default function CashierCollectionPrintPage() {
   const reviewer = signatoryFor(organization?.signatories, 'cashierCollection', 'reviewedBy');
   const [report, setReport] = useState<CashierReport | null>(null);
   const [error, setError] = useState('');
+  const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -34,6 +35,33 @@ export default function CashierCollectionPrintPage() {
         setError(e instanceof CashierCollectionApiError ? e.message : 'Failed to load.'),
       );
   }, [id]);
+
+  // Keep the whole summary on ONE landscape page: measure the content and, if it
+  // overflows the printable height, scale it down with `zoom` (which, unlike a CSS
+  // transform, shrinks the layout box so it prints on a single page). More entry
+  // rows just shrink the sheet a little rather than spilling onto a second page.
+  useLayoutEffect(() => {
+    if (!report) return;
+    // ~one landscape Letter page of printable height at 96dpi (8.5in − margins).
+    const TARGET_PX = 735;
+    let cancelled = false;
+    const fit = () => {
+      const el = contentRef.current;
+      if (!el || cancelled) return;
+      el.style.zoom = '1';
+      const natural = el.scrollHeight;
+      const z = natural > TARGET_PX ? Math.max(0.5, TARGET_PX / natural) : 1;
+      el.style.zoom = String(z);
+    };
+    fit();
+    // Re-fit once fonts/letterhead settle (text metrics can change the height).
+    const t = setTimeout(fit, 250);
+    if (document.fonts?.ready) document.fonts.ready.then(fit).catch(() => undefined);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [report]);
 
   if (error) return <div style={{ padding: 32, color: '#b42318' }}>{error}</div>;
   if (!report) return <div style={{ padding: 32, color: '#667085' }}>Loading…</div>;
@@ -59,9 +87,13 @@ export default function CashierCollectionPrintPage() {
     <div className="gov-print-page cdr-landscape">
       <style>{`
         .cdr-landscape .gov-print-sheet { width: 11in; }
-        @media print { @page { size: letter landscape; } }
+        @media print {
+          @page { size: letter landscape; margin: 0.35in; }
+          .cdr-landscape .gov-print-sheet { width: 100%; }
+        }
       `}</style>
       <div className="gov-print-sheet" style={{ fontFamily: "'Arial','Helvetica',sans-serif" }}>
+        <div ref={contentRef}>
         <div style={{ textAlign: 'center', marginBottom: 8 }}>
           <GovLetterhead entityStyle={{ fontSize: 13 }} subStyle={{ fontSize: 9 }} />
           <div style={{ fontSize: '13pt', fontWeight: 700, letterSpacing: 2, marginTop: 6 }}>
@@ -128,78 +160,98 @@ export default function CashierCollectionPrintPage() {
           </tbody>
         </table>
 
-        {/* Remittance verification: cash + checks = total collection vs declared */}
-        <table style={{ borderCollapse: 'collapse', marginTop: 10, minWidth: 320 }}>
-          <tbody>
-            <tr>
-              <td style={cell}>Total cash counted</td>
-              <td style={num}>{peso(report.combinedCashCountTotal)}</td>
-            </tr>
-            <tr>
-              <td style={cell}>Add: checks received</td>
-              <td style={num}>{peso(report.combinedChecksTotal)}</td>
-            </tr>
-            <tr>
-              <td style={{ ...cell, fontWeight: 700 }}>Total collection counted</td>
-              <td style={{ ...num, fontWeight: 700 }}>{peso(report.overallCountedTotal)}</td>
-            </tr>
-            <tr>
-              <td style={cell}>Total collections (declared)</td>
-              <td style={num}>{peso(report.totalAmount)}</td>
-            </tr>
-            <tr>
-              <td style={{ ...cell, fontWeight: 700 }}>Short / (over)</td>
-              <td style={{ ...num, fontWeight: 700 }}>
-                {Math.abs(report.overallVariance) < 0.005
-                  ? '— (balanced)'
-                  : report.overallVariance > 0
-                    ? `(${peso(report.overallVariance)}) over`
-                    : `${peso(-report.overallVariance)} short`}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        {/* Combined cash count */}
-        <div style={{ marginTop: 14, fontSize: '9pt', fontWeight: 700 }}>Cash Count (final)</div>
-        <table style={{ borderCollapse: 'collapse', marginTop: 4 }}>
-          <thead>
-            <tr>
-              <th style={th}>Denomination</th>
-              <th style={th}>Qty</th>
-              <th style={th}>Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {report.denominations
-              .filter((d) => (Number(report.combinedCashCount[String(d)]) || 0) > 0)
-              .map((d) => {
-                const q = Number(report.combinedCashCount[String(d)]) || 0;
-                return (
-                  <tr key={d}>
-                    <td style={cell}>
-                      {d < 1 ? `${Math.round(d * 100)}¢` : `₱${d.toLocaleString('en-PH')}`}
-                    </td>
-                    <td style={num}>{q}</td>
-                    <td style={num}>{peso((Math.round(d * 100) * q) / 100)}</td>
+        {/* Cash count and the short/(over) reconciliation, aligned side by side. */}
+        <div
+          style={{
+            display: 'flex',
+            gap: 40,
+            alignItems: 'flex-start',
+            flexWrap: 'wrap',
+            marginTop: 12,
+          }}
+        >
+          {/* Combined cash count */}
+          <div>
+            <div style={{ fontSize: '9pt', fontWeight: 700, marginBottom: 4 }}>
+              Cash Count (final)
+            </div>
+            <table style={{ borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={th}>Denomination</th>
+                  <th style={th}>Qty</th>
+                  <th style={th}>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.denominations
+                  .filter((d) => (Number(report.combinedCashCount[String(d)]) || 0) > 0)
+                  .map((d) => {
+                    const q = Number(report.combinedCashCount[String(d)]) || 0;
+                    return (
+                      <tr key={d}>
+                        <td style={cell}>
+                          {d < 1 ? `${Math.round(d * 100)}¢` : `₱${d.toLocaleString('en-PH')}`}
+                        </td>
+                        <td style={num}>{q}</td>
+                        <td style={num}>{peso((Math.round(d * 100) * q) / 100)}</td>
+                      </tr>
+                    );
+                  })}
+                {(Number(report.combinedCashCount.other) || 0) > 0 && (
+                  <tr>
+                    <td style={cell}>Other coins</td>
+                    <td style={num}>—</td>
+                    <td style={num}>{peso(Number(report.combinedCashCount.other) || 0)}</td>
                   </tr>
-                );
-              })}
-            {(Number(report.combinedCashCount.other) || 0) > 0 && (
-              <tr>
-                <td style={cell}>Other coins</td>
-                <td style={num}>—</td>
-                <td style={num}>{peso(Number(report.combinedCashCount.other) || 0)}</td>
-              </tr>
-            )}
-            <tr>
-              <td style={{ ...th, textAlign: 'right' }} colSpan={2}>
-                TOTAL CASH COUNTED
-              </td>
-              <td style={{ ...num, fontWeight: 700 }}>{peso(report.combinedCashCountTotal)}</td>
-            </tr>
-          </tbody>
-        </table>
+                )}
+                <tr>
+                  <td style={{ ...th, textAlign: 'right' }} colSpan={2}>
+                    TOTAL CASH COUNTED
+                  </td>
+                  <td style={{ ...num, fontWeight: 700 }}>{peso(report.combinedCashCountTotal)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Remittance verification: cash + checks = total collection vs declared */}
+          <div>
+            <div style={{ fontSize: '9pt', fontWeight: 700, marginBottom: 4 }}>
+              Remittance Verification
+            </div>
+            <table style={{ borderCollapse: 'collapse', minWidth: 320 }}>
+              <tbody>
+                <tr>
+                  <td style={cell}>Total cash counted</td>
+                  <td style={num}>{peso(report.combinedCashCountTotal)}</td>
+                </tr>
+                <tr>
+                  <td style={cell}>Add: checks received</td>
+                  <td style={num}>{peso(report.combinedChecksTotal)}</td>
+                </tr>
+                <tr>
+                  <td style={{ ...cell, fontWeight: 700 }}>Total collection counted</td>
+                  <td style={{ ...num, fontWeight: 700 }}>{peso(report.overallCountedTotal)}</td>
+                </tr>
+                <tr>
+                  <td style={cell}>Total collections (declared)</td>
+                  <td style={num}>{peso(report.totalAmount)}</td>
+                </tr>
+                <tr>
+                  <td style={{ ...cell, fontWeight: 700 }}>Short / (over)</td>
+                  <td style={{ ...num, fontWeight: 700 }}>
+                    {Math.abs(report.overallVariance) < 0.005
+                      ? '— (balanced)'
+                      : report.overallVariance > 0
+                        ? `(${peso(report.overallVariance)}) over`
+                        : `${peso(-report.overallVariance)} short`}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
 
         <div style={{ marginTop: 40, display: 'flex', gap: 40, fontSize: '9pt' }}>
           <div style={{ flex: 1 }}>
@@ -220,6 +272,7 @@ export default function CashierCollectionPrintPage() {
           <div style={{ fontSize: 8, color: '#98a2b3' }}>
             Printed: {new Date().toLocaleString('en-PH')} | {report.reportNumber}
           </div>
+        </div>
         </div>
       </div>
 
