@@ -352,7 +352,59 @@ export class JevService {
       throw new BadRequestException('Cannot delete a JEV in a locked accounting period.');
     }
 
+    // A cashier collection report (CDR) is posted through this JEV (its collection
+    // JEV, or its deposit-to-bank JEV). Deleting the JEV must unwind the report so
+    // the cashier can act on it again — otherwise the report stays "submitted"
+    // pointing at a JEV that no longer exists, and can't be edited or deleted.
+    const cdr = await this.prisma.cashierCollectionReport.findFirst({
+      where: { organizationId, OR: [{ journalEntryId: id }, { depositJournalEntryId: id }] },
+      select: { id: true, journalEntryId: true, depositJournalEntryId: true },
+    });
+
     await runAudited(this.prisma, userId, async (tx) => {
+      if (cdr?.journalEntryId === id) {
+        // The collection posting is being removed — the whole report goes back to
+        // draft (now editable/deletable by the cashier). A deposit raised on top
+        // of it is invalid without its collection, so remove that JEV too.
+        if (cdr.depositJournalEntryId) {
+          await tx.jevLine.deleteMany({ where: { jevId: cdr.depositJournalEntryId } });
+          await tx.journalEntryVoucher.deleteMany({
+            where: { id: cdr.depositJournalEntryId, organizationId },
+          });
+        }
+        await tx.cashierCollectionReport.update({
+          where: { id: cdr.id },
+          data: {
+            status: 'draft',
+            journalEntryId: null,
+            submittedAt: null,
+            submittedBy: null,
+            depositJournalEntryId: null,
+            depositRecordedAt: null,
+            depositDate: null,
+            depositBankAccountId: null,
+            depositRecordedBy: null,
+            updatedBy: userId,
+            version: { increment: 1 },
+          },
+        });
+      } else if (cdr?.depositJournalEntryId === id) {
+        // Only the deposit posting is being removed — undo the deposit step; the
+        // report stays submitted (its collection JEV is untouched).
+        await tx.cashierCollectionReport.update({
+          where: { id: cdr.id },
+          data: {
+            depositJournalEntryId: null,
+            depositRecordedAt: null,
+            depositDate: null,
+            depositBankAccountId: null,
+            depositRecordedBy: null,
+            updatedBy: userId,
+            version: { increment: 1 },
+          },
+        });
+      }
+
       // JevLine cascades on JEV delete, but remove explicitly so the audit log
       // records the line removals too.
       await tx.jevLine.deleteMany({ where: { jevId: id } });
