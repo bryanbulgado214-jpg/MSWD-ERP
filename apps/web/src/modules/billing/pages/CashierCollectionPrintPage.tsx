@@ -118,10 +118,11 @@ export default function CashierCollectionPrintPage() {
             </tr>
           </thead>
           <tbody>
-            {report.entries.map((e) =>
-              // One row per collection line; the Teller and Area span the entry's
-              // lines so each OR / nature / amount / remark reads on its own row.
-              e.glLines.map((l, li) => (
+            {report.entries.map((e) => {
+              // Physical (cash/check) lines only; online payments print in their
+              // own table below. One row per line; Teller and Area span the entry.
+              const rows = e.glLines.filter((l) => !l.isOnline);
+              return rows.map((l, li) => (
                 <tr key={`${e.id}-${li}`}>
                   <td style={cell}>
                     {l.orFrom
@@ -132,10 +133,10 @@ export default function CashierCollectionPrintPage() {
                   </td>
                   {li === 0 && (
                     <>
-                      <td style={cell} rowSpan={e.glLines.length}>
+                      <td style={cell} rowSpan={rows.length}>
                         {e.collectorName}
                       </td>
-                      <td style={cell} rowSpan={e.glLines.length}>
+                      <td style={cell} rowSpan={rows.length}>
                         {e.collectionAreaName ?? '—'}
                       </td>
                     </>
@@ -147,8 +148,8 @@ export default function CashierCollectionPrintPage() {
                   <td style={num}>{peso(l.amount)}</td>
                   <td style={cell}>{l.remarks || '\u00A0'}</td>
                 </tr>
-              )),
-            )}
+              ));
+            })}
             {report.entries.length === 0 && (
               <tr>
                 <td style={{ ...cell, textAlign: 'center', color: '#888' }} colSpan={6}>
@@ -160,17 +161,20 @@ export default function CashierCollectionPrintPage() {
               <td style={{ ...th, textAlign: 'right' }} colSpan={4}>
                 TOTAL
               </td>
-              <td style={{ ...num, fontWeight: 700 }}>{peso(report.totalAmount)}</td>
+              <td style={{ ...num, fontWeight: 700 }}>
+                {peso(report.totalAmount - report.onlineTotal)}
+              </td>
               <td style={cell}></td>
             </tr>
           </tbody>
         </table>
 
-        {/* Cash count and the short/(over) reconciliation, aligned side by side. */}
+        {/* Cash count, the short/(over) reconciliation and online payments,
+            aligned side by side. */}
         <div
           style={{
             display: 'flex',
-            gap: 40,
+            gap: 20,
             alignItems: 'flex-start',
             flexWrap: 'wrap',
             marginTop: 12,
@@ -226,7 +230,7 @@ export default function CashierCollectionPrintPage() {
             <div style={{ fontSize: '9pt', fontWeight: 700, marginBottom: 4 }}>
               Remittance Verification
             </div>
-            <table style={{ borderCollapse: 'collapse', minWidth: 320 }}>
+            <table style={{ borderCollapse: 'collapse', minWidth: 260 }}>
               <tbody>
                 <tr>
                   <td style={cell}>Total cash counted</td>
@@ -241,8 +245,8 @@ export default function CashierCollectionPrintPage() {
                   <td style={{ ...num, fontWeight: 700 }}>{peso(report.overallCountedTotal)}</td>
                 </tr>
                 <tr>
-                  <td style={cell}>Total collections (declared)</td>
-                  <td style={num}>{peso(report.totalAmount)}</td>
+                  <td style={cell}>Physical collections (declared)</td>
+                  <td style={num}>{peso(report.totalAmount - report.onlineTotal)}</td>
                 </tr>
                 <tr>
                   <td style={{ ...cell, fontWeight: 700 }}>Short / (over)</td>
@@ -257,6 +261,50 @@ export default function CashierCollectionPrintPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Online payments — deposited straight to the bank, kept separate from
+              the physical cash/checks the cashier deposits for the day. */}
+          {report.onlineTotal > 0 && (
+            <div>
+              <div style={{ fontSize: '9pt', fontWeight: 700, marginBottom: 4 }}>
+                Online Payments (to bank — not physical cash)
+              </div>
+              <table style={{ borderCollapse: 'collapse', minWidth: 260 }}>
+                <thead>
+                  <tr>
+                    <th style={th}>Bank Account</th>
+                    <th style={th}>OR</th>
+                    <th style={th}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.entries.flatMap((e) =>
+                    e.glLines
+                      .filter((l) => l.isOnline)
+                      .map((l, i) => (
+                        <tr key={`${e.id}-ol-${i}`}>
+                          <td style={cell}>{l.bankAccountLabel ?? '—'}</td>
+                          <td style={cell}>
+                            {l.orFrom
+                              ? l.orTo && l.orTo !== l.orFrom
+                                ? `${l.orFrom}–${l.orTo}`
+                                : l.orFrom
+                              : '—'}
+                          </td>
+                          <td style={num}>{peso(l.amount)}</td>
+                        </tr>
+                      )),
+                  )}
+                  <tr>
+                    <td style={{ ...th, textAlign: 'right' }} colSpan={2}>
+                      TOTAL ONLINE
+                    </td>
+                    <td style={{ ...num, fontWeight: 700 }}>{peso(report.onlineTotal)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         <div style={{ marginTop: 40, display: 'flex', gap: 40, fontSize: '9pt' }}>

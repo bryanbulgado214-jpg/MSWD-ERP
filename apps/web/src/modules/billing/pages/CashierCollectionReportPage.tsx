@@ -71,6 +71,8 @@ type LineDraft = {
   // A single-invoice line (one OR, no range) hides the OR-To field. UI-only —
   // when true, orTo is left blank so the receipt reads as just the one OR.
   single: boolean;
+  // Receiving bank account, required for an online-payment line.
+  bankAccountId: string;
 };
 type Draft = {
   collectorId: string;
@@ -90,6 +92,7 @@ const emptyLine = (): LineDraft => ({
   remarks: '',
   // New lines start as a single invoice — click "Range" to enter an OR span.
   single: true,
+  bankAccountId: '',
 });
 
 function emptyDraft(reportDate: string): Draft {
@@ -321,6 +324,7 @@ export default function CashierCollectionReportPage() {
         remarks: l.remarks ?? '',
         // A range only when orTo names a different receipt than orFrom.
         single: !(l.orTo && l.orTo !== l.orFrom),
+        bankAccountId: l.bankAccountId ?? '',
       })),
       checks: e.checks ?? [],
       cashCount: e.cashCount ?? {},
@@ -339,6 +343,8 @@ export default function CashierCollectionReportPage() {
   const draftVariance = Math.round((draftCounted - draftRemit) * 100) / 100;
   const typeRequiresDesc = (key: string) =>
     !!opts?.collectionTypes.find((t) => t.key === key)?.requiresDescription;
+  const typeRequiresBank = (key: string) =>
+    !!opts?.collectionTypes.find((t) => t.key === key)?.requiresBankAccount;
   const draftValid =
     !!draft &&
     !!draft.collectorId &&
@@ -350,6 +356,8 @@ export default function CashierCollectionReportPage() {
     draft.lines.every(
       (l) => !typeRequiresDesc(l.collectionType) || l.description.trim().length > 0,
     ) &&
+    // Online-payment lines must name the receiving bank account.
+    draft.lines.every((l) => !typeRequiresBank(l.collectionType) || !!l.bankAccountId) &&
     draftRemit > 0 &&
     draftChecksTotal <= draftRemit + 0.005 &&
     draft.checks.every((c) => c.checkNumber.trim() && (Number(c.amount) || 0) > 0);
@@ -372,6 +380,9 @@ export default function CashierCollectionReportPage() {
             orFrom: l.orFrom.trim(),
             ...(!l.single && l.orTo.trim() ? { orTo: l.orTo.trim() } : {}),
             ...(l.remarks.trim() ? { remarks: l.remarks.trim() } : {}),
+            ...(typeRequiresBank(l.collectionType) && l.bankAccountId
+              ? { bankAccountId: l.bankAccountId }
+              : {}),
           })),
         checks: draft.checks
           .filter((c) => c.checkNumber.trim())
@@ -822,6 +833,29 @@ export default function CashierCollectionReportPage() {
                             }}
                           />
                         )}
+                        {type?.requiresBankAccount && (
+                          <select
+                            style={{
+                              ...inputStyle,
+                              padding: '4px 6px',
+                              marginTop: 4,
+                              borderColor: l.bankAccountId ? '#d0d5dd' : '#f97066',
+                            }}
+                            value={l.bankAccountId}
+                            onChange={(e) => {
+                              const lines = [...draft.lines];
+                              lines[i] = { ...lines[i]!, bankAccountId: e.target.value };
+                              setDraft({ ...draft, lines });
+                            }}
+                          >
+                            <option value="">— Deposited to which bank account? * —</option>
+                            {opts.bankAccounts.map((b) => (
+                              <option key={b.id} value={b.id}>
+                                {b.label}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </td>
                       <td>
                         <input
@@ -1207,8 +1241,10 @@ export default function CashierCollectionReportPage() {
                 <span style={{ fontFamily: 'monospace' }}>{peso(report.overallCountedTotal)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Total collections (declared)</span>
-                <strong style={{ fontFamily: 'monospace' }}>{peso(report.totalAmount)}</strong>
+                <span>Physical collections (declared)</span>
+                <strong style={{ fontFamily: 'monospace' }}>
+                  {peso(report.totalAmount - report.onlineTotal)}
+                </strong>
               </div>
               <div
                 style={{
@@ -1225,6 +1261,21 @@ export default function CashierCollectionReportPage() {
                 <span>Short / (over)</span>
                 <span>{varianceLabel(report.overallVariance).text}</span>
               </div>
+              {report.onlineTotal > 0 && (
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    borderTop: '1px dashed #eaecf0',
+                    paddingTop: 6,
+                    marginTop: 6,
+                    color: '#175cd3',
+                  }}
+                >
+                  <span>Online payments (to bank, not cash)</span>
+                  <span style={{ fontFamily: 'monospace' }}>{peso(report.onlineTotal)}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

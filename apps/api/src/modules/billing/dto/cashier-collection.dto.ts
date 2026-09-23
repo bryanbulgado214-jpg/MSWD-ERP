@@ -133,6 +133,11 @@ export class CollectionLineDto {
   @IsOptional()
   @MaxLength(200)
   remarks?: string;
+
+  // Required for an online-payment line: the bank account the money landed in.
+  @IsUUID()
+  @IsOptional()
+  bankAccountId?: string;
 }
 
 export class UpsertCashierEntryDto {

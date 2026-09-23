@@ -64,11 +64,13 @@ export interface CollectionTypeOption {
   mapped: boolean;
   requiresDescription: boolean;
   classifiedByAccountant: boolean;
+  requiresBankAccount: boolean;
 }
 export interface FormOptions {
   collectors: Collector[];
   areas: CollectionArea[];
   collectionTypes: CollectionTypeOption[];
+  bankAccounts: BankAccountOption[];
   denominations: number[];
 }
 export interface JevRef {
@@ -112,6 +114,7 @@ export interface CollectionLineInput {
   orFrom: string;
   orTo?: string;
   remarks?: string;
+  bankAccountId?: string;
 }
 export interface CollectionLineDetail {
   collectionType: string;
@@ -124,6 +127,9 @@ export interface CollectionLineDetail {
   orFrom: string;
   orTo: string;
   remarks: string;
+  isOnline: boolean;
+  bankAccountId: string | null;
+  bankAccountLabel: string | null;
 }
 export interface CashierEntry {
   id: string;
@@ -136,6 +142,8 @@ export interface CashierEntry {
   orSeries: string;
   amount: number;
   totalRemittance: number;
+  onlineTotal: number;
+  physicalTotal: number;
   checks: CheckItem[];
   checksTotal: number;
   cashCountTotal: number;
@@ -158,6 +166,7 @@ export interface CashierReport {
   combinedCashCount: Record<string, number>;
   combinedCashCountTotal: number;
   combinedChecksTotal: number;
+  onlineTotal: number;
   overallCountedTotal: number;
   overallVariance: number;
   denominations: number[];

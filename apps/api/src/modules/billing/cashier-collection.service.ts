@@ -59,6 +59,9 @@ export interface CollectionLine {
   orTo?: string;
   // Free-text note the teller adds for this line (shown on the summary).
   remarks?: string;
+  // For an online/e-payment line: the bank account the money landed in. On
+  // posting this line debits that bank account (not Cash - Collecting Officer).
+  bankAccountId?: string;
 }
 
 /** Human label for an OR range: "3822" for a single receipt, "3822 to 3827" for a span. */
@@ -198,10 +201,11 @@ export class CashierCollectionService {
   // ── Form options for the cashier ──
 
   async getFormOptions(orgId: string) {
-    const [collectors, areas, collGl] = await Promise.all([
+    const [collectors, areas, collGl, bankAccounts] = await Promise.all([
       this.listCollectors(orgId, true),
       this.listAreas(orgId, true),
       this.resolveCollectionGl(orgId),
+      this.listBankAccounts(orgId),
     ]);
     // The cashier picks a type of collection; standard types resolve to a GL
     // account via the account mappings (shown for reference). "Other" carries no
@@ -216,9 +220,16 @@ export class CashierCollectionService {
         mapped: !!gl,
         requiresDescription: !!t.requiresDescription,
         classifiedByAccountant: !!t.classifiedByAccountant,
+        requiresBankAccount: !!t.requiresBankAccount,
       };
     });
-    return { collectors, areas, collectionTypes, denominations: PESO_DENOMINATIONS };
+    return {
+      collectors,
+      areas,
+      collectionTypes,
+      bankAccounts,
+      denominations: PESO_DENOMINATIONS,
+    };
   }
 
   /** Resolve each standard collection type's mapped GL account (typeKey → account). */
@@ -447,6 +458,27 @@ export class CashierCollectionService {
     }
     await this.healOrphanedPostings([report], existingJevIds);
 
+    // Labels for the bank accounts named on online-payment lines.
+    const lineBankIds = [
+      ...new Set(
+        report.entries.flatMap((e) =>
+          ((e.glLines as CollectionLine[] | null) ?? [])
+            .map((l) => l.bankAccountId)
+            .filter((x): x is string => !!x),
+        ),
+      ),
+    ];
+    const bankLabelById = new Map<string, string>();
+    if (lineBankIds.length) {
+      const banks = await this.prisma.bankAccount.findMany({
+        where: { id: { in: lineBankIds }, organizationId: orgId },
+        select: { id: true, accountName: true, accountNumber: true, bank: { select: { code: true } } },
+      });
+      for (const b of banks) {
+        bankLabelById.set(b.id, `${b.bank.code} — ${b.accountName} (${b.accountNumber})`);
+      }
+    }
+
     let combined: Record<string, number> = {};
     let combinedChecks = 0;
     const entries = report.entries.map((e) => {
@@ -469,16 +501,24 @@ export class CashierCollectionService {
           orFrom: l.orFrom ?? '',
           orTo: l.orTo ?? l.orFrom ?? '',
           remarks: l.remarks ?? '',
+          // Online/e-payment: not physical cash — carries the receiving bank.
+          isOnline: !!type?.requiresBankAccount,
+          bankAccountId: l.bankAccountId ?? null,
+          bankAccountLabel: l.bankAccountId ? (bankLabelById.get(l.bankAccountId) ?? null) : null,
         };
       });
       const checks = (e.checks as CheckItem[] | null) ?? [];
       const chkTotal = checksTotal(checks);
       const cashTotal = round2(cashCountTotal(cc));
-      const total = Number(e.amount); // declared total remittance
+      const total = Number(e.amount); // declared total remittance (incl. online)
+      // Online payments are not physical cash the teller hands over — the cash +
+      // checks reconcile only against the physical portion of the remittance.
+      const onlineTotal = round2(glLines.filter((l) => l.isOnline).reduce((s, l) => s + l.amount, 0));
+      const physicalTotal = round2(total - onlineTotal);
       // Checks are part of the collection: counted = cash + checks.
       const countedTotal = round2(cashTotal + chkTotal);
-      // Over/(short): counted collection vs the teller's declared remittance.
-      const variance = round2(countedTotal - total);
+      // Over/(short): counted collection vs the physical remittance expected.
+      const variance = round2(countedTotal - physicalTotal);
       combinedChecks = round2(combinedChecks + chkTotal);
       return {
         id: e.id,
@@ -491,6 +531,8 @@ export class CashierCollectionService {
         orSeries: e.orSeries,
         amount: total,
         totalRemittance: total,
+        onlineTotal,
+        physicalTotal,
         checks,
         checksTotal: chkTotal,
         cashCountTotal: cashTotal,
@@ -499,6 +541,9 @@ export class CashierCollectionService {
         cashCount: cc,
       };
     });
+    // Online payments across the whole report — kept out of the physical cash
+    // reconciliation and shown in their own table.
+    const reportOnlineTotal = round2(entries.reduce((s, e) => s + e.onlineTotal, 0));
 
     return {
       id: report.id,
@@ -517,10 +562,13 @@ export class CashierCollectionService {
       combinedCashCount: combined,
       combinedCashCountTotal: round2(cashCountTotal(combined)),
       combinedChecksTotal: combinedChecks,
-      // Overall: counted collection (cash + checks) vs the declared total.
+      // Total online/e-payments (deposited straight to the bank, not physical cash).
+      onlineTotal: reportOnlineTotal,
+      // Overall: counted collection (cash + checks) vs the PHYSICAL declared total
+      // (online payments excluded — they never enter the cashier's drawer).
       overallCountedTotal: round2(cashCountTotal(combined) + combinedChecks),
       overallVariance: round2(
-        cashCountTotal(combined) + combinedChecks - Number(report.totalAmount),
+        cashCountTotal(combined) + combinedChecks - (Number(report.totalAmount) - reportOnlineTotal),
       ),
       denominations: PESO_DENOMINATIONS,
     };
@@ -627,7 +675,7 @@ export class CashierCollectionService {
       }
       const orTo = l.orTo?.trim() || orFrom;
       const remarks = l.remarks?.trim();
-      return {
+      const line: CollectionLine = {
         collectionType: l.collectionType,
         amount: amt,
         ...(description ? { description } : {}),
@@ -635,7 +683,33 @@ export class CashierCollectionService {
         orTo,
         ...(remarks ? { remarks } : {}),
       };
+      // Online payments must name the receiving bank account.
+      if (type.requiresBankAccount) {
+        if (!l.bankAccountId) {
+          throw new BadRequestException(`Select the receiving bank account for "${type.label}".`);
+        }
+        line.bankAccountId = l.bankAccountId;
+      }
+      return line;
     });
+    // Validate every online line's bank account (active + linked to a GL account).
+    const bankIds = [...new Set(lines.map((l) => l.bankAccountId).filter((x): x is string => !!x))];
+    if (bankIds.length) {
+      const banks = await this.prisma.bankAccount.findMany({
+        where: { id: { in: bankIds }, organizationId: orgId, status: 'active' },
+        select: { id: true, chartOfAccountId: true },
+      });
+      const byId = new Map(banks.map((b) => [b.id, b]));
+      for (const bid of bankIds) {
+        const b = byId.get(bid);
+        if (!b) throw new BadRequestException('Select a valid bank account for the online payment.');
+        if (!b.chartOfAccountId) {
+          throw new BadRequestException(
+            'The selected bank account is not linked to a Cash-in-Bank ledger account.',
+          );
+        }
+      }
+    }
     const amount = round2(lines.reduce((s, l) => s + l.amount, 0));
     if (amount <= 0)
       throw new BadRequestException('The total remittance must be greater than zero.');
@@ -847,15 +921,63 @@ export class CashierCollectionService {
         };
       }),
     );
-    const lines = [
-      {
+    // Split the debit side: physical cash + checks debit Cash - Collecting Officer;
+    // online/e-payments debit the bank account each landed in (grouped by bank).
+    const allLines = report.entries.flatMap((e) => (e.glLines as CollectionLine[] | null) ?? []);
+    const onlineTotal = round2(
+      allLines
+        .filter((l) => collectionTypeByKey.get(l.collectionType)?.requiresBankAccount)
+        .reduce((s, l) => s + Number(l.amount), 0),
+    );
+    const physicalTotal = round2(total - onlineTotal);
+    const debitLines: Array<{
+      chartOfAccountId: string;
+      debitAmount: number;
+      creditAmount: number;
+      description: string;
+    }> = [];
+    if (physicalTotal > 0) {
+      debitLines.push({
         chartOfAccountId: cashMap.chartOfAccountId,
-        debitAmount: total,
+        debitAmount: physicalTotal,
         creditAmount: 0,
         description: `Daily collections — ${dateStr} (${report.reportNumber})`,
-      },
-      ...creditLines,
-    ];
+      });
+    }
+    if (onlineTotal > 0) {
+      const byBank = new Map<string, number>();
+      for (const l of allLines) {
+        if (!collectionTypeByKey.get(l.collectionType)?.requiresBankAccount || !l.bankAccountId) {
+          continue;
+        }
+        byBank.set(l.bankAccountId, round2((byBank.get(l.bankAccountId) ?? 0) + Number(l.amount)));
+      }
+      const banks = await this.prisma.bankAccount.findMany({
+        where: { id: { in: [...byBank.keys()] }, organizationId: orgId },
+        select: {
+          id: true,
+          chartOfAccountId: true,
+          accountNumber: true,
+          bank: { select: { code: true } },
+        },
+      });
+      const bankById = new Map(banks.map((b) => [b.id, b]));
+      for (const [bankId, amt] of byBank) {
+        const b = bankById.get(bankId);
+        if (!b?.chartOfAccountId) {
+          throw new BadRequestException(
+            'An online payment names a bank account with no linked Cash-in-Bank ledger account.',
+          );
+        }
+        debitLines.push({
+          chartOfAccountId: b.chartOfAccountId,
+          debitAmount: amt,
+          creditAmount: 0,
+          description: `Online collections — ${b.bank.code} ${b.accountNumber} — ${dateStr}`,
+        });
+      }
+    }
+    const lines = [...debitLines, ...creditLines];
 
     const jev = await runAudited(this.prisma, userId, async (tx) => {
       const created = await tx.journalEntryVoucher.create({

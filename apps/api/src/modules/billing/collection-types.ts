@@ -18,9 +18,17 @@ export interface CollectionType {
   requiresDescription?: boolean;
   /** GL is assigned by the accountant during review, not by a fixed mapping. */
   classifiedByAccountant?: boolean;
+  /**
+   * Money received straight into a bank account (e.g. an online/e-payment), NOT
+   * physical cash. The cashier must pick the receiving bank account; on posting
+   * it debits that bank account instead of Cash - Collecting Officer, and it is
+   * kept out of the day's physical cash reconciliation.
+   */
+  requiresBankAccount?: boolean;
 }
 
 export const OTHER_COLLECTION_KEY = 'other';
+export const ONLINE_PAYMENT_KEY = 'online_payment';
 
 /**
  * Temporary holding account an unclassified "Other" collection credits until the
@@ -59,6 +67,16 @@ export const COLLECTION_TYPES: CollectionType[] = [
     label: 'Guaranty deposit',
     mappingKey: 'collection.guaranty_deposit',
     defaultGlCode: '2-04-01-040', // Guaranty/Security Deposits Payable
+  },
+  {
+    // Received directly in the bank (e-payment/online). Credits Accounts
+    // Receivable like a water-bill payment; the accountant can reclassify on
+    // review if a particular online collection was for something else.
+    key: ONLINE_PAYMENT_KEY,
+    label: 'Online payment',
+    mappingKey: 'collection.water_sales',
+    defaultGlCode: '1-03-01-010', // Accounts Receivable
+    requiresBankAccount: true,
   },
   {
     key: OTHER_COLLECTION_KEY,
