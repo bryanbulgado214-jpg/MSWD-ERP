@@ -332,19 +332,29 @@ export default function CashierCollectionReportPage() {
     setError('');
   }
 
+  const typeRequiresDesc = (key: string) =>
+    !!opts?.collectionTypes.find((t) => t.key === key)?.requiresDescription;
+  const typeRequiresBank = (key: string) =>
+    !!opts?.collectionTypes.find((t) => t.key === key)?.requiresBankAccount;
   const draftRemit = draft
     ? Math.round(draft.lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0) * 100) / 100
     : 0;
+  // Online payments land straight in the bank — not physical cash, so they are
+  // excluded from the cash-count reconciliation.
+  const draftOnline = draft
+    ? Math.round(
+        draft.lines
+          .filter((l) => typeRequiresBank(l.collectionType))
+          .reduce((s, l) => s + (parseFloat(l.amount) || 0), 0) * 100,
+      ) / 100
+    : 0;
+  const draftPhysical = Math.round((draftRemit - draftOnline) * 100) / 100;
   const draftChecksTotal = draft
     ? draft.checks.reduce((s, c) => s + (Number(c.amount) || 0), 0)
     : 0;
   const draftCash = draft ? cashCountTotal(denoms, draft.cashCount) : 0;
   const draftCounted = Math.round((draftCash + draftChecksTotal) * 100) / 100;
-  const draftVariance = Math.round((draftCounted - draftRemit) * 100) / 100;
-  const typeRequiresDesc = (key: string) =>
-    !!opts?.collectionTypes.find((t) => t.key === key)?.requiresDescription;
-  const typeRequiresBank = (key: string) =>
-    !!opts?.collectionTypes.find((t) => t.key === key)?.requiresBankAccount;
+  const draftVariance = Math.round((draftCounted - draftPhysical) * 100) / 100;
   const draftValid =
     !!draft &&
     !!draft.collectorId &&
@@ -1151,8 +1161,8 @@ export default function CashierCollectionReportPage() {
                 <span style={{ fontFamily: 'monospace' }}>{peso(draftCounted)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Total remittance (declared)</span>
-                <span style={{ fontFamily: 'monospace' }}>{peso(draftRemit)}</span>
+                <span>Physical remittance (declared)</span>
+                <span style={{ fontFamily: 'monospace' }}>{peso(draftPhysical)}</span>
               </div>
               <div
                 style={{
@@ -1168,6 +1178,21 @@ export default function CashierCollectionReportPage() {
                 <span>Short / (over)</span>
                 <span>{varianceLabel(draftVariance).text}</span>
               </div>
+              {draftOnline > 0 && (
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    borderTop: '1px dashed #eaecf0',
+                    paddingTop: 4,
+                    marginTop: 4,
+                    color: '#175cd3',
+                  }}
+                >
+                  <span>Online payments (to bank, not cash)</span>
+                  <span style={{ fontFamily: 'monospace' }}>{peso(draftOnline)}</span>
+                </div>
+              )}
             </div>
           )}
 
