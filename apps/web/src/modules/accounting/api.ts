@@ -637,6 +637,16 @@ export async function updateClearedDate(
   return res.json();
 }
 
+// Cashier reverses an erroneous clearing: a cleared check/ADA goes back to
+// "released" so it can be re-cleared with the correct date.
+export async function unclearCheck(
+  id: string,
+  data: { expectedVersion: number },
+): Promise<CheckDetail> {
+  const res = await authFetchMutate(`/accounting/checks/${id}/unclear`, 'POST', data);
+  return res.json();
+}
+
 // Approver-only (General Manager): void or spoil a check. The server enforces
 // that the voider is not the person who prepared/printed/released it.
 export async function voidCheck(

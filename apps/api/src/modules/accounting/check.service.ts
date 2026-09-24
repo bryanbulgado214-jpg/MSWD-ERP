@@ -457,6 +457,58 @@ export class CheckService {
   }
 
   /**
+   * Cashier action: reverse an erroneous clearing. A cleared check/ADA goes back
+   * to "released" (issued, awaiting clearing) and its cleared date is dropped, so
+   * the cashier can re-clear it with the correct date. Blocked while the check is
+   * part of a bank reconciliation.
+   */
+  async unclearCheck(
+    organizationId: string,
+    id: string,
+    userId: string,
+    data: { expectedVersion: number },
+  ) {
+    const check = await this.prisma.check.findFirst({ where: { id, organizationId } });
+    if (!check) throw new NotFoundException('Check not found.');
+    if (check.version !== data.expectedVersion) {
+      throw new ConflictException('Check was modified. Please refresh.');
+    }
+    if (check.status !== 'cleared') {
+      throw new BadRequestException('Only a cleared check or ADA can be un-cleared.');
+    }
+    const recItems = await this.prisma.bankReconciliationItem.count({ where: { checkId: id } });
+    if (recItems > 0) {
+      throw new BadRequestException(
+        'This check appears in a bank reconciliation — remove it from the reconciliation before un-clearing.',
+      );
+    }
+    return runAudited(this.prisma, userId, async (tx) => {
+      const updated = await tx.check.update({
+        where: { id },
+        data: {
+          status: 'released',
+          clearedDate: null,
+          // A directly-cleared check may never have had a release timestamp.
+          ...(check.releasedAt ? {} : { releasedBy: userId, releasedAt: new Date() }),
+          updatedBy: userId,
+          version: { increment: 1 },
+        },
+        select: CHECK_DETAIL_SELECT,
+      });
+      await tx.checkStatusHistory.create({
+        data: {
+          checkId: id,
+          fromStatus: 'cleared',
+          toStatus: 'released',
+          changedBy: userId,
+          remarks: 'Clearing reversed — check un-cleared.',
+        },
+      });
+      return updated;
+    });
+  }
+
+  /**
    * Cashier action: assign the physical check number to a PENDING check and mark
    * it printed. The check's DV must already be posted. Also stamps the DV so its
    * printout shows the check number.

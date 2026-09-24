@@ -10,6 +10,7 @@ import {
   getChecks,
   printCheck,
   transitionCheck,
+  unclearCheck,
   updateCheckNumber,
   updateClearedDate,
   voidCheck,
@@ -217,6 +218,29 @@ export default function CheckRegisterPage() {
       setClearError(err.message);
     } finally {
       setClearing(false);
+    }
+  }
+
+  // Reverse an erroneous clearing: the check/ADA goes back to "released" so it
+  // can be re-cleared with the correct date.
+  async function handleUnclear(check: CheckListItem) {
+    setActionError('');
+    const label = check.disbursementVoucher?.paymentMode === 'ada' ? 'ADA' : 'check';
+    if (
+      !window.confirm(
+        `Un-clear this ${label}? It will go back to "released" (awaiting clearing) and its cleared date will be removed. You can then mark it cleared again with the correct date.`,
+      )
+    ) {
+      return;
+    }
+    setBusy(check.id);
+    try {
+      await unclearCheck(check.id, { expectedVersion: check.version });
+      loadChecks();
+    } catch (err: any) {
+      setActionError(err.message);
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -736,6 +760,16 @@ export default function CheckRegisterPage() {
                               onClick={() => openEditClearedDate(c)}
                             >
                               Edit date
+                            </button>
+                          )}
+                          {canRelease && c.status === 'cleared' && (
+                            <button
+                              className="acct-btn acct-btn--sm"
+                              title="Reverse an accidental clearing — sends it back to released"
+                              disabled={busy === c.id}
+                              onClick={() => handleUnclear(c)}
+                            >
+                              Unclear
                             </button>
                           )}
                           {voidable && (

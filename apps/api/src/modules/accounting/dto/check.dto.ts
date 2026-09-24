@@ -75,6 +75,11 @@ export class UpdateClearedDateDto {
   clearedDate!: string;
 }
 
+export class UnclearCheckDto {
+  @IsNumber()
+  expectedVersion!: number;
+}
+
 export class VoidCheckDto {
   @IsNumber()
   expectedVersion!: number;

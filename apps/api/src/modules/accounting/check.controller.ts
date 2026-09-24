@@ -20,6 +20,7 @@ import { CheckService } from './check.service';
 import {
   PrintCheckDto,
   TransitionCheckDto,
+  UnclearCheckDto,
   UpdateClearedDateDto,
   VoidCheckDto,
 } from './dto/check.dto';
@@ -113,6 +114,18 @@ export class CheckController {
     @Body() dto: UpdateClearedDateDto,
   ) {
     return this.checkService.updateClearedDate(user.organizationId, id, user.userId, dto);
+  }
+
+  // Cashier reverses an erroneous clearing: a cleared check/ADA goes back to
+  // "released" so it can be re-cleared with the correct date.
+  @Post(':id/unclear')
+  @RequirePermissions('accounting.check.record_release')
+  unclear(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UnclearCheckDto,
+  ) {
+    return this.checkService.unclearCheck(user.organizationId, id, user.userId, dto);
   }
 
   // Approver-only (General Manager): void/spoil a check. The service enforces
