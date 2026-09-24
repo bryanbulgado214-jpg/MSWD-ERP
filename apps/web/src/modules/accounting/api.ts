@@ -628,6 +628,15 @@ export async function transitionCheck(
   return res.json();
 }
 
+// Cashier corrects the cleared date of an already-cleared check/ADA.
+export async function updateClearedDate(
+  id: string,
+  data: { expectedVersion: number; clearedDate: string },
+): Promise<CheckDetail> {
+  const res = await authFetchMutate(`/accounting/checks/${id}/cleared-date`, 'PATCH', data);
+  return res.json();
+}
+
 // Approver-only (General Manager): void or spoil a check. The server enforces
 // that the voider is not the person who prepared/printed/released it.
 export async function voidCheck(

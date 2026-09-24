@@ -17,7 +17,12 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
 
 import { CheckService } from './check.service';
-import { PrintCheckDto, TransitionCheckDto, VoidCheckDto } from './dto/check.dto';
+import {
+  PrintCheckDto,
+  TransitionCheckDto,
+  UpdateClearedDateDto,
+  VoidCheckDto,
+} from './dto/check.dto';
 
 @Controller('accounting/checks')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -96,6 +101,18 @@ export class CheckController {
     @Body() dto: TransitionCheckDto,
   ) {
     return this.checkService.transition(user.organizationId, id, user.userId, dto);
+  }
+
+  // Cashier corrects the cleared date of an already-cleared check/ADA (fixes a
+  // date entered in error). Does not change the status.
+  @Patch(':id/cleared-date')
+  @RequirePermissions('accounting.check.record_release')
+  updateClearedDate(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateClearedDateDto,
+  ) {
+    return this.checkService.updateClearedDate(user.organizationId, id, user.userId, dto);
   }
 
   // Approver-only (General Manager): void/spoil a check. The service enforces

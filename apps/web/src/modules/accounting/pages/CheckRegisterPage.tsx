@@ -6,7 +6,14 @@ import { useAuth } from '../../../app/auth';
 import { AccountingSubNav } from './AccountingSubNav';
 
 import './accounting.css';
-import { getChecks, printCheck, transitionCheck, updateCheckNumber, voidCheck } from '../api';
+import {
+  getChecks,
+  printCheck,
+  transitionCheck,
+  updateCheckNumber,
+  updateClearedDate,
+  voidCheck,
+} from '../api';
 import { checkStatusDate, formatStatusDate, statusLabel } from '../status-format';
 import type { CheckListItem } from '../types';
 
@@ -67,6 +74,9 @@ export default function CheckRegisterPage() {
   const [clearing, setClearing] = useState(false);
   // Optional physical check number captured when clearing a pre-printed check.
   const [clearCheckNumber, setClearCheckNumber] = useState('');
+  // The clear modal doubles as an "edit cleared date" correction for an
+  // already-cleared check/ADA.
+  const [clearIsEdit, setClearIsEdit] = useState(false);
 
   const loadChecks = () => {
     setState({ status: 'loading' });
@@ -154,6 +164,7 @@ export default function CheckRegisterPage() {
       const today = new Date().toISOString().slice(0, 10);
       setClearDate(dvDay && dvDay > today ? dvDay : today);
       setClearCheckNumber('');
+      setClearIsEdit(false);
       setClearTarget(check);
       return;
     }
@@ -168,6 +179,15 @@ export default function CheckRegisterPage() {
     }
   }
 
+  // Open the modal to correct the cleared date of an already-cleared check/ADA.
+  function openEditClearedDate(check: CheckListItem) {
+    setClearError('');
+    setClearIsEdit(true);
+    setClearCheckNumber('');
+    setClearDate(check.clearedDate?.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
+    setClearTarget(check);
+  }
+
   async function confirmClear() {
     if (!clearTarget) return;
     const dvDay = clearTarget.disbursementVoucher?.dvDate?.slice(0, 10);
@@ -178,12 +198,19 @@ export default function CheckRegisterPage() {
     setClearing(true);
     setClearError('');
     try {
-      await transitionCheck(clearTarget.id, {
-        expectedVersion: clearTarget.version,
-        toStatus: 'cleared',
-        clearedDate: clearDate,
-        ...(clearCheckNumber.trim() ? { checkNumber: clearCheckNumber.trim() } : {}),
-      });
+      if (clearIsEdit) {
+        await updateClearedDate(clearTarget.id, {
+          expectedVersion: clearTarget.version,
+          clearedDate: clearDate,
+        });
+      } else {
+        await transitionCheck(clearTarget.id, {
+          expectedVersion: clearTarget.version,
+          toStatus: 'cleared',
+          clearedDate: clearDate,
+          ...(clearCheckNumber.trim() ? { checkNumber: clearCheckNumber.trim() } : {}),
+        });
+      }
       setClearTarget(null);
       loadChecks();
     } catch (err: any) {
@@ -322,9 +349,11 @@ export default function CheckRegisterPage() {
             }}
           >
             <h2 style={{ margin: '0 0 4px', fontSize: 17 }}>
-              {clearTarget.disbursementVoucher?.paymentMode === 'ada'
-                ? 'Mark ADA Cleared'
-                : 'Mark Check Cleared'}
+              {clearIsEdit
+                ? 'Edit Cleared Date'
+                : clearTarget.disbursementVoucher?.paymentMode === 'ada'
+                  ? 'Mark ADA Cleared'
+                  : 'Mark Check Cleared'}
             </h2>
             <p style={{ fontSize: 12.5, color: '#667085', margin: '0 0 16px' }}>
               {clearTarget.disbursementVoucher?.dvNumber} ·{' '}
@@ -337,7 +366,9 @@ export default function CheckRegisterPage() {
                 {clearError}
               </div>
             )}
-            {clearTarget.disbursementVoucher?.paymentMode !== 'ada' && !clearTarget.checkNumber && (
+            {!clearIsEdit &&
+              clearTarget.disbursementVoucher?.paymentMode !== 'ada' &&
+              !clearTarget.checkNumber && (
               <>
                 <label
                   style={{
@@ -417,7 +448,7 @@ export default function CheckRegisterPage() {
                 onClick={confirmClear}
                 disabled={clearing || !clearDate}
               >
-                {clearing ? 'Saving…' : 'Mark Cleared'}
+                {clearing ? 'Saving…' : clearIsEdit ? 'Save date' : 'Mark Cleared'}
               </button>
             </div>
           </div>
@@ -695,6 +726,16 @@ export default function CheckRegisterPage() {
                               onClick={() => handleRelease(c, 'cleared')}
                             >
                               cleared
+                            </button>
+                          )}
+                          {canRelease && c.status === 'cleared' && (
+                            <button
+                              className="acct-btn acct-btn--sm"
+                              title="Correct the date this cleared the bank"
+                              disabled={busy === c.id}
+                              onClick={() => openEditClearedDate(c)}
+                            >
+                              Edit date
                             </button>
                           )}
                           {voidable && (

@@ -404,6 +404,59 @@ export class CheckService {
   }
 
   /**
+   * Cashier action: correct the cleared date of an already-cleared check/ADA
+   * (fixes a date entered in error). Status is unchanged; the change is logged.
+   */
+  async updateClearedDate(
+    organizationId: string,
+    id: string,
+    userId: string,
+    data: { expectedVersion: number; clearedDate: string },
+  ) {
+    const check = await this.prisma.check.findFirst({
+      where: { id, organizationId },
+      include: { disbursementVoucher: { select: { dvDate: true } } },
+    });
+    if (!check) throw new NotFoundException('Check not found.');
+    if (check.version !== data.expectedVersion) {
+      throw new ConflictException('Check was modified. Please refresh.');
+    }
+    if (check.status !== 'cleared') {
+      throw new BadRequestException('Only a cleared check or ADA can have its cleared date corrected.');
+    }
+    if (!data.clearedDate) throw new BadRequestException('Cleared date is required.');
+    if (check.disbursementVoucher) {
+      const dvDay = check.disbursementVoucher.dvDate.toISOString().slice(0, 10);
+      if (data.clearedDate < dvDay) {
+        throw new BadRequestException(`Clearing date cannot be before the DV date (${dvDay}).`);
+      }
+    }
+    const prev = check.clearedDate ? check.clearedDate.toISOString().slice(0, 10) : '—';
+    if (prev === data.clearedDate) return this.findOne(organizationId, id);
+    return runAudited(this.prisma, userId, async (tx) => {
+      const updated = await tx.check.update({
+        where: { id },
+        data: {
+          clearedDate: new Date(data.clearedDate),
+          updatedBy: userId,
+          version: { increment: 1 },
+        },
+        select: CHECK_DETAIL_SELECT,
+      });
+      await tx.checkStatusHistory.create({
+        data: {
+          checkId: id,
+          fromStatus: 'cleared',
+          toStatus: 'cleared',
+          changedBy: userId,
+          remarks: `Cleared date corrected: ${prev} → ${data.clearedDate}`,
+        },
+      });
+      return updated;
+    });
+  }
+
+  /**
    * Cashier action: assign the physical check number to a PENDING check and mark
    * it printed. The check's DV must already be posted. Also stamps the DV so its
    * printout shows the check number.

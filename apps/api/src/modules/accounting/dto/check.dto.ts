@@ -67,6 +67,14 @@ export class TransitionCheckDto {
   checkNumber?: string;
 }
 
+export class UpdateClearedDateDto {
+  @IsNumber()
+  expectedVersion!: number;
+
+  @IsDateString()
+  clearedDate!: string;
+}
+
 export class VoidCheckDto {
   @IsNumber()
   expectedVersion!: number;
