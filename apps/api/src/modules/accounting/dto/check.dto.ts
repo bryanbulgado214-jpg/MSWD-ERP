@@ -59,6 +59,12 @@ export class TransitionCheckDto {
   @IsDateString()
   @IsOptional()
   clearedDate?: string;
+
+  // Optional physical check number captured when clearing a check that was
+  // printed outside the system (a historical entry cleared without printing).
+  @IsString()
+  @IsOptional()
+  checkNumber?: string;
 }
 
 export class VoidCheckDto {

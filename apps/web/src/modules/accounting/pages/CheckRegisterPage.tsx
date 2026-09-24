@@ -42,6 +42,9 @@ export default function CheckRegisterPage() {
   // Only the cashier acts on checks (print, edit #, release, clear, void). The
   // accountant's view is read-only, so the Actions column is hidden for them.
   const hasActions = canPrint || canRelease || canVoid;
+  // Checks vs ADA (bank debits) — two tabs over the same register, filtered by
+  // the paying DV's payment mode.
+  const [tab, setTab] = useState<'check' | 'ada'>('check');
 
   const [state, setState] = useState<LoadState>({ status: 'idle' });
   const [filterBank, setFilterBank] = useState('');
@@ -62,10 +65,13 @@ export default function CheckRegisterPage() {
   const [clearDate, setClearDate] = useState(new Date().toISOString().slice(0, 10));
   const [clearError, setClearError] = useState('');
   const [clearing, setClearing] = useState(false);
+  // Optional physical check number captured when clearing a pre-printed check.
+  const [clearCheckNumber, setClearCheckNumber] = useState('');
 
   const loadChecks = () => {
     setState({ status: 'loading' });
     const params = new URLSearchParams();
+    params.set('paymentMode', tab === 'ada' ? 'ada' : 'check');
     if (filterBank) params.set('bankAccountId', filterBank);
     if (filterStatus) params.set('status', filterStatus);
     if (search) params.set('search', search);
@@ -76,7 +82,7 @@ export default function CheckRegisterPage() {
 
   useEffect(() => {
     loadChecks();
-  }, [filterBank, filterStatus]);
+  }, [filterBank, filterStatus, tab]);
 
   const checks = state.status === 'loaded' ? state.data : [];
 
@@ -147,6 +153,7 @@ export default function CheckRegisterPage() {
       const dvDay = check.disbursementVoucher?.dvDate?.slice(0, 10);
       const today = new Date().toISOString().slice(0, 10);
       setClearDate(dvDay && dvDay > today ? dvDay : today);
+      setClearCheckNumber('');
       setClearTarget(check);
       return;
     }
@@ -175,6 +182,7 @@ export default function CheckRegisterPage() {
         expectedVersion: clearTarget.version,
         toStatus: 'cleared',
         clearedDate: clearDate,
+        ...(clearCheckNumber.trim() ? { checkNumber: clearCheckNumber.trim() } : {}),
       });
       setClearTarget(null);
       loadChecks();
@@ -232,6 +240,30 @@ export default function CheckRegisterPage() {
         passbook.
         {!canPrint && !canVoid && ' (You have view-only access.)'}
       </p>
+
+      <div style={{ display: 'flex', gap: 4, borderBottom: '2px solid #e4e7ec', marginBottom: 14 }}>
+        {(['check', 'ada'] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTab(t)}
+            style={{
+              padding: '8px 16px',
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: 14,
+              color: tab === t ? 'var(--mswd-navy, #0b2e63)' : '#667085',
+              borderBottom:
+                tab === t ? '2px solid var(--mswd-navy, #0b2e63)' : '2px solid transparent',
+              marginBottom: -2,
+            }}
+          >
+            {t === 'check' ? 'Checks' : 'ADA (bank debits)'}
+          </button>
+        ))}
+      </div>
 
       <div className="acct-toolbar">
         <select
@@ -304,6 +336,38 @@ export default function CheckRegisterPage() {
               <div className="acct-error" style={{ marginBottom: 12 }}>
                 {clearError}
               </div>
+            )}
+            {clearTarget.disbursementVoucher?.paymentMode !== 'ada' && !clearTarget.checkNumber && (
+              <>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: '#344054',
+                    marginBottom: 4,
+                  }}
+                >
+                  Check number{' '}
+                  <span style={{ fontWeight: 400, color: '#667085' }}>
+                    (if already printed — optional)
+                  </span>
+                </label>
+                <input
+                  value={clearCheckNumber}
+                  onChange={(e) => setClearCheckNumber(e.target.value)}
+                  placeholder="e.g. DBP-0004851"
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    border: '1px solid #d0d5dd',
+                    borderRadius: 6,
+                    fontSize: 13,
+                    boxSizing: 'border-box',
+                    marginBottom: 12,
+                  }}
+                />
+              </>
             )}
             <label
               style={{
@@ -466,7 +530,9 @@ export default function CheckRegisterPage() {
       {state.status === 'error' && <div className="acct-error">{state.message}</div>}
       {state.status === 'loaded' && checks.length === 0 && (
         <div className="acct-empty">
-          No checks found. Checks appear here when a check-paid DV is prepared.
+          {tab === 'ada'
+            ? 'No ADA debits. An ADA-paid disbursement voucher appears here — no check is printed; mark it cleared once it reflects in the bank passbook.'
+            : 'No checks found. Checks appear here when a check-paid DV is prepared.'}
         </div>
       )}
 
@@ -559,6 +625,18 @@ export default function CheckRegisterPage() {
                               onClick={() => openPrint(c)}
                             >
                               Print Check
+                            </button>
+                          )}
+                          {/* Already printed outside AquaBooks (historical entry):
+                              clear it without printing so it leaves "pending". */}
+                          {isPending && canRelease && !dvDraft && !isAda && (
+                            <button
+                              className="acct-btn acct-btn--sm"
+                              title="Check was already printed outside AquaBooks — mark it cleared without printing"
+                              disabled={busy === c.id}
+                              onClick={() => handleRelease(c, 'cleared')}
+                            >
+                              Mark cleared (already printed)
                             </button>
                           )}
                           {isPending && dvDraft && (

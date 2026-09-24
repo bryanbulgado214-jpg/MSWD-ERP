@@ -31,11 +31,13 @@ export class CheckController {
     @Query('bankAccountId') bankAccountId?: string,
     @Query('status') status?: string,
     @Query('search') search?: string,
+    @Query('paymentMode') paymentMode?: string,
   ) {
     return this.checkService.findAll(user.organizationId, {
       ...(bankAccountId ? { bankAccountId } : {}),
       ...(status ? { status } : {}),
       ...(search ? { search } : {}),
+      ...(paymentMode ? { paymentMode } : {}),
     });
   }
 

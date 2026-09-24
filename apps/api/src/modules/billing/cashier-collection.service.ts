@@ -1174,7 +1174,15 @@ export class CashierCollectionService {
       .filter((x): x is string => !!x);
     const allJevIds = [...collectionJevIds, ...depositJevIds];
     const [checksDueForPrinting, unclearedChecks, notPostedJevs] = await Promise.all([
-      this.prisma.check.count({ where: { organizationId: orgId, status: 'pending' } }),
+      // Only check-paid, posted DVs are "due for printing" — ADAs are never
+      // printed, and a draft DV's check waits until the DV is posted.
+      this.prisma.check.count({
+        where: {
+          organizationId: orgId,
+          status: 'pending',
+          disbursementVoucher: { is: { paymentMode: 'check', status: { not: 'draft' } } },
+        },
+      }),
       this.prisma.check.count({
         where: { organizationId: orgId, status: { in: ['printed', 'released'] } },
       }),

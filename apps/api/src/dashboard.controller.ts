@@ -473,7 +473,13 @@ export class DashboardController {
     // ── Checks awaiting printing by the cashier ──
     if (perms.has('accounting.check.print')) {
       const checks = await this.prisma.check.findMany({
-        where: { organizationId: orgId, status: 'pending' },
+        // ADAs are never printed, and a draft DV's check waits for posting — so
+        // only posted, check-paid pending checks are "awaiting printing".
+        where: {
+          organizationId: orgId,
+          status: 'pending',
+          disbursementVoucher: { is: { paymentMode: 'check', status: { not: 'draft' } } },
+        },
         orderBy: { checkDate: 'asc' },
         take: 20,
         select: {

@@ -621,6 +621,7 @@ export async function transitionCheck(
     expectedVersion: number;
     toStatus: 'released' | 'cleared' | 'stale_dated';
     clearedDate?: string;
+    checkNumber?: string;
   },
 ): Promise<CheckDetail> {
   const res = await authFetchMutate(`/accounting/checks/${id}/transition`, 'POST', data);

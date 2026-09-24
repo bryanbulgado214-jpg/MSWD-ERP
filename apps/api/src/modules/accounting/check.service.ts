@@ -79,7 +79,7 @@ export class CheckService {
 
   async findAll(
     organizationId: string,
-    filters?: { bankAccountId?: string; status?: string; search?: string },
+    filters?: { bankAccountId?: string; status?: string; search?: string; paymentMode?: string },
   ) {
     const search = filters?.search?.trim();
     let searchWhere = {};
@@ -98,6 +98,10 @@ export class CheckService {
         organizationId,
         ...(filters?.bankAccountId ? { bankAccountId: filters.bankAccountId } : {}),
         ...(filters?.status ? { status: filters.status as any } : {}),
+        // Checks tab vs ADA tab: filter by the paying DV's payment mode.
+        ...(filters?.paymentMode
+          ? { disbursementVoucher: { is: { paymentMode: filters.paymentMode as any } } }
+          : {}),
         ...searchWhere,
       },
       select: CHECK_SELECT,
@@ -280,11 +284,17 @@ export class CheckService {
     organizationId: string,
     id: string,
     userId: string,
-    data: { expectedVersion: number; toStatus: string; remarks?: string; clearedDate?: string },
+    data: {
+      expectedVersion: number;
+      toStatus: string;
+      remarks?: string;
+      clearedDate?: string;
+      checkNumber?: string;
+    },
   ) {
     const check = await this.prisma.check.findFirst({
       where: { id, organizationId },
-      include: { disbursementVoucher: { select: { dvDate: true, paymentMode: true } } },
+      include: { disbursementVoucher: { select: { dvDate: true, paymentMode: true, status: true } } },
     });
     if (!check) throw new NotFoundException('Check not found.');
     if (check.version !== data.expectedVersion) {
@@ -299,22 +309,24 @@ export class CheckService {
       );
     }
 
-    // An ADA debit has no print/release step — it is "For Clearing" as soon as
-    // the DV is posted, and the cashier marks it Cleared when it reflects in the
-    // passbook. So allow it to clear directly from pending or released, outside
-    // the check-only state machine.
     const isAda = check.disbursementVoucher?.paymentMode === 'ada';
-    const adaClear =
-      isAda &&
-      data.toStatus === 'cleared' &&
-      (check.status === 'pending' || check.status === 'released');
-    const allowed = VALID_TRANSITIONS[check.status] ?? [];
-    if (!adaClear && !allowed.includes(data.toStatus)) {
-      throw new BadRequestException(`Cannot transition from ${check.status} to ${data.toStatus}.`);
-    }
-
     const isCleared = data.toStatus === 'cleared';
     const isReleased = data.toStatus === 'released';
+    // Clear directly (skipping print/release) from any active pre-cleared state.
+    // An ADA has no print step; a check already printed OUTSIDE the system (a
+    // historical entry) is just marked cleared rather than re-printed. Brand-new
+    // in-system checks still follow print → release → clear via VALID_TRANSITIONS.
+    const directClear =
+      isCleared &&
+      (check.status === 'pending' || check.status === 'assigned' || check.status === 'printed');
+    const allowed = VALID_TRANSITIONS[check.status] ?? [];
+    if (!directClear && !allowed.includes(data.toStatus)) {
+      throw new BadRequestException(`Cannot transition from ${check.status} to ${data.toStatus}.`);
+    }
+    // Clearing requires the DV's accounting entry to be posted first.
+    if (isCleared && check.disbursementVoucher?.status === 'draft') {
+      throw new BadRequestException('Post the disbursement voucher before marking it cleared.');
+    }
 
     if (isCleared && !data.clearedDate) {
       throw new BadRequestException('Cleared date is required.');
@@ -327,6 +339,27 @@ export class CheckService {
       }
     }
 
+    // Optionally capture the physical check number when clearing a check printed
+    // outside the system (it carried no number in AquaBooks).
+    const captureNumber =
+      directClear && !isAda && !check.checkNumber ? data.checkNumber?.trim() : undefined;
+    if (captureNumber) {
+      const clash = await this.prisma.check.findFirst({
+        where: {
+          organizationId,
+          bankAccountId: check.bankAccountId,
+          checkNumber: captureNumber,
+          id: { not: id },
+        },
+        select: { id: true },
+      });
+      if (clash) {
+        throw new ConflictException(
+          `Check number "${captureNumber}" is already used for this bank account.`,
+        );
+      }
+    }
+
     return runAudited(this.prisma, userId, async (tx) => {
       const updated = await tx.check.update({
         where: { id },
@@ -334,6 +367,7 @@ export class CheckService {
           status: data.toStatus as any,
           ...(isReleased ? { releasedBy: userId, releasedAt: new Date() } : {}),
           ...(isCleared ? { clearedDate: new Date(data.clearedDate!) } : {}),
+          ...(captureNumber ? { checkNumber: captureNumber } : {}),
           updatedBy: userId,
           version: { increment: 1 },
         },
@@ -350,11 +384,12 @@ export class CheckService {
         },
       });
 
-      // Releasing the check releases its DV — the cashier is the releaser, not
-      // the accountant who posted it (segregation of duties).
-      if (isReleased && check.disbursementVoucherId) {
-        await tx.disbursementVoucher.update({
-          where: { id: check.disbursementVoucherId },
+      // Releasing OR clearing means the payment has gone out — release its DV if
+      // it hasn't been already (the cashier is the releaser, not the accountant
+      // who posted it — segregation of duties).
+      if ((isReleased || isCleared) && check.disbursementVoucherId) {
+        await tx.disbursementVoucher.updateMany({
+          where: { id: check.disbursementVoucherId, status: { notIn: ['released', 'cancelled'] } },
           data: {
             status: 'released',
             releasedBy: userId,
