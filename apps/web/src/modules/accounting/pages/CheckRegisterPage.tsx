@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
@@ -24,6 +24,77 @@ function formatPeso(value: string | number): string {
   return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(num);
 }
 
+// ---- Date shortcut input (MM/DD/YYYY) --------------------------------------
+// Lets the user type digits only — "021426" or "02142026" — and have it snap to
+// 02/14/2026, while handing the parent an ISO (YYYY-MM-DD) value the API wants.
+function isoToDisplay(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[2]}/${m[3]}/${m[1]}` : '';
+}
+
+function isoFromParts(mm: number, dd: number, yyyy: number): string | null {
+  if (!mm || !dd || !yyyy) return null;
+  const d = new Date(yyyy, mm - 1, dd);
+  // Reject impossible dates (e.g. 02/31) — JS would roll them over otherwise.
+  if (d.getFullYear() !== yyyy || d.getMonth() !== mm - 1 || d.getDate() !== dd) return null;
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${yyyy}-${p(mm)}-${p(dd)}`;
+}
+
+function parseDateDigits(text: string): string | null {
+  const digits = text.replace(/\D/g, '');
+  if (digits.length === 8) {
+    return isoFromParts(+digits.slice(0, 2), +digits.slice(2, 4), +digits.slice(4, 8));
+  }
+  if (digits.length === 6) {
+    // MMDDYY — assume the 2000s.
+    return isoFromParts(+digits.slice(0, 2), +digits.slice(2, 4), 2000 + +digits.slice(4, 6));
+  }
+  return null;
+}
+
+function formatDateWhileTyping(text: string): string {
+  const digits = text.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+function DateInput({
+  value,
+  onChange,
+  autoFocus,
+  style,
+}: {
+  value: string;
+  onChange: (iso: string) => void;
+  autoFocus?: boolean;
+  style?: React.CSSProperties;
+}) {
+  const [text, setText] = useState(() => isoToDisplay(value));
+  // Re-sync when the parent value changes (modal opened, year auto-completed…).
+  useEffect(() => {
+    setText(isoToDisplay(value));
+  }, [value]);
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      autoFocus={autoFocus}
+      placeholder="MM/DD/YYYY"
+      value={text}
+      onChange={(e) => {
+        const shown = formatDateWhileTyping(e.target.value);
+        setText(shown);
+        const iso = parseDateDigits(shown);
+        if (iso) onChange(iso);
+        else if (e.target.value.replace(/\D/g, '') === '') onChange('');
+      }}
+      style={style}
+    />
+  );
+}
+
 const STATUS_OPTIONS = [
   '',
   'pending',
@@ -40,6 +111,9 @@ type LoadState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
   | { status: 'loaded'; data: CheckListItem[] };
+
+type SortKey = 'checkNumber' | 'dvNumber' | 'date' | 'payee';
+type SortState = { key: SortKey; dir: 'asc' | 'desc' } | null;
 
 export default function CheckRegisterPage() {
   const { permissions } = useAuth();
@@ -58,8 +132,12 @@ export default function CheckRegisterPage() {
   const [filterBank, setFilterBank] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<SortState>(null);
   const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  // Stable list of every bank seen so far — so re-filtering by one bank never
+  // drops the others from the dropdown (see bankOptions below).
+  const [bankSeen, setBankSeen] = useState<Map<string, string>>(new Map());
 
   // Cashier print modal
   const [printTarget, setPrintTarget] = useState<CheckListItem | null>(null);
@@ -79,33 +157,104 @@ export default function CheckRegisterPage() {
   // already-cleared check/ADA.
   const [clearIsEdit, setClearIsEdit] = useState(false);
 
-  const loadChecks = () => {
+  const loadChecks = useCallback(() => {
     setState({ status: 'loading' });
     const params = new URLSearchParams();
     params.set('paymentMode', tab === 'ada' ? 'ada' : 'check');
     if (filterBank) params.set('bankAccountId', filterBank);
     if (filterStatus) params.set('status', filterStatus);
-    if (search) params.set('search', search);
+    if (search.trim()) params.set('search', search.trim());
     getChecks(params.toString())
       .then((data) => setState({ status: 'loaded', data }))
       .catch((err) => setState({ status: 'error', message: err.message }));
-  };
+  }, [filterBank, filterStatus, search, tab]);
 
+  // Debounced auto-load: any filter/search change reloads after a short pause,
+  // so typing in the search box filters live without pressing Enter.
   useEffect(() => {
-    loadChecks();
-  }, [filterBank, filterStatus, tab]);
+    const t = setTimeout(loadChecks, 250);
+    return () => clearTimeout(t);
+  }, [loadChecks]);
 
   const checks = state.status === 'loaded' ? state.data : [];
 
-  // Bank filter options are derived from the loaded checks — the cashier has no
-  // broad accounting.read to list bank accounts, and the register only needs the
-  // banks that actually appear on checks.
-  const bankOptions = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const c of checks)
-      map.set(c.bankAccount.id, `${c.bankAccount.bank.code} — ${c.bankAccount.accountName}`);
-    return [...map.entries()].map(([id, label]) => ({ id, label }));
-  }, [checks]);
+  // Accumulate the banks seen across loads. The cashier has no broad
+  // accounting.read to list bank accounts, so options come from the checks —
+  // but we must NOT drop a bank just because the current filter hides its rows,
+  // otherwise re-filtering by one bank empties the dropdown of the rest.
+  useEffect(() => {
+    if (state.status !== 'loaded') return;
+    setBankSeen((prev) => {
+      let changed = false;
+      const next = new Map(prev);
+      for (const c of state.data) {
+        const label = `${c.bankAccount.bank.code} — ${c.bankAccount.accountName}`;
+        if (next.get(c.bankAccount.id) !== label) {
+          next.set(c.bankAccount.id, label);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [state]);
+
+  const bankOptions = useMemo(
+    () =>
+      [...bankSeen.entries()]
+        .map(([id, label]) => ({ id, label }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [bankSeen],
+  );
+
+  const hasFilters = !!(filterBank || filterStatus || search.trim());
+
+  function clearFilters() {
+    setFilterBank('');
+    setFilterStatus('');
+    setSearch('');
+  }
+
+  function toggleSort(key: SortKey) {
+    setSort((s) => (s && s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
+  }
+
+  const sortIndicator = (key: SortKey) => (sort?.key === key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : '');
+
+  const sortedChecks = useMemo(() => {
+    if (!sort) return checks;
+    const getVal = (c: CheckListItem): string | null => {
+      switch (sort.key) {
+        case 'checkNumber':
+          return c.checkNumber;
+        case 'dvNumber':
+          return c.disbursementVoucher?.dvNumber ?? null;
+        case 'date':
+          return c.checkDate;
+        case 'payee':
+          return c.payeeName;
+      }
+    };
+    return [...checks].sort((a, b) => {
+      const av = getVal(a);
+      const bv = getVal(b);
+      const aEmpty = av == null || av === '';
+      const bEmpty = bv == null || bv === '';
+      // Empty values (e.g. a pending check with no number) always sort last.
+      if (aEmpty && bEmpty) return 0;
+      if (aEmpty) return 1;
+      if (bEmpty) return -1;
+      let cmp: number;
+      if (sort.key === 'date') {
+        cmp = new Date(av as string).getTime() - new Date(bv as string).getTime();
+      } else if (sort.key === 'payee') {
+        cmp = (av as string).localeCompare(bv as string, undefined, { sensitivity: 'base' });
+      } else {
+        // check # / DV # — natural numeric order ("2605196" < "2605213").
+        cmp = (av as string).localeCompare(bv as string, undefined, { numeric: true });
+      }
+      return sort.dir === 'asc' ? cmp : -cmp;
+    });
+  }, [checks, sort]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -344,6 +493,15 @@ export default function CheckRegisterPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </form>
+        <button
+          type="button"
+          className="acct-btn acct-btn--sm"
+          onClick={clearFilters}
+          disabled={!hasFilters}
+          title="Clear the bank, status, and search filters"
+        >
+          Clear filters
+        </button>
       </div>
 
       {actionError && <div className="acct-error">{actionError}</div>}
@@ -435,12 +593,10 @@ export default function CheckRegisterPage() {
             >
               Clearing Date *
             </label>
-            <input
-              type="date"
+            <DateInput
               autoFocus
               value={clearDate}
-              min={clearTarget.disbursementVoucher?.dvDate?.slice(0, 10)}
-              onChange={(e) => setClearDate(e.target.value)}
+              onChange={setClearDate}
               style={{
                 width: '100%',
                 padding: '8px 10px',
@@ -550,10 +706,9 @@ export default function CheckRegisterPage() {
             >
               Check Date
             </label>
-            <input
-              type="date"
+            <DateInput
               value={printDate}
-              onChange={(e) => setPrintDate(e.target.value)}
+              onChange={setPrintDate}
               style={{
                 width: '100%',
                 padding: '8px 10px',
@@ -596,10 +751,34 @@ export default function CheckRegisterPage() {
           <table className="acct-table">
             <thead>
               <tr>
-                <th>Check #</th>
-                <th>DV #</th>
-                <th>Date</th>
-                <th>Payee</th>
+                <th
+                  onClick={() => toggleSort('checkNumber')}
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  title="Sort by check number"
+                >
+                  Check #{sortIndicator('checkNumber')}
+                </th>
+                <th
+                  onClick={() => toggleSort('dvNumber')}
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  title="Sort by DV number"
+                >
+                  DV #{sortIndicator('dvNumber')}
+                </th>
+                <th
+                  onClick={() => toggleSort('date')}
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  title="Sort by date"
+                >
+                  Date{sortIndicator('date')}
+                </th>
+                <th
+                  onClick={() => toggleSort('payee')}
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  title="Sort by payee"
+                >
+                  Payee{sortIndicator('payee')}
+                </th>
                 <th>Bank</th>
                 <th className="acct-text-right">Amount</th>
                 <th style={{ textAlign: 'center' }}>Status</th>
@@ -607,7 +786,7 @@ export default function CheckRegisterPage() {
               </tr>
             </thead>
             <tbody>
-              {checks.map((c) => {
+              {sortedChecks.map((c) => {
                 const dvDraft = c.disbursementVoucher?.status === 'draft';
                 const isPending = c.status === 'pending';
                 // An ADA debit has no printed check — it is released on posting and
