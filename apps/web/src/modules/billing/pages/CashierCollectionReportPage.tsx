@@ -73,6 +73,9 @@ type LineDraft = {
   single: boolean;
   // Receiving bank account, required for an online-payment line.
   bankAccountId: string;
+  // A cancelled OR kept only to preserve the receipt series — no amount, never
+  // posts to the GL.
+  cancelled: boolean;
 };
 type Draft = {
   collectorId: string;
@@ -93,6 +96,7 @@ const emptyLine = (): LineDraft => ({
   // New lines start as a single invoice — click "Range" to enter an OR span.
   single: true,
   bankAccountId: '',
+  cancelled: false,
 });
 
 function emptyDraft(reportDate: string): Draft {
@@ -300,6 +304,41 @@ export default function CashierCollectionReportPage() {
     load();
   }, [load]);
 
+  // Keep the in-progress "Add teller collection" form alive across a page
+  // refresh: persist the draft to localStorage and restore it on load, so an
+  // accidental refresh before "Add entry" no longer wipes everything typed.
+  const draftKey = id ? `mswd_cashier_draft_${id}` : '';
+  const [restored, setRestored] = useState(false);
+  useEffect(() => {
+    if (restored || !report) return;
+    if (draftKey && report.status === 'draft') {
+      try {
+        const raw = localStorage.getItem(draftKey);
+        if (raw) {
+          const saved = JSON.parse(raw) as { draft?: Draft; editingId?: string | null };
+          if (saved?.draft) {
+            setDraft(saved.draft);
+            setEditingId(saved.editingId ?? null);
+          }
+        }
+      } catch {
+        /* corrupt/unavailable storage — ignore */
+      }
+    }
+    setRestored(true);
+  }, [restored, report, draftKey]);
+  useEffect(() => {
+    // Only persist after the initial restore, so we never clobber a saved draft
+    // before it has been read back.
+    if (!restored || !draftKey) return;
+    try {
+      if (draft) localStorage.setItem(draftKey, JSON.stringify({ draft, editingId }));
+      else localStorage.removeItem(draftKey);
+    } catch {
+      /* storage full/blocked — the form still works, just won't survive refresh */
+    }
+  }, [restored, draftKey, draft, editingId]);
+
   const isDraft = report?.status === 'draft';
   const denoms = report?.denominations ?? [1000, 500, 200, 100, 50, 20, 10, 5, 1];
 
@@ -325,6 +364,7 @@ export default function CashierCollectionReportPage() {
         // A range only when orTo names a different receipt than orFrom.
         single: !(l.orTo && l.orTo !== l.orFrom),
         bankAccountId: l.bankAccountId ?? '',
+        cancelled: !!l.cancelled,
       })),
       checks: e.checks ?? [],
       cashCount: e.cashCount ?? {},
@@ -336,15 +376,18 @@ export default function CashierCollectionReportPage() {
     !!opts?.collectionTypes.find((t) => t.key === key)?.requiresDescription;
   const typeRequiresBank = (key: string) =>
     !!opts?.collectionTypes.find((t) => t.key === key)?.requiresBankAccount;
+  // Cancelled OR lines carry no money — they never count toward any total.
   const draftRemit = draft
-    ? Math.round(draft.lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0) * 100) / 100
+    ? Math.round(
+        draft.lines.reduce((s, l) => s + (l.cancelled ? 0 : parseFloat(l.amount) || 0), 0) * 100,
+      ) / 100
     : 0;
   // Online payments land straight in the bank — not physical cash, so they are
   // excluded from the cash-count reconciliation.
   const draftOnline = draft
     ? Math.round(
         draft.lines
-          .filter((l) => typeRequiresBank(l.collectionType))
+          .filter((l) => !l.cancelled && typeRequiresBank(l.collectionType))
           .reduce((s, l) => s + (parseFloat(l.amount) || 0), 0) * 100,
       ) / 100
     : 0;
@@ -358,16 +401,20 @@ export default function CashierCollectionReportPage() {
   const draftValid =
     !!draft &&
     !!draft.collectorId &&
-    draft.lines.some((l) => l.collectionType && (parseFloat(l.amount) || 0) > 0) &&
-    draft.lines.every((l) => !l.collectionType || (parseFloat(l.amount) || 0) > 0) &&
-    // Every collection line must carry the OR (from) it was receipted under.
+    // At least one real (non-cancelled) collection with an amount.
+    draft.lines.some((l) => l.collectionType && !l.cancelled && (parseFloat(l.amount) || 0) > 0) &&
+    // Every non-cancelled collection line needs a positive amount.
+    draft.lines.every((l) => !l.collectionType || l.cancelled || (parseFloat(l.amount) || 0) > 0) &&
+    // Every collection line — including a cancelled one — must carry its OR number.
     draft.lines.every((l) => !l.collectionType || l.orFrom.trim().length > 0) &&
-    // "Other" lines must carry a description.
+    // "Other" lines must carry a description (cancelled lines are exempt).
     draft.lines.every(
-      (l) => !typeRequiresDesc(l.collectionType) || l.description.trim().length > 0,
+      (l) => l.cancelled || !typeRequiresDesc(l.collectionType) || l.description.trim().length > 0,
     ) &&
-    // Online-payment lines must name the receiving bank account.
-    draft.lines.every((l) => !typeRequiresBank(l.collectionType) || !!l.bankAccountId) &&
+    // Online-payment lines must name the receiving bank account (cancelled exempt).
+    draft.lines.every(
+      (l) => l.cancelled || !typeRequiresBank(l.collectionType) || !!l.bankAccountId,
+    ) &&
     draftRemit > 0 &&
     draftChecksTotal <= draftRemit + 0.005 &&
     draft.checks.every((c) => c.checkNumber.trim() && (Number(c.amount) || 0) > 0);
@@ -382,17 +429,18 @@ export default function CashierCollectionReportPage() {
         ...(draft.collectionAreaId ? { collectionAreaId: draft.collectionAreaId } : {}),
         collectionDate: draft.collectionDate,
         lines: draft.lines
-          .filter((l) => l.collectionType && (parseFloat(l.amount) || 0) > 0)
+          .filter((l) => l.collectionType && (l.cancelled || (parseFloat(l.amount) || 0) > 0))
           .map((l) => ({
             collectionType: l.collectionType,
-            amount: parseFloat(l.amount) || 0,
+            amount: l.cancelled ? 0 : parseFloat(l.amount) || 0,
             ...(l.description.trim() ? { description: l.description.trim() } : {}),
             orFrom: l.orFrom.trim(),
             ...(!l.single && l.orTo.trim() ? { orTo: l.orTo.trim() } : {}),
             ...(l.remarks.trim() ? { remarks: l.remarks.trim() } : {}),
-            ...(typeRequiresBank(l.collectionType) && l.bankAccountId
+            ...(!l.cancelled && typeRequiresBank(l.collectionType) && l.bankAccountId
               ? { bankAccountId: l.bankAccountId }
               : {}),
+            ...(l.cancelled ? { cancelled: true } : {}),
           })),
         checks: draft.checks
           .filter((c) => c.checkNumber.trim())
@@ -621,30 +669,45 @@ export default function CashierCollectionReportPage() {
                   <td>{e.collectionAreaName ?? '—'}</td>
                   <td>{fmtDate(e.collectionDate)}</td>
                   <td>
-                    {e.glLines.map((l, i) => (
-                      <div key={i} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
-                        {l.collectionTypeLabel}
-                        {l.description ? `: ${l.description}` : ''}
-                        <span style={{ color: '#667085' }}> — {peso(l.amount)}</span>
-                        {l.orFrom && (
-                          <span style={{ color: '#667085' }}>
-                            {' · OR '}
-                            {l.orTo && l.orTo !== l.orFrom ? `${l.orFrom}–${l.orTo}` : l.orFrom}
+                    {e.glLines.map((l, i) =>
+                      l.cancelled ? (
+                        <div key={i} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                          <span style={{ textDecoration: 'line-through', color: '#98a2b3' }}>
+                            {l.collectionTypeLabel}
                           </span>
-                        )}
-                        <div
-                          style={{
-                            fontSize: 11,
-                            fontFamily: 'monospace',
-                            color: l.classifiedByAccountant ? '#b54708' : '#98a2b3',
-                          }}
-                        >
-                          {l.classifiedByAccountant
-                            ? l.glAccountName
-                            : `${l.glAccountCode} ${l.glAccountName}`}
+                          <span style={{ color: '#b42318', fontWeight: 600 }}> — CANCELLED</span>
+                          {l.orFrom && (
+                            <span style={{ color: '#667085' }}>
+                              {' · OR '}
+                              {l.orTo && l.orTo !== l.orFrom ? `${l.orFrom}–${l.orTo}` : l.orFrom}
+                            </span>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      ) : (
+                        <div key={i} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                          {l.collectionTypeLabel}
+                          {l.description ? `: ${l.description}` : ''}
+                          <span style={{ color: '#667085' }}> — {peso(l.amount)}</span>
+                          {l.orFrom && (
+                            <span style={{ color: '#667085' }}>
+                              {' · OR '}
+                              {l.orTo && l.orTo !== l.orFrom ? `${l.orFrom}–${l.orTo}` : l.orFrom}
+                            </span>
+                          )}
+                          <div
+                            style={{
+                              fontSize: 11,
+                              fontFamily: 'monospace',
+                              color: l.classifiedByAccountant ? '#b54708' : '#98a2b3',
+                            }}
+                          >
+                            {l.classifiedByAccountant
+                              ? l.glAccountName
+                              : `${l.glAccountCode} ${l.glAccountName}`}
+                          </div>
+                        </div>
+                      ),
+                    )}
                   </td>
                   <td>{e.orSeries}</td>
                   <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>{peso(e.amount)}</td>
@@ -869,18 +932,55 @@ export default function CashierCollectionReportPage() {
                       </td>
                       <td>
                         <input
-                          style={{ ...inputStyle, padding: '4px 6px', textAlign: 'right' }}
+                          style={{
+                            ...inputStyle,
+                            padding: '4px 6px',
+                            textAlign: 'right',
+                            ...(l.cancelled ? { background: '#f2f4f7', color: '#98a2b3' } : {}),
+                          }}
                           type="number"
                           step="0.01"
                           min="0"
-                          placeholder="0.00"
-                          value={l.amount}
+                          placeholder={l.cancelled ? '—' : '0.00'}
+                          value={l.cancelled ? '' : l.amount}
+                          disabled={l.cancelled}
                           onChange={(e) => {
                             const lines = [...draft.lines];
                             lines[i] = { ...lines[i]!, amount: e.target.value };
                             setDraft({ ...draft, lines });
                           }}
                         />
+                        <label
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            fontSize: 11,
+                            color: l.cancelled ? '#b42318' : '#98a2b3',
+                            marginTop: 3,
+                            cursor: 'pointer',
+                          }}
+                          title="Record a cancelled OR to keep the receipt series unbroken. No amount, and it won't post to the ledger."
+                        >
+                          <input
+                            type="checkbox"
+                            checked={l.cancelled}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              const lines = [...draft.lines];
+                              const cur = lines[i]!;
+                              lines[i] = {
+                                ...cur,
+                                cancelled: checked,
+                                amount: checked ? '' : cur.amount,
+                                remarks:
+                                  checked && !cur.remarks.trim() ? 'Cancelled' : cur.remarks,
+                              };
+                              setDraft({ ...draft, lines });
+                            }}
+                          />
+                          Cancelled OR
+                        </label>
                       </td>
                       <td>
                         <input

@@ -103,9 +103,17 @@ export class CollectionLineDto {
   @IsNotEmpty()
   collectionType!: string;
 
+  // 0 is allowed only for a cancelled OR line (see `cancelled`); the service
+  // still rejects a zero amount on any normal line.
   @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0.01)
+  @Min(0)
   amount!: number;
+
+  // A cancelled receipt kept in the record to preserve the OR series. It carries
+  // no amount, is excluded from the remittance total, and never posts to the GL.
+  @IsBoolean()
+  @IsOptional()
+  cancelled?: boolean;
 
   // OR range covering THIS collection type. A single series may split across
   // several types (e.g. 3822-3824 water sales, 3825-3827 penalties), so the OR

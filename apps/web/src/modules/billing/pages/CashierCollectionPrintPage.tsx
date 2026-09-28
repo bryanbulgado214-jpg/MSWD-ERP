@@ -144,8 +144,9 @@ export default function CashierCollectionPrintPage() {
                   <td style={cell}>
                     {l.collectionTypeLabel}
                     {l.description ? `: ${l.description}` : ''}
+                    {l.cancelled ? ' \u2014 CANCELLED' : ''}
                   </td>
-                  <td style={num}>{peso(l.amount)}</td>
+                  <td style={num}>{l.cancelled ? '\u2014' : peso(l.amount)}</td>
                   <td style={cell}>{l.remarks || '\u00A0'}</td>
                 </tr>
               ));

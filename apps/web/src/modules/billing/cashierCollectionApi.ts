@@ -115,6 +115,7 @@ export interface CollectionLineInput {
   orTo?: string;
   remarks?: string;
   bankAccountId?: string;
+  cancelled?: boolean;
 }
 export interface CollectionLineDetail {
   collectionType: string;
@@ -130,6 +131,7 @@ export interface CollectionLineDetail {
   isOnline: boolean;
   bankAccountId: string | null;
   bankAccountLabel: string | null;
+  cancelled: boolean;
 }
 export interface CashierEntry {
   id: string;

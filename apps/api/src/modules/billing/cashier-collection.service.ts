@@ -62,6 +62,10 @@ export interface CollectionLine {
   // For an online/e-payment line: the bank account the money landed in. On
   // posting this line debits that bank account (not Cash - Collecting Officer).
   bankAccountId?: string;
+  // A cancelled receipt recorded only to keep the OR series unbroken. It carries
+  // no amount, is excluded from the remittance total and cash-count, and never
+  // posts to the GL.
+  cancelled?: boolean;
 }
 
 /** Human label for an OR range: "3822" for a single receipt, "3822 to 3827" for a span. */
@@ -502,9 +506,12 @@ export class CashierCollectionService {
           orTo: l.orTo ?? l.orFrom ?? '',
           remarks: l.remarks ?? '',
           // Online/e-payment: not physical cash — carries the receiving bank.
-          isOnline: !!type?.requiresBankAccount,
+          // A cancelled line is never online.
+          isOnline: !l.cancelled && !!type?.requiresBankAccount,
           bankAccountId: l.bankAccountId ?? null,
           bankAccountLabel: l.bankAccountId ? (bankLabelById.get(l.bankAccountId) ?? null) : null,
+          // A cancelled OR kept only for series continuity (no amount, no GL).
+          cancelled: !!l.cancelled,
         };
       });
       const checks = (e.checks as CheckItem[] | null) ?? [];
@@ -662,16 +669,23 @@ export class CashierCollectionService {
       if (!type) {
         throw new BadRequestException('Select a valid type of collection.');
       }
-      const amt = round2(Number(l.amount));
-      if (amt <= 0)
+      const cancelled = !!l.cancelled;
+      // A cancelled OR is recorded to keep the receipt series unbroken — it needs
+      // its OR number but no amount, description, or bank account.
+      const amt = cancelled ? 0 : round2(Number(l.amount));
+      if (!cancelled && amt <= 0)
         throw new BadRequestException('Each collection amount must be greater than zero.');
       const description = l.description?.trim();
-      if (type.requiresDescription && !description) {
+      if (!cancelled && type.requiresDescription && !description) {
         throw new BadRequestException(`Describe the collection for "${type.label}".`);
       }
       const orFrom = l.orFrom?.trim();
       if (!orFrom) {
-        throw new BadRequestException(`Enter the OR (from) for "${type.label}".`);
+        throw new BadRequestException(
+          cancelled
+            ? 'Enter the OR number of the cancelled receipt.'
+            : `Enter the OR (from) for "${type.label}".`,
+        );
       }
       const orTo = l.orTo?.trim() || orFrom;
       const remarks = l.remarks?.trim();
@@ -682,9 +696,10 @@ export class CashierCollectionService {
         orFrom,
         orTo,
         ...(remarks ? { remarks } : {}),
+        ...(cancelled ? { cancelled: true } : {}),
       };
-      // Online payments must name the receiving bank account.
-      if (type.requiresBankAccount) {
+      // Online payments must name the receiving bank account (never a cancelled one).
+      if (!cancelled && type.requiresBankAccount) {
         if (!l.bankAccountId) {
           throw new BadRequestException(`Select the receiving bank account for "${type.label}".`);
         }
@@ -878,7 +893,7 @@ export class CashierCollectionService {
     // Does any line need the holding account? Resolve it only if so.
     const hasOther = report.entries.some((e) =>
       ((e.glLines as CollectionLine[] | null) ?? []).some(
-        (l) => collectionTypeByKey.get(l.collectionType)?.classifiedByAccountant,
+        (l) => !l.cancelled && collectionTypeByKey.get(l.collectionType)?.classifiedByAccountant,
       ),
     );
     const holding = hasOther ? await this.resolveHoldingAccount(orgId) : null;
@@ -892,7 +907,10 @@ export class CashierCollectionService {
     // "Other" lines credit the holding account and are flagged for the accountant
     // to reclassify before the JEV can be posted.
     const creditLines = report.entries.flatMap((e) =>
-      ((e.glLines as CollectionLine[] | null) ?? []).map((l) => {
+      ((e.glLines as CollectionLine[] | null) ?? [])
+        // Cancelled ORs carry no amount and never post to the GL.
+        .filter((l) => !l.cancelled)
+        .map((l) => {
         const type = collectionTypeByKey.get(l.collectionType);
         const collector = cName.get(e.collectorId) ?? 'Collector';
         // Cite this line's own OR range (falls back to the entry summary for
