@@ -10,6 +10,8 @@ const ROLE_HINTS: Record<string, string> = {
   'demo.teller': 'Teller — collects payments & issues OR (Collection screens)',
   'demo.cashier': 'Cashier — disburses: assigns check #, prints, releases',
   'demo.gm': 'General Manager — dedicated check-void approver',
+  budget_officer: 'Budget Officer — uploads office PPMPs & consolidates the APP',
+  procurement_officer: 'Procurement Officer — processes PRs into POs, manages suppliers',
 };
 
 export function LoginPage() {

@@ -5,6 +5,7 @@ import { useAuth } from '../../../app/auth';
 import { formatPeso } from '../../budgeting/format-peso';
 import {
   acceptForProcurement,
+  catchUpApprovePr,
   budgetCertifyPurchaseRequest,
   cancelPurchaseRequest,
   endorsePurchaseRequest,
@@ -122,6 +123,7 @@ export function PurchaseRequestDetailPage() {
       | 'budget_certify'
       | 'approve'
       | 'accept'
+      | 'catch_up_approve'
       | 'return'
       | 'reject'
       | 'cancel',
@@ -158,6 +160,9 @@ export function PurchaseRequestDetailPage() {
           break;
         case 'accept':
           updated = await acceptForProcurement(pr.id, pr.version);
+          break;
+        case 'catch_up_approve':
+          updated = await catchUpApprovePr(pr.id, pr.version);
           break;
         case 'return':
           updated = await returnPurchaseRequest(pr.id, pr.version, remarks);
@@ -329,9 +334,19 @@ export function PurchaseRequestDetailPage() {
             Approval History
           </h3>
           <div className="pr-audit-trail__entries">
+            {pr.requester && (
+              <div className="pr-audit-entry">
+                <span className="pr-audit-entry__role">Requested by (end-user)</span>
+                <span className="pr-audit-entry__user">
+                  {pr.requester.fullName || pr.requester.username}
+                </span>
+              </div>
+            )}
             {pr.creator && (
               <div className="pr-audit-entry">
-                <span className="pr-audit-entry__role">Requested by</span>
+                <span className="pr-audit-entry__role">
+                  {pr.requester ? 'Prepared by' : 'Requested by'}
+                </span>
                 <span className="pr-audit-entry__user">{pr.creator.username}</span>
                 <span className="pr-audit-entry__date">
                   {new Date(pr.createdAt).toLocaleString()}
@@ -392,6 +407,28 @@ export function PurchaseRequestDetailPage() {
             {acting ? 'Submitting...' : 'Submit for Approval'}
           </button>
         )}
+
+        {/* Catch-up back-entry: skip the approval workflow for already-approved
+            Jan–Sep records. */}
+        {(pr.status === 'draft' || pr.status === 'returned') &&
+          hasPermission('procurement.pr.mark_lifecycle') && (
+            <button
+              className="pr-btn pr-btn--primary"
+              title="Catch-up: mark this already-approved historical PR as approved and ready for its PO — no approval workflow, no journal entry"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    'Mark this PR as already approved (catch-up)? It skips the approval workflow and moves straight to procurement — for back-entering already-approved Jan–Sep records only. No journal entry is created.',
+                  )
+                ) {
+                  doAction('catch_up_approve');
+                }
+              }}
+              disabled={acting}
+            >
+              {acting ? 'Marking…' : 'Mark as Approved (catch-up)'}
+            </button>
+          )}
 
         {pr.status === 'submitted' && hasPermission('procurement.pr.endorse') && (
           <button

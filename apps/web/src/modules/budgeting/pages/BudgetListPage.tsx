@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { useAuth } from '../../../app/auth';
 import {
   BudgetSummaryApiError,
   getBudgetCycle,
@@ -67,6 +68,8 @@ function extractFiscalYear(cycle: BudgetCycleSummary): string {
 }
 
 export function BudgetListPage() {
+  const { permissions } = useAuth();
+  const canProcurementPlan = permissions.has('procurement.ppmp.manage');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<BudgetHeaderStatus | ''>('');
@@ -251,6 +254,35 @@ export function BudgetListPage() {
           + New Budget
         </Link>
       </div>
+
+      {canProcurementPlan && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            flexWrap: 'wrap',
+            background: '#eff8ff',
+            border: '1px solid #b2ddff',
+            borderRadius: 10,
+            padding: '10px 16px',
+            marginBottom: 16,
+            fontSize: 13,
+            color: '#175cd3',
+          }}
+        >
+          <strong>Procurement Plan:</strong>
+          <span style={{ color: '#475467' }}>
+            upload each office's PPMP and consolidate the Annual Procurement Plan.
+          </span>
+          <Link to="/procurement/ppmp-items" style={{ fontWeight: 600, color: '#175cd3' }}>
+            PPMP Upload →
+          </Link>
+          <Link to="/procurement/app" style={{ fontWeight: 600, color: '#175cd3' }}>
+            Consolidated APP →
+          </Link>
+        </div>
+      )}
 
       <div className="budget-list__toolbar">
         <input

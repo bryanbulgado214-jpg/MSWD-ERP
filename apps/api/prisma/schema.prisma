@@ -396,6 +396,7 @@ model User {
   createdPurchaseRequests                       PurchaseRequest[] @relation("PurchaseRequestsCreatedBy")
   updatedPurchaseRequests                       PurchaseRequest[] @relation("PurchaseRequestsUpdatedBy")
   departmentHeadPurchaseRequests                PurchaseRequest[] @relation("PurchaseRequestsDeptHead")
+  requestedPurchaseRequests                     PurchaseRequest[] @relation("PurchaseRequestsRequestedBy")
   budgetCertifiedPurchaseRequests               PurchaseRequest[] @relation("PurchaseRequestsBudgetCertifiedBy")
   approvedPurchaseRequests                      PurchaseRequest[] @relation("PurchaseRequestsApprovedBy")
   endorsedPurchaseRequests                      PurchaseRequest[] @relation("PurchaseRequestsEndorsedBy")
@@ -1398,6 +1399,7 @@ model PurchaseRequest {
   fiscalYearId           String?               @map("fiscal_year_id") @db.Uuid
   departmentId           String?               @map("department_id") @db.Uuid
   departmentHeadId       String?               @map("department_head_id") @db.Uuid
+  requestedById          String?               @map("requested_by_id") @db.Uuid
   purpose                String?
   procurementCategoryId  String?               @map("procurement_category_id") @db.Uuid
   requestedDeliveryDate  DateTime?             @map("requested_delivery_date") @db.Date
@@ -1426,6 +1428,7 @@ model PurchaseRequest {
   fiscalYear           FiscalYear?           @relation(fields: [fiscalYearId], references: [id], onDelete: Restrict)
   department           Department?           @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   departmentHead       User?                 @relation("PurchaseRequestsDeptHead", fields: [departmentHeadId], references: [id], onDelete: SetNull)
+  requester            User?                 @relation("PurchaseRequestsRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
   procurementCategory  ProcurementCategory?  @relation(fields: [procurementCategoryId], references: [id], onDelete: SetNull)
   deliveryLocation     Location?             @relation(fields: [deliveryLocationId], references: [id], onDelete: SetNull)
   ppmpItem             PpmpItem?             @relation(fields: [ppmpItemId], references: [id], onDelete: Restrict)
@@ -1453,6 +1456,7 @@ model PurchaseRequest {
   @@index([status])
   @@index([fiscalYearId])
   @@index([departmentId])
+  @@index([requestedById])
   @@index([ppmpItemId])
   @@index([appItemId])
   @@map("purchase_requests")

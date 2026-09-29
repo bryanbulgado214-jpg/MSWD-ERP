@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
+import { useAuth } from '../../../app/auth';
 import { formatPeso } from '../../budgeting/format-peso';
 import { listPurchaseOrders, ProcurementApiError } from '../api';
 import type { PurchaseOrder, PurchaseOrderStatus } from '../types';
@@ -32,6 +33,7 @@ const STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
 };
 
 export function PurchaseOrderListPage() {
+  const { hasPermission } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialStatus = searchParams.get('status') ?? '';
   const [statusFilter, setStatusFilter] = useState(initialStatus);
@@ -74,7 +76,10 @@ export function PurchaseOrderListPage() {
       <ProcurementSubNav />
       <h1>Purchase Orders</h1>
 
-      <div className="pr-toolbar">
+      <div
+        className="pr-toolbar"
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}
+      >
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           {STATUS_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -82,6 +87,15 @@ export function PurchaseOrderListPage() {
             </option>
           ))}
         </select>
+        {hasPermission('procurement.po.create') && (
+          <Link
+            to="/procurement/purchase-orders/new"
+            className="pr-btn pr-btn--primary"
+            style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}
+          >
+            + New Purchase Order
+          </Link>
+        )}
       </div>
 
       {state.status === 'loading' && <div className="pr-empty">Loading purchase orders...</div>}

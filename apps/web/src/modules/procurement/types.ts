@@ -69,6 +69,8 @@ export interface PurchaseRequest {
     };
   };
   creator?: UserRef;
+  // The end-user who initiated the request (the purchase officer is the creator).
+  requester?: { id: string; username: string; fullName?: string | null };
   endorser?: UserRef;
   budgetCertifier?: UserRef;
   approver?: UserRef;
@@ -93,11 +95,12 @@ export interface CreatePurchaseRequestItemInput {
 }
 
 export interface CreatePurchaseRequestInput {
-  budgetReleaseId: string;
+  budgetReleaseId?: string;
   title: string;
   description?: string;
   purpose?: string;
   departmentId?: string;
+  requestedById?: string;
   requestedDeliveryDate?: string;
   ppmpItemId?: string;
   appItemId?: string;

@@ -64,6 +64,12 @@ export class CreatePurchaseRequestDto {
   @IsUUID()
   departmentHeadId?: string;
 
+  // The end-user who initiated the request (the purchase officer preparing the
+  // PR selects this on their behalf).
+  @IsOptional()
+  @IsUUID()
+  requestedById?: string;
+
   @IsOptional()
   @IsUUID()
   procurementCategoryId?: string;
@@ -136,6 +142,10 @@ export class UpdatePurchaseRequestDto {
   @IsOptional()
   @IsUUID()
   departmentHeadId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  requestedById?: string;
 
   @IsOptional()
   @IsUUID()

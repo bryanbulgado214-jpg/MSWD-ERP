@@ -1,17 +1,26 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { listDepartments, listFiscalYears, listUsers } from '../../budgeting/api';
-import type { FiscalYearLookupItem, LookupItem, UserLookupItem } from '../../budgeting/api';
 import { formatPeso } from '../../budgeting/format-peso';
 import {
   approvePpmpItem,
   bulkApprovePpmpItems,
   createPpmpItem,
+  downloadPpmpTemplate,
+  listLookupDepartments,
+  listLookupUsers,
   listPpmpItems,
+  listProcurementFiscalYears,
   ProcurementApiError,
+  uploadPpmpExcel,
 } from '../api';
-import type { PpmpItem } from '../api';
+import type {
+  LookupDepartment,
+  LookupUser,
+  PpmpItem,
+  PpmpUploadResult,
+  ProcurementFiscalYear,
+} from '../api';
 import './procurement.css';
 
 const CATEGORY_OPTIONS = [
@@ -57,9 +66,9 @@ const emptyRow = (): FormRow => ({
 });
 
 export function PpmpDataEntryPage() {
-  const [fiscalYears, setFiscalYears] = useState<FiscalYearLookupItem[]>([]);
-  const [departments, setDepartments] = useState<LookupItem[]>([]);
-  const [users, setUsers] = useState<UserLookupItem[]>([]);
+  const [fiscalYears, setFiscalYears] = useState<ProcurementFiscalYear[]>([]);
+  const [departments, setDepartments] = useState<LookupDepartment[]>([]);
+  const [users, setUsers] = useState<LookupUser[]>([]);
   const [selectedFiscalYear, setSelectedFiscalYear] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('');
   const [existingItems, setExistingItems] = useState<PpmpItem[]>([]);
@@ -68,10 +77,15 @@ export function PpmpDataEntryPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loadingItems, setLoadingItems] = useState(false);
+  // Excel upload
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadAssignUser, setUploadAssignUser] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<PpmpUploadResult | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([listFiscalYears(), listDepartments(), listUsers()])
+    Promise.all([listProcurementFiscalYears(), listLookupDepartments(), listLookupUsers()])
       .then(([fy, dept, u]) => {
         if (cancelled) return;
         setFiscalYears(fy);
@@ -186,6 +200,51 @@ export function PpmpDataEntryPage() {
     }
   }
 
+  async function handleDownloadTemplate() {
+    setError(null);
+    try {
+      await downloadPpmpTemplate();
+    } catch (err) {
+      setError(err instanceof ProcurementApiError ? err.message : 'Failed to download template.');
+    }
+  }
+
+  async function handleUpload() {
+    setError(null);
+    setSuccess(null);
+    setUploadResult(null);
+    if (!uploadFile) {
+      setError('Choose an Excel file to upload first.');
+      return;
+    }
+    if (!selectedFiscalYear || !selectedDepartment) {
+      setError('Select a fiscal year and end-user office before uploading.');
+      return;
+    }
+    setUploading(true);
+    try {
+      const result = await uploadPpmpExcel(uploadFile, {
+        fiscalYearId: selectedFiscalYear,
+        departmentId: selectedDepartment,
+        ...(uploadAssignUser ? { assignedUserId: uploadAssignUser } : {}),
+      });
+      setUploadResult(result);
+      if (result.created > 0) {
+        setSuccess(`Uploaded ${result.created} PPMP item(s).`);
+        setUploadFile(null);
+        const updated = await listPpmpItems({
+          fiscalYearId: selectedFiscalYear,
+          departmentId: selectedDepartment,
+        });
+        setExistingItems(updated);
+      }
+    } catch (err) {
+      setError(err instanceof ProcurementApiError ? err.message : 'Upload failed.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
   const draftCount = existingItems.filter((i) => i.status === 'draft').length;
 
   return (
@@ -242,6 +301,110 @@ export function PpmpDataEntryPage() {
             ))}
           </select>
         </div>
+      </div>
+
+      {/* Upload from Excel */}
+      <div
+        style={{
+          border: '1px solid #e4e7ec',
+          borderRadius: 10,
+          padding: 20,
+          marginBottom: 28,
+          background: '#f9fafb',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 12,
+            marginBottom: 12,
+          }}
+        >
+          <h2 style={{ margin: 0, fontSize: 18, color: 'var(--mswd-navy)' }}>Upload from Excel</h2>
+          <button className="pr-btn" type="button" onClick={handleDownloadTemplate}>
+            ⬇ Download template
+          </button>
+        </div>
+        <p style={{ color: '#667085', fontSize: 13, marginTop: 0, marginBottom: 14 }}>
+          Fill the template and upload it here. Items load into the selected{' '}
+          <strong>fiscal year</strong> and <strong>end-user office</strong> above. A blank Code cell
+          is auto-numbered. Uploaded items start as <em>draft</em> — approve them below to include
+          them in the APP.
+        </p>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div className="pr-field" style={{ flex: 2, minWidth: 240 }}>
+            <label>Excel file (.xlsx)</label>
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={(e) => {
+                setUploadFile(e.target.files?.[0] ?? null);
+                setUploadResult(null);
+              }}
+            />
+          </div>
+          <div className="pr-field" style={{ flex: 1, minWidth: 200 }}>
+            <label>Assign all to (optional)</label>
+            <select value={uploadAssignUser} onChange={(e) => setUploadAssignUser(e.target.value)}>
+              <option value="">— Use the sheet / leave unassigned —</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.username}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            className="pr-btn pr-btn--primary"
+            type="button"
+            onClick={handleUpload}
+            disabled={uploading || !uploadFile || !selectedFiscalYear || !selectedDepartment}
+          >
+            {uploading ? 'Uploading…' : 'Upload PPMP'}
+          </button>
+        </div>
+
+        {uploadResult && (
+          <div style={{ marginTop: 14, fontSize: 13 }}>
+            <div style={{ marginBottom: 6 }}>
+              <strong>{uploadResult.created}</strong> item(s) created
+              {uploadResult.skipped > 0 && (
+                <>
+                  {' · '}
+                  <strong style={{ color: '#b42318' }}>{uploadResult.skipped}</strong> skipped
+                </>
+              )}
+              {uploadResult.warnings.length > 0 && (
+                <>
+                  {' · '}
+                  <strong style={{ color: '#b54708' }}>{uploadResult.warnings.length}</strong>{' '}
+                  warning(s)
+                </>
+              )}
+            </div>
+            {uploadResult.errors.length > 0 && (
+              <ul style={{ margin: '4px 0', paddingLeft: 18, color: '#b42318' }}>
+                {uploadResult.errors.map((e, i) => (
+                  <li key={`e${i}`}>
+                    Row {e.row}: {e.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {uploadResult.warnings.length > 0 && (
+              <ul style={{ margin: '4px 0', paddingLeft: 18, color: '#b54708' }}>
+                {uploadResult.warnings.map((w, i) => (
+                  <li key={`w${i}`}>
+                    Row {w.row}: {w.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Existing items */}

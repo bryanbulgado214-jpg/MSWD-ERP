@@ -15,8 +15,10 @@ import { CreatePurchaseRequestPage } from './pages/CreatePurchaseRequestPage';
 import { EditPurchaseRequestPage } from './pages/EditPurchaseRequestPage';
 import { OrsDetailPage } from './pages/OrsDetailPage';
 import { OrsListPage } from './pages/OrsListPage';
+import { NewPurchaseOrderPage } from './pages/NewPurchaseOrderPage';
 import { PurchaseOrderDetailPage } from './pages/PurchaseOrderDetailPage';
 import { PurchaseOrderListPage } from './pages/PurchaseOrderListPage';
+import { AppConsolidationPage } from './pages/AppConsolidationPage';
 import { PpmpDataEntryPage } from './pages/PpmpDataEntryPage';
 import { PrintCafPage } from './pages/PrintCafPage';
 import { PrintOrsPage } from './pages/PrintOrsPage';
@@ -52,8 +54,16 @@ export const procurementRoutes: RouteObject[] = [
     element: <PpmpDataEntryPage />,
   },
   {
+    path: '/procurement/app',
+    element: <AppConsolidationPage />,
+  },
+  {
     path: '/procurement/purchase-orders',
     element: <PurchaseOrderListPage />,
+  },
+  {
+    path: '/procurement/purchase-orders/new',
+    element: <NewPurchaseOrderPage />,
   },
   {
     path: '/procurement/purchase-orders/:id',

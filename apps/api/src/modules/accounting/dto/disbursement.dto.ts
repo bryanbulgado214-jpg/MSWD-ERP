@@ -103,6 +103,13 @@ export class CreateDisbursementDto {
   @IsString()
   fundSourceId?: string;
 
+  // The procurement Purchase Order this disbursement pays against. The accountant
+  // maps it here (e.g. while catching up already-approved PRs/POs). Reference
+  // only — it does not change how the accounting entry is built.
+  @IsOptional()
+  @IsUUID()
+  purchaseOrderId?: string;
+
   // Set when this DV pays a supplier's invoice (recorded from the Supplier's
   // Invoices module). The DV then settles that invoice's Accounts Payable.
   @IsOptional()

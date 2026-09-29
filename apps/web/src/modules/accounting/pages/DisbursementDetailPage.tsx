@@ -12,11 +12,14 @@ import {
   getDisbursement,
   getDvAttachments,
   getDvNotes,
+  listDvPurchaseOrders,
+  mapDvPurchaseOrder,
   postDisbursement,
   releaseDisbursement,
   uploadDvAttachment,
   type DvAttachment,
   type DvNote,
+  type DvPurchaseOrderOption,
 } from '../api';
 import { statusLabel } from '../status-format';
 import type { DisbursementDetail } from '../types';
@@ -103,10 +106,19 @@ export default function DisbursementDetailPage() {
   const [uploading, setUploading] = useState(false);
   const [sideError, setSideError] = useState('');
 
+  // Corresponding-PO editor (catch-up): map a PO onto this existing DV.
+  const [poOptions, setPoOptions] = useState<DvPurchaseOrderOption[]>([]);
+  const [poSel, setPoSel] = useState('');
+  const [savingPo, setSavingPo] = useState(false);
+  const [poSaved, setPoSaved] = useState(false);
+
   useEffect(() => {
     if (!id) return;
     getDisbursement(id)
-      .then(setDv)
+      .then((d) => {
+        setDv(d);
+        setPoSel(d.purchaseOrder?.id ?? '');
+      })
       .catch((e) =>
         setError(e instanceof AccountingApiError ? e.message : 'Failed to load the voucher.'),
       );
@@ -117,6 +129,32 @@ export default function DisbursementDetailPage() {
       .then(setAttachments)
       .catch(() => {});
   }, [id]);
+
+  useEffect(() => {
+    if (!canCreate) return;
+    listDvPurchaseOrders()
+      .then(setPoOptions)
+      .catch(() => {});
+  }, [canCreate]);
+
+  async function savePo() {
+    if (!dv) return;
+    setSavingPo(true);
+    setSideError('');
+    setPoSaved(false);
+    try {
+      const updated = await mapDvPurchaseOrder(dv.id, poSel || null);
+      setDv(updated);
+      setPoSel(updated.purchaseOrder?.id ?? '');
+      setPoSaved(true);
+    } catch (e) {
+      setSideError(
+        e instanceof AccountingApiError ? e.message : 'Failed to map the purchase order.',
+      );
+    } finally {
+      setSavingPo(false);
+    }
+  }
 
   async function submitNote() {
     if (!id || !noteDraft.trim()) return;
@@ -392,6 +430,68 @@ export default function DisbursementDetailPage() {
                 IR: {dv.inspectionReport.reportNumber} ({dv.inspectionReport.overallResult})
               </span>
             )}
+          </div>
+        )}
+
+        {/* Catch-up: map the procurement PO onto this existing DV (reference
+            only — does not touch the journal entry). */}
+        {canCreate && (
+          <div
+            style={{
+              marginTop: 12,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              flexWrap: 'wrap',
+            }}
+          >
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#344054' }}>
+              Corresponding PO
+            </span>
+            <select
+              value={poSel}
+              onChange={(e) => {
+                setPoSel(e.target.value);
+                setPoSaved(false);
+              }}
+              style={{
+                padding: '5px 8px',
+                border: '1px solid #d0d5dd',
+                borderRadius: 6,
+                fontSize: 13,
+                minWidth: 260,
+              }}
+            >
+              <option value="">— None —</option>
+              {poOptions.map((po) => (
+                <option key={po.id} value={po.id}>
+                  {po.poNumber}
+                  {po.purchaseRequest ? ` · PR ${po.purchaseRequest.prNumber}` : ''}
+                  {po.supplier ? ` · ${po.supplier.name}` : ''}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={savePo}
+              disabled={savingPo || poSel === (dv.purchaseOrder?.id ?? '')}
+              style={{
+                padding: '5px 12px',
+                fontSize: 13,
+                borderRadius: 6,
+                cursor: 'pointer',
+                border: '1px solid var(--mswd-navy, #0b2e63)',
+                background: 'var(--mswd-navy, #0b2e63)',
+                color: '#fff',
+                opacity: savingPo || poSel === (dv.purchaseOrder?.id ?? '') ? 0.5 : 1,
+              }}
+            >
+              {savingPo ? 'Saving…' : 'Save PO'}
+            </button>
+            {poSaved && <span style={{ fontSize: 12, color: '#067647' }}>✓ Saved</span>}
+            <span style={{ fontSize: 11, color: '#98a2b3' }}>
+              Reference only — does not change the journal entry.
+            </span>
           </div>
         )}
       </div>

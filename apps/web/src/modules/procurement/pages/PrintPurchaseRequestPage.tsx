@@ -200,7 +200,12 @@ export function PrintPurchaseRequestPage() {
               <div className="pr-print-sig-row">
                 <span className="pr-print-sig-label">Printed Name :</span>
                 <span className="pr-print-sig-name">
-                  {pr.creator?.username?.toUpperCase() ?? ''}
+                  {(
+                    pr.requester?.fullName ||
+                    pr.requester?.username ||
+                    pr.creator?.username ||
+                    ''
+                  ).toUpperCase()}
                 </span>
               </div>
               <div className="pr-print-sig-row">

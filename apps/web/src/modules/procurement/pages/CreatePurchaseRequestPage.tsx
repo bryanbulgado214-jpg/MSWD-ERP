@@ -4,28 +4,20 @@ import { useNavigate } from 'react-router-dom';
 import { formatPeso } from '../../budgeting/format-peso';
 import {
   createPurchaseRequest,
+  listAllocationsForUser,
   listAppItems,
-  listAvailableBudgetReleases,
   listLookupDepartments,
-  listMyPpmpItems,
+  listLookupUsers,
   listProcurementFiscalYears,
   ProcurementApiError,
   type AppItem,
-  type BudgetReleaseOption,
   type LookupDepartment,
+  type LookupUser,
   type PpmpItemWithRemaining,
   type ProcurementFiscalYear,
 } from '../api';
-import type { CreatePurchaseRequestItemInput, ItemClassification } from '../types';
+import type { CreatePurchaseRequestItemInput } from '../types';
 import './procurement.css';
-
-const CLASSIFICATION_OPTIONS: { value: ItemClassification; label: string }[] = [
-  { value: 'expense', label: 'Expense' },
-  { value: 'inventory', label: 'Inventory' },
-  { value: 'asset', label: 'Asset' },
-  { value: 'infrastructure', label: 'Infrastructure' },
-  { value: 'service', label: 'Service' },
-];
 
 function emptyItem(): CreatePurchaseRequestItemInput {
   return { description: '', quantity: 1, unitOfMeasure: 'pc', estimatedUnitCost: 0 };
@@ -33,17 +25,18 @@ function emptyItem(): CreatePurchaseRequestItemInput {
 
 export function CreatePurchaseRequestPage() {
   const navigate = useNavigate();
-  const [releases, setReleases] = useState<BudgetReleaseOption[]>([]);
-  const [loadingReleases, setLoadingReleases] = useState(true);
   const [fiscalYears, setFiscalYears] = useState<ProcurementFiscalYear[]>([]);
   const [selectedFiscalYear, setSelectedFiscalYear] = useState('');
   const [myPpmpItems, setMyPpmpItems] = useState<PpmpItemWithRemaining[]>([]);
-  const [loadingPpmp, setLoadingPpmp] = useState(true);
+  const [loadingPpmp, setLoadingPpmp] = useState(false);
   const [selectedPpmpItemId, setSelectedPpmpItemId] = useState('');
   const [departments, setDepartments] = useState<LookupDepartment[]>([]);
   const [appItems, setAppItems] = useState<AppItem[]>([]);
+  // The purchase officer prepares every PR; the end-user who initiated the
+  // request is selected here so their PPMP allocations can be drawn from.
+  const [users, setUsers] = useState<LookupUser[]>([]);
+  const [endUserId, setEndUserId] = useState('');
 
-  const [budgetReleaseId, setBudgetReleaseId] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [purpose, setPurpose] = useState('');
@@ -55,29 +48,28 @@ export function CreatePurchaseRequestPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      listAvailableBudgetReleases(),
-      listProcurementFiscalYears(),
-      listLookupDepartments(),
-    ])
-      .then(([relData, fyData, deptData]) => {
-        setReleases(relData);
-        if (relData.length === 1) setBudgetReleaseId(relData[0]!.id);
+    Promise.all([listProcurementFiscalYears(), listLookupDepartments(), listLookupUsers()])
+      .then(([fyData, deptData, userData]) => {
         setFiscalYears(fyData);
         const firstFy = fyData[0];
         if (firstFy) setSelectedFiscalYear(firstFy.id);
         setDepartments(deptData);
+        setUsers(userData);
       })
-      .catch(() => setError('Failed to load form data.'))
-      .finally(() => setLoadingReleases(false));
+      .catch(() => setError('Failed to load form data.'));
   }, []);
 
   useEffect(() => {
     if (!selectedFiscalYear) return;
     let cancelled = false;
-    setLoadingPpmp(true);
+    setSelectedPpmpItemId('');
+    // PPMP allocations belong to the end-user who initiated the request; load
+    // them only once the officer has picked that end-user.
+    setLoadingPpmp(!!endUserId);
     Promise.all([
-      listMyPpmpItems(selectedFiscalYear),
+      endUserId
+        ? listAllocationsForUser(endUserId, selectedFiscalYear)
+        : Promise.resolve([] as PpmpItemWithRemaining[]),
       listAppItems({ fiscalYearId: selectedFiscalYear, status: 'approved' }),
     ])
       .then(([ppmpData, appData]) => {
@@ -93,7 +85,7 @@ export function CreatePurchaseRequestPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedFiscalYear]);
+  }, [selectedFiscalYear, endUserId]);
 
   function selectPpmpItem(ppmpItemId: string) {
     setSelectedPpmpItemId(ppmpItemId);
@@ -126,14 +118,12 @@ export function CreatePurchaseRequestPage() {
   }
 
   const totalAmount = items.reduce((sum, item) => sum + item.quantity * item.estimatedUnitCost, 0);
-  const selectedRelease = releases.find((r) => r.id === budgetReleaseId);
   const selectedPpmpItem = myPpmpItems.find((p) => p.id === selectedPpmpItemId);
   const linkedAppItems = selectedPpmpItemId
     ? appItems.filter((a) => a.ppmpItem.id === selectedPpmpItemId)
     : appItems;
 
   const canSubmit =
-    budgetReleaseId &&
     title.trim() &&
     items.every(
       (item) =>
@@ -151,15 +141,17 @@ export function CreatePurchaseRequestPage() {
     setError(null);
     try {
       const pr = await createPurchaseRequest({
-        budgetReleaseId,
         title: title.trim(),
         ...(description.trim() ? { description: description.trim() } : {}),
         ...(purpose.trim() ? { purpose: purpose.trim() } : {}),
         ...(departmentId ? { departmentId } : {}),
+        ...(endUserId ? { requestedById: endUserId } : {}),
         ...(requestedDeliveryDate ? { requestedDeliveryDate } : {}),
         ...(selectedPpmpItemId ? { ppmpItemId: selectedPpmpItemId } : {}),
         ...(appItemId ? { appItemId } : {}),
         ...(selectedFiscalYear ? { fiscalYearId: selectedFiscalYear } : {}),
+        // Classification is assigned by the accountant during review — the
+        // purchase officer does not set it here.
         items: items.map((item) => ({
           description: item.description.trim(),
           quantity: item.quantity,
@@ -169,7 +161,6 @@ export function CreatePurchaseRequestPage() {
           ...(item.technicalSpecification?.trim()
             ? { technicalSpecification: item.technicalSpecification.trim() }
             : {}),
-          ...(item.classification ? { classification: item.classification } : {}),
         })),
       });
       navigate(`/procurement/purchase-requests/${pr.id}`);
@@ -198,6 +189,46 @@ export function CreatePurchaseRequestPage() {
 
       {error && <div className="pr-error">{error}</div>}
 
+      {/* The purchase officer prepares every PR on behalf of the requesting
+          end-user; it then routes to the signatories. */}
+      <div
+        style={{
+          background: '#eff8ff',
+          border: '1px solid #b2ddff',
+          borderRadius: 10,
+          padding: '14px 16px',
+          marginBottom: 20,
+        }}
+      >
+        <label
+          style={{
+            display: 'block',
+            fontSize: 12,
+            fontWeight: 700,
+            color: '#175cd3',
+            marginBottom: 6,
+          }}
+        >
+          Requesting End-User
+        </label>
+        <select
+          value={endUserId}
+          onChange={(e) => setEndUserId(e.target.value)}
+          style={{ maxWidth: 360, width: '100%' }}
+        >
+          <option value="">— Select the end-user who initiated this request —</option>
+          {users.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.username}
+            </option>
+          ))}
+        </select>
+        <p style={{ fontSize: 12, color: '#475467', margin: '6px 0 0' }}>
+          Pick the end-user to load their PPMP allocations. You (the purchase officer) prepare the
+          PR; it then routes to the signatories for review and approval.
+        </p>
+      </div>
+
       {/* PPMP Allocations */}
       {!loadingPpmp && myPpmpItems.length > 0 && (
         <div style={{ marginBottom: 24 }}>
@@ -210,7 +241,7 @@ export function CreatePurchaseRequestPage() {
             }}
           >
             <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--mswd-navy)' }}>
-              Your PPMP Allocations
+              {users.find((u) => u.id === endUserId)?.username ?? 'End-user'}&apos;s PPMP Allocations
             </h3>
             {fiscalYears.length > 1 && (
               <select
@@ -320,7 +351,7 @@ export function CreatePurchaseRequestPage() {
         </div>
       )}
       {loadingPpmp && (
-        <p style={{ color: '#667085', fontSize: 13 }}>Loading your PPMP allocations...</p>
+        <p style={{ color: '#667085', fontSize: 13 }}>Loading PPMP allocations...</p>
       )}
       {!loadingPpmp && myPpmpItems.length === 0 && (
         <div
@@ -333,42 +364,14 @@ export function CreatePurchaseRequestPage() {
             color: '#667085',
           }}
         >
-          No PPMP items are allocated to you for the current fiscal year. You can still create a PR
-          manually below.
+          {!endUserId
+            ? 'Select the requesting end-user above to load their PPMP allocations — or create a PR manually below.'
+            : 'No approved PPMP allocations for this end-user in the current fiscal year. You can still create a PR manually below.'}
         </div>
       )}
 
       <form className="pr-form" onSubmit={handleSubmit}>
         <div className="pr-form-grid">
-          <div className="pr-field">
-            <label>Budget Release *</label>
-            {loadingReleases ? (
-              <p style={{ color: '#667085', fontSize: 13 }}>Loading available budgets...</p>
-            ) : releases.length === 0 ? (
-              <p style={{ color: '#b42318', fontSize: 13 }}>No released budgets available.</p>
-            ) : (
-              <select
-                value={budgetReleaseId}
-                onChange={(e) => setBudgetReleaseId(e.target.value)}
-                required
-              >
-                <option value="">Select a budget release...</option>
-                {releases.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.releaseNumber} — {r.budgetHeader.responsibilityCenter.name} /{' '}
-                    {r.budgetHeader.fundSource.name} (Avail: {formatPeso(r.availableAmount)})
-                  </option>
-                ))}
-              </select>
-            )}
-            {selectedRelease && (
-              <p style={{ fontSize: 12, color: '#667085', marginTop: 4 }}>
-                Released: {formatPeso(selectedRelease.releasedAmount)} | Available:{' '}
-                {formatPeso(selectedRelease.availableAmount)}
-              </p>
-            )}
-          </div>
-
           <div className="pr-field">
             <label>Department</label>
             <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
@@ -506,9 +509,7 @@ export function CreatePurchaseRequestPage() {
                   />
                 </div>
               </div>
-              <div
-                style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 12, marginTop: 8 }}
-              >
+              <div style={{ marginTop: 8 }}>
                 <div>
                   <label
                     style={{
@@ -537,53 +538,6 @@ export function CreatePurchaseRequestPage() {
                       boxSizing: 'border-box',
                     }}
                   />
-                </div>
-                <div>
-                  <label
-                    style={{
-                      display: 'block',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: '#475467',
-                      marginBottom: 2,
-                    }}
-                  >
-                    Classification
-                  </label>
-                  <select
-                    value={item.classification ?? ''}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value) {
-                        updateItem(idx, { classification: value as ItemClassification });
-                      } else {
-                        setItems((prev) =>
-                          prev.map((it, i) => {
-                            if (i !== idx) return it;
-                            const rest = { ...it };
-                            delete rest.classification;
-                            return rest;
-                          }),
-                        );
-                      }
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '6px 8px',
-                      border: '1.5px solid #d0d5dd',
-                      borderRadius: 4,
-                      fontSize: 13,
-                      fontFamily: 'inherit',
-                      boxSizing: 'border-box',
-                    }}
-                  >
-                    <option value="">—</option>
-                    {CLASSIFICATION_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
                 </div>
               </div>
               <p style={{ textAlign: 'right', fontSize: 12, color: '#475467', margin: '8px 0 0' }}>

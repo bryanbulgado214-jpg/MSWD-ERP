@@ -160,6 +160,7 @@ export class PurchaseRequestsController {
         budgetCertifier: { select: { id: true, username: true } },
         approver: { select: { id: true, username: true } },
         creator: { select: { id: true, username: true } },
+        requester: { select: { id: true, username: true, fullName: true } },
         ppmpItem: { select: { id: true, code: true, itemDescription: true } },
         appItem: { select: { id: true, appNumber: true, procurementProjectTitle: true } },
         revisions: { orderBy: { revisionNumber: 'desc' } },
@@ -226,6 +227,18 @@ export class PurchaseRequestsController {
     @Body() dto: PurchaseRequestActionDto,
   ) {
     return this.prService.acceptForProcurement(user.organizationId, id, dto.expectedVersion, user.userId);
+  }
+
+  // Catch-up back-entry: mark an already-approved historical PR as approved,
+  // skipping the endorse/certify/approve chain, ready for its PO.
+  @Post(':id/catch-up-approve')
+  @RequirePermissions('procurement.pr.mark_lifecycle')
+  catchUpApprove(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PurchaseRequestActionDto,
+  ) {
+    return this.prService.catchUpApprove(user.organizationId, id, dto.expectedVersion, user.userId);
   }
 
   @Post(':id/return')

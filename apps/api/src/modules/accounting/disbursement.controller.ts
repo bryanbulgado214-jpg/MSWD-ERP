@@ -22,6 +22,7 @@ import {
   RequirePermissions,
 } from '../../common/decorators/require-permissions.decorator';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { PrismaService } from '../../database/prisma.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
 
@@ -31,7 +32,29 @@ import { AddDvNoteDto, CreateDisbursementDto, UpdateDvNumberDto } from './dto/di
 @Controller('accounting/disbursements')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class DisbursementController {
-  constructor(private readonly disbursementService: DisbursementService) {}
+  constructor(
+    private readonly disbursementService: DisbursementService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  // Purchase orders the accountant can map a DV to (e.g. while catching up
+  // already-approved PRs/POs). Declared before ':id' routes.
+  @Get('purchase-orders')
+  @RequirePermissions('accounting.dv.create')
+  purchaseOrders(@CurrentUser() user: AuthenticatedUser) {
+    return this.prisma.purchaseOrder.findMany({
+      where: { organizationId: user.organizationId, status: { not: 'cancelled' } },
+      select: {
+        id: true,
+        poNumber: true,
+        poDate: true,
+        contractAmount: true,
+        supplier: { select: { name: true } },
+        purchaseRequest: { select: { prNumber: true, title: true } },
+      },
+      orderBy: { poDate: 'desc' },
+    });
+  }
 
   @Get()
   @RequirePermissions('accounting.dv.read')
@@ -106,6 +129,23 @@ export class DisbursementController {
       user.userId,
       id,
       dto.dvNumber,
+    );
+  }
+
+  // Attach/clear the procurement PO reference on an existing DV (catch-up) —
+  // does not touch the journal entry or check.
+  @Patch(':id/purchase-order')
+  @RequirePermissions('accounting.dv.create')
+  mapPurchaseOrder(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { purchaseOrderId?: string | null },
+  ) {
+    return this.disbursementService.mapPurchaseOrder(
+      user.organizationId,
+      user.userId,
+      id,
+      body.purchaseOrderId ?? null,
     );
   }
 

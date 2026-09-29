@@ -85,6 +85,27 @@ async function authFetchMutate(
   return response;
 }
 
+// Multipart upload — must NOT set Content-Type (the browser adds the boundary).
+async function authFetchUpload(path: string, formData: FormData): Promise<Response> {
+  const token = getAccessToken();
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: formData,
+  });
+  if (response.status === 401) throw new ProcurementApiError('Not signed in.', 401);
+  if (response.status === 403)
+    throw new ProcurementApiError(await extractErrorMessage(response, 'Forbidden.'), 403);
+  if (response.status === 400)
+    throw new ProcurementApiError(await extractErrorMessage(response, 'Invalid request.'), 400);
+  if (!response.ok)
+    throw new ProcurementApiError(
+      await extractErrorMessage(response, `Failed (${response.status}).`),
+      response.status,
+    );
+  return response;
+}
+
 export async function listPurchaseRequests(status?: string): Promise<PurchaseRequest[]> {
   const qs = status ? `?status=${status}` : '';
   const res = await authFetch(`/procurement/purchase-requests${qs}`);
@@ -183,6 +204,20 @@ export async function acceptForProcurement(
 ): Promise<PurchaseRequest> {
   const res = await authFetchMutate(
     `/procurement/purchase-requests/${id}/accept-procurement`,
+    'POST',
+    { expectedVersion },
+  );
+  return res.json();
+}
+
+// Catch-up back-entry: mark an already-approved historical PR as approved
+// (skips the endorse/certify/approve chain), ready for its PO.
+export async function catchUpApprovePr(
+  id: string,
+  expectedVersion: number,
+): Promise<PurchaseRequest> {
+  const res = await authFetchMutate(
+    `/procurement/purchase-requests/${id}/catch-up-approve`,
     'POST',
     { expectedVersion },
   );
@@ -340,6 +375,18 @@ export async function listMyPpmpItems(fiscalYearId?: string): Promise<PpmpItemWi
   return res.json();
 }
 
+// Approved PPMP allocations (with remaining) for a specific end-user — used when
+// the purchase officer prepares a PR on that end-user's behalf.
+export async function listAllocationsForUser(
+  assignedUserId: string,
+  fiscalYearId?: string,
+): Promise<PpmpItemWithRemaining[]> {
+  const params = new URLSearchParams({ assignedUserId });
+  if (fiscalYearId) params.set('fiscalYearId', fiscalYearId);
+  const res = await authFetch(`/procurement/ppmp-items/allocations?${params.toString()}`);
+  return res.json();
+}
+
 export async function approvePpmpItem(id: string): Promise<PpmpItem> {
   const res = await authFetchMutate(`/procurement/ppmp-items/${id}/approve`, 'POST');
   return res.json();
@@ -347,6 +394,44 @@ export async function approvePpmpItem(id: string): Promise<PpmpItem> {
 
 export async function bulkApprovePpmpItems(ids: string[]): Promise<{ count: number }> {
   const res = await authFetchMutate('/procurement/ppmp-items/bulk-approve', 'POST', { ids });
+  return res.json();
+}
+
+export interface PpmpUploadResult {
+  created: number;
+  skipped: number;
+  errors: { row: number; message: string }[];
+  warnings: { row: number; message: string }[];
+}
+
+/** Download the blank PPMP Excel template and trigger a browser save. */
+export async function downloadPpmpTemplate(): Promise<void> {
+  const token = getAccessToken();
+  const res = await fetch(`${API_BASE_URL}/procurement/ppmp-items/template`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new ProcurementApiError('Failed to download the template.', res.status);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'PPMP-Template.xlsx';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+export async function uploadPpmpExcel(
+  file: File,
+  opts: { fiscalYearId: string; departmentId: string; assignedUserId?: string },
+): Promise<PpmpUploadResult> {
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('fiscalYearId', opts.fiscalYearId);
+  fd.append('departmentId', opts.departmentId);
+  if (opts.assignedUserId) fd.append('assignedUserId', opts.assignedUserId);
+  const res = await authFetchUpload('/procurement/ppmp-items/upload', fd);
   return res.json();
 }
 
@@ -681,7 +766,17 @@ export interface AppItem {
   procurementMode: string | null;
   scheduleMonth: number | null;
   status: string;
-  ppmpItem: { id: string; code: string; itemDescription: string };
+  ppmpItem: {
+    id: string;
+    code: string;
+    itemDescription: string;
+    quantity?: string;
+    unitOfMeasure?: string;
+    estimatedTotalCost?: string;
+    scheduleQuarter?: number | null;
+    department?: { id: string; code: string; name: string };
+    assignedUser?: { id: string; username: string } | null;
+  };
   fiscalYear: { id: string; year: number; name: string };
 }
 
@@ -694,6 +789,19 @@ export async function listAppItems(filters?: {
   if (filters?.status) params.set('status', filters.status);
   const qs = params.toString();
   const res = await authFetch(`/procurement/app-items${qs ? `?${qs}` : ''}`);
+  return res.json();
+}
+
+export interface AppConsolidationResult {
+  created: number;
+  alreadyInApp: number;
+  totalApprovedPpmp: number;
+  grandTotalBudget: string;
+}
+
+/** Consolidate all approved PPMP items for a fiscal year into the APP. */
+export async function consolidateApp(fiscalYearId: string): Promise<AppConsolidationResult> {
+  const res = await authFetchMutate('/procurement/app-items/consolidate', 'POST', { fiscalYearId });
   return res.json();
 }
 

@@ -12,8 +12,10 @@ import {
   getDisbursement,
   getPayees,
   getSupplierInvoice,
+  listDvPurchaseOrders,
   updateDisbursement,
   uploadDvAttachment,
+  type DvPurchaseOrderOption,
 } from '../api';
 import { bankAccountLabel } from '../bank-account-label';
 import { formatAccounting, parseMoney, unformatMoney } from '../money-format';
@@ -93,6 +95,9 @@ export default function NewDisbursementPage() {
   const [particulars, setParticulars] = useState('');
   const [paymentMode, setPaymentMode] = useState('check');
   const [fundSourceId, setFundSourceId] = useState('');
+  // The procurement PO this disbursement pays against (reference; optional).
+  const [purchaseOrderId, setPurchaseOrderId] = useState('');
+  const [purchaseOrders, setPurchaseOrders] = useState<DvPurchaseOrderOption[]>([]);
   const [bankAccountId, setBankAccountId] = useState('');
   // Once the check has CLEARED the bank the payment is settled: payee, bank and
   // amount are locked (the accountant can still fix the date, number, particulars
@@ -151,6 +156,11 @@ export default function NewDisbursementPage() {
         setFundSources(await listFundSources());
       } catch {
         /* fund sources optional */
+      }
+      try {
+        setPurchaseOrders(await listDvPurchaseOrders());
+      } catch {
+        /* purchase orders optional (procurement may be off) */
       }
       if (!id) {
         try {
@@ -221,6 +231,7 @@ export default function NewDisbursementPage() {
         setParticulars(dv.particulars);
         setPaymentMode(dv.paymentMode);
         setFundSourceId(dv.fundSource?.id ?? '');
+        setPurchaseOrderId(dv.purchaseOrder?.id ?? '');
         setBankAccountId(dv.bankAccountId ?? '');
         setCheckCleared(dv.checkStatus === 'cleared');
         // Show only the charge/deduction lines — the balancing cash credit is
@@ -312,6 +323,7 @@ export default function NewDisbursementPage() {
         paymentMode,
         bankAccountId,
         ...(fundSourceId ? { fundSourceId } : {}),
+        ...(purchaseOrderId ? { purchaseOrderId } : {}),
         ...(supplierInvoiceId ? { supplierInvoiceId } : {}),
         ...(installmentNo ? { supplierInvoiceInstallment: installmentNo } : {}),
         ...(asDraft ? { asDraft: true } : {}),
@@ -545,6 +557,26 @@ export default function NewDisbursementPage() {
                 {fundSources.map((f) => (
                   <option key={f.id} value={f.id}>
                     {f.code} — {f.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={cell('300px')}>
+              <label style={labelStyle}>
+                Corresponding PO{' '}
+                <span style={{ fontWeight: 400, color: '#98a2b3' }}>(optional)</span>
+              </label>
+              <select
+                style={inputStyle}
+                value={purchaseOrderId}
+                onChange={(e) => setPurchaseOrderId(e.target.value)}
+              >
+                <option value="">— None —</option>
+                {purchaseOrders.map((po) => (
+                  <option key={po.id} value={po.id}>
+                    {po.poNumber}
+                    {po.purchaseRequest ? ` · PR ${po.purchaseRequest.prNumber}` : ''}
+                    {po.supplier ? ` · ${po.supplier.name}` : ''}
                   </option>
                 ))}
               </select>

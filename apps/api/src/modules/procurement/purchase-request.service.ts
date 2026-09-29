@@ -74,6 +74,7 @@ export class PurchaseRequestService {
           fiscalYearId: input.fiscalYearId ?? null,
           departmentId: input.departmentId ?? null,
           departmentHeadId: input.departmentHeadId ?? null,
+          requestedById: input.requestedById ?? null,
           procurementCategoryId: input.procurementCategoryId ?? null,
           requestedDeliveryDate: input.requestedDeliveryDate ? new Date(input.requestedDeliveryDate) : null,
           deliveryLocationId: input.deliveryLocationId ?? null,
@@ -363,6 +364,53 @@ export class PurchaseRequestService {
       status: 'procurement_in_progress',
       updatedBy: actorUserId,
     }, actorUserId);
+  }
+
+  // ── Catch-up entry (Jan–Sep back-entry of already-approved PRs) ──
+  // Marks a historical PR as already approved, bypassing the
+  // endorse → certify → approve chain, and moves it straight to
+  // "procurement_in_progress" so a PO can be raised against it. Creates no
+  // journal entry — the accounting was already recorded during catch-up. Used
+  // only while back-entering records approved outside the system.
+  async catchUpApprove(
+    organizationId: string,
+    prId: string,
+    expectedVersion: number,
+    actorUserId: string,
+  ): Promise<PurchaseRequestWithItems> {
+    const pr = await this.requirePR(organizationId, prId);
+    const allowedFrom: PurchaseRequestStatus[] = [
+      'draft',
+      'submitted',
+      'endorsed',
+      'budget_review',
+      'budget_certified',
+      'approved',
+      'procurement_review',
+      'accepted_for_procurement',
+      'returned',
+    ];
+    if (!allowedFrom.includes(pr.status)) {
+      throw new BadRequestException(
+        `A "${pr.status}" purchase request cannot be marked as approved.`,
+      );
+    }
+    const now = new Date();
+    return this.updateWithVersionCheck(
+      prId,
+      expectedVersion,
+      {
+        status: 'procurement_in_progress',
+        endorsedBy: actorUserId,
+        endorsedAt: pr.endorsedAt ?? now,
+        budgetCertifiedBy: actorUserId,
+        budgetCertifiedAt: pr.budgetCertifiedAt ?? now,
+        approvedBy: actorUserId,
+        approvedAt: pr.approvedAt ?? now,
+        updatedBy: actorUserId,
+      },
+      actorUserId,
+    );
   }
 
   // ── Return actions ──

@@ -1037,6 +1037,32 @@ export async function createDisbursement(
   return res.json();
 }
 
+export interface DvPurchaseOrderOption {
+  id: string;
+  poNumber: string;
+  poDate: string;
+  contractAmount: string;
+  supplier: { name: string } | null;
+  purchaseRequest: { prNumber: string; title: string } | null;
+}
+
+/** Purchase orders the accountant can map a DV to (e.g. during catch-up). */
+export async function listDvPurchaseOrders(): Promise<DvPurchaseOrderOption[]> {
+  const res = await authFetch('/accounting/disbursements/purchase-orders');
+  return res.json();
+}
+
+/** Attach/clear the PO reference on an existing DV (no JE/check side effects). */
+export async function mapDvPurchaseOrder(
+  id: string,
+  purchaseOrderId: string | null,
+): Promise<DisbursementDetail> {
+  const res = await authFetchMutate(`/accounting/disbursements/${id}/purchase-order`, 'PATCH', {
+    purchaseOrderId,
+  });
+  return res.json();
+}
+
 export async function postDisbursement(id: string): Promise<DisbursementDetail> {
   const res = await authFetchMutate(`/accounting/disbursements/${id}/post`, 'POST');
   return res.json();

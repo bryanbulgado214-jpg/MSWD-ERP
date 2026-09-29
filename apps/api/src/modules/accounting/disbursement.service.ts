@@ -131,6 +131,40 @@ export class DisbursementService {
     });
   }
 
+  /**
+   * Attach (or clear) the procurement Purchase Order reference on an EXISTING
+   * disbursement — WITHOUT touching its journal entry or check. Used during the
+   * Jan–Aug catch-up to tag already-recorded DVs with the PO they paid, and works
+   * on any DV status (including posted/released).
+   */
+  async mapPurchaseOrder(
+    organizationId: string,
+    actorId: string,
+    id: string,
+    purchaseOrderId: string | null,
+  ) {
+    const dv = await this.prisma.disbursementVoucher.findFirst({
+      where: { id, organizationId },
+      select: { id: true },
+    });
+    if (!dv) throw new NotFoundException('Disbursement voucher not found.');
+    if (purchaseOrderId) {
+      const po = await this.prisma.purchaseOrder.findFirst({
+        where: { id: purchaseOrderId, organizationId },
+        select: { id: true },
+      });
+      if (!po) throw new BadRequestException('The selected purchase order was not found.');
+    }
+    await runAudited(this.prisma, actorId, (tx) =>
+      tx.disbursementVoucher.update({
+        where: { id },
+        data: { purchaseOrderId: purchaseOrderId ?? null, updatedBy: actorId },
+        select: { id: true },
+      }),
+    );
+    return this.findOne(organizationId, id);
+  }
+
   /** Register of ALL disbursement vouchers in the org (procurement + non-procurement). */
   async list(
     orgId: string,
@@ -497,6 +531,15 @@ export class DisbursementService {
     // Paying a supplier's invoice: the debit must settle that invoice's Accounts
     // Payable, and the amount applied cannot exceed the outstanding balance. The
     // amount applied to the payable is the total debit (Dr Accounts Payable).
+    // A mapped Purchase Order must belong to this organization.
+    if (dto.purchaseOrderId) {
+      const po = await this.prisma.purchaseOrder.findFirst({
+        where: { id: dto.purchaseOrderId, organizationId: orgId },
+        select: { id: true },
+      });
+      if (!po) throw new BadRequestException('The selected purchase order was not found.');
+    }
+
     if (dto.supplierInvoiceId) {
       const invoice = await this.prisma.supplierInvoice.findFirst({
         where: { id: dto.supplierInvoiceId, organizationId: orgId },
@@ -635,6 +678,7 @@ export class DisbursementService {
           otherDeductions: 0,
           netAmount: net,
           bankName: dvBankName,
+          ...(dto.purchaseOrderId ? { purchaseOrderId: dto.purchaseOrderId } : {}),
           ...(dto.supplierInvoiceId ? { supplierInvoiceId: dto.supplierInvoiceId } : {}),
           ...(dto.supplierInvoiceInstallment != null
             ? { supplierInvoiceInstallment: dto.supplierInvoiceInstallment }
@@ -929,6 +973,7 @@ export class DisbursementService {
           otherDeductions: 0,
           netAmount: net,
           bankName: dvBankName,
+          purchaseOrderId: dto.purchaseOrderId ?? null,
           fundSourceId: dto.fundSourceId ?? null,
           // Re-raising the check on a posted DV sends it back to awaiting release.
           ...(reissueCheck && !isDraft ? { status: 'approved' as never } : {}),

@@ -647,6 +647,8 @@ export interface CreateDisbursementInput {
   // The paying bank account; its Cash-in-Bank ledger account is auto-credited.
   bankAccountId: string;
   fundSourceId?: string;
+  // The procurement Purchase Order this DV pays against (reference only).
+  purchaseOrderId?: string;
   // Set when this DV pays a supplier's invoice — it settles that invoice's AP.
   supplierInvoiceId?: string;
   // Save without posting to the GL (held as a draft JEV).

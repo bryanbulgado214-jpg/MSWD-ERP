@@ -33,6 +33,16 @@ export class AppItemController {
     });
   }
 
+  // Generate/refresh the APP by consolidating all approved PPMP items for a year.
+  @Post('consolidate')
+  @RequirePermissions('procurement.app.manage')
+  async consolidate(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: { fiscalYearId: string },
+  ) {
+    return this.appItemService.consolidate(user.organizationId, body.fiscalYearId, user.userId);
+  }
+
   @Get()
   @RequirePermissions('procurement.read')
   async findAll(
