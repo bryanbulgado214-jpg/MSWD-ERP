@@ -31,7 +31,6 @@ const MODULE_NAV = [
 // until we configure them; the dev/demo build still shows every module. Remove a
 // module from this set to bring it into the live navigation.
 const LIVE_HIDDEN_MODULES = new Set<string>([
-  'budgeting',
   'hr',
   'workorder',
   'complaint',
