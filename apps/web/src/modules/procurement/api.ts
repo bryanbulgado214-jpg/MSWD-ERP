@@ -295,12 +295,23 @@ export async function listProcurementFiscalYears(): Promise<ProcurementFiscalYea
 
 // ── PPMP Items ──
 
+export interface EndUser {
+  id: string;
+  name: string;
+  position: string | null;
+  departmentId: string;
+  isActive: boolean;
+  version: number;
+  department?: { id: string; code: string; name: string };
+}
+
 export interface PpmpItem {
   id: string;
   organizationId: string;
   fiscalYearId: string;
   departmentId: string;
   assignedUserId: string | null;
+  endUserId: string | null;
   code: string;
   itemDescription: string;
   procurementCategory: string;
@@ -316,6 +327,12 @@ export interface PpmpItem {
   department?: { id: string; code: string; name: string };
   fiscalYear?: { id: string; year: number; name: string };
   assignedUser?: { id: string; username: string; email: string } | null;
+  endUser?: {
+    id: string;
+    name: string;
+    position: string | null;
+    department?: { id: string; code: string; name: string };
+  } | null;
 }
 
 export interface PpmpItemWithRemaining extends PpmpItem {
@@ -329,6 +346,20 @@ export interface CreatePpmpItemInput {
   fiscalYearId: string;
   departmentId: string;
   assignedUserId?: string;
+  endUserId?: string;
+  code: string;
+  itemDescription: string;
+  procurementCategory: string;
+  unitOfMeasure: string;
+  quantity: number;
+  estimatedUnitCost: number;
+  modeOfProcurement?: string;
+  scheduleQuarter?: number;
+  cboNotes?: string;
+  status?: 'draft' | 'approved';
+}
+
+export interface PpmpBatchItemInput {
   code: string;
   itemDescription: string;
   procurementCategory: string;
@@ -357,12 +388,14 @@ export async function listPpmpItems(filters?: {
   fiscalYearId?: string;
   departmentId?: string;
   assignedUserId?: string;
+  endUserId?: string;
   status?: string;
 }): Promise<PpmpItem[]> {
   const params = new URLSearchParams();
   if (filters?.fiscalYearId) params.set('fiscalYearId', filters.fiscalYearId);
   if (filters?.departmentId) params.set('departmentId', filters.departmentId);
   if (filters?.assignedUserId) params.set('assignedUserId', filters.assignedUserId);
+  if (filters?.endUserId) params.set('endUserId', filters.endUserId);
   if (filters?.status) params.set('status', filters.status);
   const qs = params.toString();
   const res = await authFetch(`/procurement/ppmp-items${qs ? `?${qs}` : ''}`);
@@ -424,14 +457,74 @@ export async function downloadPpmpTemplate(): Promise<void> {
 
 export async function uploadPpmpExcel(
   file: File,
-  opts: { fiscalYearId: string; departmentId: string; assignedUserId?: string },
+  opts: { fiscalYearId: string; departmentId: string; assignedUserId?: string; endUserId?: string },
 ): Promise<PpmpUploadResult> {
   const fd = new FormData();
   fd.append('file', file);
   fd.append('fiscalYearId', opts.fiscalYearId);
   fd.append('departmentId', opts.departmentId);
   if (opts.assignedUserId) fd.append('assignedUserId', opts.assignedUserId);
+  if (opts.endUserId) fd.append('endUserId', opts.endUserId);
   const res = await authFetchUpload('/procurement/ppmp-items/upload', fd);
+  return res.json();
+}
+
+/** Save a whole PPMP for one end-user at once (draft or approved). */
+export async function createPpmpBatch(input: {
+  fiscalYearId: string;
+  departmentId: string;
+  endUserId?: string;
+  status?: 'draft' | 'approved';
+  items: PpmpBatchItemInput[];
+}): Promise<PpmpItem[]> {
+  const res = await authFetchMutate('/procurement/ppmp-items/batch', 'POST', input);
+  return res.json();
+}
+
+/** Approved PPMP allocations for a specific end-user (from the managed list). */
+export async function listAllocationsForEndUser(
+  endUserId: string,
+  fiscalYearId?: string,
+): Promise<PpmpItemWithRemaining[]> {
+  const params = new URLSearchParams({ endUserId });
+  if (fiscalYearId) params.set('fiscalYearId', fiscalYearId);
+  const res = await authFetch(`/procurement/ppmp-items/allocations?${params.toString()}`);
+  return res.json();
+}
+
+// ── End-user master (the budget officer maintains it; not login accounts) ──
+export async function listEndUsers(opts?: {
+  departmentId?: string;
+  includeInactive?: boolean;
+}): Promise<EndUser[]> {
+  const params = new URLSearchParams();
+  if (opts?.departmentId) params.set('departmentId', opts.departmentId);
+  if (opts?.includeInactive) params.set('includeInactive', 'true');
+  const qs = params.toString();
+  const res = await authFetch(`/procurement/end-users${qs ? `?${qs}` : ''}`);
+  return res.json();
+}
+
+export async function createEndUser(input: {
+  name: string;
+  departmentId: string;
+  position?: string;
+}): Promise<EndUser> {
+  const res = await authFetchMutate('/procurement/end-users', 'POST', input);
+  return res.json();
+}
+
+export async function updateEndUser(
+  id: string,
+  input: {
+    expectedVersion: number;
+    name?: string;
+    departmentId?: string;
+    position?: string;
+    isActive?: boolean;
+  },
+): Promise<EndUser> {
+  const res = await authFetchMutate(`/procurement/end-users/${id}`, 'PATCH', input);
   return res.json();
 }
 

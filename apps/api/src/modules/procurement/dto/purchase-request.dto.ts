@@ -70,6 +70,12 @@ export class CreatePurchaseRequestDto {
   @IsUUID()
   requestedById?: string;
 
+  // The requesting end-user from the managed PPMP end-user list (not a login
+  // account) — drives which PPMP allocations the PR draws from.
+  @IsOptional()
+  @IsUUID()
+  endUserId?: string;
+
   @IsOptional()
   @IsUUID()
   procurementCategoryId?: string;
@@ -146,6 +152,10 @@ export class UpdatePurchaseRequestDto {
   @IsOptional()
   @IsUUID()
   requestedById?: string;
+
+  @IsOptional()
+  @IsUUID()
+  endUserId?: string;
 
   @IsOptional()
   @IsUUID()

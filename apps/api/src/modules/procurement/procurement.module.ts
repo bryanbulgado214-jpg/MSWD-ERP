@@ -10,6 +10,8 @@ import { DelegationController } from './delegation.controller';
 import { DelegationService } from './delegation.service';
 import { DvController } from './dv.controller';
 import { DvService } from './dv.service';
+import { EndUserController } from './end-user.controller';
+import { EndUserService } from './end-user.service';
 import { InspectionController } from './inspection.controller';
 import { InspectionService } from './inspection.service';
 import { AppItemService } from './app-item.service';
@@ -42,16 +44,17 @@ import { SupplierService } from './supplier.service';
     DelegationController,
     InspectionController,
     DvController,
+    EndUserController,
   ],
   providers: [
     PurchaseRequestService, PpmpService, AppItemService,
     SupplierService, PurchaseOrderService, CafService, OrsService,
-    DelegationService, InspectionService, DvService,
+    DelegationService, InspectionService, DvService, EndUserService,
   ],
   exports: [
     PurchaseRequestService, PpmpService, AppItemService,
     SupplierService, PurchaseOrderService, CafService, OrsService,
-    DelegationService, InspectionService, DvService,
+    DelegationService, InspectionService, DvService, EndUserService,
   ],
 })
 export class ProcurementModule {}

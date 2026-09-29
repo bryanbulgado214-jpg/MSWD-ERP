@@ -40,6 +40,7 @@ export class PpmpController {
       fiscalYearId: string;
       departmentId: string;
       assignedUserId?: string;
+      endUserId?: string;
       code: string;
       itemDescription: string;
       procurementCategory: 'goods' | 'services' | 'infrastructure' | 'consulting_services';
@@ -49,15 +50,64 @@ export class PpmpController {
       modeOfProcurement?: string;
       scheduleQuarter?: number;
       cboNotes?: string;
+      status?: 'draft' | 'approved';
     },
   ) {
     const item = await this.ppmpService.create(user.organizationId, {
       ...body,
       createdBy: user.userId,
     });
-    // PPMPs constitute the APP — keep it generated in step with each item.
-    await this.appItemService.consolidate(user.organizationId, body.fiscalYearId, user.userId);
+    // Approved PPMPs constitute the APP — reconsolidate; drafts don't affect it.
+    if ((body.status ?? 'approved') === 'approved') {
+      await this.appItemService.consolidate(user.organizationId, body.fiscalYearId, user.userId);
+    }
     return item;
+  }
+
+  // Save a whole PPMP for one end-user at once (one transaction, one APP pass).
+  @Post('batch')
+  @RequirePermissions('procurement.ppmp.manage')
+  async createBatch(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: {
+      fiscalYearId: string;
+      departmentId: string;
+      endUserId?: string;
+      assignedUserId?: string;
+      status?: 'draft' | 'approved';
+      items: Array<{
+        code: string;
+        itemDescription: string;
+        procurementCategory: 'goods' | 'services' | 'infrastructure' | 'consulting_services';
+        unitOfMeasure: string;
+        quantity: number | string;
+        estimatedUnitCost: number | string;
+        modeOfProcurement?: string;
+        scheduleQuarter?: number;
+        cboNotes?: string;
+      }>;
+    },
+  ) {
+    if (!body.items?.length) throw new BadRequestException('At least one item is required.');
+    if (!body.fiscalYearId || !body.departmentId) {
+      throw new BadRequestException('A fiscal year and a section are required.');
+    }
+    const created = await this.ppmpService.createBatch(
+      user.organizationId,
+      {
+        fiscalYearId: body.fiscalYearId,
+        departmentId: body.departmentId,
+        ...(body.endUserId ? { endUserId: body.endUserId } : {}),
+        ...(body.assignedUserId ? { assignedUserId: body.assignedUserId } : {}),
+        ...(body.status ? { status: body.status } : {}),
+        createdBy: user.userId,
+      },
+      body.items,
+    );
+    if ((body.status ?? 'approved') === 'approved') {
+      await this.appItemService.consolidate(user.organizationId, body.fiscalYearId, user.userId);
+    }
+    return created;
   }
 
   @Patch(':id')
@@ -93,16 +143,22 @@ export class PpmpController {
   async upload(
     @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() file: Express.Multer.File,
-    @Body() body: { fiscalYearId: string; departmentId: string; assignedUserId?: string },
+    @Body() body: {
+      fiscalYearId: string;
+      departmentId: string;
+      assignedUserId?: string;
+      endUserId?: string;
+    },
   ) {
     if (!file) throw new BadRequestException('No file uploaded.');
     if (!body.fiscalYearId || !body.departmentId) {
-      throw new BadRequestException('A fiscal year and an end-user office are required.');
+      throw new BadRequestException('A fiscal year and a section are required.');
     }
     const result = await this.ppmpService.uploadExcel(user.organizationId, file.buffer, {
       fiscalYearId: body.fiscalYearId,
       departmentId: body.departmentId,
       ...(body.assignedUserId ? { defaultAssignedUserId: body.assignedUserId } : {}),
+      ...(body.endUserId ? { defaultEndUserId: body.endUserId } : {}),
       actorUserId: user.userId,
     });
     // Uploaded PPMPs are approved budget and constitute the APP — generate it now.
@@ -127,11 +183,18 @@ export class PpmpController {
   @RequirePermissions('procurement.read')
   async allocationsForUser(
     @CurrentUser() user: AuthenticatedUser,
+    @Query('endUserId') endUserId?: string,
     @Query('assignedUserId') assignedUserId?: string,
     @Query('fiscalYearId') fiscalYearId?: string,
   ) {
-    if (!assignedUserId) return [];
-    return this.ppmpService.findMyItems(user.organizationId, assignedUserId, fiscalYearId);
+    if (endUserId) {
+      return this.ppmpService.allocationsForEndUser(user.organizationId, endUserId, fiscalYearId);
+    }
+    // Legacy: allocations keyed on a login account (pre end-user master).
+    if (assignedUserId) {
+      return this.ppmpService.findMyItems(user.organizationId, assignedUserId, fiscalYearId);
+    }
+    return [];
   }
 
   @Get()
@@ -141,12 +204,14 @@ export class PpmpController {
     @Query('fiscalYearId') fiscalYearId?: string,
     @Query('departmentId') departmentId?: string,
     @Query('assignedUserId') assignedUserId?: string,
+    @Query('endUserId') endUserId?: string,
     @Query('status') status?: string,
   ) {
     return this.ppmpService.findAll(user.organizationId, {
       ...(fiscalYearId ? { fiscalYearId } : {}),
       ...(departmentId ? { departmentId } : {}),
       ...(assignedUserId ? { assignedUserId } : {}),
+      ...(endUserId ? { endUserId } : {}),
       ...(status ? { status } : {}),
     });
   }

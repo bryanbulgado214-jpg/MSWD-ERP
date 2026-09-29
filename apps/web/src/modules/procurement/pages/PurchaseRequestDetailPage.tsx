@@ -334,18 +334,20 @@ export function PurchaseRequestDetailPage() {
             Approval History
           </h3>
           <div className="pr-audit-trail__entries">
-            {pr.requester && (
+            {(pr.endUser || pr.requester) && (
               <div className="pr-audit-entry">
                 <span className="pr-audit-entry__role">Requested by (end-user)</span>
                 <span className="pr-audit-entry__user">
-                  {pr.requester.fullName || pr.requester.username}
+                  {pr.endUser
+                    ? `${pr.endUser.name}${pr.endUser.department ? ` — ${pr.endUser.department.name}` : ''}`
+                    : pr.requester?.fullName || pr.requester?.username}
                 </span>
               </div>
             )}
             {pr.creator && (
               <div className="pr-audit-entry">
                 <span className="pr-audit-entry__role">
-                  {pr.requester ? 'Prepared by' : 'Requested by'}
+                  {pr.endUser || pr.requester ? 'Prepared by' : 'Requested by'}
                 </span>
                 <span className="pr-audit-entry__user">{pr.creator.username}</span>
                 <span className="pr-audit-entry__date">

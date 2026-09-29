@@ -134,6 +134,7 @@ model Organization {
   purchaseRequests     PurchaseRequest[]
   procurementCategories ProcurementCategory[]
   ppmpItems            PpmpItem[]
+  ppmpEndUsers         PpmpEndUser[]
   appItems             AppItem[]
   delegationAuthorities DelegationAuthority[]
   suppliers             Supplier[]
@@ -277,6 +278,7 @@ model Department {
 
   purchaseRequests      PurchaseRequest[]
   ppmpItems             PpmpItem[]
+  ppmpEndUsers          PpmpEndUser[]
   delegationAuthorities DelegationAuthority[]
   obligationRequests    ObligationRequest[]
   requisitionIssueSlips RequisitionIssueSlip[]
@@ -1400,6 +1402,7 @@ model PurchaseRequest {
   departmentId           String?               @map("department_id") @db.Uuid
   departmentHeadId       String?               @map("department_head_id") @db.Uuid
   requestedById          String?               @map("requested_by_id") @db.Uuid
+  endUserId              String?               @map("end_user_id") @db.Uuid
   purpose                String?
   procurementCategoryId  String?               @map("procurement_category_id") @db.Uuid
   requestedDeliveryDate  DateTime?             @map("requested_delivery_date") @db.Date
@@ -1429,6 +1432,7 @@ model PurchaseRequest {
   department           Department?           @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   departmentHead       User?                 @relation("PurchaseRequestsDeptHead", fields: [departmentHeadId], references: [id], onDelete: SetNull)
   requester            User?                 @relation("PurchaseRequestsRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  endUser              PpmpEndUser?          @relation("PurchaseRequestsEndUser", fields: [endUserId], references: [id], onDelete: SetNull)
   procurementCategory  ProcurementCategory?  @relation(fields: [procurementCategoryId], references: [id], onDelete: SetNull)
   deliveryLocation     Location?             @relation(fields: [deliveryLocationId], references: [id], onDelete: SetNull)
   ppmpItem             PpmpItem?             @relation(fields: [ppmpItemId], references: [id], onDelete: Restrict)
@@ -1457,6 +1461,7 @@ model PurchaseRequest {
   @@index([fiscalYearId])
   @@index([departmentId])
   @@index([requestedById])
+  @@index([endUserId])
   @@index([ppmpItemId])
   @@index([appItemId])
   @@map("purchase_requests")
@@ -1521,6 +1526,7 @@ model PpmpItem {
   estimatedTotalCost  Decimal                 @map("estimated_total_cost") @db.Decimal(18, 2)
   status              PpmpStatus              @default(draft)
   assignedUserId      String?                 @map("assigned_user_id") @db.Uuid
+  endUserId           String?                 @map("end_user_id") @db.Uuid
   cboNotes            String?                 @map("cbo_notes") @db.VarChar(500)
   modeOfProcurement   String?                 @map("mode_of_procurement") @db.VarChar(100)
   scheduleQuarter     Int?                    @map("schedule_quarter") @db.SmallInt
@@ -1536,6 +1542,7 @@ model PpmpItem {
   fiscalYear       FiscalYear        @relation(fields: [fiscalYearId], references: [id], onDelete: Restrict)
   department       Department        @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   assignedUser     User?             @relation("PpmpItemsAssignedTo", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  endUser          PpmpEndUser?      @relation(fields: [endUserId], references: [id], onDelete: SetNull)
   approverUser     User?             @relation("PpmpItemsApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
   creator          User?             @relation("PpmpItemsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
   updater          User?             @relation("PpmpItemsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
@@ -1549,8 +1556,38 @@ model PpmpItem {
   @@index([departmentId])
   @@index([assignedUserId])
   @@index([assignedUserId, fiscalYearId])
+  @@index([endUserId])
   @@index([status])
   @@map("ppmp_items")
+}
+
+/// A requesting end-user maintained by the budget officer (NOT a login account),
+/// grouped by section/department — like the accountant's payee master. PPMP
+/// items and purchase requests reference it so procurement is planned per
+/// end-user without every requester needing a system account.
+model PpmpEndUser {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  departmentId   String   @map("department_id") @db.Uuid
+  name           String   @db.VarChar(255)
+  position       String?  @db.VarChar(150)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  version        Int      @default(1)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  department   Department   @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  ppmpItems        PpmpItem[]
+  purchaseRequests PurchaseRequest[] @relation("PurchaseRequestsEndUser")
+
+  @@unique([organizationId, departmentId, name])
+  @@index([organizationId])
+  @@index([departmentId])
+  @@map("ppmp_end_users")
 }
 
 model AppItem {

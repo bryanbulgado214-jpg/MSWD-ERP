@@ -59,6 +59,7 @@ export interface CreatePpmpItemInput {
   fiscalYearId: string;
   departmentId: string;
   assignedUserId?: string;
+  endUserId?: string;
   code: string;
   itemDescription: string;
   procurementCategory: 'goods' | 'services' | 'infrastructure' | 'consulting_services';
@@ -68,11 +69,15 @@ export interface CreatePpmpItemInput {
   modeOfProcurement?: string;
   scheduleQuarter?: number;
   cboNotes?: string;
+  // Draft = still editable; approved = locked and flows into the APP. The budget
+  // officer chooses "Save as Draft" vs "Finalize" when saving.
+  status?: 'draft' | 'approved';
   createdBy?: string;
 }
 
 export interface UpdatePpmpItemInput {
   assignedUserId?: string | null;
+  endUserId?: string | null;
   itemDescription?: string;
   procurementCategory?: 'goods' | 'services' | 'infrastructure' | 'consulting_services';
   unitOfMeasure?: string;
@@ -84,6 +89,19 @@ export interface UpdatePpmpItemInput {
   updatedBy?: string;
 }
 
+const PPMP_ITEM_INCLUDE = {
+  department: { select: { id: true, code: true, name: true } },
+  assignedUser: { select: { id: true, username: true, email: true } },
+  endUser: {
+    select: {
+      id: true,
+      name: true,
+      position: true,
+      department: { select: { id: true, code: true, name: true } },
+    },
+  },
+} satisfies Prisma.PpmpItemInclude;
+
 @Injectable()
 export class PpmpService {
   constructor(private readonly prisma: PrismaService) {}
@@ -93,6 +111,8 @@ export class PpmpService {
     const unitCost = new Prisma.Decimal(input.estimatedUnitCost);
     const totalCost = qty.mul(unitCost);
 
+    const approved = (input.status ?? 'approved') === 'approved';
+
     return runAudited(this.prisma, input.createdBy, (tx) =>
       tx.ppmpItem.create({
         data: {
@@ -100,6 +120,7 @@ export class PpmpService {
           fiscalYearId: input.fiscalYearId,
           departmentId: input.departmentId,
           ...(input.assignedUserId ? { assignedUserId: input.assignedUserId } : {}),
+          ...(input.endUserId ? { endUserId: input.endUserId } : {}),
           code: input.code,
           itemDescription: input.itemDescription,
           procurementCategory: input.procurementCategory,
@@ -110,19 +131,83 @@ export class PpmpService {
           ...(input.modeOfProcurement ? { modeOfProcurement: input.modeOfProcurement } : {}),
           ...(input.scheduleQuarter != null ? { scheduleQuarter: input.scheduleQuarter } : {}),
           ...(input.cboNotes ? { cboNotes: input.cboNotes } : {}),
-          // A water district's PPMP is its approved budget (funds are on hand
-          // from internally-generated income), so items are approved on entry.
-          status: 'approved',
-          approvedBy: input.createdBy ?? null,
-          approvedAt: new Date(),
+          // A water district's PPMP is its approved budget, so items default to
+          // approved on entry — but the budget officer can Save as Draft to keep
+          // editing before finalizing (drafts are excluded from the APP).
+          status: approved ? 'approved' : 'draft',
+          ...(approved ? { approvedBy: input.createdBy ?? null, approvedAt: new Date() } : {}),
           createdBy: input.createdBy ?? null,
         },
-        include: {
-          department: { select: { id: true, code: true, name: true } },
-          assignedUser: { select: { id: true, username: true, email: true } },
-        },
+        include: PPMP_ITEM_INCLUDE,
       }),
     );
+  }
+
+  /**
+   * Save a whole PPMP for one end-user at once: all items in a single
+   * transaction, then the caller reconsolidates the APP once. Approved items
+   * flow into the APP; drafts stay editable.
+   */
+  async createBatch(
+    organizationId: string,
+    common: {
+      fiscalYearId: string;
+      departmentId: string;
+      endUserId?: string;
+      assignedUserId?: string;
+      status?: 'draft' | 'approved';
+      createdBy?: string;
+    },
+    items: Array<
+      Pick<
+        CreatePpmpItemInput,
+        | 'code'
+        | 'itemDescription'
+        | 'procurementCategory'
+        | 'unitOfMeasure'
+        | 'quantity'
+        | 'estimatedUnitCost'
+        | 'modeOfProcurement'
+        | 'scheduleQuarter'
+        | 'cboNotes'
+      >
+    >,
+  ) {
+    const approved = (common.status ?? 'approved') === 'approved';
+    const now = new Date();
+
+    return runAudited(this.prisma, common.createdBy, async (tx) => {
+      const created = [];
+      for (const it of items) {
+        const qty = new Prisma.Decimal(it.quantity);
+        const unitCost = new Prisma.Decimal(it.estimatedUnitCost);
+        const row = await tx.ppmpItem.create({
+          data: {
+            organizationId,
+            fiscalYearId: common.fiscalYearId,
+            departmentId: common.departmentId,
+            ...(common.assignedUserId ? { assignedUserId: common.assignedUserId } : {}),
+            ...(common.endUserId ? { endUserId: common.endUserId } : {}),
+            code: it.code,
+            itemDescription: it.itemDescription,
+            procurementCategory: it.procurementCategory,
+            unitOfMeasure: it.unitOfMeasure,
+            quantity: qty,
+            estimatedUnitCost: unitCost,
+            estimatedTotalCost: qty.mul(unitCost),
+            ...(it.modeOfProcurement ? { modeOfProcurement: it.modeOfProcurement } : {}),
+            ...(it.scheduleQuarter != null ? { scheduleQuarter: it.scheduleQuarter } : {}),
+            ...(it.cboNotes ? { cboNotes: it.cboNotes } : {}),
+            status: approved ? 'approved' : 'draft',
+            ...(approved ? { approvedBy: common.createdBy ?? null, approvedAt: now } : {}),
+            createdBy: common.createdBy ?? null,
+          },
+          include: PPMP_ITEM_INCLUDE,
+        });
+        created.push(row);
+      }
+      return created;
+    });
   }
 
   async update(organizationId: string, id: string, input: UpdatePpmpItemInput) {
@@ -136,6 +221,7 @@ export class PpmpService {
 
     if (input.updatedBy) updates.updatedBy = input.updatedBy;
     if (input.assignedUserId !== undefined) updates.assignedUserId = input.assignedUserId;
+    if (input.endUserId !== undefined) updates.endUserId = input.endUserId;
     if (input.itemDescription !== undefined) updates.itemDescription = input.itemDescription;
     if (input.procurementCategory !== undefined) updates.procurementCategory = input.procurementCategory;
     if (input.unitOfMeasure !== undefined) updates.unitOfMeasure = input.unitOfMeasure;
@@ -157,10 +243,7 @@ export class PpmpService {
       tx.ppmpItem.update({
         where: { id },
         data: updates,
-        include: {
-          department: { select: { id: true, code: true, name: true } },
-          assignedUser: { select: { id: true, username: true, email: true } },
-        },
+        include: PPMP_ITEM_INCLUDE,
       }),
     );
   }
@@ -169,6 +252,7 @@ export class PpmpService {
     fiscalYearId?: string;
     departmentId?: string;
     assignedUserId?: string;
+    endUserId?: string;
     status?: string;
   }) {
     return this.prisma.ppmpItem.findMany({
@@ -177,12 +261,12 @@ export class PpmpService {
         ...(filters?.fiscalYearId ? { fiscalYearId: filters.fiscalYearId } : {}),
         ...(filters?.departmentId ? { departmentId: filters.departmentId } : {}),
         ...(filters?.assignedUserId ? { assignedUserId: filters.assignedUserId } : {}),
+        ...(filters?.endUserId ? { endUserId: filters.endUserId } : {}),
         ...(filters?.status ? { status: filters.status as 'draft' | 'approved' | 'cancelled' } : {}),
       },
       include: {
-        department: { select: { id: true, code: true, name: true } },
+        ...PPMP_ITEM_INCLUDE,
         fiscalYear: { select: { id: true, year: true, name: true } },
-        assignedUser: { select: { id: true, username: true, email: true } },
       },
       orderBy: { code: 'asc' },
     });
@@ -236,6 +320,60 @@ export class PpmpService {
     );
 
     return itemsWithRemaining;
+  }
+
+  /**
+   * Approved PPMP items assigned to a specific end-user (from the managed
+   * master list), with amounts/quantities already committed to purchase
+   * requests netted out. This is what the PR form reads to show a requesting
+   * end-user's remaining allocations.
+   */
+  async allocationsForEndUser(organizationId: string, endUserId: string, fiscalYearId?: string) {
+    const items = await this.prisma.ppmpItem.findMany({
+      where: {
+        organizationId,
+        endUserId,
+        status: 'approved',
+        ...(fiscalYearId ? { fiscalYearId } : {}),
+      },
+      include: {
+        department: { select: { id: true, code: true, name: true } },
+        fiscalYear: { select: { id: true, year: true, name: true } },
+      },
+      orderBy: { code: 'asc' },
+    });
+
+    return Promise.all(
+      items.map(async (item) => {
+        const prTotals = await this.prisma.purchaseRequest.aggregate({
+          where: {
+            ppmpItemId: item.id,
+            organizationId,
+            status: { notIn: ['cancelled', 'rejected', 'voided'] },
+          },
+          _sum: { totalAmount: true },
+        });
+        const requested = prTotals._sum.totalAmount ?? new Prisma.Decimal(0);
+        const prQty = await this.prisma.purchaseRequestItem.aggregate({
+          where: {
+            purchaseRequest: {
+              ppmpItemId: item.id,
+              organizationId,
+              status: { notIn: ['cancelled', 'rejected', 'voided'] },
+            },
+          },
+          _sum: { quantity: true },
+        });
+        const usedQty = prQty._sum.quantity ?? new Prisma.Decimal(0);
+        return {
+          ...item,
+          requestedAmount: requested,
+          remainingAmount: item.estimatedTotalCost.sub(requested),
+          usedQuantity: usedQty,
+          remainingQuantity: item.quantity.sub(usedQty),
+        };
+      }),
+    );
   }
 
   async findOne(organizationId: string, id: string) {
@@ -302,6 +440,7 @@ export class PpmpService {
       fiscalYearId: string;
       departmentId: string;
       defaultAssignedUserId?: string;
+      defaultEndUserId?: string;
       actorUserId: string;
     },
   ): Promise<PpmpUploadResult> {
@@ -450,6 +589,7 @@ export class PpmpService {
         fiscalYearId: opts.fiscalYearId,
         departmentId: opts.departmentId,
         ...(assignedUserId ? { assignedUserId } : {}),
+        ...(opts.defaultEndUserId ? { endUserId: opts.defaultEndUserId } : {}),
         code,
         itemDescription: desc,
         procurementCategory: category,

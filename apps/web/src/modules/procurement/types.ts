@@ -71,6 +71,13 @@ export interface PurchaseRequest {
   creator?: UserRef;
   // The end-user who initiated the request (the purchase officer is the creator).
   requester?: { id: string; username: string; fullName?: string | null };
+  // The requesting end-user from the managed list (name/section, not a login).
+  endUser?: {
+    id: string;
+    name: string;
+    position: string | null;
+    department?: { id: string; code: string; name: string };
+  } | null;
   endorser?: UserRef;
   budgetCertifier?: UserRef;
   approver?: UserRef;
@@ -101,6 +108,7 @@ export interface CreatePurchaseRequestInput {
   purpose?: string;
   departmentId?: string;
   requestedById?: string;
+  endUserId?: string;
   requestedDeliveryDate?: string;
   ppmpItemId?: string;
   appItemId?: string;

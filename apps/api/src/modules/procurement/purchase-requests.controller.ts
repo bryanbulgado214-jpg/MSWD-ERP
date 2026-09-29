@@ -161,6 +161,14 @@ export class PurchaseRequestsController {
         approver: { select: { id: true, username: true } },
         creator: { select: { id: true, username: true } },
         requester: { select: { id: true, username: true, fullName: true } },
+        endUser: {
+          select: {
+            id: true,
+            name: true,
+            position: true,
+            department: { select: { id: true, code: true, name: true } },
+          },
+        },
         ppmpItem: { select: { id: true, code: true, itemDescription: true } },
         appItem: { select: { id: true, appNumber: true, procurementProjectTitle: true } },
         revisions: { orderBy: { revisionNumber: 'desc' } },

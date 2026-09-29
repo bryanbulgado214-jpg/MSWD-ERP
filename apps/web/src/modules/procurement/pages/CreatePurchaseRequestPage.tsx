@@ -4,19 +4,21 @@ import { useNavigate } from 'react-router-dom';
 import { formatPeso } from '../../budgeting/format-peso';
 import {
   createPurchaseRequest,
-  listAllocationsForUser,
+  listAllocationsForEndUser,
   listAppItems,
+  listEndUsers,
   listLookupDepartments,
-  listLookupUsers,
   listProcurementFiscalYears,
   ProcurementApiError,
   type AppItem,
+  type EndUser,
   type LookupDepartment,
-  type LookupUser,
   type PpmpItemWithRemaining,
   type ProcurementFiscalYear,
 } from '../api';
 import type { CreatePurchaseRequestItemInput } from '../types';
+
+import { EndUserPicker } from './EndUserPicker';
 import './procurement.css';
 
 function emptyItem(): CreatePurchaseRequestItemInput {
@@ -34,7 +36,7 @@ export function CreatePurchaseRequestPage() {
   const [appItems, setAppItems] = useState<AppItem[]>([]);
   // The purchase officer prepares every PR; the end-user who initiated the
   // request is selected here so their PPMP allocations can be drawn from.
-  const [users, setUsers] = useState<LookupUser[]>([]);
+  const [endUsers, setEndUsers] = useState<EndUser[]>([]);
   const [endUserId, setEndUserId] = useState('');
 
   const [title, setTitle] = useState('');
@@ -48,13 +50,13 @@ export function CreatePurchaseRequestPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([listProcurementFiscalYears(), listLookupDepartments(), listLookupUsers()])
-      .then(([fyData, deptData, userData]) => {
+    Promise.all([listProcurementFiscalYears(), listLookupDepartments(), listEndUsers()])
+      .then(([fyData, deptData, endUserData]) => {
         setFiscalYears(fyData);
         const firstFy = fyData[0];
         if (firstFy) setSelectedFiscalYear(firstFy.id);
         setDepartments(deptData);
-        setUsers(userData);
+        setEndUsers(endUserData);
       })
       .catch(() => setError('Failed to load form data.'));
   }, []);
@@ -68,7 +70,7 @@ export function CreatePurchaseRequestPage() {
     setLoadingPpmp(!!endUserId);
     Promise.all([
       endUserId
-        ? listAllocationsForUser(endUserId, selectedFiscalYear)
+        ? listAllocationsForEndUser(endUserId, selectedFiscalYear)
         : Promise.resolve([] as PpmpItemWithRemaining[]),
       listAppItems({ fiscalYearId: selectedFiscalYear, status: 'approved' }),
     ])
@@ -145,7 +147,7 @@ export function CreatePurchaseRequestPage() {
         ...(description.trim() ? { description: description.trim() } : {}),
         ...(purpose.trim() ? { purpose: purpose.trim() } : {}),
         ...(departmentId ? { departmentId } : {}),
-        ...(endUserId ? { requestedById: endUserId } : {}),
+        ...(endUserId ? { endUserId } : {}),
         ...(requestedDeliveryDate ? { requestedDeliveryDate } : {}),
         ...(selectedPpmpItemId ? { ppmpItemId: selectedPpmpItemId } : {}),
         ...(appItemId ? { appItemId } : {}),
@@ -211,21 +213,21 @@ export function CreatePurchaseRequestPage() {
         >
           Requesting End-User
         </label>
-        <select
-          value={endUserId}
-          onChange={(e) => setEndUserId(e.target.value)}
-          style={{ maxWidth: 360, width: '100%' }}
-        >
-          <option value="">— Select the end-user who initiated this request —</option>
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.username}
-            </option>
-          ))}
-        </select>
+        <div style={{ maxWidth: 480 }}>
+          <EndUserPicker
+            endUsers={endUsers}
+            value={endUserId}
+            departments={departments}
+            onChange={setEndUserId}
+            onCreated={(created) => {
+              setEndUsers((prev) => [...prev, created]);
+              setEndUserId(created.id);
+            }}
+          />
+        </div>
         <p style={{ fontSize: 12, color: '#475467', margin: '6px 0 0' }}>
-          Pick the end-user to load their PPMP allocations. You (the purchase officer) prepare the
-          PR; it then routes to the signatories for review and approval.
+          Pick the end-user to load their PPMP allocations, or add a new one. You (the purchase
+          officer) prepare the PR; it then routes to the signatories for review and approval.
         </p>
       </div>
 
@@ -241,7 +243,7 @@ export function CreatePurchaseRequestPage() {
             }}
           >
             <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--mswd-navy)' }}>
-              {users.find((u) => u.id === endUserId)?.username ?? 'End-user'}&apos;s PPMP Allocations
+              {endUsers.find((u) => u.id === endUserId)?.name ?? 'End-user'}&apos;s PPMP Allocations
             </h3>
             {fiscalYears.length > 1 && (
               <select

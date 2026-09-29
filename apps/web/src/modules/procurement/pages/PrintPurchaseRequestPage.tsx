@@ -201,6 +201,7 @@ export function PrintPurchaseRequestPage() {
                 <span className="pr-print-sig-label">Printed Name :</span>
                 <span className="pr-print-sig-name">
                   {(
+                    pr.endUser?.name ||
                     pr.requester?.fullName ||
                     pr.requester?.username ||
                     pr.creator?.username ||

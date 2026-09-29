@@ -7,6 +7,7 @@ export interface CreatePurchaseRequestInput {
   departmentId?: string;
   departmentHeadId?: string;
   requestedById?: string;
+  endUserId?: string;
   procurementCategoryId?: string;
   requestedDeliveryDate?: string;
   deliveryLocationId?: string;

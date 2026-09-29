@@ -75,6 +75,7 @@ export class PurchaseRequestService {
           departmentId: input.departmentId ?? null,
           departmentHeadId: input.departmentHeadId ?? null,
           requestedById: input.requestedById ?? null,
+          endUserId: input.endUserId ?? null,
           procurementCategoryId: input.procurementCategoryId ?? null,
           requestedDeliveryDate: input.requestedDeliveryDate ? new Date(input.requestedDeliveryDate) : null,
           deliveryLocationId: input.deliveryLocationId ?? null,
