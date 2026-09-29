@@ -6,6 +6,7 @@ import { useAuth } from '../../../app/auth';
 // just the parts of procurement it works with (e.g. the procurement officer sees
 // only Purchase Requests + Purchase Orders).
 const LINKS: { to: string; label: string; exact?: boolean; perms: string[] }[] = [
+  { to: '/procurement/dashboard', label: 'Dashboard', perms: ['procurement.read'] },
   { to: '/procurement', label: 'Purchase Requests', exact: true, perms: ['procurement.read'] },
   {
     to: '/procurement/purchase-orders',

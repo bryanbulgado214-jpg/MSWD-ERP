@@ -238,6 +238,45 @@ export class DashboardController {
       }
     }
 
+    // ── Procurement officer: draft PRs awaiting catch-up approval ──
+    if (perms.has('procurement.pr.mark_lifecycle')) {
+      const prs = await this.prisma.purchaseRequest.findMany({
+        where: { organizationId: orgId, status: 'draft' },
+        include: prInclude,
+        orderBy: prOrder,
+        take: 20,
+      });
+      for (const pr of prs) items.push(prItem(pr, 'pr_catch_up_approve', 'Review & Approve'));
+    }
+
+    // ── Procurement officer: approved PRs still awaiting a Purchase Order ──
+    if (perms.has('procurement.po.create')) {
+      const prs = await this.prisma.purchaseRequest.findMany({
+        where: {
+          organizationId: orgId,
+          status: { in: ['procurement_in_progress', 'awarded'] },
+          purchaseOrders: { none: { status: { not: 'cancelled' } } },
+        },
+        include: prInclude,
+        orderBy: prOrder,
+        take: 20,
+      });
+      for (const pr of prs) {
+        items.push({
+          id: pr.id,
+          module: 'procurement',
+          type: 'pr_needs_po',
+          label: pr.prNumber,
+          description: `${pr.title} — approved, awaiting a Purchase Order`,
+          amount: pr.totalAmount.toString(),
+          createdAt: pr.createdAt.toISOString(),
+          actionLabel: 'Create PO',
+          link: '/procurement/purchase-orders/new',
+          ...(pr.creator ? { createdBy: pr.creator.username } : {}),
+        });
+      }
+    }
+
     const returnedPrs = await this.prisma.purchaseRequest.findMany({
       where: { organizationId: orgId, status: 'returned', createdBy: user.userId },
       orderBy: { updatedAt: 'desc' },

@@ -20,6 +20,7 @@ import { PurchaseOrderDetailPage } from './pages/PurchaseOrderDetailPage';
 import { PurchaseOrderListPage } from './pages/PurchaseOrderListPage';
 import { AppConsolidationPage } from './pages/AppConsolidationPage';
 import { PpmpDataEntryPage } from './pages/PpmpDataEntryPage';
+import { ProcurementDashboardPage } from './pages/ProcurementDashboardPage';
 import { PrintCafPage } from './pages/PrintCafPage';
 import { PrintOrsPage } from './pages/PrintOrsPage';
 import { PrintPurchaseOrderPage } from './pages/PrintPurchaseOrderPage';
@@ -32,6 +33,10 @@ export const procurementRoutes: RouteObject[] = [
   {
     path: '/procurement',
     element: <PurchaseRequestListPage />,
+  },
+  {
+    path: '/procurement/dashboard',
+    element: <ProcurementDashboardPage />,
   },
   {
     path: '/procurement/purchase-requests/new',

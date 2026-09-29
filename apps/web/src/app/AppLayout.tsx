@@ -3,7 +3,12 @@ import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-d
 
 import { useAuth } from './auth';
 import { ChangePasswordModal } from './ChangePasswordModal';
-import { hasModuleAccess, isAccountantHome, isCashierHome } from './module-access';
+import {
+  hasModuleAccess,
+  isAccountantHome,
+  isCashierHome,
+  isProcurementHome,
+} from './module-access';
 import { NotificationBell } from './NotificationBell';
 import './app-layout.css';
 
@@ -83,9 +88,10 @@ export function AppLayout() {
       !(cashierHome && mod.module === 'accounting') &&
       !(import.meta.env.PROD && LIVE_HIDDEN_MODULES.has(mod.module)),
   ).map((mod) => (cashierHome && mod.module === 'billing' ? { ...mod, label: 'Cashiering' } : mod));
-  // The accountant's and cashier's homes are their own dashboards — hide the
-  // generic Home tab for them.
-  const showHome = !isAccountantHome(permissions) && !cashierHome;
+  // The accountant's, cashier's, and procurement officer's homes are their own
+  // dashboards — hide the generic Home tab for them.
+  const showHome =
+    !isAccountantHome(permissions) && !cashierHome && !isProcurementHome(permissions);
 
   function handleLogout() {
     logout();

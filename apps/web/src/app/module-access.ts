@@ -157,3 +157,17 @@ export function isCashierHome(permissions: Set<string>): boolean {
     !hasModuleAccess(permissions, 'admin')
   );
 }
+
+/**
+ * A procurement officer (holds a procurement permission) who is not an admin,
+ * accountant, or cashier. Their home is the Procurement Dashboard, so the
+ * generic Home tab is hidden and "/" redirects to /procurement/dashboard.
+ */
+export function isProcurementHome(permissions: Set<string>): boolean {
+  return (
+    hasModuleAccess(permissions, 'procurement') &&
+    !isAccountantHome(permissions) &&
+    !isCashierHome(permissions) &&
+    !hasModuleAccess(permissions, 'admin')
+  );
+}
