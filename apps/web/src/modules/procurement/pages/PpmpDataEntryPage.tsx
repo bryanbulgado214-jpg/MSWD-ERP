@@ -38,6 +38,7 @@ const MODE_OPTIONS = [
   'Small Value Procurement',
   'Competitive Bidding',
   'Direct Contracting',
+  'Direct Acquisition',
   'Negotiated Procurement',
   'Agency-to-Agency',
 ];
