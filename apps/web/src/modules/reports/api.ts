@@ -111,3 +111,55 @@ export async function getFiscalYears(): Promise<FiscalYearOption[]> {
   const res = await authFetch('/reports/fiscal-years');
   return res.json();
 }
+
+export interface PpmpUtilizationRow {
+  code: string;
+  description: string;
+  section: string;
+  endUser: string;
+  unitOfMeasure: string;
+  approvedQty: string;
+  unitCost: string;
+  approvedBudget: string;
+  purchasedQty: string;
+  purchasedAmount: string;
+  poReferences: string;
+  remainingQty: string;
+  remainingBudget: string;
+}
+
+export interface AppUtilizationRow {
+  appNumber: string;
+  projectTitle: string;
+  section: string;
+  endUser: string;
+  unitOfMeasure: string;
+  approvedQty: string;
+  approvedBudget: string;
+  purchasedQty: string;
+  purchasedAmount: string;
+  poReferences: string;
+  remainingQty: string;
+  remainingBudget: string;
+}
+
+export interface UtilizationReport<T> {
+  rows: T[];
+  fiscalYear: string;
+}
+
+export async function getPpmpUtilization(
+  fiscalYearId?: string,
+): Promise<UtilizationReport<PpmpUtilizationRow>> {
+  const qs = fiscalYearId ? `?fiscalYearId=${fiscalYearId}` : '';
+  const res = await authFetch(`/reports/ppmp-utilization${qs}`);
+  return res.json();
+}
+
+export async function getAppUtilization(
+  fiscalYearId?: string,
+): Promise<UtilizationReport<AppUtilizationRow>> {
+  const qs = fiscalYearId ? `?fiscalYearId=${fiscalYearId}` : '';
+  const res = await authFetch(`/reports/app-utilization${qs}`);
+  return res.json();
+}

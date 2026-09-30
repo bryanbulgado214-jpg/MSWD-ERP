@@ -1,4 +1,5 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
@@ -42,6 +43,157 @@ export class ReportsController {
     ]);
 
     return { totalPRs, totalAmount, byStatus, poCount, cafCount, orsCount };
+  }
+
+  // PPMP utilization: per approved PPMP item — approved qty/budget, what has
+  // actually been put on a (non-cancelled) Purchase Order, and the remainder.
+  @Get('ppmp-utilization')
+  @RequirePermissions('procurement.read')
+  async ppmpUtilization(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('fiscalYearId') fiscalYearId?: string,
+    @Query('endUserId') endUserId?: string,
+  ) {
+    const orgId = user.organizationId;
+    const items = await this.prisma.ppmpItem.findMany({
+      where: {
+        organizationId: orgId,
+        status: 'approved',
+        ...(fiscalYearId ? { fiscalYearId } : {}),
+        ...(endUserId ? { endUserId } : {}),
+      },
+      include: {
+        department: { select: { code: true, name: true } },
+        endUser: { select: { name: true } },
+        assignedUser: { select: { username: true } },
+        fiscalYear: { select: { name: true, year: true } },
+      },
+      orderBy: [{ department: { name: 'asc' } }, { code: 'asc' }],
+    });
+
+    const rows = await Promise.all(
+      items.map(async (it) => {
+        const pos = await this.prisma.purchaseOrder.findMany({
+          where: {
+            organizationId: orgId,
+            status: { not: 'cancelled' },
+            purchaseRequest: { ppmpItemId: it.id },
+          },
+          select: { poNumber: true, contractAmount: true },
+          orderBy: { poDate: 'asc' },
+        });
+        const purchasedAmount = pos.reduce(
+          (s, p) => s.add(p.contractAmount),
+          new Prisma.Decimal(0),
+        );
+        const qAgg = await this.prisma.purchaseRequestItem.aggregate({
+          where: {
+            purchaseRequest: {
+              organizationId: orgId,
+              ppmpItemId: it.id,
+              purchaseOrders: { some: { status: { not: 'cancelled' } } },
+            },
+          },
+          _sum: { quantity: true },
+        });
+        const purchasedQty = qAgg._sum.quantity ?? new Prisma.Decimal(0);
+        return {
+          code: it.code,
+          description: it.itemDescription,
+          section: it.department?.name ?? '',
+          endUser: it.endUser?.name ?? it.assignedUser?.username ?? '',
+          unitOfMeasure: it.unitOfMeasure,
+          approvedQty: it.quantity.toString(),
+          unitCost: it.estimatedUnitCost.toString(),
+          approvedBudget: it.estimatedTotalCost.toString(),
+          purchasedQty: purchasedQty.toString(),
+          purchasedAmount: purchasedAmount.toString(),
+          poReferences: pos.map((p) => p.poNumber).join(', '),
+          remainingQty: it.quantity.sub(purchasedQty).toString(),
+          remainingBudget: it.estimatedTotalCost.sub(purchasedAmount).toString(),
+        };
+      }),
+    );
+
+    const fy = items[0]?.fiscalYear;
+    return { rows, fiscalYear: fy ? `${fy.name} (${fy.year})` : '' };
+  }
+
+  // APP utilization: per approved APP line — approved budget/qty (qty from the
+  // parent PPMP item), actual purchased via POs, and the remainder.
+  @Get('app-utilization')
+  @RequirePermissions('procurement.read')
+  async appUtilization(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('fiscalYearId') fiscalYearId?: string,
+  ) {
+    const orgId = user.organizationId;
+    const items = await this.prisma.appItem.findMany({
+      where: {
+        organizationId: orgId,
+        status: 'approved',
+        ...(fiscalYearId ? { fiscalYearId } : {}),
+      },
+      include: {
+        ppmpItem: {
+          select: {
+            quantity: true,
+            unitOfMeasure: true,
+            department: { select: { name: true } },
+            endUser: { select: { name: true } },
+          },
+        },
+        fiscalYear: { select: { name: true, year: true } },
+      },
+      orderBy: { appNumber: 'asc' },
+    });
+
+    const rows = await Promise.all(
+      items.map(async (it) => {
+        const pos = await this.prisma.purchaseOrder.findMany({
+          where: {
+            organizationId: orgId,
+            status: { not: 'cancelled' },
+            purchaseRequest: { appItemId: it.id },
+          },
+          select: { poNumber: true, contractAmount: true },
+          orderBy: { poDate: 'asc' },
+        });
+        const purchasedAmount = pos.reduce(
+          (s, p) => s.add(p.contractAmount),
+          new Prisma.Decimal(0),
+        );
+        const qAgg = await this.prisma.purchaseRequestItem.aggregate({
+          where: {
+            purchaseRequest: {
+              organizationId: orgId,
+              appItemId: it.id,
+              purchaseOrders: { some: { status: { not: 'cancelled' } } },
+            },
+          },
+          _sum: { quantity: true },
+        });
+        const purchasedQty = qAgg._sum.quantity ?? new Prisma.Decimal(0);
+        const approvedQty = it.ppmpItem.quantity;
+        return {
+          appNumber: it.appNumber,
+          projectTitle: it.procurementProjectTitle,
+          section: it.ppmpItem.department?.name ?? '',
+          endUser: it.ppmpItem.endUser?.name ?? '',
+          unitOfMeasure: it.ppmpItem.unitOfMeasure,
+          approvedQty: approvedQty.toString(),
+          approvedBudget: it.approvedBudget.toString(),
+          purchasedQty: purchasedQty.toString(),
+          purchasedAmount: purchasedAmount.toString(),
+          poReferences: pos.map((p) => p.poNumber).join(', '),
+          remainingQty: approvedQty.sub(purchasedQty).toString(),
+          remainingBudget: it.approvedBudget.sub(purchasedAmount).toString(),
+        };
+      }),
+    );
+
+    const fy = items[0]?.fiscalYear;
+    return { rows, fiscalYear: fy ? `${fy.name} (${fy.year})` : '' };
   }
 
   @Get('procurement-by-department')

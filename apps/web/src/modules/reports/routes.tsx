@@ -21,6 +21,8 @@ import { FixedAssetRegisterPage } from './pages/FixedAssetRegisterPage';
 import { JournalEntryRegisterPage } from './pages/JournalEntryRegisterPage';
 import { LoanAmortizationPage } from './pages/LoanAmortizationPage';
 import { PayeesPage } from './pages/PayeesPage';
+import { AppUtilizationReportPage } from './pages/AppUtilizationReportPage';
+import { PpmpUtilizationReportPage } from './pages/PpmpUtilizationReportPage';
 import { ProcurementReportPage } from './pages/ProcurementReportPage';
 import { RciReportPage } from './pages/RciReportPage';
 import { ReportsLanding } from './pages/ReportsLanding';
@@ -74,6 +76,8 @@ export const reportsRoutes = [
 
       // ── Procurement / Budget (existing) ────────────────────────────────
       { path: 'procurement', element: <ProcurementReportPage /> },
+      { path: 'ppmp-utilization', element: <PpmpUtilizationReportPage /> },
+      { path: 'app-utilization', element: <AppUtilizationReportPage /> },
       { path: 'budget', element: <BudgetReportPage /> },
       { path: 'suppliers', element: <SupplierReportPage /> },
     ],

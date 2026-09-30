@@ -775,6 +775,35 @@ export function PpmpDataEntryPage() {
                   </div>
                 );
               })}
+
+              {/* Total for this end-user — to validate the PPMP was entered right */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '90px 1fr 56px 110px 84px 150px',
+                  gap: 8,
+                  padding: '10px 14px',
+                  background: '#f9fafb',
+                  borderTop: '2px solid #d0d5dd',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: '#101828',
+                }}
+              >
+                <div style={{ gridColumn: '1 / 3' }}>
+                  Total — {existingItems.length} item{existingItems.length === 1 ? '' : 's'}
+                </div>
+                <div />
+                <div style={{ textAlign: 'right' }}>
+                  {formatPeso(
+                    existingItems
+                      .reduce((s, it) => s + Number(it.estimatedTotalCost), 0)
+                      .toFixed(2),
+                  )}
+                </div>
+                <div />
+                <div />
+              </div>
             </div>
           )}
 

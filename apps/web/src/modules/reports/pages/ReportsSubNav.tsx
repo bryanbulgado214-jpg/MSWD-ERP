@@ -221,6 +221,20 @@ export const REPORT_GROUPS: ReportGroup[] = [
         blurb: 'Procurement analytics',
       },
       {
+        to: '/reports/ppmp-utilization',
+        label: 'PPMP Utilization',
+        perm: 'procurement.read',
+        icon: '📋',
+        blurb: 'Approved vs. purchased (PPMP)',
+      },
+      {
+        to: '/reports/app-utilization',
+        label: 'APP Utilization',
+        perm: 'procurement.read',
+        icon: '📑',
+        blurb: 'Approved vs. purchased (APP)',
+      },
+      {
         to: '/reports/budget',
         label: 'Budget Utilization',
         perm: 'budgeting.read',
