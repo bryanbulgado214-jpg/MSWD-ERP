@@ -5,7 +5,7 @@ import { formatPeso } from '../../budgeting/format-peso';
 import {
   approvePpmpItem,
   bulkApprovePpmpItems,
-  createPpmpBatch,
+  createPpmpItem,
   downloadPpmpTemplate,
   listEndUsers,
   listLookupDepartments,
@@ -32,6 +32,10 @@ const CATEGORY_OPTIONS = [
   { value: 'infrastructure', label: 'Infrastructure' },
   { value: 'consulting_services', label: 'Consulting Services' },
 ];
+
+const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(
+  CATEGORY_OPTIONS.map((c) => [c.value, c.label]),
+);
 
 const MODE_OPTIONS = [
   'Shopping',
@@ -68,14 +72,19 @@ const emptyRow = (): FormRow => ({
 });
 
 interface EditState {
-  id: string;
   itemDescription: string;
   quantity: string;
   estimatedUnitCost: string;
+  procurementCategory: string;
+  unitOfMeasure: string;
   modeOfProcurement: string;
   scheduleQuarter: string;
   cboNotes: string;
 }
+
+const cell: React.CSSProperties = { fontSize: 12, color: '#475467' };
+const detailLabel: React.CSSProperties = { fontSize: 11, color: '#98a2b3', marginBottom: 2 };
+const detailVal: React.CSSProperties = { fontSize: 13, color: '#101828' };
 
 export function PpmpDataEntryPage() {
   const [fiscalYears, setFiscalYears] = useState<ProcurementFiscalYear[]>([]);
@@ -84,12 +93,14 @@ export function PpmpDataEntryPage() {
   const [selectedFiscalYear, setSelectedFiscalYear] = useState('');
   const [selectedEndUserId, setSelectedEndUserId] = useState('');
   const [existingItems, setExistingItems] = useState<PpmpItem[]>([]);
-  const [rows, setRows] = useState<FormRow[]>([emptyRow()]);
-  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<FormRow>(emptyRow());
+  const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loadingItems, setLoadingItems] = useState(false);
-  const [editing, setEditing] = useState<EditState | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [edit, setEdit] = useState<EditState | null>(null);
   // Excel upload
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -140,6 +151,17 @@ export function PpmpDataEntryPage() {
     };
   }, [selectedFiscalYear, selectedEndUserId]);
 
+  // Collapse an expanded (read-only) row when the user clicks elsewhere. While a
+  // row is being edited we keep it open so the edits aren't lost.
+  useEffect(() => {
+    if (!expandedId || editingId) return;
+    function onDocMouseDown() {
+      setExpandedId(null);
+    }
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [expandedId, editingId]);
+
   function reloadItems() {
     if (!selectedFiscalYear || !selectedEndUserId) return;
     listPpmpItems({ fiscalYearId: selectedFiscalYear, endUserId: selectedEndUserId })
@@ -147,86 +169,92 @@ export function PpmpDataEntryPage() {
       .catch(() => {});
   }
 
-  function updateRow(index: number, field: keyof FormRow, value: string) {
-    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
-  }
-  function addRow() {
-    setRows((prev) => [...prev, emptyRow()]);
-  }
-  function removeRow(index: number) {
-    setRows((prev) => prev.filter((_, i) => i !== index));
+  function updateForm(field: keyof FormRow, value: string) {
+    setForm((prev) => ({ ...prev, [field]: value }));
   }
 
-  async function save(status: 'draft' | 'approved') {
+  const formComplete = Boolean(
+    form.code && form.itemDescription && form.quantity && form.estimatedUnitCost,
+  );
+
+  async function addItem() {
     setError(null);
     setSuccess(null);
     if (!selectedEndUserId) {
       setError('Choose an end-user first (or add one).');
       return;
     }
-    const valid = rows.filter(
-      (r) => r.code && r.itemDescription && r.quantity && r.estimatedUnitCost,
-    );
-    if (valid.length === 0) {
-      setError('Fill in at least one complete row (code, description, quantity, unit cost).');
+    if (!formComplete) {
+      setError('Fill in Code, Description, Quantity, and Unit Cost before adding.');
       return;
     }
-    setSaving(true);
+    setAdding(true);
     try {
-      await createPpmpBatch({
+      await createPpmpItem({
         fiscalYearId: selectedFiscalYear,
         departmentId,
         endUserId: selectedEndUserId,
-        status,
-        items: valid.map((r) => ({
-          code: r.code,
-          itemDescription: r.itemDescription,
-          procurementCategory: r.procurementCategory,
-          unitOfMeasure: r.unitOfMeasure || 'pc',
-          quantity: parseFloat(r.quantity),
-          estimatedUnitCost: parseFloat(r.estimatedUnitCost),
-          ...(r.modeOfProcurement ? { modeOfProcurement: r.modeOfProcurement } : {}),
-          ...(r.scheduleQuarter ? { scheduleQuarter: parseInt(r.scheduleQuarter) } : {}),
-          ...(r.cboNotes ? { cboNotes: r.cboNotes } : {}),
-        })),
+        status: 'draft',
+        code: form.code,
+        itemDescription: form.itemDescription,
+        procurementCategory: form.procurementCategory,
+        unitOfMeasure: form.unitOfMeasure || 'pc',
+        quantity: parseFloat(form.quantity),
+        estimatedUnitCost: parseFloat(form.estimatedUnitCost),
+        ...(form.modeOfProcurement ? { modeOfProcurement: form.modeOfProcurement } : {}),
+        ...(form.scheduleQuarter ? { scheduleQuarter: parseInt(form.scheduleQuarter) } : {}),
+        ...(form.cboNotes ? { cboNotes: form.cboNotes } : {}),
       });
-      setSuccess(
-        `${valid.length} item(s) saved${status === 'draft' ? ' as draft — you can edit them below' : ' and finalized into the APP'}.`,
-      );
-      setRows([emptyRow()]);
+      setForm(emptyRow());
       reloadItems();
     } catch (err) {
-      setError(err instanceof ProcurementApiError ? err.message : 'Failed to save items.');
+      setError(err instanceof ProcurementApiError ? err.message : 'Failed to add item.');
     } finally {
-      setSaving(false);
+      setAdding(false);
     }
   }
 
+  function toggleRow(id: string) {
+    if (editingId) return; // don't collapse mid-edit
+    setExpandedId((cur) => (cur === id ? null : id));
+  }
+
   function startEdit(item: PpmpItem) {
-    setEditing({
-      id: item.id,
+    setExpandedId(item.id);
+    setEditingId(item.id);
+    setEdit({
       itemDescription: item.itemDescription,
       quantity: String(item.quantity),
       estimatedUnitCost: String(item.estimatedUnitCost),
+      procurementCategory: item.procurementCategory,
+      unitOfMeasure: item.unitOfMeasure,
       modeOfProcurement: item.modeOfProcurement ?? '',
       scheduleQuarter: item.scheduleQuarter ? String(item.scheduleQuarter) : '',
       cboNotes: item.cboNotes ?? '',
     });
   }
 
-  async function saveEdit() {
-    if (!editing) return;
+  function cancelEdit() {
+    setEditingId(null);
+    setEdit(null);
+  }
+
+  async function saveEdit(id: string) {
+    if (!edit) return;
     setError(null);
     try {
-      await updatePpmpItem(editing.id, {
-        itemDescription: editing.itemDescription,
-        quantity: parseFloat(editing.quantity),
-        estimatedUnitCost: parseFloat(editing.estimatedUnitCost),
-        ...(editing.modeOfProcurement ? { modeOfProcurement: editing.modeOfProcurement } : {}),
-        ...(editing.scheduleQuarter ? { scheduleQuarter: parseInt(editing.scheduleQuarter) } : {}),
-        ...(editing.cboNotes ? { cboNotes: editing.cboNotes } : {}),
+      await updatePpmpItem(id, {
+        itemDescription: edit.itemDescription,
+        procurementCategory: edit.procurementCategory,
+        unitOfMeasure: edit.unitOfMeasure || 'pc',
+        quantity: parseFloat(edit.quantity),
+        estimatedUnitCost: parseFloat(edit.estimatedUnitCost),
+        ...(edit.modeOfProcurement ? { modeOfProcurement: edit.modeOfProcurement } : {}),
+        ...(edit.scheduleQuarter ? { scheduleQuarter: parseInt(edit.scheduleQuarter) } : {}),
+        ...(edit.cboNotes ? { cboNotes: edit.cboNotes } : {}),
       });
-      setEditing(null);
+      setEditingId(null);
+      setEdit(null);
       reloadItems();
     } catch (err) {
       setError(err instanceof ProcurementApiError ? err.message : 'Failed to update item.');
@@ -273,10 +301,6 @@ export function PpmpDataEntryPage() {
       setError('Choose an Excel file to upload first.');
       return;
     }
-    if (!selectedFiscalYear || !selectedEndUserId) {
-      setError('Select a fiscal year and an end-user before uploading.');
-      return;
-    }
     setUploading(true);
     try {
       const result = await uploadPpmpExcel(uploadFile, {
@@ -299,18 +323,20 @@ export function PpmpDataEntryPage() {
 
   const draftCount = existingItems.filter((i) => i.status === 'draft').length;
   const ready = Boolean(selectedFiscalYear && selectedEndUserId);
-  const filledRows = rows.filter((r) => r.code && r.itemDescription).length;
+  const liveTotal =
+    form.quantity && form.estimatedUnitCost
+      ? parseFloat(form.quantity) * parseFloat(form.estimatedUnitCost)
+      : 0;
 
   return (
     <div className="pr-page">
       <Link to="/procurement" className="pr-back">
         {'<-'} Back to Procurement
       </Link>
-      <h1>PPMP Data Entry</h1>
-      <p style={{ color: '#667085', fontSize: 14, marginBottom: 24 }}>
-        Choose the fiscal year and the requesting end-user, then add all of that end-user's PPMP
-        items and save them together. Save as a draft to keep editing, or finalize to include them
-        in the APP.
+      <h1 style={{ marginBottom: 4 }}>PPMP Data Entry</h1>
+      <p style={{ color: '#667085', fontSize: 13, marginTop: 0, marginBottom: 18 }}>
+        Pick the fiscal year and end-user, then add one item at a time — each goes into the list
+        above. Click a saved item to see its details; finalize when the list is complete.
       </p>
 
       {error && <div className="pr-error">{error}</div>}
@@ -319,9 +345,9 @@ export function PpmpDataEntryPage() {
           style={{
             background: '#ecfdf3',
             color: '#067647',
-            padding: '12px 16px',
+            padding: '10px 14px',
             borderRadius: 8,
-            marginBottom: 16,
+            marginBottom: 14,
             fontSize: 13,
           }}
         >
@@ -329,8 +355,8 @@ export function PpmpDataEntryPage() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 16, marginBottom: 8, flexWrap: 'wrap' }}>
-        <div className="pr-field" style={{ flex: 1, minWidth: 200 }}>
+      <div style={{ display: 'flex', gap: 16, marginBottom: 6, flexWrap: 'wrap' }}>
+        <div className="pr-field" style={{ flex: 1, minWidth: 180 }}>
           <label>Fiscal Year</label>
           <select value={selectedFiscalYear} onChange={(e) => setSelectedFiscalYear(e.target.value)}>
             {fiscalYears.map((fy) => (
@@ -355,426 +381,498 @@ export function PpmpDataEntryPage() {
         </div>
       </div>
       {selectedEndUser && (
-        <p style={{ color: '#667085', fontSize: 13, margin: '0 0 24px' }}>
+        <p style={{ color: '#667085', fontSize: 12, margin: '0 0 20px' }}>
           Section: <strong>{selectedEndUser.department?.name ?? '—'}</strong>
           {selectedEndUser.position ? ` · ${selectedEndUser.position}` : ''}
         </p>
       )}
 
-      {!ready && (
-        <div className="pr-empty">Select a fiscal year and an end-user to begin.</div>
-      )}
+      {!ready && <div className="pr-empty">Select a fiscal year and an end-user to begin.</div>}
 
       {ready && (
         <>
-          {/* Upload from Excel */}
+          {/* Saved items — compact list, click a row to expand */}
           <div
             style={{
-              border: '1px solid #e4e7ec',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 8,
+            }}
+          >
+            <h2 style={{ margin: 0, fontSize: 16, color: 'var(--mswd-navy)' }}>
+              {selectedEndUser?.name}'s Items ({existingItems.length})
+            </h2>
+            {draftCount > 0 && (
+              <button
+                className="pr-btn pr-btn--success"
+                style={{ padding: '5px 12px', fontSize: 13 }}
+                onClick={finalizeAllDrafts}
+              >
+                Finalize All Drafts ({draftCount})
+              </button>
+            )}
+          </div>
+
+          {existingItems.length === 0 && !loadingItems && (
+            <div className="pr-empty" style={{ marginBottom: 20 }}>
+              No items yet — add the first one below.
+            </div>
+          )}
+
+          {existingItems.length > 0 && (
+            <div
+              style={{
+                border: '1px solid #e4e7ec',
+                borderRadius: 10,
+                overflow: 'hidden',
+                marginBottom: 24,
+              }}
+            >
+              {/* header row */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '90px 1fr 56px 110px 84px 150px',
+                  gap: 8,
+                  padding: '8px 14px',
+                  background: '#f9fafb',
+                  borderBottom: '1px solid #e4e7ec',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: '#667085',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.02em',
+                }}
+              >
+                <div>Code</div>
+                <div>Description</div>
+                <div style={{ textAlign: 'right' }}>Qty</div>
+                <div style={{ textAlign: 'right' }}>Total</div>
+                <div>Status</div>
+                <div />
+              </div>
+
+              {existingItems.map((item) => {
+                const isOpen = expandedId === item.id;
+                const isEditing = editingId === item.id;
+                return (
+                  <div
+                    key={item.id}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    style={{ borderBottom: '1px solid #f2f4f7' }}
+                  >
+                    <div
+                      onClick={() => toggleRow(item.id)}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '90px 1fr 56px 110px 84px 150px',
+                        gap: 8,
+                        padding: '10px 14px',
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                        background: isOpen ? '#f9fafb' : '#fff',
+                        fontSize: 13,
+                      }}
+                    >
+                      <div style={{ fontWeight: 700 }}>{item.code}</div>
+                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {item.itemDescription}
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        {parseFloat(item.quantity).toLocaleString()}
+                      </div>
+                      <div style={{ textAlign: 'right', fontWeight: 600 }}>
+                        {formatPeso(String(item.estimatedTotalCost))}
+                      </div>
+                      <div>
+                        <span className={`pr-badge pr-badge--${item.status}`}>{item.status}</span>
+                      </div>
+                      <div
+                        style={{ textAlign: 'right', whiteSpace: 'nowrap' }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {item.status === 'draft' && !isEditing && (
+                          <>
+                            <button
+                              className="pr-btn"
+                              style={{ padding: '3px 10px', fontSize: 11 }}
+                              onClick={() => startEdit(item)}
+                            >
+                              Edit
+                            </button>{' '}
+                            <button
+                              className="pr-btn pr-btn--success"
+                              style={{ padding: '3px 10px', fontSize: 11 }}
+                              onClick={() => finalize(item.id)}
+                            >
+                              Finalize
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {isOpen && (
+                      <div style={{ padding: '4px 14px 16px', background: '#f9fafb' }}>
+                        {isEditing && edit ? (
+                          <div style={{ display: 'grid', gap: 10 }}>
+                            <div className="pr-field">
+                              <label>Item Description</label>
+                              <input
+                                value={edit.itemDescription}
+                                onChange={(e) =>
+                                  setEdit({ ...edit, itemDescription: e.target.value })
+                                }
+                              />
+                            </div>
+                            <div
+                              style={{
+                                display: 'grid',
+                                gridTemplateColumns: '1fr 90px 90px 110px',
+                                gap: 10,
+                              }}
+                            >
+                              <div className="pr-field">
+                                <label>Category</label>
+                                <select
+                                  value={edit.procurementCategory}
+                                  onChange={(e) =>
+                                    setEdit({ ...edit, procurementCategory: e.target.value })
+                                  }
+                                >
+                                  {CATEGORY_OPTIONS.map((c) => (
+                                    <option key={c.value} value={c.value}>
+                                      {c.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="pr-field">
+                                <label>UOM</label>
+                                <input
+                                  value={edit.unitOfMeasure}
+                                  onChange={(e) =>
+                                    setEdit({ ...edit, unitOfMeasure: e.target.value })
+                                  }
+                                />
+                              </div>
+                              <div className="pr-field">
+                                <label>Qty</label>
+                                <input
+                                  type="number"
+                                  value={edit.quantity}
+                                  onChange={(e) => setEdit({ ...edit, quantity: e.target.value })}
+                                />
+                              </div>
+                              <div className="pr-field">
+                                <label>Unit Cost</label>
+                                <input
+                                  type="number"
+                                  value={edit.estimatedUnitCost}
+                                  onChange={(e) =>
+                                    setEdit({ ...edit, estimatedUnitCost: e.target.value })
+                                  }
+                                />
+                              </div>
+                            </div>
+                            <div
+                              style={{ display: 'grid', gridTemplateColumns: '1fr 80px 1fr', gap: 10 }}
+                            >
+                              <div className="pr-field">
+                                <label>Mode of Procurement</label>
+                                <select
+                                  value={edit.modeOfProcurement}
+                                  onChange={(e) =>
+                                    setEdit({ ...edit, modeOfProcurement: e.target.value })
+                                  }
+                                >
+                                  <option value="">— Select —</option>
+                                  {MODE_OPTIONS.map((m) => (
+                                    <option key={m} value={m}>
+                                      {m}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="pr-field">
+                                <label>Quarter</label>
+                                <select
+                                  value={edit.scheduleQuarter}
+                                  onChange={(e) =>
+                                    setEdit({ ...edit, scheduleQuarter: e.target.value })
+                                  }
+                                >
+                                  <option value="">—</option>
+                                  <option value="1">Q1</option>
+                                  <option value="2">Q2</option>
+                                  <option value="3">Q3</option>
+                                  <option value="4">Q4</option>
+                                </select>
+                              </div>
+                              <div className="pr-field">
+                                <label>Notes</label>
+                                <input
+                                  value={edit.cboNotes}
+                                  onChange={(e) => setEdit({ ...edit, cboNotes: e.target.value })}
+                                />
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button
+                                className="pr-btn pr-btn--primary"
+                                style={{ padding: '5px 14px', fontSize: 13 }}
+                                onClick={() => saveEdit(item.id)}
+                              >
+                                Save
+                              </button>
+                              <button
+                                className="pr-btn"
+                                style={{ padding: '5px 14px', fontSize: 13 }}
+                                onClick={cancelEdit}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+                              gap: 14,
+                            }}
+                          >
+                            <div>
+                              <div style={detailLabel}>Category</div>
+                              <div style={detailVal}>
+                                {CATEGORY_LABELS[item.procurementCategory] ??
+                                  item.procurementCategory}
+                              </div>
+                            </div>
+                            <div>
+                              <div style={detailLabel}>Unit of Measure</div>
+                              <div style={detailVal}>{item.unitOfMeasure}</div>
+                            </div>
+                            <div>
+                              <div style={detailLabel}>Unit Cost</div>
+                              <div style={detailVal}>
+                                {formatPeso(String(item.estimatedUnitCost))}
+                              </div>
+                            </div>
+                            <div>
+                              <div style={detailLabel}>Mode of Procurement</div>
+                              <div style={detailVal}>{item.modeOfProcurement ?? '—'}</div>
+                            </div>
+                            <div>
+                              <div style={detailLabel}>Schedule</div>
+                              <div style={detailVal}>
+                                {item.scheduleQuarter ? `Q${item.scheduleQuarter}` : '—'}
+                              </div>
+                            </div>
+                            <div>
+                              <div style={detailLabel}>Notes</div>
+                              <div style={detailVal}>{item.cboNotes || '—'}</div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Single entry form + Add */}
+          <div
+            style={{
+              border: '1px solid #d0d5dd',
               borderRadius: 10,
-              padding: 20,
-              marginBottom: 28,
-              background: '#f9fafb',
+              padding: 16,
+              marginBottom: 20,
+              background: '#fff',
             }}
           >
             <div
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: 12,
+                alignItems: 'baseline',
                 marginBottom: 12,
               }}
             >
-              <h2 style={{ margin: 0, fontSize: 18, color: 'var(--mswd-navy)' }}>
-                Upload from Excel
-              </h2>
-              <button className="pr-btn" type="button" onClick={handleDownloadTemplate}>
-                ⬇ Download template
-              </button>
+              <h3 style={{ margin: 0, fontSize: 15, color: 'var(--mswd-navy)' }}>
+                Add an item{selectedEndUser ? ` for ${selectedEndUser.name}` : ''}
+              </h3>
+              {liveTotal > 0 && (
+                <span style={cell}>
+                  Total: <strong>{formatPeso(liveTotal.toFixed(2))}</strong>
+                </span>
+              )}
             </div>
-            <p style={{ color: '#667085', fontSize: 13, marginTop: 0, marginBottom: 14 }}>
-              Uploaded items are assigned to <strong>{selectedEndUser?.name}</strong> and finalized
-              into the APP. A blank Code cell is auto-numbered.
-            </p>
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-              <div className="pr-field" style={{ flex: 2, minWidth: 240 }}>
-                <label>Excel file (.xlsx)</label>
+            <div
+              style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 10, marginBottom: 10 }}
+            >
+              <div className="pr-field">
+                <label>PPMP Code</label>
                 <input
-                  type="file"
-                  accept=".xlsx,.xls"
-                  onChange={(e) => {
-                    setUploadFile(e.target.files?.[0] ?? null);
-                    setUploadResult(null);
-                  }}
+                  value={form.code}
+                  onChange={(e) => updateForm('code', e.target.value)}
+                  placeholder="ADM-001"
+                />
+              </div>
+              <div className="pr-field">
+                <label>Item Description</label>
+                <input
+                  value={form.itemDescription}
+                  onChange={(e) => updateForm('itemDescription', e.target.value)}
+                  placeholder="Bond paper A4, 80gsm"
+                />
+              </div>
+            </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 80px 80px 110px 1fr 70px',
+                gap: 10,
+                marginBottom: 10,
+              }}
+            >
+              <div className="pr-field">
+                <label>Category</label>
+                <select
+                  value={form.procurementCategory}
+                  onChange={(e) => updateForm('procurementCategory', e.target.value)}
+                >
+                  {CATEGORY_OPTIONS.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="pr-field">
+                <label>UOM</label>
+                <input
+                  value={form.unitOfMeasure}
+                  onChange={(e) => updateForm('unitOfMeasure', e.target.value)}
+                  placeholder="pc"
+                />
+              </div>
+              <div className="pr-field">
+                <label>Qty</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={form.quantity}
+                  onChange={(e) => updateForm('quantity', e.target.value)}
+                />
+              </div>
+              <div className="pr-field">
+                <label>Unit Cost</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.estimatedUnitCost}
+                  onChange={(e) => updateForm('estimatedUnitCost', e.target.value)}
+                />
+              </div>
+              <div className="pr-field">
+                <label>Mode of Procurement</label>
+                <select
+                  value={form.modeOfProcurement}
+                  onChange={(e) => updateForm('modeOfProcurement', e.target.value)}
+                >
+                  <option value="">— Select —</option>
+                  {MODE_OPTIONS.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="pr-field">
+                <label>Quarter</label>
+                <select
+                  value={form.scheduleQuarter}
+                  onChange={(e) => updateForm('scheduleQuarter', e.target.value)}
+                >
+                  <option value="">—</option>
+                  <option value="1">Q1</option>
+                  <option value="2">Q2</option>
+                  <option value="3">Q3</option>
+                  <option value="4">Q4</option>
+                </select>
+              </div>
+            </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr auto',
+                gap: 10,
+                alignItems: 'end',
+              }}
+            >
+              <div className="pr-field">
+                <label>Notes</label>
+                <input
+                  value={form.cboNotes}
+                  onChange={(e) => updateForm('cboNotes', e.target.value)}
+                  placeholder="Optional"
                 />
               </div>
               <button
                 className="pr-btn pr-btn--primary"
-                type="button"
-                onClick={handleUpload}
-                disabled={uploading || !uploadFile}
+                style={{ padding: '8px 22px', whiteSpace: 'nowrap' }}
+                onClick={addItem}
+                disabled={adding || !formComplete}
               >
-                {uploading ? 'Uploading…' : 'Upload PPMP'}
+                {adding ? 'Adding…' : '+ Add to List'}
               </button>
             </div>
-            {uploadResult && (
-              <div style={{ marginTop: 14, fontSize: 13 }}>
-                <strong>{uploadResult.created}</strong> item(s) created
-                {uploadResult.skipped > 0 && (
-                  <>
-                    {' · '}
-                    <strong style={{ color: '#b42318' }}>{uploadResult.skipped}</strong> skipped
-                  </>
-                )}
-                {uploadResult.errors.length > 0 && (
-                  <ul style={{ margin: '4px 0', paddingLeft: 18, color: '#b42318' }}>
-                    {uploadResult.errors.map((e, i) => (
-                      <li key={`e${i}`}>
-                        Row {e.row}: {e.message}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
           </div>
 
-          {/* Existing items for this end-user */}
-          {existingItems.length > 0 && (
-            <div style={{ marginBottom: 32 }}>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: 12,
-                }}
-              >
-                <h2 style={{ margin: 0, fontSize: 18, color: 'var(--mswd-navy)' }}>
-                  {selectedEndUser?.name}'s Items ({existingItems.length})
-                </h2>
-                {draftCount > 0 && (
-                  <button className="pr-btn pr-btn--success" onClick={finalizeAllDrafts}>
-                    Finalize All Drafts ({draftCount})
-                  </button>
-                )}
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table className="pr-table">
-                  <thead>
-                    <tr>
-                      <th>Code</th>
-                      <th>Description</th>
-                      <th style={{ textAlign: 'right' }}>Qty</th>
-                      <th style={{ textAlign: 'right' }}>Unit Cost</th>
-                      <th style={{ textAlign: 'right' }}>Total</th>
-                      <th>Mode</th>
-                      <th>Q</th>
-                      <th>Status</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {existingItems.map((item) =>
-                      editing?.id === item.id ? (
-                        <tr key={item.id} style={{ background: '#fffaeb' }}>
-                          <td>
-                            <strong>{item.code}</strong>
-                          </td>
-                          <td>
-                            <input
-                              value={editing.itemDescription}
-                              onChange={(e) =>
-                                setEditing({ ...editing, itemDescription: e.target.value })
-                              }
-                              style={{ width: '100%' }}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              value={editing.quantity}
-                              onChange={(e) => setEditing({ ...editing, quantity: e.target.value })}
-                              style={{ width: 70 }}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              value={editing.estimatedUnitCost}
-                              onChange={(e) =>
-                                setEditing({ ...editing, estimatedUnitCost: e.target.value })
-                              }
-                              style={{ width: 90 }}
-                            />
-                          </td>
-                          <td style={{ textAlign: 'right', fontSize: 12, color: '#98a2b3' }}>—</td>
-                          <td>
-                            <select
-                              value={editing.modeOfProcurement}
-                              onChange={(e) =>
-                                setEditing({ ...editing, modeOfProcurement: e.target.value })
-                              }
-                            >
-                              <option value="">—</option>
-                              {MODE_OPTIONS.map((m) => (
-                                <option key={m} value={m}>
-                                  {m}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-                          <td>
-                            <select
-                              value={editing.scheduleQuarter}
-                              onChange={(e) =>
-                                setEditing({ ...editing, scheduleQuarter: e.target.value })
-                              }
-                            >
-                              <option value="">—</option>
-                              <option value="1">Q1</option>
-                              <option value="2">Q2</option>
-                              <option value="3">Q3</option>
-                              <option value="4">Q4</option>
-                            </select>
-                          </td>
-                          <td>draft</td>
-                          <td style={{ whiteSpace: 'nowrap' }}>
-                            <button
-                              className="pr-btn pr-btn--primary"
-                              style={{ padding: '4px 10px', fontSize: 11 }}
-                              onClick={saveEdit}
-                            >
-                              Save
-                            </button>{' '}
-                            <button
-                              className="pr-btn"
-                              style={{ padding: '4px 10px', fontSize: 11 }}
-                              onClick={() => setEditing(null)}
-                            >
-                              Cancel
-                            </button>
-                          </td>
-                        </tr>
-                      ) : (
-                        <tr key={item.id}>
-                          <td>
-                            <strong>{item.code}</strong>
-                          </td>
-                          <td>{item.itemDescription}</td>
-                          <td style={{ textAlign: 'right' }}>
-                            {parseFloat(item.quantity).toLocaleString()}
-                          </td>
-                          <td style={{ textAlign: 'right' }}>
-                            {formatPeso(String(item.estimatedUnitCost))}
-                          </td>
-                          <td style={{ textAlign: 'right' }}>
-                            {formatPeso(String(item.estimatedTotalCost))}
-                          </td>
-                          <td style={{ fontSize: 11 }}>{item.modeOfProcurement ?? '—'}</td>
-                          <td>{item.scheduleQuarter ?? '—'}</td>
-                          <td>
-                            <span className={`pr-badge pr-badge--${item.status}`}>
-                              {item.status}
-                            </span>
-                          </td>
-                          <td style={{ whiteSpace: 'nowrap' }}>
-                            {item.status === 'draft' && (
-                              <>
-                                <button
-                                  className="pr-btn"
-                                  style={{ padding: '4px 10px', fontSize: 11 }}
-                                  onClick={() => startEdit(item)}
-                                >
-                                  Edit
-                                </button>{' '}
-                                <button
-                                  className="pr-btn pr-btn--success"
-                                  style={{ padding: '4px 10px', fontSize: 11 }}
-                                  onClick={() => finalize(item.id)}
-                                >
-                                  Finalize
-                                </button>
-                              </>
-                            )}
-                          </td>
-                        </tr>
-                      ),
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-          {loadingItems && <p style={{ color: '#667085' }}>Loading existing items…</p>}
-
-          {/* New items grid */}
-          <h2 style={{ fontSize: 18, color: 'var(--mswd-navy)', marginBottom: 16 }}>
-            Add Items for {selectedEndUser?.name}
-          </h2>
-
-          {rows.map((row, idx) => (
-            <div key={idx} className="pr-item-card">
-              {rows.length > 1 && (
-                <button
-                  className="pr-item-card__remove"
-                  onClick={() => removeRow(idx)}
-                  title="Remove row"
-                >
-                  x
-                </button>
-              )}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '160px 1fr',
-                  gap: 12,
-                  marginBottom: 12,
-                }}
-              >
-                <div className="pr-field">
-                  <label>PPMP Code</label>
-                  <input
-                    type="text"
-                    value={row.code}
-                    onChange={(e) => updateRow(idx, 'code', e.target.value)}
-                    placeholder="ADM-001"
-                  />
-                </div>
-                <div className="pr-field">
-                  <label>Item Description</label>
-                  <input
-                    type="text"
-                    value={row.itemDescription}
-                    onChange={(e) => updateRow(idx, 'itemDescription', e.target.value)}
-                    placeholder="Bond paper A4, 80gsm"
-                  />
-                </div>
-              </div>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 100px 100px 120px',
-                  gap: 12,
-                  marginBottom: 12,
-                }}
-              >
-                <div className="pr-field">
-                  <label>Category</label>
-                  <select
-                    value={row.procurementCategory}
-                    onChange={(e) => updateRow(idx, 'procurementCategory', e.target.value)}
-                  >
-                    {CATEGORY_OPTIONS.map((c) => (
-                      <option key={c.value} value={c.value}>
-                        {c.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="pr-field">
-                  <label>UOM</label>
-                  <input
-                    type="text"
-                    value={row.unitOfMeasure}
-                    onChange={(e) => updateRow(idx, 'unitOfMeasure', e.target.value)}
-                    placeholder="pc"
-                  />
-                </div>
-                <div className="pr-field">
-                  <label>Quantity</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={row.quantity}
-                    onChange={(e) => updateRow(idx, 'quantity', e.target.value)}
-                  />
-                </div>
-                <div className="pr-field">
-                  <label>Unit Cost</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={row.estimatedUnitCost}
-                    onChange={(e) => updateRow(idx, 'estimatedUnitCost', e.target.value)}
-                  />
-                </div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 1fr', gap: 12 }}>
-                <div className="pr-field">
-                  <label>Mode of Procurement</label>
-                  <select
-                    value={row.modeOfProcurement}
-                    onChange={(e) => updateRow(idx, 'modeOfProcurement', e.target.value)}
-                  >
-                    <option value="">— Select —</option>
-                    {MODE_OPTIONS.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="pr-field">
-                  <label>Quarter</label>
-                  <select
-                    value={row.scheduleQuarter}
-                    onChange={(e) => updateRow(idx, 'scheduleQuarter', e.target.value)}
-                  >
-                    <option value="">—</option>
-                    <option value="1">Q1</option>
-                    <option value="2">Q2</option>
-                    <option value="3">Q3</option>
-                    <option value="4">Q4</option>
-                  </select>
-                </div>
-                <div className="pr-field">
-                  <label>Notes</label>
-                  <input
-                    type="text"
-                    value={row.cboNotes}
-                    onChange={(e) => updateRow(idx, 'cboNotes', e.target.value)}
-                  />
-                </div>
-              </div>
-              {row.quantity && row.estimatedUnitCost && (
-                <div style={{ textAlign: 'right', marginTop: 8, fontSize: 13, color: '#475467' }}>
-                  Total:{' '}
-                  <strong>
-                    {formatPeso(
-                      (parseFloat(row.quantity) * parseFloat(row.estimatedUnitCost)).toFixed(2),
-                    )}
-                  </strong>
-                </div>
-              )}
-            </div>
-          ))}
-
-          <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
-            <button className="pr-btn" onClick={addRow}>
-              + Add Another Row
+          {/* Excel upload — compact */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              flexWrap: 'wrap',
+              fontSize: 13,
+              color: '#667085',
+              borderTop: '1px dashed #e4e7ec',
+              paddingTop: 14,
+            }}
+          >
+            <span>Or upload a filled Excel template for {selectedEndUser?.name}:</span>
+            <button className="pr-btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={handleDownloadTemplate}>
+              ⬇ Template
             </button>
-          </div>
-
-          <div className="pr-form-actions">
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={(e) => {
+                setUploadFile(e.target.files?.[0] ?? null);
+                setUploadResult(null);
+              }}
+            />
             <button
               className="pr-btn"
-              onClick={() => save('draft')}
-              disabled={saving || filledRows === 0}
+              style={{ padding: '4px 12px', fontSize: 12 }}
+              onClick={handleUpload}
+              disabled={uploading || !uploadFile}
             >
-              {saving ? 'Saving…' : `Save as Draft (${filledRows})`}
+              {uploading ? 'Uploading…' : 'Upload'}
             </button>
-            <button
-              className="pr-btn pr-btn--primary"
-              onClick={() => save('approved')}
-              disabled={saving || filledRows === 0}
-            >
-              {saving ? 'Saving…' : `Finalize ${filledRows} Item(s)`}
-            </button>
+            {uploadResult && (
+              <span style={{ color: uploadResult.created > 0 ? '#067647' : '#b42318' }}>
+                {uploadResult.created} created
+                {uploadResult.skipped > 0 ? ` · ${uploadResult.skipped} skipped` : ''}
+              </span>
+            )}
           </div>
         </>
       )}
