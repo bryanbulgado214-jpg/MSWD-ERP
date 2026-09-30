@@ -99,6 +99,7 @@ export interface CreatePurchaseRequestItemInput {
   accountCode?: string;
   technicalSpecification?: string;
   classification?: ItemClassification;
+  ppmpItemId?: string;
 }
 
 export interface CreatePurchaseRequestInput {

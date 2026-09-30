@@ -51,6 +51,7 @@ export class PurchaseRequestService {
         estimatedTotalCost,
         accountCode: item.accountCode ?? null,
         technicalSpecification: item.technicalSpecification ?? null,
+        ppmpItemId: item.ppmpItemId ?? null,
         ...(item.classification ? { classification: item.classification as ItemClassification } : {}),
       };
     });
@@ -144,6 +145,7 @@ export class PurchaseRequestService {
             estimatedTotalCost,
             accountCode: item.accountCode ?? null,
             technicalSpecification: item.technicalSpecification ?? null,
+            ppmpItemId: item.ppmpItemId ?? null,
             ...(item.classification ? { classification: item.classification as ItemClassification } : {}),
           };
         });

@@ -236,6 +236,14 @@ export class PpmpController {
     return this.ppmpService.getRemainingPlannedAmount(user.organizationId, id);
   }
 
+  // Documents (POs + their DVs) that recorded actual acquisitions of this PPMP
+  // item — the "purchased to date" drill-down on the PR form.
+  @Get(':id/acquisitions')
+  @RequirePermissions('procurement.read')
+  async acquisitions(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.ppmpService.acquisitionsForPpmpItem(user.organizationId, id);
+  }
+
   @Post(':id/approve')
   @RequirePermissions('procurement.ppmp.manage')
   async approve(

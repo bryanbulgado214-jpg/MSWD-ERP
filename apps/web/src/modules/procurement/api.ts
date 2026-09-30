@@ -341,6 +341,27 @@ export interface PpmpItemWithRemaining extends PpmpItem {
   remainingAmount: string;
   usedQuantity: string;
   remainingQuantity: string;
+  purchasedQuantity: string;
+  purchasedAmount: string;
+}
+
+export interface AcquisitionDocument {
+  type: string;
+  reference: string;
+  date: string | null;
+  quantity: string | null;
+  unitCost: string | null;
+  totalAmount: string;
+  relatedTo?: string;
+  supplier?: string;
+}
+
+/** Documents (POs + their DVs) that recorded actual purchases of a PPMP item. */
+export async function getPpmpAcquisitions(
+  ppmpItemId: string,
+): Promise<{ documents: AcquisitionDocument[] }> {
+  const res = await authFetch(`/procurement/ppmp-items/${ppmpItemId}/acquisitions`);
+  return res.json();
 }
 
 export interface CreatePpmpItemInput {

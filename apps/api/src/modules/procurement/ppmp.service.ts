@@ -394,35 +394,144 @@ export class PpmpService {
 
     return Promise.all(
       items.map(async (item) => {
-        const prTotals = await this.prisma.purchaseRequest.aggregate({
+        // PR line quantities for this PPMP item — matched either by the line's own
+        // ppmpItemId (new, multi-item PRs) or the PR header (legacy single-item PRs).
+        const ppmpMatch = (headerLink: boolean) =>
+          headerLink
+            ? { ppmpItemId: null, purchaseRequest: { ppmpItemId: item.id, organizationId } }
+            : { ppmpItemId: item.id, purchaseRequest: { organizationId } };
+
+        // Purchased = quantity on PRs that reached a non-cancelled Purchase Order.
+        const purchasedAgg = await this.prisma.purchaseRequestItem.aggregate({
           where: {
-            ppmpItemId: item.id,
-            organizationId,
-            status: { notIn: ['cancelled', 'rejected', 'voided'] },
-          },
-          _sum: { totalAmount: true },
-        });
-        const requested = prTotals._sum.totalAmount ?? new Prisma.Decimal(0);
-        const prQty = await this.prisma.purchaseRequestItem.aggregate({
-          where: {
-            purchaseRequest: {
-              ppmpItemId: item.id,
-              organizationId,
-              status: { notIn: ['cancelled', 'rejected', 'voided'] },
-            },
+            OR: [true, false].map((h) => {
+              const m = ppmpMatch(h);
+              return {
+                ...m,
+                purchaseRequest: {
+                  ...m.purchaseRequest,
+                  status: { notIn: ['cancelled', 'rejected', 'voided'] },
+                  purchaseOrders: { some: { status: { not: 'cancelled' } } },
+                },
+              };
+            }),
           },
           _sum: { quantity: true },
         });
-        const usedQty = prQty._sum.quantity ?? new Prisma.Decimal(0);
+        const purchasedQty = purchasedAgg._sum.quantity ?? new Prisma.Decimal(0);
+
+        // Requested (any non-cancelled PR, whether or not a PO exists yet).
+        const usedAgg = await this.prisma.purchaseRequestItem.aggregate({
+          where: {
+            OR: [true, false].map((h) => {
+              const m = ppmpMatch(h);
+              return {
+                ...m,
+                purchaseRequest: {
+                  ...m.purchaseRequest,
+                  status: { notIn: ['cancelled', 'rejected', 'voided'] },
+                },
+              };
+            }),
+          },
+          _sum: { quantity: true },
+        });
+        const usedQty = usedAgg._sum.quantity ?? new Prisma.Decimal(0);
+        const purchasedAmount = purchasedQty.mul(item.estimatedUnitCost);
+
         return {
           ...item,
-          requestedAmount: requested,
-          remainingAmount: item.estimatedTotalCost.sub(requested),
+          purchasedQuantity: purchasedQty,
+          purchasedAmount,
           usedQuantity: usedQty,
-          remainingQuantity: item.quantity.sub(usedQty),
+          requestedAmount: usedQty.mul(item.estimatedUnitCost),
+          // Remaining to purchase = approved − actually purchased (via POs).
+          remainingQuantity: item.quantity.sub(purchasedQty),
+          remainingAmount: item.estimatedTotalCost.sub(purchasedAmount),
         };
       }),
     );
+  }
+
+  /**
+   * The documents (POs and their DVs) that recorded actual acquisitions of a
+   * PPMP item — for the "purchased to date" drill-down on the PR form. Petty
+   * cash vouchers are not attributable (no PCV→PPMP link in the model).
+   */
+  async acquisitionsForPpmpItem(organizationId: string, ppmpItemId: string) {
+    const pos = await this.prisma.purchaseOrder.findMany({
+      where: {
+        organizationId,
+        status: { not: 'cancelled' },
+        purchaseRequest: {
+          OR: [{ ppmpItemId }, { items: { some: { ppmpItemId } } }],
+        },
+      },
+      select: {
+        poNumber: true,
+        poDate: true,
+        contractAmount: true,
+        supplier: { select: { name: true } },
+        purchaseRequest: {
+          select: {
+            prNumber: true,
+            ppmpItemId: true,
+            items: {
+              where: { OR: [{ ppmpItemId }, { ppmpItemId: null }] },
+              select: { quantity: true, estimatedUnitCost: true, ppmpItemId: true },
+            },
+          },
+        },
+        disbursementVouchers: {
+          where: { status: { not: 'cancelled' } },
+          select: { dvNumber: true, dvDate: true, netAmount: true, status: true },
+          orderBy: { dvDate: 'asc' },
+        },
+      },
+      orderBy: { poDate: 'asc' },
+    });
+
+    const documents: Array<{
+      type: string;
+      reference: string;
+      date: string | null;
+      quantity: string | null;
+      unitCost: string | null;
+      totalAmount: string;
+      relatedTo?: string;
+      supplier?: string;
+    }> = [];
+
+    for (const po of pos) {
+      // Quantity/unit-cost for THIS ppmp item come from the matching PR lines.
+      const lines = po.purchaseRequest.items.filter(
+        (i) => i.ppmpItemId === ppmpItemId || (i.ppmpItemId === null && po.purchaseRequest.ppmpItemId === ppmpItemId),
+      );
+      const qty = lines.reduce((s, l) => s.add(l.quantity), new Prisma.Decimal(0));
+      const unit = lines[0]?.estimatedUnitCost ?? null;
+      documents.push({
+        type: 'Purchase Order',
+        reference: po.poNumber,
+        date: po.poDate ? po.poDate.toISOString().slice(0, 10) : null,
+        quantity: qty.gt(0) ? qty.toString() : null,
+        unitCost: unit ? unit.toString() : null,
+        totalAmount: po.contractAmount.toString(),
+        ...(po.supplier ? { supplier: po.supplier.name } : {}),
+      });
+      for (const dv of po.disbursementVouchers) {
+        documents.push({
+          type: 'Disbursement Voucher',
+          reference: dv.dvNumber,
+          date: dv.dvDate ? dv.dvDate.toISOString().slice(0, 10) : null,
+          quantity: null,
+          unitCost: null,
+          totalAmount: dv.netAmount.toString(),
+          relatedTo: po.poNumber,
+        });
+      }
+    }
+
+    return { documents };
   }
 
   async findOne(organizationId: string, id: string) {

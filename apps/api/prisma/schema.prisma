@@ -1479,14 +1479,19 @@ model PurchaseRequestItem {
   accountCode            String?             @map("account_code") @db.VarChar(30)
   technicalSpecification String?             @map("technical_specification")
   classification         ItemClassification?
+  // The PPMP item this line draws from — lets one PR span several PPMP items and
+  // keeps per-item purchased/remaining tracking accurate.
+  ppmpItemId             String?             @map("ppmp_item_id") @db.Uuid
   createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   purchaseRequest      PurchaseRequest       @relation(fields: [purchaseRequestId], references: [id], onDelete: Cascade)
+  ppmpItem             PpmpItem?             @relation(fields: [ppmpItemId], references: [id], onDelete: SetNull)
   inspectionReportItems InspectionReportItem[]
 
   @@unique([purchaseRequestId, itemNumber])
   @@index([purchaseRequestId])
+  @@index([ppmpItemId])
   @@map("purchase_request_items")
 }
 
@@ -1550,8 +1555,9 @@ model PpmpItem {
   creator          User?             @relation("PpmpItemsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
   updater          User?             @relation("PpmpItemsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
 
-  appItems         AppItem[]
-  purchaseRequests PurchaseRequest[]
+  appItems             AppItem[]
+  purchaseRequests     PurchaseRequest[]
+  purchaseRequestItems PurchaseRequestItem[]
 
   @@unique([organizationId, code])
   @@index([organizationId])

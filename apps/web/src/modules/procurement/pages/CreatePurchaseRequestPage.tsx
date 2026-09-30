@@ -18,6 +18,7 @@ import {
 } from '../api';
 import type { CreatePurchaseRequestItemInput } from '../types';
 
+import { AcquisitionsModal } from './AcquisitionsModal';
 import { EndUserPicker } from './EndUserPicker';
 import './procurement.css';
 
@@ -31,7 +32,11 @@ export function CreatePurchaseRequestPage() {
   const [selectedFiscalYear, setSelectedFiscalYear] = useState('');
   const [myPpmpItems, setMyPpmpItems] = useState<PpmpItemWithRemaining[]>([]);
   const [loadingPpmp, setLoadingPpmp] = useState(false);
-  const [selectedPpmpItemId, setSelectedPpmpItemId] = useState('');
+  const [acqModal, setAcqModal] = useState<{
+    id: string;
+    code: string;
+    description: string;
+  } | null>(null);
   const [departments, setDepartments] = useState<LookupDepartment[]>([]);
   const [appItems, setAppItems] = useState<AppItem[]>([]);
   // The purchase officer prepares every PR; the end-user who initiated the
@@ -64,7 +69,9 @@ export function CreatePurchaseRequestPage() {
   useEffect(() => {
     if (!selectedFiscalYear) return;
     let cancelled = false;
-    setSelectedPpmpItemId('');
+    // A new end-user means new allocations — clear any allocation-derived lines.
+    setItems([emptyItem()]);
+    setAppItemId('');
     // PPMP allocations belong to the end-user who initiated the request; load
     // them only once the officer has picked that end-user.
     setLoadingPpmp(!!endUserId);
@@ -89,21 +96,32 @@ export function CreatePurchaseRequestPage() {
     };
   }, [selectedFiscalYear, endUserId]);
 
-  function selectPpmpItem(ppmpItemId: string) {
-    setSelectedPpmpItemId(ppmpItemId);
-    const ppmp = myPpmpItems.find((p) => p.id === ppmpItemId);
-    if (!ppmp) return;
-    setTitle(ppmp.itemDescription);
-    setItems([
-      {
-        description: ppmp.itemDescription,
-        quantity: parseFloat(ppmp.remainingQuantity),
-        unitOfMeasure: ppmp.unitOfMeasure,
-        estimatedUnitCost: parseFloat(ppmp.estimatedUnitCost),
-      },
-    ]);
-    const linkedApp = appItems.find((a) => a.ppmpItem.id === ppmpItemId);
-    setAppItemId(linkedApp ? linkedApp.id : '');
+  // Multi-select: each checked allocation becomes a PR line that remembers its
+  // PPMP item; unchecking removes that line. Manual (non-PPMP) lines are kept.
+  function toggleAllocation(ppmp: PpmpItemWithRemaining) {
+    const already = items.some((it) => it.ppmpItemId === ppmp.id);
+    if (already) {
+      setItems((prev) => {
+        const next = prev.filter((it) => it.ppmpItemId !== ppmp.id);
+        return next.length ? next : [emptyItem()];
+      });
+      return;
+    }
+    const line: CreatePurchaseRequestItemInput = {
+      description: ppmp.itemDescription,
+      quantity: parseFloat(ppmp.remainingQuantity) || 0,
+      unitOfMeasure: ppmp.unitOfMeasure,
+      estimatedUnitCost: parseFloat(ppmp.estimatedUnitCost) || 0,
+      ppmpItemId: ppmp.id,
+    };
+    setItems((prev) => {
+      const onlyEmpty = prev.length === 1 && !prev[0]?.description && !prev[0]?.ppmpItemId;
+      return onlyEmpty ? [line] : [...prev, line];
+    });
+    if (!title.trim()) setTitle(ppmp.itemDescription);
+    // Auto-link the APP line for a first single selection.
+    const linkedApp = appItems.find((a) => a.ppmpItem.id === ppmp.id);
+    if (linkedApp && !appItemId) setAppItemId(linkedApp.id);
   }
 
   function updateItem(index: number, patch: Partial<CreatePurchaseRequestItemInput>) {
@@ -120,10 +138,8 @@ export function CreatePurchaseRequestPage() {
   }
 
   const totalAmount = items.reduce((sum, item) => sum + item.quantity * item.estimatedUnitCost, 0);
-  const selectedPpmpItem = myPpmpItems.find((p) => p.id === selectedPpmpItemId);
-  const linkedAppItems = selectedPpmpItemId
-    ? appItems.filter((a) => a.ppmpItem.id === selectedPpmpItemId)
-    : appItems;
+  const selectedPpmpIds = [...new Set(items.map((it) => it.ppmpItemId).filter(Boolean))] as string[];
+  const linkedAppItems = appItems;
 
   const canSubmit =
     title.trim() &&
@@ -149,7 +165,7 @@ export function CreatePurchaseRequestPage() {
         ...(departmentId ? { departmentId } : {}),
         ...(endUserId ? { endUserId } : {}),
         ...(requestedDeliveryDate ? { requestedDeliveryDate } : {}),
-        ...(selectedPpmpItemId ? { ppmpItemId: selectedPpmpItemId } : {}),
+        ...(selectedPpmpIds.length === 1 ? { ppmpItemId: selectedPpmpIds[0] } : {}),
         ...(appItemId ? { appItemId } : {}),
         ...(selectedFiscalYear ? { fiscalYearId: selectedFiscalYear } : {}),
         // Classification is assigned by the accountant during review — the
@@ -159,6 +175,7 @@ export function CreatePurchaseRequestPage() {
           quantity: item.quantity,
           unitOfMeasure: item.unitOfMeasure.trim(),
           estimatedUnitCost: item.estimatedUnitCost,
+          ...(item.ppmpItemId ? { ppmpItemId: item.ppmpItemId } : {}),
           ...(item.accountCode?.trim() ? { accountCode: item.accountCode.trim() } : {}),
           ...(item.technicalSpecification?.trim()
             ? { technicalSpecification: item.technicalSpecification.trim() }
@@ -265,7 +282,8 @@ export function CreatePurchaseRequestPage() {
             )}
           </div>
           <p style={{ fontSize: 12, color: '#667085', marginBottom: 8 }}>
-            Select an item from your PPMP to pre-fill the purchase request.
+            Check one or more items from the PPMP to add them to this purchase request. Click a
+            "Purchased to Date" figure to see the documents behind it.
           </p>
           <div style={{ overflowX: 'auto' }}>
             <table className="pr-table" style={{ fontSize: 12 }}>
@@ -276,6 +294,7 @@ export function CreatePurchaseRequestPage() {
                   <th>Description</th>
                   <th>UOM</th>
                   <th style={{ textAlign: 'right' }}>Allocated Qty</th>
+                  <th style={{ textAlign: 'right' }}>Purchased to Date</th>
                   <th style={{ textAlign: 'right' }}>Remaining Qty</th>
                   <th style={{ textAlign: 'right' }}>Unit Cost</th>
                   <th style={{ textAlign: 'right' }}>Remaining Budget</th>
@@ -284,25 +303,25 @@ export function CreatePurchaseRequestPage() {
               <tbody>
                 {myPpmpItems.map((ppmp) => {
                   const remQty = parseFloat(ppmp.remainingQuantity);
-                  const isSelected = selectedPpmpItemId === ppmp.id;
+                  const purchased = parseFloat(ppmp.purchasedQuantity ?? '0');
+                  const isSelected = items.some((it) => it.ppmpItemId === ppmp.id);
                   const exhausted = remQty <= 0;
                   return (
                     <tr
                       key={ppmp.id}
                       style={{
                         background: isSelected ? '#eff8ff' : exhausted ? '#f9fafb' : undefined,
-                        opacity: exhausted ? 0.5 : 1,
+                        opacity: exhausted && !isSelected ? 0.55 : 1,
                         cursor: exhausted ? 'not-allowed' : 'pointer',
                       }}
-                      onClick={() => !exhausted && selectPpmpItem(ppmp.id)}
+                      onClick={() => !exhausted && toggleAllocation(ppmp)}
                     >
-                      <td>
+                      <td onClick={(e) => e.stopPropagation()}>
                         <input
-                          type="radio"
-                          name="ppmpItem"
+                          type="checkbox"
                           checked={isSelected}
-                          disabled={exhausted}
-                          onChange={() => selectPpmpItem(ppmp.id)}
+                          disabled={exhausted && !isSelected}
+                          onChange={() => toggleAllocation(ppmp)}
                           style={{ cursor: exhausted ? 'not-allowed' : 'pointer' }}
                         />
                       </td>
@@ -313,6 +332,30 @@ export function CreatePurchaseRequestPage() {
                       <td>{ppmp.unitOfMeasure}</td>
                       <td style={{ textAlign: 'right' }}>
                         {parseFloat(ppmp.quantity).toLocaleString()}
+                      </td>
+                      <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setAcqModal({
+                              id: ppmp.id,
+                              code: ppmp.code,
+                              description: ppmp.itemDescription,
+                            })
+                          }
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
+                            color: '#175cd3',
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                            textDecoration: 'underline dotted',
+                          }}
+                          title="View the PO/DV documents behind this"
+                        >
+                          {purchased.toLocaleString()}
+                        </button>
                       </td>
                       <td
                         style={{
@@ -333,21 +376,19 @@ export function CreatePurchaseRequestPage() {
               </tbody>
             </table>
           </div>
-          {selectedPpmpItem && (
+          {selectedPpmpIds.length > 0 && (
             <div
               style={{
                 background: '#eff8ff',
                 borderRadius: 8,
-                padding: '12px 16px',
+                padding: '10px 16px',
                 marginTop: 12,
                 fontSize: 13,
               }}
             >
-              Selected: <strong>{selectedPpmpItem.code}</strong> —{' '}
-              {selectedPpmpItem.itemDescription}
-              {' | '}Remaining: {parseFloat(selectedPpmpItem.remainingQuantity).toLocaleString()}{' '}
-              {selectedPpmpItem.unitOfMeasure}
-              {' | '}Budget: {formatPeso(selectedPpmpItem.remainingAmount)}
+              <strong>{selectedPpmpIds.length}</strong> PPMP item
+              {selectedPpmpIds.length === 1 ? '' : 's'} added to this request — adjust each line's
+              quantity in the Items section below.
             </div>
           )}
         </div>
@@ -564,6 +605,15 @@ export function CreatePurchaseRequestPage() {
           </button>
         </div>
       </form>
+
+      {acqModal && (
+        <AcquisitionsModal
+          ppmpItemId={acqModal.id}
+          itemCode={acqModal.code}
+          itemDescription={acqModal.description}
+          onClose={() => setAcqModal(null)}
+        />
+      )}
     </div>
   );
 }

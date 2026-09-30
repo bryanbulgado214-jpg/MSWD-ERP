@@ -32,6 +32,11 @@ export class PurchaseRequestItemDto {
   @IsOptional()
   @IsIn(['inventory', 'asset', 'expense', 'infrastructure', 'service'])
   classification?: 'inventory' | 'asset' | 'expense' | 'infrastructure' | 'service';
+
+  // The PPMP item this line was drawn from (when the officer picked an allocation).
+  @IsOptional()
+  @IsUUID()
+  ppmpItemId?: string;
 }
 
 export class CreatePurchaseRequestDto {

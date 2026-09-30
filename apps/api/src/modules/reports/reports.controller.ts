@@ -77,26 +77,37 @@ export class ReportsController {
           where: {
             organizationId: orgId,
             status: { not: 'cancelled' },
-            purchaseRequest: { ppmpItemId: it.id },
+            purchaseRequest: {
+              OR: [{ ppmpItemId: it.id }, { items: { some: { ppmpItemId: it.id } } }],
+            },
           },
-          select: { poNumber: true, contractAmount: true },
+          select: { poNumber: true },
           orderBy: { poDate: 'asc' },
         });
-        const purchasedAmount = pos.reduce(
-          (s, p) => s.add(p.contractAmount),
-          new Prisma.Decimal(0),
-        );
         const qAgg = await this.prisma.purchaseRequestItem.aggregate({
           where: {
-            purchaseRequest: {
-              organizationId: orgId,
-              ppmpItemId: it.id,
-              purchaseOrders: { some: { status: { not: 'cancelled' } } },
-            },
+            OR: [
+              {
+                ppmpItemId: it.id,
+                purchaseRequest: {
+                  organizationId: orgId,
+                  purchaseOrders: { some: { status: { not: 'cancelled' } } },
+                },
+              },
+              {
+                ppmpItemId: null,
+                purchaseRequest: {
+                  ppmpItemId: it.id,
+                  organizationId: orgId,
+                  purchaseOrders: { some: { status: { not: 'cancelled' } } },
+                },
+              },
+            ],
           },
           _sum: { quantity: true },
         });
         const purchasedQty = qAgg._sum.quantity ?? new Prisma.Decimal(0);
+        const purchasedAmount = purchasedQty.mul(it.estimatedUnitCost);
         return {
           code: it.code,
           description: it.itemDescription,
@@ -138,6 +149,7 @@ export class ReportsController {
         ppmpItem: {
           select: {
             quantity: true,
+            estimatedUnitCost: true,
             unitOfMeasure: true,
             department: { select: { name: true } },
             endUser: { select: { name: true } },
@@ -150,30 +162,44 @@ export class ReportsController {
 
     const rows = await Promise.all(
       items.map(async (it) => {
+        // An APP line = one PPMP item; measure purchases against that PPMP item
+        // (via PR line links or the PR header), same basis as PPMP utilization.
+        const ppmpId = it.ppmpItemId;
         const pos = await this.prisma.purchaseOrder.findMany({
           where: {
             organizationId: orgId,
             status: { not: 'cancelled' },
-            purchaseRequest: { appItemId: it.id },
+            purchaseRequest: {
+              OR: [{ ppmpItemId: ppmpId }, { items: { some: { ppmpItemId: ppmpId } } }],
+            },
           },
-          select: { poNumber: true, contractAmount: true },
+          select: { poNumber: true },
           orderBy: { poDate: 'asc' },
         });
-        const purchasedAmount = pos.reduce(
-          (s, p) => s.add(p.contractAmount),
-          new Prisma.Decimal(0),
-        );
         const qAgg = await this.prisma.purchaseRequestItem.aggregate({
           where: {
-            purchaseRequest: {
-              organizationId: orgId,
-              appItemId: it.id,
-              purchaseOrders: { some: { status: { not: 'cancelled' } } },
-            },
+            OR: [
+              {
+                ppmpItemId: ppmpId,
+                purchaseRequest: {
+                  organizationId: orgId,
+                  purchaseOrders: { some: { status: { not: 'cancelled' } } },
+                },
+              },
+              {
+                ppmpItemId: null,
+                purchaseRequest: {
+                  ppmpItemId: ppmpId,
+                  organizationId: orgId,
+                  purchaseOrders: { some: { status: { not: 'cancelled' } } },
+                },
+              },
+            ],
           },
           _sum: { quantity: true },
         });
         const purchasedQty = qAgg._sum.quantity ?? new Prisma.Decimal(0);
+        const purchasedAmount = purchasedQty.mul(it.ppmpItem.estimatedUnitCost);
         const approvedQty = it.ppmpItem.quantity;
         return {
           appNumber: it.appNumber,

@@ -28,6 +28,7 @@ export interface CreatePurchaseRequestItemInput {
   accountCode?: string;
   technicalSpecification?: string;
   classification?: 'inventory' | 'asset' | 'expense' | 'infrastructure' | 'service';
+  ppmpItemId?: string;
 }
 
 export interface UpdatePurchaseRequestInput {
