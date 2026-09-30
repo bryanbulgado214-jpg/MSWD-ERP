@@ -68,6 +68,9 @@ export interface CreatePpmpItemInput {
   estimatedUnitCost: number | string;
   modeOfProcurement?: string;
   scheduleQuarter?: number;
+  // Quantity split across quarters, e.g. { "1": 6, "3": 6, "4": 6 }. When
+  // provided, the values must sum to `quantity`.
+  scheduleByQuarter?: Record<string, number> | null;
   cboNotes?: string;
   // Draft = still editable; approved = locked and flows into the APP. The budget
   // officer chooses "Save as Draft" vs "Finalize" when saving.
@@ -85,8 +88,36 @@ export interface UpdatePpmpItemInput {
   estimatedUnitCost?: number | string;
   modeOfProcurement?: string | null;
   scheduleQuarter?: number | null;
+  scheduleByQuarter?: Record<string, number> | null;
   cboNotes?: string | null;
   updatedBy?: string;
+}
+
+/** Keep only quarters 1-4 with a positive quantity, or null if none. */
+function normalizeSchedule(raw: unknown): Record<string, number> | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const out: Record<string, number> = {};
+  for (const q of ['1', '2', '3', '4']) {
+    const v = Number((raw as Record<string, unknown>)[q] ?? 0);
+    if (Number.isFinite(v) && v > 0) out[q] = v;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function scheduleTotal(sched: Record<string, number> | null): number {
+  return sched ? Object.values(sched).reduce((a, b) => a + Number(b), 0) : 0;
+}
+
+/** Throws if a provided quarter schedule does not sum to the item quantity. */
+function assertScheduleMatches(sched: Record<string, number> | null, quantity: number | string) {
+  if (!sched) return;
+  const total = scheduleTotal(sched);
+  const qty = Number(quantity);
+  if (Math.abs(total - qty) > 0.0001) {
+    throw new BadRequestException(
+      `The quarter schedule totals ${total}, but the item quantity is ${qty}. They must match.`,
+    );
+  }
 }
 
 const PPMP_ITEM_INCLUDE = {
@@ -110,6 +141,8 @@ export class PpmpService {
     const qty = new Prisma.Decimal(input.quantity);
     const unitCost = new Prisma.Decimal(input.estimatedUnitCost);
     const totalCost = qty.mul(unitCost);
+    const schedule = normalizeSchedule(input.scheduleByQuarter);
+    assertScheduleMatches(schedule, input.quantity);
 
     const approved = (input.status ?? 'approved') === 'approved';
 
@@ -130,6 +163,7 @@ export class PpmpService {
           estimatedTotalCost: totalCost,
           ...(input.modeOfProcurement ? { modeOfProcurement: input.modeOfProcurement } : {}),
           ...(input.scheduleQuarter != null ? { scheduleQuarter: input.scheduleQuarter } : {}),
+          ...(schedule ? { scheduleByQuarter: schedule } : {}),
           ...(input.cboNotes ? { cboNotes: input.cboNotes } : {}),
           // A water district's PPMP is its approved budget, so items default to
           // approved on entry — but the budget officer can Save as Draft to keep
@@ -169,6 +203,7 @@ export class PpmpService {
         | 'estimatedUnitCost'
         | 'modeOfProcurement'
         | 'scheduleQuarter'
+        | 'scheduleByQuarter'
         | 'cboNotes'
       >
     >,
@@ -181,6 +216,8 @@ export class PpmpService {
       for (const it of items) {
         const qty = new Prisma.Decimal(it.quantity);
         const unitCost = new Prisma.Decimal(it.estimatedUnitCost);
+        const schedule = normalizeSchedule(it.scheduleByQuarter);
+        assertScheduleMatches(schedule, it.quantity);
         const row = await tx.ppmpItem.create({
           data: {
             organizationId,
@@ -197,6 +234,7 @@ export class PpmpService {
             estimatedTotalCost: qty.mul(unitCost),
             ...(it.modeOfProcurement ? { modeOfProcurement: it.modeOfProcurement } : {}),
             ...(it.scheduleQuarter != null ? { scheduleQuarter: it.scheduleQuarter } : {}),
+            ...(schedule ? { scheduleByQuarter: schedule } : {}),
             ...(it.cboNotes ? { cboNotes: it.cboNotes } : {}),
             status: approved ? 'approved' : 'draft',
             ...(approved ? { approvedBy: common.createdBy ?? null, approvedAt: now } : {}),
@@ -238,6 +276,17 @@ export class PpmpService {
       updates.estimatedUnitCost = unitCost;
       updates.estimatedTotalCost = qty.mul(unitCost);
     }
+
+    // Keep the quarter schedule consistent with the (possibly new) quantity.
+    const nextQty = input.quantity !== undefined ? Number(input.quantity) : Number(item.quantity);
+    let nextSchedule: Record<string, number> | null | undefined;
+    if (input.scheduleByQuarter !== undefined) {
+      nextSchedule = normalizeSchedule(input.scheduleByQuarter);
+      updates.scheduleByQuarter = nextSchedule ?? Prisma.DbNull;
+    }
+    const scheduleToCheck =
+      nextSchedule !== undefined ? nextSchedule : normalizeSchedule(item.scheduleByQuarter);
+    assertScheduleMatches(scheduleToCheck, nextQty);
 
     return runAudited(this.prisma, input.updatedBy, (tx) =>
       tx.ppmpItem.update({

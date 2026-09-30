@@ -47,6 +47,10 @@ const MODE_OPTIONS = [
   'Agency-to-Agency',
 ];
 
+const QUARTERS = ['1', '2', '3', '4'] as const;
+type QuarterMap = { '1': string; '2': string; '3': string; '4': string };
+const emptySched = (): QuarterMap => ({ '1': '', '2': '', '3': '', '4': '' });
+
 interface FormRow {
   code: string;
   itemDescription: string;
@@ -55,7 +59,7 @@ interface FormRow {
   quantity: string;
   estimatedUnitCost: string;
   modeOfProcurement: string;
-  scheduleQuarter: string;
+  sched: QuarterMap;
   cboNotes: string;
 }
 
@@ -67,7 +71,7 @@ const emptyRow = (): FormRow => ({
   quantity: '',
   estimatedUnitCost: '',
   modeOfProcurement: '',
-  scheduleQuarter: '',
+  sched: emptySched(),
   cboNotes: '',
 });
 
@@ -78,8 +82,86 @@ interface EditState {
   procurementCategory: string;
   unitOfMeasure: string;
   modeOfProcurement: string;
-  scheduleQuarter: string;
+  sched: QuarterMap;
   cboNotes: string;
+}
+
+/** Sum the per-quarter quantities. */
+function schedTotal(s: QuarterMap): number {
+  return QUARTERS.reduce((a, q) => a + (parseFloat(s[q]) || 0), 0);
+}
+
+/** { "1": 6, "3": 6 } from the form's quarter inputs (drops zeros). */
+function schedObject(s: QuarterMap): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const q of QUARTERS) {
+    const v = parseFloat(s[q]) || 0;
+    if (v > 0) out[q] = v;
+  }
+  return out;
+}
+
+/** A stored schedule back into the 4 quarter input strings. */
+function schedToMap(raw: Record<string, number> | null | undefined): QuarterMap {
+  const m = emptySched();
+  if (raw) for (const q of QUARTERS) if (raw[q]) m[q] = String(raw[q]);
+  return m;
+}
+
+/** "Q1: 6 · Q3: 6 · Q4: 6" for display. */
+function schedLabel(raw: Record<string, number> | null | undefined, fallbackQuarter?: number | null): string {
+  if (raw && Object.keys(raw).length) {
+    return QUARTERS.filter((q) => raw[q]).map((q) => `Q${q}: ${raw[q]}`).join(' · ');
+  }
+  return fallbackQuarter ? `Q${fallbackQuarter}` : '—';
+}
+
+function ScheduleEditor({
+  sched,
+  onChange,
+  quantity,
+}: {
+  sched: QuarterMap;
+  onChange: (q: (typeof QUARTERS)[number], value: string) => void;
+  quantity: number;
+}) {
+  const total = schedTotal(sched);
+  const matches = quantity > 0 && Math.abs(total - quantity) < 0.0001;
+  return (
+    <div className="pr-field">
+      <label>Schedule by quarter — spread the quantity across the quarters it will be bought</label>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        {QUARTERS.map((q) => (
+          <label
+            key={q}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}
+          >
+            <span style={{ color: '#667085', fontWeight: 700 }}>Q{q}</span>
+            <input
+              type="number"
+              min="0"
+              value={sched[q]}
+              onChange={(e) => onChange(q, e.target.value)}
+              style={{ width: 64 }}
+            />
+          </label>
+        ))}
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            color: matches ? '#067647' : quantity > 0 ? '#b42318' : '#98a2b3',
+          }}
+        >
+          {quantity <= 0
+            ? 'Enter a quantity first'
+            : matches
+              ? `✓ ${total} scheduled`
+              : `Scheduled ${total} of ${quantity} — must match`}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 const cell: React.CSSProperties = { fontSize: 12, color: '#475467' };
@@ -169,12 +251,18 @@ export function PpmpDataEntryPage() {
       .catch(() => {});
   }
 
-  function updateForm(field: keyof FormRow, value: string) {
+  function updateForm(field: keyof Omit<FormRow, 'sched'>, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
+  function updateSched(q: (typeof QUARTERS)[number], value: string) {
+    setForm((prev) => ({ ...prev, sched: { ...prev.sched, [q]: value } }));
+  }
 
+  const formQty = parseFloat(form.quantity) || 0;
+  const formScheduled = schedTotal(form.sched);
+  const scheduleMatches = formQty > 0 && Math.abs(formScheduled - formQty) < 0.0001;
   const formComplete = Boolean(
-    form.code && form.itemDescription && form.quantity && form.estimatedUnitCost,
+    form.code && form.itemDescription && form.quantity && form.estimatedUnitCost && scheduleMatches,
   );
 
   async function addItem() {
@@ -184,8 +272,14 @@ export function PpmpDataEntryPage() {
       setError('Choose an end-user first (or add one).');
       return;
     }
-    if (!formComplete) {
+    if (!(form.code && form.itemDescription && form.quantity && form.estimatedUnitCost)) {
       setError('Fill in Code, Description, Quantity, and Unit Cost before adding.');
+      return;
+    }
+    if (!scheduleMatches) {
+      setError(
+        `The quarter schedule totals ${formScheduled}, but the quantity is ${formQty}. They must match.`,
+      );
       return;
     }
     setAdding(true);
@@ -202,7 +296,7 @@ export function PpmpDataEntryPage() {
         quantity: parseFloat(form.quantity),
         estimatedUnitCost: parseFloat(form.estimatedUnitCost),
         ...(form.modeOfProcurement ? { modeOfProcurement: form.modeOfProcurement } : {}),
-        ...(form.scheduleQuarter ? { scheduleQuarter: parseInt(form.scheduleQuarter) } : {}),
+        scheduleByQuarter: schedObject(form.sched),
         ...(form.cboNotes ? { cboNotes: form.cboNotes } : {}),
       });
       setForm(emptyRow());
@@ -229,7 +323,7 @@ export function PpmpDataEntryPage() {
       procurementCategory: item.procurementCategory,
       unitOfMeasure: item.unitOfMeasure,
       modeOfProcurement: item.modeOfProcurement ?? '',
-      scheduleQuarter: item.scheduleQuarter ? String(item.scheduleQuarter) : '',
+      sched: schedToMap(item.scheduleByQuarter),
       cboNotes: item.cboNotes ?? '',
     });
   }
@@ -242,6 +336,14 @@ export function PpmpDataEntryPage() {
   async function saveEdit(id: string) {
     if (!edit) return;
     setError(null);
+    const editQty = parseFloat(edit.quantity) || 0;
+    const editScheduled = schedTotal(edit.sched);
+    if (!(editQty > 0 && Math.abs(editScheduled - editQty) < 0.0001)) {
+      setError(
+        `The quarter schedule totals ${editScheduled}, but the quantity is ${editQty}. They must match.`,
+      );
+      return;
+    }
     try {
       await updatePpmpItem(id, {
         itemDescription: edit.itemDescription,
@@ -250,7 +352,7 @@ export function PpmpDataEntryPage() {
         quantity: parseFloat(edit.quantity),
         estimatedUnitCost: parseFloat(edit.estimatedUnitCost),
         ...(edit.modeOfProcurement ? { modeOfProcurement: edit.modeOfProcurement } : {}),
-        ...(edit.scheduleQuarter ? { scheduleQuarter: parseInt(edit.scheduleQuarter) } : {}),
+        scheduleByQuarter: schedObject(edit.sched),
         ...(edit.cboNotes ? { cboNotes: edit.cboNotes } : {}),
       });
       setEditingId(null);
@@ -577,7 +679,7 @@ export function PpmpDataEntryPage() {
                               </div>
                             </div>
                             <div
-                              style={{ display: 'grid', gridTemplateColumns: '1fr 80px 1fr', gap: 10 }}
+                              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}
                             >
                               <div className="pr-field">
                                 <label>Mode of Procurement</label>
@@ -596,21 +698,6 @@ export function PpmpDataEntryPage() {
                                 </select>
                               </div>
                               <div className="pr-field">
-                                <label>Quarter</label>
-                                <select
-                                  value={edit.scheduleQuarter}
-                                  onChange={(e) =>
-                                    setEdit({ ...edit, scheduleQuarter: e.target.value })
-                                  }
-                                >
-                                  <option value="">—</option>
-                                  <option value="1">Q1</option>
-                                  <option value="2">Q2</option>
-                                  <option value="3">Q3</option>
-                                  <option value="4">Q4</option>
-                                </select>
-                              </div>
-                              <div className="pr-field">
                                 <label>Notes</label>
                                 <input
                                   value={edit.cboNotes}
@@ -618,6 +705,13 @@ export function PpmpDataEntryPage() {
                                 />
                               </div>
                             </div>
+                            <ScheduleEditor
+                              sched={edit.sched}
+                              onChange={(q, v) =>
+                                setEdit({ ...edit, sched: { ...edit.sched, [q]: v } })
+                              }
+                              quantity={parseFloat(edit.quantity) || 0}
+                            />
                             <div style={{ display: 'flex', gap: 8 }}>
                               <button
                                 className="pr-btn pr-btn--primary"
@@ -665,9 +759,9 @@ export function PpmpDataEntryPage() {
                               <div style={detailVal}>{item.modeOfProcurement ?? '—'}</div>
                             </div>
                             <div>
-                              <div style={detailLabel}>Schedule</div>
+                              <div style={detailLabel}>Schedule by Quarter</div>
                               <div style={detailVal}>
-                                {item.scheduleQuarter ? `Q${item.scheduleQuarter}` : '—'}
+                                {schedLabel(item.scheduleByQuarter, item.scheduleQuarter)}
                               </div>
                             </div>
                             <div>
@@ -734,7 +828,7 @@ export function PpmpDataEntryPage() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: '1fr 80px 80px 110px 1fr 70px',
+                gridTemplateColumns: '1fr 80px 80px 110px 1fr',
                 gap: 10,
                 marginBottom: 10,
               }}
@@ -793,19 +887,9 @@ export function PpmpDataEntryPage() {
                   ))}
                 </select>
               </div>
-              <div className="pr-field">
-                <label>Quarter</label>
-                <select
-                  value={form.scheduleQuarter}
-                  onChange={(e) => updateForm('scheduleQuarter', e.target.value)}
-                >
-                  <option value="">—</option>
-                  <option value="1">Q1</option>
-                  <option value="2">Q2</option>
-                  <option value="3">Q3</option>
-                  <option value="4">Q4</option>
-                </select>
-              </div>
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <ScheduleEditor sched={form.sched} onChange={updateSched} quantity={formQty} />
             </div>
             <div
               style={{

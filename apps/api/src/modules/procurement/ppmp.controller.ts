@@ -49,6 +49,7 @@ export class PpmpController {
       estimatedUnitCost: number | string;
       modeOfProcurement?: string;
       scheduleQuarter?: number;
+      scheduleByQuarter?: Record<string, number> | null;
       cboNotes?: string;
       status?: 'draft' | 'approved';
     },
@@ -84,6 +85,7 @@ export class PpmpController {
         estimatedUnitCost: number | string;
         modeOfProcurement?: string;
         scheduleQuarter?: number;
+        scheduleByQuarter?: Record<string, number> | null;
         cboNotes?: string;
       }>;
     },

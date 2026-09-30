@@ -321,6 +321,7 @@ export interface PpmpItem {
   estimatedTotalCost: string;
   modeOfProcurement: string | null;
   scheduleQuarter: number | null;
+  scheduleByQuarter: Record<string, number> | null;
   cboNotes: string | null;
   status: string;
   createdAt: string;
@@ -355,6 +356,7 @@ export interface CreatePpmpItemInput {
   estimatedUnitCost: number;
   modeOfProcurement?: string;
   scheduleQuarter?: number;
+  scheduleByQuarter?: Record<string, number> | null;
   cboNotes?: string;
   status?: 'draft' | 'approved';
 }
@@ -368,6 +370,7 @@ export interface PpmpBatchItemInput {
   estimatedUnitCost: number;
   modeOfProcurement?: string;
   scheduleQuarter?: number;
+  scheduleByQuarter?: Record<string, number> | null;
   cboNotes?: string;
 }
 

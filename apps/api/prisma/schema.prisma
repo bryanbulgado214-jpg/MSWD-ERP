@@ -1530,6 +1530,9 @@ model PpmpItem {
   cboNotes            String?                 @map("cbo_notes") @db.VarChar(500)
   modeOfProcurement   String?                 @map("mode_of_procurement") @db.VarChar(100)
   scheduleQuarter     Int?                    @map("schedule_quarter") @db.SmallInt
+  // Quantity split across quarters, e.g. {"1":6,"3":6,"4":6}. When set, the
+  // values must sum to `quantity`. Supersedes the single scheduleQuarter.
+  scheduleByQuarter   Json?                   @map("schedule_by_quarter")
   approvedBy          String?                 @map("approved_by") @db.Uuid
   approvedAt          DateTime?               @map("approved_at") @db.Timestamptz(6)
   createdAt           DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
