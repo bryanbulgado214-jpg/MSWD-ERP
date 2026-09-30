@@ -61,7 +61,13 @@ export class PurchaseRequestService {
       new Prisma.Decimal(0),
     );
 
-    const prNumber = await this.generatePrNumber(organizationId);
+    let prNumber: string;
+    if (input.prNumber?.trim()) {
+      prNumber = input.prNumber.trim();
+      await this.assertPrNumberAvailable(organizationId, prNumber);
+    } else {
+      prNumber = await this.generatePrNumber(organizationId);
+    }
 
     return runAudited(this.prisma, input.createdBy, (tx) =>
       tx.purchaseRequest.create({
@@ -166,6 +172,35 @@ export class PurchaseRequestService {
 
       return this.applyVersionedUpdate(tx, prId, expectedVersion, data);
     });
+  }
+
+  // Change the PR's document number at ANY status (correction / reconciling with
+  // an official registry). Gated by an admin permission at the controller.
+  async changeNumber(
+    organizationId: string,
+    prId: string,
+    expectedVersion: number,
+    prNumber: string,
+    actorUserId?: string,
+  ): Promise<PurchaseRequestWithItems> {
+    const pr = await this.requirePR(organizationId, prId);
+    const next = prNumber.trim();
+    if (!next) {
+      throw new BadRequestException('PR number cannot be blank.');
+    }
+    if (next === pr.prNumber) {
+      return this.prisma.purchaseRequest.findUniqueOrThrow({
+        where: { id: prId },
+        include: { items: { orderBy: { itemNumber: 'asc' } } },
+      });
+    }
+    await this.assertPrNumberAvailable(organizationId, next, prId);
+    return this.updateWithVersionCheck(
+      prId,
+      expectedVersion,
+      { prNumber: next, updatedBy: actorUserId ?? null },
+      actorUserId,
+    );
   }
 
   // ── Step 1: End-user submits PR ──
@@ -669,6 +704,26 @@ export class PurchaseRequestService {
   }
 
   // ── helpers ──
+
+  // Enforce the per-organization uniqueness of a PR number before we rely on the
+  // DB constraint, so the officer gets a clear message instead of a raw error.
+  private async assertPrNumberAvailable(
+    organizationId: string,
+    prNumber: string,
+    excludeId?: string,
+  ): Promise<void> {
+    const existing = await this.prisma.purchaseRequest.findFirst({
+      where: {
+        organizationId,
+        prNumber,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new ConflictException(`PR number "${prNumber}" is already in use.`);
+    }
+  }
 
   private async requirePR(organizationId: string, prId: string) {
     const pr = await this.prisma.purchaseRequest.findFirst({

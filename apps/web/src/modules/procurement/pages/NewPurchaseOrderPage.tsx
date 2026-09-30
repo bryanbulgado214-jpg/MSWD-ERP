@@ -33,6 +33,7 @@ export function NewPurchaseOrderPage() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const [poNumber, setPoNumber] = useState('');
   const [purchaseRequestId, setPurchaseRequestId] = useState('');
   const [supplierId, setSupplierId] = useState('');
   const [poDate, setPoDate] = useState(new Date().toISOString().slice(0, 10));
@@ -89,6 +90,7 @@ export function NewPurchaseOrderPage() {
     setError('');
     try {
       const po = await createPurchaseOrder({
+        ...(poNumber.trim() ? { poNumber: poNumber.trim() } : {}),
         purchaseRequestId,
         supplierId,
         poDate,
@@ -141,6 +143,20 @@ export function NewPurchaseOrderPage() {
 
       {prs.length > 0 && (
         <div style={{ maxWidth: 720 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 14 }}>
+            <div className="pr-field">
+              <label>PO Number (optional)</label>
+              <input
+                type="text"
+                value={poNumber}
+                onChange={(e) => setPoNumber(e.target.value)}
+                placeholder="Leave blank to auto-generate (PO-000001)"
+                maxLength={30}
+              />
+            </div>
+            <div></div>
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 14 }}>
             <div className="pr-field">
               <label>Purchase Request *</label>

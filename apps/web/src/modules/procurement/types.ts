@@ -103,6 +103,8 @@ export interface CreatePurchaseRequestItemInput {
 }
 
 export interface CreatePurchaseRequestInput {
+  // Optional manual PR number; leave blank to auto-generate (PR-000001).
+  prNumber?: string;
   budgetReleaseId?: string;
   title: string;
   description?: string;

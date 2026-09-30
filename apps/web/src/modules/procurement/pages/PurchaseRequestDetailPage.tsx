@@ -8,6 +8,7 @@ import {
   catchUpApprovePr,
   budgetCertifyPurchaseRequest,
   cancelPurchaseRequest,
+  changePrNumber,
   endorsePurchaseRequest,
   finalApprovePurchaseRequest,
   getPurchaseRequest,
@@ -22,6 +23,7 @@ import {
   submitPurchaseRequest,
 } from '../api';
 import type { Caf, Ors, PurchaseOrder, PurchaseRequest, PurchaseRequestStatus } from '../types';
+import { DocNumberEditor } from './DocNumberEditor';
 import './procurement.css';
 
 type LoadState =
@@ -214,7 +216,15 @@ export function PurchaseRequestDetailPage() {
       </a>
 
       <div className="pr-detail-header">
-        <h1>{pr.prNumber}</h1>
+        <DocNumberEditor
+          value={pr.prNumber}
+          canEdit={hasPermission('procurement.pr.mark_lifecycle')}
+          label="PR"
+          onSave={async (next) => {
+            const updated = await changePrNumber(pr.id, pr.version, next);
+            setState({ status: 'loaded', data: updated });
+          }}
+        />
         <span className={`pr-badge pr-badge--${pr.status}`}>
           {STATUS_LABELS[pr.status] ?? pr.status}
         </span>

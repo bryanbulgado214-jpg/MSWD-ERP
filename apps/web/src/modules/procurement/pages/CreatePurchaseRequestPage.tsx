@@ -44,6 +44,7 @@ export function CreatePurchaseRequestPage() {
   const [endUsers, setEndUsers] = useState<EndUser[]>([]);
   const [endUserId, setEndUserId] = useState('');
 
+  const [prNumber, setPrNumber] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [purpose, setPurpose] = useState('');
@@ -159,6 +160,7 @@ export function CreatePurchaseRequestPage() {
     setError(null);
     try {
       const pr = await createPurchaseRequest({
+        ...(prNumber.trim() ? { prNumber: prNumber.trim() } : {}),
         title: title.trim(),
         ...(description.trim() ? { description: description.trim() } : {}),
         ...(purpose.trim() ? { purpose: purpose.trim() } : {}),
@@ -415,6 +417,17 @@ export function CreatePurchaseRequestPage() {
 
       <form className="pr-form" onSubmit={handleSubmit}>
         <div className="pr-form-grid">
+          <div className="pr-field">
+            <label>PR Number (optional)</label>
+            <input
+              type="text"
+              value={prNumber}
+              onChange={(e) => setPrNumber(e.target.value)}
+              placeholder="Leave blank to auto-generate (PR-000001)"
+              maxLength={30}
+            />
+          </div>
+
           <div className="pr-field">
             <label>Department</label>
             <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>

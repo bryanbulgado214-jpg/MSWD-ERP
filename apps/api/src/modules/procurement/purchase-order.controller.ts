@@ -5,7 +5,7 @@ import { RequirePermissions } from '../../common/decorators/require-permissions.
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
-import { CreatePurchaseOrderDto, PurchaseOrderActionDto, UpdatePurchaseOrderDto } from './dto/purchase-order.dto';
+import { ChangePurchaseOrderNumberDto, CreatePurchaseOrderDto, PurchaseOrderActionDto, UpdatePurchaseOrderDto } from './dto/purchase-order.dto';
 import { PurchaseOrderService } from './purchase-order.service';
 
 @Controller('procurement/purchase-orders')
@@ -52,6 +52,17 @@ export class PurchaseOrderController {
     @Body() dto: UpdatePurchaseOrderDto,
   ) {
     return this.purchaseOrderService.update(user.organizationId, id, user.userId, dto);
+  }
+
+  // Correct / reconcile the PO document number at any status.
+  @Patch(':id/number')
+  @RequirePermissions('procurement.po.create')
+  changeNumber(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ChangePurchaseOrderNumberDto,
+  ) {
+    return this.purchaseOrderService.changeNumber(user.organizationId, id, user.userId, dto.expectedVersion, dto.poNumber);
   }
 
   @Post(':id/submit-for-caf')

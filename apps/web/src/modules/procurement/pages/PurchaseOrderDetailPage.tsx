@@ -6,12 +6,14 @@ import { formatPeso } from '../../budgeting/format-peso';
 import {
   approvePurchaseOrder,
   cancelPurchaseOrder,
+  changePoNumber,
   getPurchaseOrder,
   listCafs,
   ProcurementApiError,
   submitPoForCaf,
 } from '../api';
 import type { Caf, PurchaseOrder, PurchaseOrderStatus } from '../types';
+import { DocNumberEditor } from './DocNumberEditor';
 import './procurement.css';
 
 type LoadState =
@@ -133,7 +135,15 @@ export function PurchaseOrderDetailPage() {
       </Link>
 
       <div className="pr-detail-header">
-        <h1>{po.poNumber}</h1>
+        <DocNumberEditor
+          value={po.poNumber}
+          canEdit={canCreate}
+          label="PO"
+          onSave={async (next) => {
+            const updated = await changePoNumber(po.id, po.version, next);
+            setState({ status: 'loaded', data: updated });
+          }}
+        />
         <span className={`pr-badge pr-badge--${po.status}`}>
           {STATUS_LABELS[po.status] ?? po.status}
         </span>

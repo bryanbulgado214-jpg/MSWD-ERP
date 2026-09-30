@@ -1,6 +1,14 @@
 import { IsDateString, IsInt, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength } from 'class-validator';
 
 export class CreatePurchaseOrderDto {
+  // Optional manual PO number. Leave blank to auto-generate (PO-000001);
+  // supply your own to match an existing registry / paper record.
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(30)
+  poNumber?: string;
+
   @IsUUID()
   purchaseRequestId!: string;
 
@@ -92,4 +100,14 @@ export class PurchaseOrderActionDto {
   @IsOptional()
   @IsString()
   remarks?: string;
+}
+
+export class ChangePurchaseOrderNumberDto {
+  @IsInt()
+  expectedVersion!: number;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(30)
+  poNumber!: string;
 }

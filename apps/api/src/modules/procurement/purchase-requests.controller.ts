@@ -7,7 +7,7 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { PrismaService } from '../../database/prisma.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
-import { CreatePurchaseRequestDto, PurchaseRequestActionDto, UpdatePurchaseRequestDto } from './dto/purchase-request.dto';
+import { ChangePurchaseRequestNumberDto, CreatePurchaseRequestDto, PurchaseRequestActionDto, UpdatePurchaseRequestDto } from './dto/purchase-request.dto';
 import { PurchaseRequestService } from './purchase-request.service';
 
 @Controller('procurement/purchase-requests')
@@ -185,6 +185,17 @@ export class PurchaseRequestsController {
   ) {
     const { expectedVersion, ...edit } = dto;
     return this.prService.update(user.organizationId, id, expectedVersion, { ...edit, updatedBy: user.userId });
+  }
+
+  // Correct / reconcile the PR document number at any status.
+  @Patch(':id/number')
+  @RequirePermissions('procurement.pr.mark_lifecycle')
+  changeNumber(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ChangePurchaseRequestNumberDto,
+  ) {
+    return this.prService.changeNumber(user.organizationId, id, dto.expectedVersion, dto.prNumber, user.userId);
   }
 
   @Post(':id/submit')

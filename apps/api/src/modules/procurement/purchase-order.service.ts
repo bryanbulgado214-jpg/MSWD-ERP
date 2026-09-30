@@ -74,6 +74,7 @@ export class PurchaseOrderService {
     organizationId: string,
     userId: string,
     data: {
+      poNumber?: string;
       purchaseRequestId: string;
       supplierId: string;
       poDate: string;
@@ -104,7 +105,13 @@ export class PurchaseOrderService {
     });
     if (!supplier) throw new NotFoundException('Supplier not found or is inactive.');
 
-    const poNumber = await this.generatePoNumber(organizationId);
+    let poNumber: string;
+    if (data.poNumber?.trim()) {
+      poNumber = data.poNumber.trim();
+      await this.assertPoNumberAvailable(organizationId, poNumber);
+    } else {
+      poNumber = await this.generatePoNumber(organizationId);
+    }
 
     return runAudited(this.prisma, userId, async (tx) => {
       const po = await tx.purchaseOrder.create({
@@ -188,6 +195,41 @@ export class PurchaseOrderService {
           ...(data.deliveryTerms !== undefined ? { deliveryTerms: data.deliveryTerms } : {}),
           ...(data.paymentTerms !== undefined ? { paymentTerms: data.paymentTerms } : {}),
           ...(data.remarks !== undefined ? { remarks: data.remarks } : {}),
+          updatedBy: userId,
+          version: { increment: 1 },
+        },
+        select: PO_SELECT,
+      }),
+    );
+  }
+
+  // Change the PO's document number at ANY status (correction / reconciling with
+  // an official registry). Gated by a PO management permission at the controller.
+  async changeNumber(
+    organizationId: string,
+    id: string,
+    userId: string,
+    expectedVersion: number,
+    poNumber: string,
+  ) {
+    const po = await this.prisma.purchaseOrder.findFirst({
+      where: { id, organizationId },
+    });
+    if (!po) throw new NotFoundException('Purchase order not found.');
+    if (po.version !== expectedVersion) {
+      throw new ConflictException('Purchase order was modified by another user. Please refresh and try again.');
+    }
+    const next = poNumber.trim();
+    if (!next) throw new BadRequestException('PO number cannot be blank.');
+    if (next === po.poNumber) {
+      return this.findOne(organizationId, id);
+    }
+    await this.assertPoNumberAvailable(organizationId, next, id);
+    return runAudited(this.prisma, userId, (tx) =>
+      tx.purchaseOrder.update({
+        where: { id },
+        data: {
+          poNumber: next,
           updatedBy: userId,
           version: { increment: 1 },
         },
@@ -289,6 +331,26 @@ export class PurchaseOrderService {
         select: PO_SELECT,
       }),
     );
+  }
+
+  // Enforce the per-organization uniqueness of a PO number before we rely on the
+  // DB constraint, so the officer gets a clear message instead of a raw error.
+  private async assertPoNumberAvailable(
+    organizationId: string,
+    poNumber: string,
+    excludeId?: string,
+  ): Promise<void> {
+    const existing = await this.prisma.purchaseOrder.findFirst({
+      where: {
+        organizationId,
+        poNumber,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new ConflictException(`PO number "${poNumber}" is already in use.`);
+    }
   }
 
   private async generatePoNumber(organizationId: string): Promise<string> {

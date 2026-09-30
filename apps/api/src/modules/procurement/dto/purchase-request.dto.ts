@@ -40,6 +40,14 @@ export class PurchaseRequestItemDto {
 }
 
 export class CreatePurchaseRequestDto {
+  // Optional manual PR number. Leave blank to auto-generate (PR-000001);
+  // supply your own to match an existing registry / paper record.
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(30)
+  prNumber?: string;
+
   @IsString()
   @MinLength(1)
   @MaxLength(255)
@@ -209,4 +217,14 @@ export class PurchaseRequestActionDto {
   @IsOptional()
   @IsString()
   remarks?: string;
+}
+
+export class ChangePurchaseRequestNumberDto {
+  @IsInt()
+  expectedVersion!: number;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(30)
+  prNumber!: string;
 }
