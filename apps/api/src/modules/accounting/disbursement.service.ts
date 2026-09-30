@@ -1030,6 +1030,25 @@ export class DisbursementService {
         });
       }
 
+      // Keep a not-yet-printed, not-yet-settled check/ADA in step with the DV
+      // date. Editing a posted DV's date must flow to its pending check — the
+      // check register and the printed check read the check's OWN date, not the
+      // DV's. Re-raised checks already carry the new date; a printed check has an
+      // inked date and a cleared/voided one is settled, so both are left alone.
+      // The `checkDate: not` guard makes this idempotent (self-heals an existing
+      // stale check on the next save; no needless version churn otherwise).
+      if (!reissueCheck) {
+        await tx.check.updateMany({
+          where: {
+            disbursementVoucherId: id,
+            printedAt: null,
+            status: { notIn: ['cleared', 'stale_dated', 'voided', 'spoiled'] },
+            checkDate: { not: dvDate },
+          },
+          data: { checkDate: dvDate, updatedBy: userId, version: { increment: 1 } },
+        });
+      }
+
       // A payment's amount may have changed — re-settle the invoice's balance.
       if (existing.supplierInvoiceId) {
         await this.recomputeInvoicePaid(tx, existing.supplierInvoiceId);
