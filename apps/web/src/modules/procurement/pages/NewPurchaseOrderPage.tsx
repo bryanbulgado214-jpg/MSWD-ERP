@@ -24,6 +24,7 @@ const MODE_OPTIONS = [
   'Small Value Procurement',
   'Shopping',
   'Direct Contracting',
+  'Direct Acquisition',
   'Negotiated Procurement',
   'Repeat Order',
   'Agency-to-Agency',
