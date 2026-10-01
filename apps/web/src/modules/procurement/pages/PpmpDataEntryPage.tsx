@@ -479,6 +479,9 @@ export function PpmpDataEntryPage() {
               setEndUsers((prev) => [...prev, created]);
               setSelectedEndUserId(created.id);
             }}
+            onUpdated={(updated) => {
+              setEndUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+            }}
           />
         </div>
       </div>

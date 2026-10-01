@@ -244,6 +244,9 @@ export function CreatePurchaseRequestPage() {
               setEndUsers((prev) => [...prev, created]);
               setEndUserId(created.id);
             }}
+            onUpdated={(updated) => {
+              setEndUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+            }}
           />
         </div>
         <p style={{ fontSize: 12, color: '#475467', margin: '6px 0 0' }}>

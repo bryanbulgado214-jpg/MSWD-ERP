@@ -99,6 +99,15 @@ export class EndUserService {
       );
     }
 
+    // Moving the end-user to a different section — make sure it exists first.
+    if (data.departmentId && data.departmentId !== endUser.departmentId) {
+      const department = await this.prisma.department.findFirst({
+        where: { id: data.departmentId, organizationId },
+        select: { id: true },
+      });
+      if (!department) throw new NotFoundException('Section (department) not found.');
+    }
+
     const nextName = data.name?.trim() ?? endUser.name;
     const nextDept = data.departmentId ?? endUser.departmentId;
     if (nextName !== endUser.name || nextDept !== endUser.departmentId) {
