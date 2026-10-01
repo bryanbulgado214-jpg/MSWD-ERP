@@ -12,8 +12,16 @@ export class CreatePurchaseOrderDto {
   @IsUUID()
   purchaseRequestId!: string;
 
+  // The winning supplier, picked from the shared supplier (payee) master. The
+  // service bridges this to a Supplier record for the PO. Either payeeId or a
+  // direct supplierId must be supplied (payeeId is the normal path).
+  @IsOptional()
   @IsUUID()
-  supplierId!: string;
+  payeeId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  supplierId?: string;
 
   @IsDateString()
   poDate!: string;

@@ -17,6 +17,19 @@ const SUPPLIER_SELECT = {
   version: true,
 } as const;
 
+// The shared supplier master lives in the accounting payee table — both the
+// accountant (DVs) and procurement (POs) draw from it. We expose it read/write
+// here so the purchase officer sees and extends the same list on the PO page.
+const PAYEE_SELECT = {
+  id: true,
+  name: true,
+  tin: true,
+  address: true,
+  vatRegistered: true,
+  isActive: true,
+  version: true,
+} as const;
+
 @Injectable()
 export class SupplierService {
   constructor(private readonly prisma: PrismaService) {}
@@ -39,6 +52,42 @@ export class SupplierService {
     });
     if (!supplier) throw new NotFoundException('Supplier not found.');
     return supplier;
+  }
+
+  // The shared supplier master (accounting payee list), surfaced for procurement
+  // so the New PO page offers exactly the suppliers the accountant already has.
+  async listPayees(organizationId: string) {
+    return this.prisma.payee.findMany({
+      where: { organizationId, mergedIntoId: null, isActive: true },
+      select: PAYEE_SELECT,
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  async createPayee(
+    organizationId: string,
+    userId: string,
+    data: { name: string; tin?: string; address?: string; vatRegistered?: boolean },
+  ) {
+    const name = data.name.trim();
+    if (!name) throw new ConflictException('Supplier name is required.');
+    const existing = await this.prisma.payee.findFirst({
+      where: { organizationId, mergedIntoId: null, name: { equals: name, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (existing) throw new ConflictException(`"${name}" is already in the supplier list.`);
+    return this.prisma.payee.create({
+      data: {
+        organizationId,
+        name,
+        ...(data.tin?.trim() ? { tin: data.tin.trim() } : {}),
+        ...(data.address?.trim() ? { address: data.address.trim() } : {}),
+        vatRegistered: data.vatRegistered ?? false,
+        createdBy: userId,
+        updatedBy: userId,
+      },
+      select: PAYEE_SELECT,
+    });
   }
 
   async create(

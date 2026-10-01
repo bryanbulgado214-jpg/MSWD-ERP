@@ -618,6 +618,33 @@ export async function updateSupplier(
   return res.json();
 }
 
+// The shared supplier master (the accountant's supplier/payee list). The New PO
+// page lists and extends THIS so both modules draw on one list.
+export interface SupplierPayee {
+  id: string;
+  name: string;
+  tin: string | null;
+  address: string | null;
+  vatRegistered: boolean;
+  isActive: boolean;
+  version: number;
+}
+
+export async function listSupplierPayees(): Promise<SupplierPayee[]> {
+  const res = await authFetch('/procurement/suppliers/payees');
+  return res.json();
+}
+
+export async function createSupplierPayee(data: {
+  name: string;
+  tin?: string;
+  address?: string;
+  vatRegistered?: boolean;
+}): Promise<SupplierPayee> {
+  const res = await authFetchMutate('/procurement/suppliers/payees', 'POST', data);
+  return res.json();
+}
+
 // ── Purchase Orders ──
 
 export async function listPurchaseOrders(filters?: {
@@ -640,7 +667,8 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrder> {
 export async function createPurchaseOrder(data: {
   poNumber?: string;
   purchaseRequestId: string;
-  supplierId: string;
+  payeeId?: string;
+  supplierId?: string;
   poDate: string;
   contractAmount: number;
   awardDate?: string;

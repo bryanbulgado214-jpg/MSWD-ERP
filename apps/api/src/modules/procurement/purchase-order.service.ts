@@ -76,7 +76,8 @@ export class PurchaseOrderService {
     data: {
       poNumber?: string;
       purchaseRequestId: string;
-      supplierId: string;
+      supplierId?: string;
+      payeeId?: string;
       poDate: string;
       contractAmount: number;
       awardDate?: string;
@@ -100,11 +101,6 @@ export class PurchaseOrderService {
     });
     if (existingPo) throw new ConflictException('An active purchase order already exists for this PR.');
 
-    const supplier = await this.prisma.supplier.findFirst({
-      where: { id: data.supplierId, organizationId, isActive: true },
-    });
-    if (!supplier) throw new NotFoundException('Supplier not found or is inactive.');
-
     let poNumber: string;
     if (data.poNumber?.trim()) {
       poNumber = data.poNumber.trim();
@@ -114,13 +110,23 @@ export class PurchaseOrderService {
     }
 
     return runAudited(this.prisma, userId, async (tx) => {
+      // The dropdown offers the shared supplier (payee) master; bridge the chosen
+      // payee to a Supplier record (the PO's FK) — reused by name, created if new.
+      const supplierId = await this.resolveSupplierId(
+        tx,
+        organizationId,
+        userId,
+        data.supplierId,
+        data.payeeId,
+      );
+
       const po = await tx.purchaseOrder.create({
         data: {
           organizationId,
           poNumber,
           poDate: new Date(data.poDate),
           purchaseRequestId: data.purchaseRequestId,
-          supplierId: data.supplierId,
+          supplierId,
           contractAmount: new Prisma.Decimal(data.contractAmount),
           ...(data.awardDate ? { awardDate: new Date(data.awardDate) } : {}),
           ...(data.awardNoticeNumber ? { awardNoticeNumber: data.awardNoticeNumber } : {}),
@@ -365,6 +371,61 @@ export class PurchaseOrderService {
         select: PO_SELECT,
       }),
     );
+  }
+
+  // Resolve the PO's Supplier FK from the chosen supplier (payee) master entry.
+  // A direct supplierId is validated and used as-is; otherwise the payee is
+  // mirrored into a Supplier row — reused by its (org, name) unique key so the
+  // same supplier never duplicates, created on first use.
+  private async resolveSupplierId(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    userId: string,
+    supplierId?: string,
+    payeeId?: string,
+  ): Promise<string> {
+    if (supplierId) {
+      const supplier = await tx.supplier.findFirst({
+        where: { id: supplierId, organizationId, isActive: true },
+        select: { id: true },
+      });
+      if (!supplier) throw new NotFoundException('Supplier not found or is inactive.');
+      return supplier.id;
+    }
+    if (!payeeId) {
+      throw new BadRequestException('Select a supplier for the purchase order.');
+    }
+    const payee = await tx.payee.findFirst({
+      where: { id: payeeId, organizationId, mergedIntoId: null },
+      select: { name: true, tin: true, address: true },
+    });
+    if (!payee) throw new NotFoundException('Supplier not found.');
+
+    const existing = await tx.supplier.findFirst({
+      where: { organizationId, name: payee.name },
+      select: { id: true, isActive: true },
+    });
+    if (existing) {
+      if (!existing.isActive) {
+        await tx.supplier.update({
+          where: { id: existing.id },
+          data: { isActive: true, updatedBy: userId },
+        });
+      }
+      return existing.id;
+    }
+    const created = await tx.supplier.create({
+      data: {
+        organizationId,
+        name: payee.name,
+        ...(payee.tin ? { tin: payee.tin } : {}),
+        ...(payee.address ? { address: payee.address } : {}),
+        createdBy: userId,
+        updatedBy: userId,
+      },
+      select: { id: true },
+    });
+    return created.id;
   }
 
   // Enforce the per-organization uniqueness of a PO number before we rely on the

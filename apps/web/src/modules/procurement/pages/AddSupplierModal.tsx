@@ -1,25 +1,23 @@
 import { useEffect, useState } from 'react';
 
-import { createSupplier, ProcurementApiError } from '../api';
-import type { Supplier } from '../types';
+import { createSupplierPayee, ProcurementApiError, type SupplierPayee } from '../api';
 
 interface Props {
   // Prefill the name from whatever the officer may have typed/searched.
   initialName?: string;
-  onCreated: (supplier: Supplier) => void;
+  onCreated: (supplier: SupplierPayee) => void;
   onClose: () => void;
 }
 
 // A floating window to register a new supplier without leaving the New Purchase
-// Order page. On success the created supplier is handed back to the caller so it
-// can be dropped into the dropdown and selected straight away.
+// Order page. It writes to the SHARED supplier master (the accountant's payee
+// list), so the new supplier also shows in accounting. On success the created
+// supplier is handed back so it can be dropped into the dropdown and selected.
 export function AddSupplierModal({ initialName = '', onCreated, onClose }: Props) {
   const [name, setName] = useState(initialName);
   const [tin, setTin] = useState('');
   const [address, setAddress] = useState('');
-  const [contactPerson, setContactPerson] = useState('');
-  const [contactNumber, setContactNumber] = useState('');
-  const [email, setEmail] = useState('');
+  const [vatRegistered, setVatRegistered] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -40,13 +38,11 @@ export function AddSupplierModal({ initialName = '', onCreated, onClose }: Props
     setSaving(true);
     setError('');
     try {
-      const supplier = await createSupplier({
+      const supplier = await createSupplierPayee({
         name: name.trim(),
         ...(tin.trim() ? { tin: tin.trim() } : {}),
         ...(address.trim() ? { address: address.trim() } : {}),
-        ...(contactPerson.trim() ? { contactPerson: contactPerson.trim() } : {}),
-        ...(contactNumber.trim() ? { contactNumber: contactNumber.trim() } : {}),
-        ...(email.trim() ? { email: email.trim() } : {}),
+        vatRegistered,
       });
       onCreated(supplier);
     } catch (err) {
@@ -60,8 +56,13 @@ export function AddSupplierModal({ initialName = '', onCreated, onClose }: Props
     <div style={overlay} onMouseDown={onClose}>
       <div style={card} onMouseDown={(e) => e.stopPropagation()}>
         <div style={headerStyle}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--mswd-navy)' }}>
-            Add New Supplier
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--mswd-navy)' }}>
+              Add New Supplier
+            </div>
+            <div style={{ fontSize: 12, color: '#667085' }}>
+              Added to the shared supplier list (also visible in accounting).
+            </div>
           </div>
           <button onClick={onClose} style={closeBtn} aria-label="Close" type="button">
             ×
@@ -82,30 +83,16 @@ export function AddSupplierModal({ initialName = '', onCreated, onClose }: Props
             </div>
             <div className="pr-field">
               <label>Address</label>
-              <input value={address} onChange={(e) => setAddress(e.target.value)} />
+              <input value={address} onChange={(e) => setAddress(e.target.value)} maxLength={500} />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-              <div className="pr-field">
-                <label>Contact Person</label>
-                <input
-                  value={contactPerson}
-                  onChange={(e) => setContactPerson(e.target.value)}
-                  maxLength={255}
-                />
-              </div>
-              <div className="pr-field">
-                <label>Contact Number</label>
-                <input
-                  value={contactNumber}
-                  onChange={(e) => setContactNumber(e.target.value)}
-                  maxLength={50}
-                />
-              </div>
-              <div className="pr-field">
-                <label>Email</label>
-                <input value={email} onChange={(e) => setEmail(e.target.value)} maxLength={255} />
-              </div>
-            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+              <input
+                type="checkbox"
+                checked={vatRegistered}
+                onChange={(e) => setVatRegistered(e.target.checked)}
+              />
+              VAT-registered
+            </label>
             <div className="pr-form-actions">
               <button type="button" className="pr-btn" onClick={onClose} disabled={saving}>
                 Cancel

@@ -7,10 +7,11 @@ import {
   createPurchaseOrder,
   listPurchaseOrders,
   listPurchaseRequests,
-  listSuppliers,
+  listSupplierPayees,
   ProcurementApiError,
+  type SupplierPayee,
 } from '../api';
-import type { PurchaseRequest, Supplier } from '../types';
+import type { PurchaseRequest } from '../types';
 
 import { AddSupplierModal } from './AddSupplierModal';
 import './procurement.css';
@@ -35,7 +36,7 @@ export function NewPurchaseOrderPage() {
   // supplier.manage OR po.create), so the purchase officer isn't blocked.
   const canAddSupplier = hasPermission('procurement.po.create');
   const [prs, setPrs] = useState<PurchaseRequest[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [suppliers, setSuppliers] = useState<SupplierPayee[]>([]);
   const [showAddSupplier, setShowAddSupplier] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [error, setError] = useState('');
@@ -55,7 +56,7 @@ export function NewPurchaseOrderPage() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([listPurchaseRequests(), listPurchaseOrders(), listSuppliers()])
+    Promise.all([listPurchaseRequests(), listPurchaseOrders(), listSupplierPayees()])
       .then(([allPrs, pos, sups]) => {
         if (cancelled) return;
         // Exclude PRs that already have an active (non-cancelled) PO.
@@ -67,7 +68,8 @@ export function NewPurchaseOrderPage() {
             (pr) => ELIGIBLE_PR_STATUSES.includes(pr.status) && !takenPrIds.has(pr.id),
           ),
         );
-        setSuppliers(sups); // listSuppliers() returns active suppliers by default
+        // The shared supplier master (same list the accountant uses).
+        setSuppliers(sups);
       })
       .catch((e) => {
         if (!cancelled)
@@ -83,7 +85,7 @@ export function NewPurchaseOrderPage() {
   const selectedPr = useMemo(() => prs.find((p) => p.id === purchaseRequestId), [prs, purchaseRequestId]);
 
   // A supplier added inline is dropped into the list and selected straight away.
-  function handleSupplierCreated(supplier: Supplier) {
+  function handleSupplierCreated(supplier: SupplierPayee) {
     setSuppliers((prev) =>
       [...prev, supplier].sort((a, b) => a.name.localeCompare(b.name)),
     );
@@ -109,7 +111,7 @@ export function NewPurchaseOrderPage() {
       const po = await createPurchaseOrder({
         ...(poNumber.trim() ? { poNumber: poNumber.trim() } : {}),
         purchaseRequestId,
-        supplierId,
+        payeeId: supplierId,
         poDate,
         contractAmount: parseFloat(contractAmount),
         ...(awardDate ? { awardDate } : {}),

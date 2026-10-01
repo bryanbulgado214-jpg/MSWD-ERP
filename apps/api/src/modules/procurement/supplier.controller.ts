@@ -5,7 +5,7 @@ import { RequireAnyPermissions, RequirePermissions } from '../../common/decorato
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
-import { CreateSupplierDto, UpdateSupplierDto } from './dto/supplier.dto';
+import { CreateProcurementPayeeDto, CreateSupplierDto, UpdateSupplierDto } from './dto/supplier.dto';
 import { SupplierService } from './supplier.service';
 
 @Controller('procurement/suppliers')
@@ -20,6 +20,22 @@ export class SupplierController {
     @Query('includeInactive') includeInactive?: string,
   ) {
     return this.supplierService.findAll(user.organizationId, includeInactive === 'true');
+  }
+
+  // The shared supplier master (accounting payee list) for the New PO page.
+  // Declared before :id so "payees" isn't captured as an :id param.
+  @Get('payees')
+  @RequirePermissions('procurement.read')
+  listPayees(@CurrentUser() user: AuthenticatedUser) {
+    return this.supplierService.listPayees(user.organizationId);
+  }
+
+  // Quick-add a supplier into the shared master (so it also shows in accounting).
+  // Allowed for a supplier manager OR anyone who can raise a PO.
+  @Post('payees')
+  @RequireAnyPermissions('procurement.supplier.manage', 'procurement.po.create')
+  createPayee(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateProcurementPayeeDto) {
+    return this.supplierService.createPayee(user.organizationId, user.userId, dto);
   }
 
   @Get(':id')
