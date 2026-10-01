@@ -238,6 +238,40 @@ export class PurchaseOrderService {
     );
   }
 
+  // Change the PO's date at ANY status (correction / reconciling with a paper
+  // record). poDate is a document date only — it drives no accounting — so this
+  // is safe post-approval, unlike the DV date.
+  async changeDate(
+    organizationId: string,
+    id: string,
+    userId: string,
+    expectedVersion: number,
+    poDate: string,
+  ) {
+    const po = await this.prisma.purchaseOrder.findFirst({
+      where: { id, organizationId },
+    });
+    if (!po) throw new NotFoundException('Purchase order not found.');
+    if (po.version !== expectedVersion) {
+      throw new ConflictException('Purchase order was modified by another user. Please refresh and try again.');
+    }
+    const when = new Date(poDate);
+    if (Number.isNaN(when.getTime())) {
+      throw new BadRequestException('A valid PO date is required.');
+    }
+    return runAudited(this.prisma, userId, (tx) =>
+      tx.purchaseOrder.update({
+        where: { id },
+        data: {
+          poDate: when,
+          updatedBy: userId,
+          version: { increment: 1 },
+        },
+        select: PO_SELECT,
+      }),
+    );
+  }
+
   async submitForCaf(organizationId: string, id: string, userId: string, expectedVersion: number) {
     const po = await this.prisma.purchaseOrder.findFirst({
       where: { id, organizationId },

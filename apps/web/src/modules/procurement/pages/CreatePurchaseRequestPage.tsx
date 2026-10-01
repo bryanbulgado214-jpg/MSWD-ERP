@@ -45,6 +45,7 @@ export function CreatePurchaseRequestPage() {
   const [endUserId, setEndUserId] = useState('');
 
   const [prNumber, setPrNumber] = useState('');
+  const [prDate, setPrDate] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [purpose, setPurpose] = useState('');
@@ -161,6 +162,7 @@ export function CreatePurchaseRequestPage() {
     try {
       const pr = await createPurchaseRequest({
         ...(prNumber.trim() ? { prNumber: prNumber.trim() } : {}),
+        ...(prDate ? { prDate } : {}),
         title: title.trim(),
         ...(description.trim() ? { description: description.trim() } : {}),
         ...(purpose.trim() ? { purpose: purpose.trim() } : {}),
@@ -428,6 +430,14 @@ export function CreatePurchaseRequestPage() {
             />
           </div>
 
+          <div className="pr-field">
+            <label>PR Date (optional)</label>
+            <input type="date" value={prDate} onChange={(e) => setPrDate(e.target.value)} />
+            <span style={{ fontSize: 11, color: '#667085' }}>Leave blank to date it today.</span>
+          </div>
+        </div>
+
+        <div className="pr-form-grid">
           <div className="pr-field">
             <label>Department</label>
             <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>

@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
+import { RequireAnyPermissions, RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
@@ -31,8 +31,10 @@ export class SupplierController {
     return this.supplierService.findOne(user.organizationId, id);
   }
 
+  // Either a supplier manager OR anyone who can raise a PO (so the purchase
+  // officer can quick-add a supplier inline while creating a purchase order).
   @Post()
-  @RequirePermissions('procurement.supplier.manage')
+  @RequireAnyPermissions('procurement.supplier.manage', 'procurement.po.create')
   create(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateSupplierDto,

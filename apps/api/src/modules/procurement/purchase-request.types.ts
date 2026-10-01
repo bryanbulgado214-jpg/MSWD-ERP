@@ -1,6 +1,8 @@
 export interface CreatePurchaseRequestInput {
   // Optional manual PR number; when omitted, one is auto-generated.
   prNumber?: string;
+  // Optional PR date; when omitted, the PR is dated now.
+  prDate?: string;
   title: string;
   description?: string;
   purpose?: string;

@@ -111,3 +111,11 @@ export class ChangePurchaseOrderNumberDto {
   @MaxLength(30)
   poNumber!: string;
 }
+
+export class ChangePurchaseOrderDateDto {
+  @IsInt()
+  expectedVersion!: number;
+
+  @IsDateString()
+  poDate!: string;
+}

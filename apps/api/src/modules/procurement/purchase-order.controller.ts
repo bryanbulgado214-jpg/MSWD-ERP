@@ -5,7 +5,7 @@ import { RequirePermissions } from '../../common/decorators/require-permissions.
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
-import { ChangePurchaseOrderNumberDto, CreatePurchaseOrderDto, PurchaseOrderActionDto, UpdatePurchaseOrderDto } from './dto/purchase-order.dto';
+import { ChangePurchaseOrderDateDto, ChangePurchaseOrderNumberDto, CreatePurchaseOrderDto, PurchaseOrderActionDto, UpdatePurchaseOrderDto } from './dto/purchase-order.dto';
 import { PurchaseOrderService } from './purchase-order.service';
 
 @Controller('procurement/purchase-orders')
@@ -63,6 +63,17 @@ export class PurchaseOrderController {
     @Body() dto: ChangePurchaseOrderNumberDto,
   ) {
     return this.purchaseOrderService.changeNumber(user.organizationId, id, user.userId, dto.expectedVersion, dto.poNumber);
+  }
+
+  // Correct / reconcile the PO date at any status.
+  @Patch(':id/date')
+  @RequirePermissions('procurement.po.create')
+  changeDate(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ChangePurchaseOrderDateDto,
+  ) {
+    return this.purchaseOrderService.changeDate(user.organizationId, id, user.userId, dto.expectedVersion, dto.poDate);
   }
 
   @Post(':id/submit-for-caf')

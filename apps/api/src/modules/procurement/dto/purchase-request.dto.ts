@@ -48,6 +48,12 @@ export class CreatePurchaseRequestDto {
   @MaxLength(30)
   prNumber?: string;
 
+  // Optional PR date. Leave blank to date it today; supply your own to match an
+  // existing paper record (catch-up / historical entry).
+  @IsOptional()
+  @IsDateString()
+  prDate?: string;
+
   @IsString()
   @MinLength(1)
   @MaxLength(255)
@@ -227,4 +233,12 @@ export class ChangePurchaseRequestNumberDto {
   @MinLength(1)
   @MaxLength(30)
   prNumber!: string;
+}
+
+export class ChangePurchaseRequestDateDto {
+  @IsInt()
+  expectedVersion!: number;
+
+  @IsDateString()
+  prDate!: string;
 }

@@ -164,6 +164,18 @@ export async function changePrNumber(
   return res.json();
 }
 
+export async function changePrDate(
+  id: string,
+  expectedVersion: number,
+  prDate: string,
+): Promise<PurchaseRequest> {
+  const res = await authFetchMutate(`/procurement/purchase-requests/${id}/date`, 'PATCH', {
+    expectedVersion,
+    prDate,
+  });
+  return res.json();
+}
+
 export async function submitPurchaseRequest(
   id: string,
   expectedVersion: number,
@@ -650,6 +662,18 @@ export async function changePoNumber(
   const res = await authFetchMutate(`/procurement/purchase-orders/${id}/number`, 'PATCH', {
     expectedVersion,
     poNumber,
+  });
+  return res.json();
+}
+
+export async function changePoDate(
+  id: string,
+  expectedVersion: number,
+  poDate: string,
+): Promise<PurchaseOrder> {
+  const res = await authFetchMutate(`/procurement/purchase-orders/${id}/date`, 'PATCH', {
+    expectedVersion,
+    poDate,
   });
   return res.json();
 }

@@ -8,6 +8,7 @@ import {
   catchUpApprovePr,
   budgetCertifyPurchaseRequest,
   cancelPurchaseRequest,
+  changePrDate,
   changePrNumber,
   endorsePurchaseRequest,
   finalApprovePurchaseRequest,
@@ -23,6 +24,7 @@ import {
   submitPurchaseRequest,
 } from '../api';
 import type { Caf, Ors, PurchaseOrder, PurchaseRequest, PurchaseRequestStatus } from '../types';
+import { DocDateEditor } from './DocDateEditor';
 import { DocNumberEditor } from './DocNumberEditor';
 import './procurement.css';
 
@@ -288,8 +290,17 @@ export function PurchaseRequestDetailPage() {
           <dd>{pr.budgetRelease?.releaseNumber ?? '—'}</dd>
         </div>
         <div>
-          <dt>Created</dt>
-          <dd>{new Date(pr.createdAt).toLocaleString()}</dd>
+          <dt>PR Date</dt>
+          <dd>
+            <DocDateEditor
+              value={pr.createdAt}
+              canEdit={hasPermission('procurement.pr.mark_lifecycle')}
+              onSave={async (nextIso) => {
+                const updated = await changePrDate(pr.id, pr.version, nextIso);
+                setState({ status: 'loaded', data: updated });
+              }}
+            />
+          </dd>
         </div>
         {pr.department && (
           <div>

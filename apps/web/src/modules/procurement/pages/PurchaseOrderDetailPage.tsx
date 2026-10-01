@@ -6,6 +6,7 @@ import { formatPeso } from '../../budgeting/format-peso';
 import {
   approvePurchaseOrder,
   cancelPurchaseOrder,
+  changePoDate,
   changePoNumber,
   getPurchaseOrder,
   listCafs,
@@ -13,6 +14,7 @@ import {
   submitPoForCaf,
 } from '../api';
 import type { Caf, PurchaseOrder, PurchaseOrderStatus } from '../types';
+import { DocDateEditor } from './DocDateEditor';
 import { DocNumberEditor } from './DocNumberEditor';
 import './procurement.css';
 
@@ -212,7 +214,16 @@ export function PurchaseOrderDetailPage() {
         </div>
         <div>
           <dt>PO Date</dt>
-          <dd>{new Date(po.poDate).toLocaleDateString()}</dd>
+          <dd>
+            <DocDateEditor
+              value={po.poDate}
+              canEdit={canCreate}
+              onSave={async (nextIso) => {
+                const updated = await changePoDate(po.id, po.version, nextIso);
+                setState({ status: 'loaded', data: updated });
+              }}
+            />
+          </dd>
         </div>
         {po.awardDate && (
           <div>

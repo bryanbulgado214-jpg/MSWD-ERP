@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
+import { useAuth } from '../../../app/auth';
 import { formatPeso } from '../../budgeting/format-peso';
 import {
   createPurchaseOrder,
@@ -10,6 +11,8 @@ import {
   ProcurementApiError,
 } from '../api';
 import type { PurchaseRequest, Supplier } from '../types';
+
+import { AddSupplierModal } from './AddSupplierModal';
 import './procurement.css';
 
 // A PO can only be raised against a PR the BAC has taken into procurement.
@@ -27,8 +30,13 @@ const MODE_OPTIONS = [
 
 export function NewPurchaseOrderPage() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  // Anyone who can raise a PO may quick-add a supplier here (the backend accepts
+  // supplier.manage OR po.create), so the purchase officer isn't blocked.
+  const canAddSupplier = hasPermission('procurement.po.create');
   const [prs, setPrs] = useState<PurchaseRequest[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [showAddSupplier, setShowAddSupplier] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -73,6 +81,15 @@ export function NewPurchaseOrderPage() {
   }, []);
 
   const selectedPr = useMemo(() => prs.find((p) => p.id === purchaseRequestId), [prs, purchaseRequestId]);
+
+  // A supplier added inline is dropped into the list and selected straight away.
+  function handleSupplierCreated(supplier: Supplier) {
+    setSuppliers((prev) =>
+      [...prev, supplier].sort((a, b) => a.name.localeCompare(b.name)),
+    );
+    setSupplierId(supplier.id);
+    setShowAddSupplier(false);
+  }
 
   function onSelectPr(id: string) {
     setPurchaseRequestId(id);
@@ -179,10 +196,30 @@ export function NewPurchaseOrderPage() {
                   </option>
                 ))}
               </select>
-              {suppliers.length === 0 && (
-                <span style={{ fontSize: 11, color: '#b54708' }}>
-                  No active suppliers — add one under Suppliers first.
-                </span>
+              {canAddSupplier ? (
+                <button
+                  type="button"
+                  onClick={() => setShowAddSupplier(true)}
+                  style={{
+                    marginTop: 4,
+                    alignSelf: 'flex-start',
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    color: 'var(--mswd-blue, #175cd3)',
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  + Add new supplier
+                </button>
+              ) : (
+                suppliers.length === 0 && (
+                  <span style={{ fontSize: 11, color: '#b54708' }}>
+                    No active suppliers — add one under Suppliers first.
+                  </span>
+                )
               )}
             </div>
           </div>
@@ -283,6 +320,13 @@ export function NewPurchaseOrderPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {showAddSupplier && (
+        <AddSupplierModal
+          onCreated={handleSupplierCreated}
+          onClose={() => setShowAddSupplier(false)}
+        />
       )}
     </div>
   );

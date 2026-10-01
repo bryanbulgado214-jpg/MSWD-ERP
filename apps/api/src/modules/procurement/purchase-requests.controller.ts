@@ -7,7 +7,7 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { PrismaService } from '../../database/prisma.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
-import { ChangePurchaseRequestNumberDto, CreatePurchaseRequestDto, PurchaseRequestActionDto, UpdatePurchaseRequestDto } from './dto/purchase-request.dto';
+import { ChangePurchaseRequestDateDto, ChangePurchaseRequestNumberDto, CreatePurchaseRequestDto, PurchaseRequestActionDto, UpdatePurchaseRequestDto } from './dto/purchase-request.dto';
 import { PurchaseRequestService } from './purchase-request.service';
 
 @Controller('procurement/purchase-requests')
@@ -196,6 +196,17 @@ export class PurchaseRequestsController {
     @Body() dto: ChangePurchaseRequestNumberDto,
   ) {
     return this.prService.changeNumber(user.organizationId, id, dto.expectedVersion, dto.prNumber, user.userId);
+  }
+
+  // Correct / reconcile the PR date at any status.
+  @Patch(':id/date')
+  @RequirePermissions('procurement.pr.mark_lifecycle')
+  changeDate(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ChangePurchaseRequestDateDto,
+  ) {
+    return this.prService.changeDate(user.organizationId, id, dto.expectedVersion, dto.prDate, user.userId);
   }
 
   @Post(':id/submit')

@@ -93,6 +93,8 @@ export class PurchaseRequestService {
           fundSourceId: input.fundSourceId ?? null,
           totalAmount,
           status: 'draft',
+          // Optional backdating for catch-up entry; otherwise defaults to now().
+          ...(input.prDate ? { createdAt: new Date(input.prDate) } : {}),
           createdBy: input.createdBy ?? null,
           items: { create: items },
         },
@@ -199,6 +201,29 @@ export class PurchaseRequestService {
       prId,
       expectedVersion,
       { prNumber: next, updatedBy: actorUserId ?? null },
+      actorUserId,
+    );
+  }
+
+  // Change the PR's date at ANY status (correction / reconciling with a paper
+  // record). The PR has no separate document-date column — its date is createdAt
+  // (what the detail page and the printed PR show), so that is what moves.
+  async changeDate(
+    organizationId: string,
+    prId: string,
+    expectedVersion: number,
+    prDate: string,
+    actorUserId?: string,
+  ): Promise<PurchaseRequestWithItems> {
+    await this.requirePR(organizationId, prId);
+    const when = new Date(prDate);
+    if (Number.isNaN(when.getTime())) {
+      throw new BadRequestException('A valid PR date is required.');
+    }
+    return this.updateWithVersionCheck(
+      prId,
+      expectedVersion,
+      { createdAt: when, updatedBy: actorUserId ?? null },
       actorUserId,
     );
   }
