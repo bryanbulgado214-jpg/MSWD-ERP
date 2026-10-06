@@ -40,6 +40,9 @@ export default function WorkOrderListPage() {
         <h1>Work Orders</h1>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <Link to="/work-orders/dashboard" className="wo-btn wo-btn--sm">Dashboard</Link>
+          {permissions.has('workorder.team.manage') && (
+            <Link to="/work-orders/teams" className="wo-btn wo-btn--sm">Teams &amp; Personnel</Link>
+          )}
           {permissions.has('workorder.reports') && (
             <Link to="/work-orders/reports" className="wo-btn wo-btn--sm">Reports</Link>
           )}

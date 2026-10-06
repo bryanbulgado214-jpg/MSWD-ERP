@@ -32,7 +32,6 @@ const MODULE_NAV = [
 // module from this set to bring it into the live navigation.
 const LIVE_HIDDEN_MODULES = new Set<string>([
   'hr',
-  'workorder',
   'complaint',
   'asset',
 ]);

@@ -1,4 +1,11 @@
-import type { WorkOrder, WorkOrderDashboard, WorkOrderMaterial, WorkOrderNote } from './types';
+import type {
+  WorkOrder,
+  WorkOrderDashboard,
+  WorkOrderMaterial,
+  WorkOrderNote,
+  WorkOrderPersonnel,
+  WorkOrderTeam,
+} from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
 
@@ -77,11 +84,16 @@ export async function createWorkOrder(data: {
   title: string;
   description?: string;
   consumerId?: string;
-  meterId?: string;
+  customerName?: string;
   location?: string;
   scheduledDate?: string;
-  assignedTo?: string;
   estimatedDurationHrs?: number;
+  instructions?: string;
+  remarks?: string;
+  customerSignatureRequired?: boolean;
+  teamId?: string;
+  teamLeaderId?: string;
+  memberIds?: string[];
 }): Promise<WorkOrder> {
   const res = await authFetchMutate('/workorders', 'POST', data);
   return res.json();
@@ -94,30 +106,31 @@ export async function updateWorkOrder(
     priority?: string;
     title?: string;
     description?: string;
-    consumerId?: string;
-    meterId?: string;
+    customerName?: string;
     location?: string;
     scheduledDate?: string;
-    estimatedDurationHrs?: number;
+    instructions?: string;
+    remarks?: string;
+    customerSignatureRequired?: boolean;
   },
 ): Promise<WorkOrder> {
   const res = await authFetchMutate(`/workorders/${id}`, 'PATCH', data);
   return res.json();
 }
 
-export async function assignWorkOrder(
+export async function assignCrew(
   id: string,
-  data: { expectedVersion: number; assignedTo: string },
+  data: { expectedVersion: number; teamId?: string; teamLeaderId?: string; memberIds: string[] },
 ): Promise<WorkOrder> {
-  const res = await authFetchMutate(`/workorders/${id}/assign`, 'POST', data);
+  const res = await authFetchMutate(`/workorders/${id}/assign-crew`, 'POST', data);
   return res.json();
 }
 
-export async function startWorkOrder(
+export async function dispatchWorkOrder(
   id: string,
-  data: { expectedVersion: number },
+  data: { expectedVersion: number; timeLeft?: string },
 ): Promise<WorkOrder> {
-  const res = await authFetchMutate(`/workorders/${id}/start`, 'POST', data);
+  const res = await authFetchMutate(`/workorders/${id}/dispatch`, 'POST', data);
   return res.json();
 }
 
@@ -125,11 +138,64 @@ export async function completeWorkOrder(
   id: string,
   data: {
     expectedVersion: number;
-    completionNotes?: string;
+    timeReturned?: string;
+    tasksPerformed?: string;
+    issuesEncountered?: string;
+    remarks?: string;
     actualDurationHrs?: number;
   },
 ): Promise<WorkOrder> {
   const res = await authFetchMutate(`/workorders/${id}/complete`, 'POST', data);
+  return res.json();
+}
+
+// ── Personnel roster & reusable teams ──
+
+export async function listPersonnel(section?: string): Promise<WorkOrderPersonnel[]> {
+  const qs = section ? `?section=${section}` : '';
+  const res = await authFetch(`/workorder-personnel${qs}`);
+  return res.json();
+}
+
+export async function createPersonnel(data: {
+  name: string;
+  designation?: string;
+  section?: string;
+  contactNumber?: string;
+}): Promise<WorkOrderPersonnel> {
+  const res = await authFetchMutate('/workorder-personnel', 'POST', data);
+  return res.json();
+}
+
+export async function updatePersonnel(
+  id: string,
+  data: { name?: string; designation?: string; section?: string; contactNumber?: string; isActive?: boolean },
+): Promise<WorkOrderPersonnel> {
+  const res = await authFetchMutate(`/workorder-personnel/${id}`, 'PATCH', data);
+  return res.json();
+}
+
+export async function listTeams(section?: string): Promise<WorkOrderTeam[]> {
+  const qs = section ? `?section=${section}` : '';
+  const res = await authFetch(`/workorder-teams${qs}`);
+  return res.json();
+}
+
+export async function createTeam(data: {
+  name: string;
+  section?: string;
+  leaderId?: string;
+  memberIds?: string[];
+}): Promise<WorkOrderTeam> {
+  const res = await authFetchMutate('/workorder-teams', 'POST', data);
+  return res.json();
+}
+
+export async function updateTeam(
+  id: string,
+  data: { name?: string; section?: string; leaderId?: string; memberIds?: string[]; isActive?: boolean },
+): Promise<WorkOrderTeam> {
+  const res = await authFetchMutate(`/workorder-teams/${id}`, 'PATCH', data);
   return res.json();
 }
 

@@ -7,9 +7,18 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
+import { ForbiddenException } from '@nestjs/common';
+import type { WorkOrderType } from '@prisma/client';
+
+import { getGrantedPermissionCodes } from '../../common/guards/get-granted-permission-codes';
 import { PrismaService } from '../../database/prisma.service';
 import { AutoJevService } from '../accounting/auto-jev.service';
 import { runAudited } from '../budgeting/audit-actor.util';
+import {
+  assignPermissionFor,
+  natureOfType,
+  signatureRequiredByDefault,
+} from './work-order-taxonomy';
 
 @Injectable()
 export class WorkOrderService {
@@ -51,8 +60,9 @@ export class WorkOrderService {
         consumer: { select: { id: true, firstName: true, lastName: true, accountNumber: true } },
         meter: { select: { id: true, serialNumber: true } },
         assignee: { select: { id: true, firstName: true, lastName: true } },
+        teamLeader: { select: { id: true, name: true } },
         verifier: { select: { id: true, username: true } },
-        _count: { select: { materials: true, notes: true } },
+        _count: { select: { materials: true, notes: true, members: true } },
       },
     });
   }
@@ -76,6 +86,15 @@ export class WorkOrderService {
         verifier: { select: { id: true, username: true } },
         creator: { select: { id: true, username: true } },
         updater: { select: { id: true, username: true } },
+        crewAssigner: { select: { id: true, username: true } },
+        team: { select: { id: true, name: true } },
+        teamLeader: { select: { id: true, name: true, designation: true } },
+        members: {
+          include: {
+            personnel: { select: { id: true, name: true, designation: true, section: true } },
+          },
+          orderBy: { isLeader: 'desc' },
+        },
         materials: {
           include: {
             inventoryItem: {
@@ -105,36 +124,161 @@ export class WorkOrderService {
       title: string;
       description?: string;
       consumerId?: string;
+      customerName?: string;
       meterId?: string;
       location?: string;
       scheduledDate?: string;
-      assignedTo?: string;
       estimatedDurationHrs?: number;
+      instructions?: string;
+      remarks?: string;
+      customerSignatureRequired?: boolean;
+      // Crew the creator wants to dispatch. Only applied when the creator holds
+      // the assign permission for this work order's nature (technical/commercial).
+      teamId?: string;
+      teamLeaderId?: string;
+      memberIds?: string[];
     },
   ) {
+    const type = dto.type as WorkOrderType;
+    const nature = natureOfType(type);
+    const signatureRequired =
+      dto.customerSignatureRequired ?? signatureRequiredByDefault(type);
+
+    // Can this creator finalise the crew now? (Technical orders need Technical
+    // Services; commercial orders need Commercial Services.)
+    const wantsCrew = !!(dto.teamLeaderId || (dto.memberIds && dto.memberIds.length));
+    let assignCrewNow = false;
+    if (wantsCrew) {
+      const granted = await getGrantedPermissionCodes(this.prisma, userId);
+      assignCrewNow = granted.has(assignPermissionFor(nature));
+    }
+    if (assignCrewNow) {
+      await this.assertCrewInOrg(organizationId, dto.teamLeaderId, dto.memberIds);
+    }
+
     const woNumber = await this.generateWoNumber(organizationId);
+    const members = assignCrewNow ? this.buildMemberRows(dto.teamLeaderId, dto.memberIds) : [];
 
-    const hasAssignee = !!dto.assignedTo;
+    return runAudited(this.prisma, userId, (tx) =>
+      tx.workOrder.create({
+        data: {
+          organizationId,
+          woNumber,
+          type: type as never,
+          nature,
+          ...(dto.priority ? { priority: dto.priority as never } : {}),
+          status: assignCrewNow ? ('assigned' as never) : ('pending' as never),
+          title: dto.title,
+          ...(dto.description ? { description: dto.description } : {}),
+          ...(dto.consumerId ? { consumerId: dto.consumerId } : {}),
+          ...(dto.customerName ? { customerName: dto.customerName.trim() } : {}),
+          ...(dto.meterId ? { meterId: dto.meterId } : {}),
+          ...(dto.location ? { location: dto.location } : {}),
+          ...(dto.scheduledDate ? { scheduledDate: new Date(dto.scheduledDate) } : {}),
+          ...(dto.estimatedDurationHrs != null ? { estimatedDurationHrs: dto.estimatedDurationHrs } : {}),
+          ...(dto.instructions ? { instructions: dto.instructions.trim() } : {}),
+          ...(dto.remarks ? { remarks: dto.remarks.trim() } : {}),
+          customerSignatureRequired: signatureRequired,
+          ...(assignCrewNow
+            ? {
+                teamId: dto.teamId ?? null,
+                teamLeaderId: dto.teamLeaderId ?? null,
+                assignedCrewBy: userId,
+                assignedCrewAt: new Date(),
+                members: { create: members },
+              }
+            : {}),
+          createdBy: userId,
+          updatedBy: userId,
+        },
+      }),
+    );
+  }
 
-    return this.prisma.workOrder.create({
+  // Build the per-order crew rows: the leader (isLeader) + the other members,
+  // de-duplicated (the leader is included in the crew even if omitted from
+  // memberIds).
+  private buildMemberRows(leaderId?: string, memberIds?: string[]) {
+    const ids = new Set(memberIds ?? []);
+    if (leaderId) ids.add(leaderId);
+    return [...ids].map((personnelId) => ({ personnelId, isLeader: personnelId === leaderId }));
+  }
+
+  private async assertCrewInOrg(organizationId: string, leaderId?: string, memberIds?: string[]) {
+    const ids = [...new Set([...(leaderId ? [leaderId] : []), ...(memberIds ?? [])])];
+    if (!ids.length) return;
+    const count = await this.prisma.workOrderPersonnel.count({
+      where: { organizationId, id: { in: ids } },
+    });
+    if (count !== ids.length) throw new BadRequestException('One or more crew members are invalid.');
+  }
+
+  // Assign (or re-assign) the crew for a work order. Enforces the nature rule:
+  // a technical order needs workorder.assign.technical; a commercial one needs
+  // workorder.assign.commercial.
+  async assignCrew(
+    organizationId: string,
+    userId: string,
+    id: string,
+    dto: { expectedVersion: number; teamId?: string; teamLeaderId?: string; memberIds?: string[] },
+  ) {
+    const wo = await this.findOneOrThrow(organizationId, id);
+    this.checkVersion(wo.version, dto.expectedVersion);
+    if (!['pending', 'assigned'].includes(wo.status)) {
+      throw new BadRequestException('Crew can only be assigned while the work order is pending or assigned.');
+    }
+    const granted = await getGrantedPermissionCodes(this.prisma, userId);
+    if (!granted.has(assignPermissionFor(wo.nature))) {
+      throw new ForbiddenException(
+        wo.nature === 'technical'
+          ? 'This is a technical work order — only Technical Services can assign the crew.'
+          : 'Only Commercial Services can assign the crew for this work order.',
+      );
+    }
+    if (!dto.teamLeaderId && !(dto.memberIds && dto.memberIds.length)) {
+      throw new BadRequestException('Select a team leader and at least one crew member.');
+    }
+    await this.assertCrewInOrg(organizationId, dto.teamLeaderId, dto.memberIds);
+    const members = this.buildMemberRows(dto.teamLeaderId, dto.memberIds);
+
+    return runAudited(this.prisma, userId, async (tx) => {
+      await tx.workOrderMember.deleteMany({ where: { workOrderId: id } });
+      return tx.workOrder.update({
+        where: { id },
+        data: {
+          teamId: dto.teamId ?? null,
+          teamLeaderId: dto.teamLeaderId ?? null,
+          assignedCrewBy: userId,
+          assignedCrewAt: new Date(),
+          status: 'assigned',
+          updatedBy: userId,
+          version: { increment: 1 },
+          members: { create: members },
+        },
+      });
+    });
+  }
+
+  // Dispatch the crew: records the time they left and moves to in_progress.
+  async dispatch(
+    organizationId: string,
+    userId: string,
+    id: string,
+    dto: { expectedVersion: number; timeLeft?: string },
+  ) {
+    const wo = await this.findOneOrThrow(organizationId, id);
+    this.checkVersion(wo.version, dto.expectedVersion);
+    if (wo.status !== 'assigned') {
+      throw new BadRequestException('Only an assigned work order (with a crew) can be dispatched.');
+    }
+    return this.prisma.workOrder.update({
+      where: { id },
       data: {
-        organizationId,
-        woNumber,
-        type: dto.type as never,
-        ...(dto.priority ? { priority: dto.priority as never } : {}),
-        status: hasAssignee ? ('assigned' as never) : ('pending' as never),
-        title: dto.title,
-        ...(dto.description ? { description: dto.description } : {}),
-        ...(dto.consumerId ? { consumerId: dto.consumerId } : {}),
-        ...(dto.meterId ? { meterId: dto.meterId } : {}),
-        ...(dto.location ? { location: dto.location } : {}),
-        ...(dto.scheduledDate ? { scheduledDate: new Date(dto.scheduledDate) } : {}),
-        ...(dto.assignedTo ? { assignedTo: dto.assignedTo, assignedAt: new Date() } : {}),
-        ...(dto.estimatedDurationHrs != null
-          ? { estimatedDurationHrs: dto.estimatedDurationHrs }
-          : {}),
-        createdBy: userId,
+        status: 'in_progress',
+        timeLeft: dto.timeLeft ? new Date(dto.timeLeft) : new Date(),
+        startedAt: new Date(),
         updatedBy: userId,
+        version: { increment: 1 },
       },
     });
   }
@@ -149,17 +293,21 @@ export class WorkOrderService {
       title?: string;
       description?: string;
       consumerId?: string;
+      customerName?: string;
       meterId?: string;
       location?: string;
       scheduledDate?: string;
       estimatedDurationHrs?: number;
+      instructions?: string;
+      remarks?: string;
+      customerSignatureRequired?: boolean;
     },
   ) {
     const wo = await this.findOneOrThrow(organizationId, id);
     this.checkVersion(wo.version, dto.expectedVersion);
 
-    if (!['draft', 'pending'].includes(wo.status)) {
-      throw new BadRequestException('Can only edit work orders in draft or pending status');
+    if (!['draft', 'pending', 'assigned'].includes(wo.status)) {
+      throw new BadRequestException('Can only edit a work order before it is dispatched.');
     }
 
     return this.prisma.workOrder.update({
@@ -168,12 +316,16 @@ export class WorkOrderService {
         ...(dto.priority ? { priority: dto.priority as never } : {}),
         ...(dto.title ? { title: dto.title } : {}),
         ...(dto.description !== undefined ? { description: dto.description } : {}),
-        ...(dto.consumerId ? { consumerId: dto.consumerId } : {}),
-        ...(dto.meterId ? { meterId: dto.meterId } : {}),
-        ...(dto.location ? { location: dto.location } : {}),
+        ...(dto.consumerId !== undefined ? { consumerId: dto.consumerId || null } : {}),
+        ...(dto.customerName !== undefined ? { customerName: dto.customerName.trim() || null } : {}),
+        ...(dto.meterId !== undefined ? { meterId: dto.meterId || null } : {}),
+        ...(dto.location !== undefined ? { location: dto.location } : {}),
         ...(dto.scheduledDate ? { scheduledDate: new Date(dto.scheduledDate) } : {}),
-        ...(dto.estimatedDurationHrs != null
-          ? { estimatedDurationHrs: dto.estimatedDurationHrs }
+        ...(dto.estimatedDurationHrs != null ? { estimatedDurationHrs: dto.estimatedDurationHrs } : {}),
+        ...(dto.instructions !== undefined ? { instructions: dto.instructions.trim() || null } : {}),
+        ...(dto.remarks !== undefined ? { remarks: dto.remarks.trim() || null } : {}),
+        ...(dto.customerSignatureRequired !== undefined
+          ? { customerSignatureRequired: dto.customerSignatureRequired }
           : {}),
         updatedBy: userId,
         version: { increment: 1 },
@@ -238,6 +390,10 @@ export class WorkOrderService {
       expectedVersion: number;
       completionNotes?: string;
       actualDurationHrs?: number;
+      timeReturned?: string;
+      tasksPerformed?: string;
+      issuesEncountered?: string;
+      remarks?: string;
     },
   ) {
     const wo = await this.findOneOrThrow(organizationId, id);
@@ -257,8 +413,12 @@ export class WorkOrderService {
       data: {
         status: 'completed',
         completedAt: new Date(),
+        timeReturned: dto.timeReturned ? new Date(dto.timeReturned) : new Date(),
         ...(dto.completionNotes ? { completionNotes: dto.completionNotes } : {}),
         ...(dto.actualDurationHrs != null ? { actualDurationHrs: dto.actualDurationHrs } : {}),
+        ...(dto.tasksPerformed !== undefined ? { tasksPerformed: dto.tasksPerformed.trim() || null } : {}),
+        ...(dto.issuesEncountered !== undefined ? { issuesEncountered: dto.issuesEncountered.trim() || null } : {}),
+        ...(dto.remarks !== undefined ? { remarks: dto.remarks.trim() || null } : {}),
         materialsCost: materialsCost._sum.totalCost ?? 0,
         updatedBy: userId,
         version: { increment: 1 },

@@ -7,11 +7,13 @@ import WorkOrderListPage from './pages/WorkOrderListPage';
 import WorkOrderNewPage from './pages/WorkOrderNewPage';
 import WorkOrderPrintPage from './pages/WorkOrderPrintPage';
 import WorkOrderReportsPage from './pages/WorkOrderReportsPage';
+import WorkOrderTeamsPage from './pages/WorkOrderTeamsPage';
 
 const workOrderRoutes: RouteObject[] = [
   { index: true, element: <WorkOrderListPage /> },
   { path: 'dashboard', element: <WorkOrderDashboardPage /> },
   { path: 'reports', element: <WorkOrderReportsPage /> },
+  { path: 'teams', element: <WorkOrderTeamsPage /> },
   { path: 'new', element: <WorkOrderNewPage /> },
   { path: ':id', element: <WorkOrderDetailPage /> },
   { path: ':id/edit', element: <WorkOrderEditPage /> },

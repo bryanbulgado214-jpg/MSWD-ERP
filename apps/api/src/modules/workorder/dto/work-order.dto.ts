@@ -1,10 +1,12 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   ValidateNested,
 } from 'class-validator';
 
@@ -13,12 +15,20 @@ export class CreateWorkOrderDto {
   @IsString() @IsOptional() priority?: string;
   @IsString() @IsNotEmpty() title!: string;
   @IsString() @IsOptional() description?: string;
-  @IsString() @IsOptional() consumerId?: string;
-  @IsString() @IsOptional() meterId?: string;
+  @IsUUID() @IsOptional() consumerId?: string;
+  @IsString() @IsOptional() customerName?: string;
+  @IsUUID() @IsOptional() meterId?: string;
   @IsString() @IsOptional() location?: string;
   @IsString() @IsOptional() scheduledDate?: string;
-  @IsString() @IsOptional() assignedTo?: string;
   @IsNumber() @IsOptional() estimatedDurationHrs?: number;
+  @IsString() @IsOptional() instructions?: string;
+  @IsString() @IsOptional() remarks?: string;
+  @IsBoolean() @IsOptional() customerSignatureRequired?: boolean;
+  // Optional crew at creation (applied only if the creator may assign for the
+  // derived nature).
+  @IsUUID() @IsOptional() teamId?: string;
+  @IsUUID() @IsOptional() teamLeaderId?: string;
+  @IsArray() @IsUUID('all', { each: true }) @IsOptional() memberIds?: string[];
 }
 
 export class UpdateWorkOrderDto {
@@ -27,10 +37,26 @@ export class UpdateWorkOrderDto {
   @IsString() @IsOptional() title?: string;
   @IsString() @IsOptional() description?: string;
   @IsString() @IsOptional() consumerId?: string;
+  @IsString() @IsOptional() customerName?: string;
   @IsString() @IsOptional() meterId?: string;
   @IsString() @IsOptional() location?: string;
   @IsString() @IsOptional() scheduledDate?: string;
   @IsNumber() @IsOptional() estimatedDurationHrs?: number;
+  @IsString() @IsOptional() instructions?: string;
+  @IsString() @IsOptional() remarks?: string;
+  @IsBoolean() @IsOptional() customerSignatureRequired?: boolean;
+}
+
+export class AssignCrewDto {
+  @IsNumber() @IsNotEmpty() expectedVersion!: number;
+  @IsUUID() @IsOptional() teamId?: string;
+  @IsUUID() @IsOptional() teamLeaderId?: string;
+  @IsArray() @IsUUID('all', { each: true }) @IsOptional() memberIds?: string[];
+}
+
+export class DispatchWorkOrderDto {
+  @IsNumber() @IsNotEmpty() expectedVersion!: number;
+  @IsString() @IsOptional() timeLeft?: string;
 }
 
 export class AssignWorkOrderDto {
@@ -46,6 +72,10 @@ export class CompleteWorkOrderDto {
   @IsNumber() @IsNotEmpty() expectedVersion!: number;
   @IsString() @IsOptional() completionNotes?: string;
   @IsNumber() @IsOptional() actualDurationHrs?: number;
+  @IsString() @IsOptional() timeReturned?: string;
+  @IsString() @IsOptional() tasksPerformed?: string;
+  @IsString() @IsOptional() issuesEncountered?: string;
+  @IsString() @IsOptional() remarks?: string;
 }
 
 export class VerifyWorkOrderDto {

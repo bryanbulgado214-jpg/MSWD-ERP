@@ -190,6 +190,16 @@ async function main() {
       name: 'Customer Service Representative',
       description: 'Handles consumer complaints, inquiries, and service requests.',
     },
+    {
+      code: 'TECH_SERVICES_HEAD',
+      name: 'Technical Services Head',
+      description: 'Heads the Technical Services Section; assigns the crew for technical work orders.',
+    },
+    {
+      code: 'COMMERCIAL_SERVICES_HEAD',
+      name: 'Commercial Services Head',
+      description: 'Heads the Commercial Services Section; initiates work orders and runs commercial ones.',
+    },
   ];
 
   const roles: Record<string, { id: string }> = {};
@@ -458,6 +468,9 @@ async function main() {
     { code: 'workorder.read', name: 'View Work Orders', module: 'workorder' },
     { code: 'workorder.create', name: 'Create Work Orders', module: 'workorder' },
     { code: 'workorder.assign', name: 'Assign Work Orders', module: 'workorder' },
+    { code: 'workorder.assign.technical', name: 'Assign Crew (Technical)', module: 'workorder' },
+    { code: 'workorder.assign.commercial', name: 'Assign Crew (Commercial)', module: 'workorder' },
+    { code: 'workorder.team.manage', name: 'Manage Teams & Personnel', module: 'workorder' },
     { code: 'workorder.execute', name: 'Execute Work Orders', module: 'workorder' },
     { code: 'workorder.verify', name: 'Verify Completed Work', module: 'workorder' },
     { code: 'workorder.reports', name: 'View Work Order Reports', module: 'workorder' },
@@ -865,6 +878,32 @@ async function main() {
   // Field Technician: read + execute work orders.
   for (const code of ['workorder.read', 'workorder.execute']) {
     await grant('FIELD_TECHNICIAN', code);
+  }
+
+  // Technical Services Head: full crew-dispatch management; assigns crew for
+  // technical work orders (and can run them).
+  for (const code of [
+    'workorder.read',
+    'workorder.create',
+    'workorder.assign.technical',
+    'workorder.team.manage',
+    'workorder.execute',
+    'workorder.reports',
+  ]) {
+    await grant('TECH_SERVICES_HEAD', code);
+  }
+
+  // Commercial Services Head: initiates work orders (incl. technical ones, which
+  // Technical Services then crews) and assigns crew for commercial ones.
+  for (const code of [
+    'workorder.read',
+    'workorder.create',
+    'workorder.assign.commercial',
+    'workorder.team.manage',
+    'workorder.execute',
+    'workorder.reports',
+  ]) {
+    await grant('COMMERCIAL_SERVICES_HEAD', code);
   }
 
   // ── Customer Service permissions ──
@@ -1611,6 +1650,37 @@ async function main() {
       organizationalUnitId: rootUnit.id,
     },
   });
+
+  // ── Seed the two section-head work-order users ──
+  for (const h of [
+    { username: 'tech_head', email: 'tech.head@example.invalid', roleCode: 'TECH_SERVICES_HEAD' },
+    { username: 'commercial_head', email: 'commercial.head@example.invalid', roleCode: 'COMMERCIAL_SERVICES_HEAD' },
+  ]) {
+    const headUser = await prisma.user.upsert({
+      where: { organizationId_username: { organizationId: organization.id, username: h.username } },
+      update: {},
+      create: {
+        organizationId: organization.id,
+        username: h.username,
+        email: h.email,
+        passwordHash,
+        isActive: true,
+      },
+    });
+    const headRole = roles[h.roleCode];
+    if (!headRole) throw new Error(`Seed error: ${h.roleCode} role was not created above.`);
+    await prisma.userRole.upsert({
+      where: {
+        userId_roleId_organizationalUnitId: {
+          userId: headUser.id,
+          roleId: headRole.id,
+          organizationalUnitId: rootUnit.id,
+        },
+      },
+      update: {},
+      create: { userId: headUser.id, roleId: headRole.id, organizationalUnitId: rootUnit.id },
+    });
+  }
 
   // ── Seed field technician test user ──
   const fieldTechnicianUser = await prisma.user.upsert({

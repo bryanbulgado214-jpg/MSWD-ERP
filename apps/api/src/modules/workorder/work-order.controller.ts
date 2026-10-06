@@ -1,17 +1,22 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
+import {
+  RequireAnyPermissions,
+  RequirePermissions,
+} from '../../common/decorators/require-permissions.decorator';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
 import {
   AddWorkOrderMaterialDto,
   AddWorkOrderNoteDto,
+  AssignCrewDto,
   AssignWorkOrderDto,
   CancelWorkOrderDto,
   CompleteWorkOrderDto,
   CreateWorkOrderDto,
+  DispatchWorkOrderDto,
   StartWorkOrderDto,
   UpdateWorkOrderDto,
   VerifyWorkOrderDto,
@@ -95,6 +100,30 @@ export class WorkOrderController {
     @Body() dto: AssignWorkOrderDto,
   ) {
     return this.workOrderService.assign(user.organizationId, user.userId, id, dto);
+  }
+
+  // Crew-dispatch assignment (team leader + members). The service enforces the
+  // nature rule: technical orders require Technical Services, commercial require
+  // Commercial Services.
+  @Post(':id/assign-crew')
+  @RequireAnyPermissions('workorder.assign.technical', 'workorder.assign.commercial')
+  assignCrew(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: AssignCrewDto,
+  ) {
+    return this.workOrderService.assignCrew(user.organizationId, user.userId, id, dto);
+  }
+
+  // Record the crew leaving for the field (time out) and move to in-progress.
+  @Post(':id/dispatch')
+  @RequirePermissions('workorder.execute')
+  dispatch(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: DispatchWorkOrderDto,
+  ) {
+    return this.workOrderService.dispatch(user.organizationId, user.userId, id, dto);
   }
 
   @Post(':id/start')
