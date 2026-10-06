@@ -140,7 +140,7 @@ export function AppLayout() {
               }}
             >
               <img
-                src="/aquabooks-mark.png"
+                src="/aquabooks-mark-white.png"
                 alt=""
                 style={{ height: 30, width: 'auto', display: 'block' }}
               />
