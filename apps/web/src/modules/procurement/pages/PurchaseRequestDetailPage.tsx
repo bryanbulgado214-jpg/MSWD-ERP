@@ -54,6 +54,20 @@ const TERMINAL_STATUSES = new Set<PurchaseRequestStatus>([
   'voided',
 ]);
 
+// Any pre-procurement status can be caught up straight to procurement (records
+// back-entry), mirroring the API's allowed-from list.
+const CATCH_UP_PR_STATUSES = new Set<PurchaseRequestStatus>([
+  'draft',
+  'submitted',
+  'endorsed',
+  'budget_review',
+  'budget_certified',
+  'approved',
+  'procurement_review',
+  'accepted_for_procurement',
+  'returned',
+]);
+
 function stepIndex(status: PurchaseRequestStatus): number {
   const idx = WORKFLOW_STEPS.findIndex((s) => s.status === status);
   return idx >= 0 ? idx : -1;
@@ -431,9 +445,9 @@ export function PurchaseRequestDetailPage() {
           </button>
         )}
 
-        {/* Catch-up back-entry: skip the approval workflow for already-approved
-            Jan–Sep records. */}
-        {(pr.status === 'draft' || pr.status === 'returned') &&
+        {/* Catch-up back-entry: skip the approval workflow for an already-
+            completed historical procurement. */}
+        {CATCH_UP_PR_STATUSES.has(pr.status) &&
           hasPermission('procurement.pr.mark_lifecycle') && (
             <button
               className="pr-btn pr-btn--primary"
@@ -441,7 +455,7 @@ export function PurchaseRequestDetailPage() {
               onClick={() => {
                 if (
                   window.confirm(
-                    'Mark this PR as already approved (catch-up)? It skips the approval workflow and moves straight to procurement — for back-entering already-approved Jan–Sep records only. No journal entry is created.',
+                    'Mark this PR as already approved (catch-up)? It skips the approval workflow and moves straight to procurement — for back-entering an already-completed historical record. No journal entry is created.',
                   )
                 ) {
                   doAction('catch_up_approve');

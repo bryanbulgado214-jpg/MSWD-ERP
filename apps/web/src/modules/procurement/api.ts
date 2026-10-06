@@ -723,6 +723,17 @@ export async function approvePurchaseOrder(
   return res.json();
 }
 
+// Catch-up: mark a PO as issued, skipping CAF and creating no accounting entry.
+export async function catchUpIssuePo(
+  id: string,
+  expectedVersion: number,
+): Promise<PurchaseOrder> {
+  const res = await authFetchMutate(`/procurement/purchase-orders/${id}/catch-up-issue`, 'POST', {
+    expectedVersion,
+  });
+  return res.json();
+}
+
 export async function cancelPurchaseOrder(
   id: string,
   expectedVersion: number,

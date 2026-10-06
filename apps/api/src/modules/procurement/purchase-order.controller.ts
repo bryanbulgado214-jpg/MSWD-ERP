@@ -96,6 +96,18 @@ export class PurchaseOrderController {
     return this.purchaseOrderService.approve(user.organizationId, id, user.userId, dto.expectedVersion);
   }
 
+  // Catch-up back-entry: mark an already-completed PO as issued, skipping CAF and
+  // creating no accounting entry (records only). Same gate as the PR catch-up.
+  @Post(':id/catch-up-issue')
+  @RequirePermissions('procurement.pr.mark_lifecycle')
+  catchUpIssue(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PurchaseOrderActionDto,
+  ) {
+    return this.purchaseOrderService.catchUpIssue(user.organizationId, id, user.userId, dto.expectedVersion);
+  }
+
   @Post(':id/cancel')
   @RequirePermissions('procurement.po.create')
   cancel(

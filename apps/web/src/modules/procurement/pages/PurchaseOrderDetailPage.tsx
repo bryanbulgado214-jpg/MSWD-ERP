@@ -6,6 +6,7 @@ import { formatPeso } from '../../budgeting/format-peso';
 import {
   approvePurchaseOrder,
   cancelPurchaseOrder,
+  catchUpIssuePo,
   changePoDate,
   changePoNumber,
   getPurchaseOrder,
@@ -93,6 +94,28 @@ export function PurchaseOrderDetailPage() {
     }
   }
 
+  async function doCatchUpIssue() {
+    if (state.status !== 'loaded') return;
+    if (
+      !confirm(
+        'Mark this purchase order as issued (catch-up)? It skips the CAF and approval steps and ' +
+          'creates NO accounting entry — for back-entering a procurement that was already ' +
+          'completed and paid outside the system, for records only.',
+      )
+    )
+      return;
+    setActing(true);
+    setError('');
+    try {
+      const updated = await catchUpIssuePo(state.data.id, state.data.version);
+      setState({ status: 'loaded', data: updated });
+    } catch (e) {
+      setError(e instanceof ProcurementApiError ? e.message : 'Catch-up issue failed.');
+    } finally {
+      setActing(false);
+    }
+  }
+
   async function doCancel() {
     if (state.status !== 'loaded') return;
     const remarks = window.prompt('Reason for cancellation:');
@@ -129,6 +152,7 @@ export function PurchaseOrderDetailPage() {
   const po = state.data;
   const canCreate = hasPermission('procurement.po.create');
   const canApprove = hasPermission('procurement.po.approve');
+  const canCatchUp = hasPermission('procurement.pr.mark_lifecycle');
 
   return (
     <div className="pr-page">
@@ -169,6 +193,16 @@ export function PurchaseOrderDetailPage() {
         {po.status === 'for_approval' && canApprove && (
           <button className="pr-btn pr-btn--success" disabled={acting} onClick={doApprove}>
             Approve PO
+          </button>
+        )}
+        {po.status !== 'approved' && po.status !== 'cancelled' && canCatchUp && (
+          <button
+            className="pr-btn pr-btn--primary"
+            disabled={acting}
+            title="Catch-up: mark this already-completed PO as issued — no CAF, no accounting entry; for back-entering past records"
+            onClick={doCatchUpIssue}
+          >
+            {acting ? 'Working…' : 'Mark as Issued (catch-up)'}
           </button>
         )}
         {po.status !== 'approved' && po.status !== 'cancelled' && canCreate && (

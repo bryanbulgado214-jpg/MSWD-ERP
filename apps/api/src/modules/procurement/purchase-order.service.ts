@@ -344,6 +344,42 @@ export class PurchaseOrderService {
     });
   }
 
+  // Catch-up entry: mark a PO as issued directly, skipping the CAF + approval
+  // steps and WITHOUT creating any accounting entry. For back-entering a
+  // procurement that was completed and paid outside the system — records only.
+  async catchUpIssue(organizationId: string, id: string, userId: string, expectedVersion: number) {
+    const po = await this.prisma.purchaseOrder.findFirst({ where: { id, organizationId } });
+    if (!po) throw new NotFoundException('Purchase order not found.');
+    if (po.status === 'approved') {
+      throw new BadRequestException('This purchase order is already issued.');
+    }
+    if (po.status === 'cancelled') {
+      throw new BadRequestException('A cancelled purchase order cannot be issued.');
+    }
+    if (po.version !== expectedVersion) {
+      throw new ConflictException('Purchase order was modified by another user. Please refresh and try again.');
+    }
+
+    return runAudited(this.prisma, userId, async (tx) => {
+      const result = await tx.purchaseOrder.update({
+        where: { id },
+        data: {
+          status: 'approved',
+          approvedBy: userId,
+          approvedAt: new Date(),
+          updatedBy: userId,
+          version: { increment: 1 },
+        },
+        select: PO_SELECT,
+      });
+      await tx.purchaseRequest.update({
+        where: { id: po.purchaseRequestId },
+        data: { status: 'po_issued', updatedBy: userId },
+      });
+      return result;
+    });
+  }
+
   async cancel(organizationId: string, id: string, userId: string, expectedVersion: number, remarks?: string) {
     const po = await this.prisma.purchaseOrder.findFirst({
       where: { id, organizationId },
