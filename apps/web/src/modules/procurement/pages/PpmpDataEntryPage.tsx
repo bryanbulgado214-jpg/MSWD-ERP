@@ -76,6 +76,7 @@ const emptyRow = (): FormRow => ({
 });
 
 interface EditState {
+  code: string;
   itemDescription: string;
   quantity: string;
   estimatedUnitCost: string;
@@ -317,6 +318,7 @@ export function PpmpDataEntryPage() {
     setExpandedId(item.id);
     setEditingId(item.id);
     setEdit({
+      code: item.code,
       itemDescription: item.itemDescription,
       quantity: String(item.quantity),
       estimatedUnitCost: String(item.estimatedUnitCost),
@@ -336,6 +338,10 @@ export function PpmpDataEntryPage() {
   async function saveEdit(id: string) {
     if (!edit) return;
     setError(null);
+    if (!edit.code.trim()) {
+      setError('Code is required.');
+      return;
+    }
     const editQty = parseFloat(edit.quantity) || 0;
     const editScheduled = schedTotal(edit.sched);
     if (!(editQty > 0 && Math.abs(editScheduled - editQty) < 0.0001)) {
@@ -346,6 +352,7 @@ export function PpmpDataEntryPage() {
     }
     try {
       await updatePpmpItem(id, {
+        code: edit.code.trim(),
         itemDescription: edit.itemDescription,
         procurementCategory: edit.procurementCategory,
         unitOfMeasure: edit.unitOfMeasure || 'pc',
@@ -622,14 +629,30 @@ export function PpmpDataEntryPage() {
                       <div style={{ padding: '4px 14px 16px', background: '#f9fafb' }}>
                         {isEditing && edit ? (
                           <div style={{ display: 'grid', gap: 10 }}>
-                            <div className="pr-field">
-                              <label>Item Description</label>
-                              <input
-                                value={edit.itemDescription}
-                                onChange={(e) =>
-                                  setEdit({ ...edit, itemDescription: e.target.value })
-                                }
-                              />
+                            <div
+                              style={{
+                                display: 'grid',
+                                gridTemplateColumns: '160px 1fr',
+                                gap: 10,
+                              }}
+                            >
+                              <div className="pr-field">
+                                <label>Code</label>
+                                <input
+                                  value={edit.code}
+                                  onChange={(e) => setEdit({ ...edit, code: e.target.value })}
+                                  maxLength={30}
+                                />
+                              </div>
+                              <div className="pr-field">
+                                <label>Item Description</label>
+                                <input
+                                  value={edit.itemDescription}
+                                  onChange={(e) =>
+                                    setEdit({ ...edit, itemDescription: e.target.value })
+                                  }
+                                />
+                              </div>
                             </div>
                             <div
                               style={{

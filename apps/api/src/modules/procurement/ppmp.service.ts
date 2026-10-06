@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as XLSX from 'xlsx';
 
@@ -81,6 +81,7 @@ export interface CreatePpmpItemInput {
 export interface UpdatePpmpItemInput {
   assignedUserId?: string | null;
   endUserId?: string | null;
+  code?: string;
   itemDescription?: string;
   procurementCategory?: 'goods' | 'services' | 'infrastructure' | 'consulting_services';
   unitOfMeasure?: string;
@@ -260,6 +261,19 @@ export class PpmpService {
     if (input.updatedBy) updates.updatedBy = input.updatedBy;
     if (input.assignedUserId !== undefined) updates.assignedUserId = input.assignedUserId;
     if (input.endUserId !== undefined) updates.endUserId = input.endUserId;
+    if (input.code !== undefined) {
+      const code = input.code.trim();
+      if (!code) throw new BadRequestException('PPMP code is required.');
+      if (code.length > 30) throw new BadRequestException('PPMP code must be 30 characters or fewer.');
+      if (code !== item.code) {
+        const dup = await this.prisma.ppmpItem.findFirst({
+          where: { organizationId, code, id: { not: id } },
+          select: { id: true },
+        });
+        if (dup) throw new ConflictException(`PPMP code "${code}" is already in use.`);
+      }
+      updates.code = code;
+    }
     if (input.itemDescription !== undefined) updates.itemDescription = input.itemDescription;
     if (input.procurementCategory !== undefined) updates.procurementCategory = input.procurementCategory;
     if (input.unitOfMeasure !== undefined) updates.unitOfMeasure = input.unitOfMeasure;
