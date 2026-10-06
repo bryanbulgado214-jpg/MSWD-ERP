@@ -3,13 +3,14 @@
 /* ── Sub-navigation (vertical left sidebar) ── */
 .acct-subnav {
   /* Locked to the viewport so it stays put on scroll; left tracks the centered
-     page gutter (page max-width 1240 + 24px inset). */
+     page gutter (page max-width 1240 + 24px inset). Overflow stays visible so a
+     group's flyout can extend past the sidebar; z-index keeps it above content. */
   position: fixed;
+  z-index: 50;
   left: var(--subnav-left, 24px);
   top: calc(var(--app-header-h, 74px) + 26px);
   width: 178px;
-  max-height: calc(100vh - var(--app-header-h, 74px) - 44px);
-  overflow-y: auto;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -36,6 +37,62 @@
   color: var(--mswd-blue);
   background: #eff4ff;
   border-left-color: var(--mswd-blue);
+}
+
+/* Collapsible group (Cash Management) whose links fly out to the side — mirrors
+   the Reports sub-nav. Defined after the link rules so the group header's
+   overrides win over .acct-subnav__link. */
+.acct-subnav__group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.acct-subnav__group-label {
+  width: 100%;
+  background: none;
+  border: none;
+  /* Inherit only the family — keep .acct-subnav__link's 13px/600 so the group
+     header matches the other links (font shorthand would reset the size). */
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+}
+.acct-subnav__group-label--open {
+  color: var(--mswd-blue);
+  background: #eff4ff;
+  border-left-color: var(--mswd-blue);
+}
+.acct-subnav__chevron {
+  flex-shrink: 0;
+  font-size: 16px;
+  line-height: 1;
+  color: #98a2b3;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+.acct-subnav__group-label--open .acct-subnav__chevron {
+  color: var(--mswd-blue);
+  transform: rotate(90deg);
+}
+
+/* The group's links, floating to the right of its header. */
+.acct-subnav__flyout {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 8px);
+  z-index: 20;
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+  box-shadow: 0 8px 22px rgba(16, 24, 40, 0.12);
 }
 
 .acct-page {
@@ -102,6 +159,18 @@
     flex-wrap: wrap;
     margin-bottom: 16px;
     width: auto;
+  }
+  /* On narrow screens the group's links drop inline under its header. */
+  .acct-subnav__group {
+    width: 100%;
+  }
+  .acct-subnav__flyout {
+    position: static;
+    box-shadow: none;
+    border: none;
+    border-radius: 0;
+    padding: 2px 0 6px 14px;
+    min-width: 0;
   }
 }
 
