@@ -11,7 +11,7 @@ import {
   type BudgetReleaseOption,
   type LookupDepartment,
 } from '../api';
-import type { CreatePurchaseRequestItemInput, ItemClassification, PurchaseRequest } from '../types';
+import type { ItemClassification, PurchaseRequest } from '../types';
 import './procurement.css';
 
 const CLASSIFICATION_OPTIONS: { value: ItemClassification; label: string }[] = [
@@ -21,6 +21,32 @@ const CLASSIFICATION_OPTIONS: { value: ItemClassification; label: string }[] = [
   { value: 'infrastructure', label: 'Infrastructure' },
   { value: 'service', label: 'Service' },
 ];
+
+// Qty and Unit Cost are held as raw text while editing so the field can be
+// cleared (no "stuck 0") and typed freely; they are parsed to numbers on save.
+interface FormItem {
+  description: string;
+  quantity: string;
+  unitOfMeasure: string;
+  estimatedUnitCost: string;
+  accountCode?: string;
+  technicalSpecification?: string;
+  classification?: ItemClassification;
+}
+
+// Parse a typed number field; blank / partial / invalid reads as 0.
+function toNumber(value: string): number {
+  const n = parseFloat(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Keep only digits and a single decimal point as the user types.
+function numericText(value: string): string {
+  const cleaned = value.replace(/[^0-9.]/g, '');
+  const dot = cleaned.indexOf('.');
+  if (dot === -1) return cleaned;
+  return cleaned.slice(0, dot + 1) + cleaned.slice(dot + 1).replace(/\./g, '');
+}
 
 export function EditPurchaseRequestPage() {
   const { id } = useParams<{ id: string }>();
@@ -37,7 +63,7 @@ export function EditPurchaseRequestPage() {
   const [purpose, setPurpose] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [requestedDeliveryDate, setRequestedDeliveryDate] = useState('');
-  const [items, setItems] = useState<CreatePurchaseRequestItemInput[]>([]);
+  const [items, setItems] = useState<FormItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,9 +89,9 @@ export function EditPurchaseRequestPage() {
         setItems(
           prData.items.map((item) => ({
             description: item.description,
-            quantity: parseFloat(item.quantity),
+            quantity: String(parseFloat(item.quantity)),
             unitOfMeasure: item.unitOfMeasure,
-            estimatedUnitCost: parseFloat(item.estimatedUnitCost),
+            estimatedUnitCost: String(parseFloat(item.estimatedUnitCost)),
             ...(item.accountCode ? { accountCode: item.accountCode } : {}),
             ...(item.technicalSpecification
               ? { technicalSpecification: item.technicalSpecification }
@@ -80,7 +106,7 @@ export function EditPurchaseRequestPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  function updateItem(index: number, patch: Partial<CreatePurchaseRequestItemInput>) {
+  function updateItem(index: number, patch: Partial<FormItem>) {
     setItems((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
   }
 
@@ -92,24 +118,32 @@ export function EditPurchaseRequestPage() {
   function addItem() {
     setItems((prev) => [
       ...prev,
-      { description: '', quantity: 1, unitOfMeasure: 'pc', estimatedUnitCost: 0 },
+      { description: '', quantity: '1', unitOfMeasure: 'pc', estimatedUnitCost: '' },
     ]);
   }
 
-  const totalAmount = items.reduce((sum, item) => sum + item.quantity * item.estimatedUnitCost, 0);
+  // An item with a blank / zero quantity is treated as "not ordering this line"
+  // and is simply left out on save — so to drop a line from the PR you clear its
+  // quantity (e.g. for PR items a PO didn't cover). Only the kept lines must be
+  // fully filled in.
+  const keptItems = items.filter((item) => toNumber(item.quantity) > 0);
+  const totalAmount = keptItems.reduce(
+    (sum, item) => sum + toNumber(item.quantity) * toNumber(item.estimatedUnitCost),
+    0,
+  );
   const selectedRelease = releases.find((r) => r.id === budgetReleaseId);
 
   // A budget release is NOT required here — PRs can be created without one, so
   // requiring it on edit would leave those PRs permanently unsaveable (the Save
-  // button greyed out with no explanation). Only a title and well-formed items
-  // are required, matching the create form and the API.
+  // button greyed out with no explanation). Only a title and the kept items are
+  // required, matching the create form and the API.
   const itemsOk =
-    items.length > 0 &&
-    items.every(
+    keptItems.length > 0 &&
+    keptItems.every(
       (item) =>
         item.description.trim() &&
-        item.quantity > 0 &&
-        item.estimatedUnitCost > 0 &&
+        toNumber(item.quantity) > 0 &&
+        toNumber(item.estimatedUnitCost) > 0 &&
         item.unitOfMeasure.trim(),
     );
   const canSubmit = Boolean(pr && title.trim() && itemsOk && !submitting);
@@ -117,7 +151,9 @@ export function EditPurchaseRequestPage() {
   // Surface why Save is disabled so the user is never stuck guessing.
   const missing: string[] = [];
   if (!title.trim()) missing.push('a title');
-  if (!itemsOk) missing.push('each item to have a description, quantity, unit, and a unit cost above 0');
+  if (keptItems.length === 0) missing.push('at least one item with a quantity above 0');
+  else if (!itemsOk)
+    missing.push('each kept item (quantity above 0) to have a description, unit, and a unit cost above 0');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -133,11 +169,11 @@ export function EditPurchaseRequestPage() {
         ...(departmentId ? { departmentId } : {}),
         ...(requestedDeliveryDate ? { requestedDeliveryDate } : {}),
         ...(budgetReleaseId ? { budgetReleaseId } : {}),
-        items: items.map((item) => ({
+        items: keptItems.map((item) => ({
           description: item.description.trim(),
-          quantity: item.quantity,
+          quantity: toNumber(item.quantity),
           unitOfMeasure: item.unitOfMeasure.trim(),
-          estimatedUnitCost: item.estimatedUnitCost,
+          estimatedUnitCost: toNumber(item.estimatedUnitCost),
           ...(item.accountCode?.trim() ? { accountCode: item.accountCode.trim() } : {}),
           ...(item.technicalSpecification?.trim()
             ? { technicalSpecification: item.technicalSpecification.trim() }
@@ -304,6 +340,9 @@ export function EditPurchaseRequestPage() {
               + Add Item
             </button>
           </div>
+          <p style={{ fontSize: 12, color: '#667085', margin: '0 0 10px' }}>
+            Tip: clear an item's quantity to leave it off this PR (e.g. lines a PO didn't cover).
+          </p>
 
           {items.map((item, idx) => (
             <div key={idx} className="pr-item-card">
@@ -324,19 +363,17 @@ export function EditPurchaseRequestPage() {
                     type="text"
                     value={item.description}
                     onChange={(e) => updateItem(idx, { description: e.target.value })}
-                    required
                     maxLength={500}
                   />
                 </div>
                 <div>
                   <label>Qty</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={item.quantity}
-                    onChange={(e) => updateItem(idx, { quantity: parseFloat(e.target.value) || 0 })}
-                    min={0.0001}
-                    step="any"
-                    required
+                    onChange={(e) => updateItem(idx, { quantity: numericText(e.target.value) })}
+                    placeholder="0"
                   />
                 </div>
                 <div>
@@ -345,21 +382,19 @@ export function EditPurchaseRequestPage() {
                     type="text"
                     value={item.unitOfMeasure}
                     onChange={(e) => updateItem(idx, { unitOfMeasure: e.target.value })}
-                    required
                     maxLength={20}
                   />
                 </div>
                 <div>
                   <label>Unit Cost</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={item.estimatedUnitCost}
                     onChange={(e) =>
-                      updateItem(idx, { estimatedUnitCost: parseFloat(e.target.value) || 0 })
+                      updateItem(idx, { estimatedUnitCost: numericText(e.target.value) })
                     }
-                    min={0.01}
-                    step="0.01"
-                    required
+                    placeholder="0.00"
                   />
                 </div>
               </div>
@@ -444,7 +479,8 @@ export function EditPurchaseRequestPage() {
                 </div>
               </div>
               <p style={{ textAlign: 'right', fontSize: 12, color: '#475467', margin: '8px 0 0' }}>
-                Line total: {formatPeso((item.quantity * item.estimatedUnitCost).toFixed(2))}
+                Line total:{' '}
+                {formatPeso((toNumber(item.quantity) * toNumber(item.estimatedUnitCost)).toFixed(2))}
               </p>
             </div>
           ))}
@@ -462,13 +498,6 @@ export function EditPurchaseRequestPage() {
           </p>
         )}
         <div className="pr-form-actions">
-          <button
-            type="button"
-            className="pr-btn"
-            onClick={() => navigate(`/procurement/purchase-requests/${id}`)}
-          >
-            Cancel
-          </button>
           <button type="submit" className="pr-btn pr-btn--primary" disabled={!canSubmit}>
             {submitting ? 'Saving...' : 'Save Changes'}
           </button>
