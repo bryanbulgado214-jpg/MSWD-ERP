@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import type { PurchaseRequestStatus } from '@prisma/client';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -185,6 +185,17 @@ export class PurchaseRequestsController {
   ) {
     const { expectedVersion, ...edit } = dto;
     return this.prService.update(user.organizationId, id, expectedVersion, { ...edit, updatedBy: user.userId });
+  }
+
+  // Permanently delete a PR that never carried a financial commitment (draft /
+  // returned / cancelled / rejected, with nothing downstream attached).
+  @Delete(':id')
+  @RequirePermissions('procurement.pr.cancel')
+  remove(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.prService.remove(user.organizationId, id, user.userId);
   }
 
   // Correct / reconcile the PR document number at any status.

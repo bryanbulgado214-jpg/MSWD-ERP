@@ -593,6 +593,42 @@ export class PurchaseRequestService {
     }, actorUserId);
   }
 
+  // Permanently delete a purchase request that never carried a financial
+  // commitment — a draft the preparer is cleaning up, or one that ended in a
+  // dead state (cancelled / rejected / returned). Blocked the moment anything
+  // downstream is attached (a PO, a CAF, an ORS, a DV): the FK constraints on
+  // those child tables are Restrict, so the database itself refuses the delete
+  // and we surface that as a friendly message. PR items are removed by their
+  // cascade; the internal revision log is cleared first (it is Restrict).
+  async remove(organizationId: string, prId: string, actorUserId?: string): Promise<void> {
+    const pr = await this.requirePR(organizationId, prId);
+    this.assertStatus(pr, ['draft', 'returned', 'cancelled', 'rejected'], 'deleted');
+
+    const [poCount, cafCount] = await Promise.all([
+      this.prisma.purchaseOrder.count({ where: { purchaseRequestId: prId } }),
+      this.prisma.certificationOfAvailability.count({ where: { purchaseRequestId: prId } }),
+    ]);
+    if (poCount > 0 || cafCount > 0) {
+      throw new ConflictException(
+        'This purchase request has linked purchase orders or certifications of funds, so it cannot be deleted. Void those documents first.',
+      );
+    }
+
+    await runAudited(this.prisma, actorUserId, async (tx) => {
+      await tx.prRevision.deleteMany({ where: { purchaseRequestId: prId } });
+      try {
+        await tx.purchaseRequest.delete({ where: { id: prId } });
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') {
+          throw new ConflictException(
+            'This purchase request has linked documents, so it cannot be deleted.',
+          );
+        }
+        throw err;
+      }
+    });
+  }
+
   // ── Procurement lifecycle transitions ──
 
   async markLifecycle(

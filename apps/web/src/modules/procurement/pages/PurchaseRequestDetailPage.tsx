@@ -10,6 +10,7 @@ import {
   cancelPurchaseRequest,
   changePrDate,
   changePrNumber,
+  deletePurchaseRequest,
   endorsePurchaseRequest,
   finalApprovePurchaseRequest,
   getPurchaseRequest,
@@ -52,6 +53,17 @@ const TERMINAL_STATUSES = new Set<PurchaseRequestStatus>([
   'cancelled',
   'returned',
   'voided',
+]);
+
+// A PR can be permanently deleted only before it carries any financial
+// commitment — a draft, or one that ended in a dead state. Mirrors the API's
+// allowed-from list. (The backend still blocks it if anything downstream — a
+// PO, CAF, ORS or DV — is attached.)
+const DELETABLE_STATUSES = new Set<PurchaseRequestStatus>([
+  'draft',
+  'returned',
+  'cancelled',
+  'rejected',
 ]);
 
 // Any pre-procurement status can be caught up straight to procurement (records
@@ -196,6 +208,27 @@ export function PurchaseRequestDetailPage() {
     } catch (err) {
       setActionError(err instanceof Error ? err.message : `Failed to ${action}.`);
     } finally {
+      setActing(false);
+    }
+  }
+
+  async function doDelete() {
+    if (state.status !== 'loaded' || acting) return;
+    const pr = state.data;
+    if (
+      !window.confirm(
+        `Permanently delete ${pr.prNumber}? This removes the purchase request and its items for good. This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setActing(true);
+    setActionError(null);
+    try {
+      await deletePurchaseRequest(pr.id);
+      navigate('/procurement');
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to delete.');
       setActing(false);
     }
   }
@@ -615,6 +648,21 @@ export function PurchaseRequestDetailPage() {
             Mark as Completed
           </button>
         )}
+
+        {/* Permanently delete an uncommitted PR (draft / returned / cancelled /
+            rejected). The creator can clear their own; an admin can clear any. */}
+        {DELETABLE_STATUSES.has(pr.status) &&
+          (isCreator || hasPermission('procurement.pr.mark_lifecycle')) &&
+          hasPermission('procurement.pr.cancel') && (
+            <button
+              className="pr-btn pr-btn--danger"
+              onClick={doDelete}
+              disabled={acting}
+              title="Permanently delete this purchase request"
+            >
+              {acting ? 'Deleting…' : 'Delete PR'}
+            </button>
+          )}
       </div>
 
       {/* ── Financial Chain Summary ── */}

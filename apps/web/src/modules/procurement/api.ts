@@ -54,7 +54,7 @@ async function authFetch(path: string): Promise<Response> {
 
 async function authFetchMutate(
   path: string,
-  method: 'POST' | 'PATCH',
+  method: 'POST' | 'PATCH' | 'DELETE',
   body?: unknown,
 ): Promise<Response> {
   const token = getAccessToken();
@@ -150,6 +150,10 @@ export async function updatePurchaseRequest(
 ): Promise<PurchaseRequest> {
   const res = await authFetchMutate(`/procurement/purchase-requests/${id}`, 'PATCH', input);
   return res.json();
+}
+
+export async function deletePurchaseRequest(id: string): Promise<void> {
+  await authFetchMutate(`/procurement/purchase-requests/${id}`, 'DELETE');
 }
 
 export async function changePrNumber(

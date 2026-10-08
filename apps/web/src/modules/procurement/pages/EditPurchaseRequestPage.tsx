@@ -99,10 +99,11 @@ export function EditPurchaseRequestPage() {
   const totalAmount = items.reduce((sum, item) => sum + item.quantity * item.estimatedUnitCost, 0);
   const selectedRelease = releases.find((r) => r.id === budgetReleaseId);
 
-  const canSubmit =
-    pr &&
-    budgetReleaseId &&
-    title.trim() &&
+  // A budget release is NOT required here — PRs can be created without one, so
+  // requiring it on edit would leave those PRs permanently unsaveable (the Save
+  // button greyed out with no explanation). Only a title and well-formed items
+  // are required, matching the create form and the API.
+  const itemsOk =
     items.length > 0 &&
     items.every(
       (item) =>
@@ -110,8 +111,13 @@ export function EditPurchaseRequestPage() {
         item.quantity > 0 &&
         item.estimatedUnitCost > 0 &&
         item.unitOfMeasure.trim(),
-    ) &&
-    !submitting;
+    );
+  const canSubmit = Boolean(pr && title.trim() && itemsOk && !submitting);
+
+  // Surface why Save is disabled so the user is never stuck guessing.
+  const missing: string[] = [];
+  if (!title.trim()) missing.push('a title');
+  if (!itemsOk) missing.push('each item to have a description, quantity, unit, and a unit cost above 0');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -204,22 +210,26 @@ export function EditPurchaseRequestPage() {
       <form className="pr-form" onSubmit={handleSubmit}>
         <div className="pr-form-grid">
           <div className="pr-field">
-            <label>Budget Release *</label>
-            {releases.length === 0 ? (
-              <p style={{ color: '#b42318', fontSize: 13 }}>No released budgets available.</p>
+            <label>Budget Release</label>
+            {releases.length === 0 && !budgetReleaseId ? (
+              <p style={{ color: '#667085', fontSize: 13 }}>No released budgets available.</p>
             ) : (
-              <select
-                value={budgetReleaseId}
-                onChange={(e) => setBudgetReleaseId(e.target.value)}
-                required
-              >
-                <option value="">Select a budget release...</option>
+              <select value={budgetReleaseId} onChange={(e) => setBudgetReleaseId(e.target.value)}>
+                <option value="">— None —</option>
                 {releases.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.releaseNumber} — {r.budgetHeader.responsibilityCenter.name} /{' '}
                     {r.budgetHeader.fundSource.name} (Avail: {formatPeso(r.availableAmount)})
                   </option>
                 ))}
+                {/* Keep the PR's existing release selectable even when it is no
+                    longer in the "available" list, so editing never silently
+                    drops it. */}
+                {budgetReleaseId && !releases.some((r) => r.id === budgetReleaseId) && (
+                  <option value={budgetReleaseId}>
+                    {pr?.budgetRelease?.releaseNumber ?? 'Current release'} (current)
+                  </option>
+                )}
               </select>
             )}
             {selectedRelease && (
@@ -446,6 +456,11 @@ export function EditPurchaseRequestPage() {
           </p>
         </div>
 
+        {!canSubmit && !submitting && missing.length > 0 && (
+          <p style={{ textAlign: 'right', fontSize: 12, color: '#b42318', margin: '0 0 8px' }}>
+            To save, you still need: {missing.join('; ')}.
+          </p>
+        )}
         <div className="pr-form-actions">
           <button
             type="button"
