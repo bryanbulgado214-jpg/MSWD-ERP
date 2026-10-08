@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { getReport } from '../api';
 import { WO_PRIORITY_LABELS, WO_STATUS_LABELS, WO_TYPE_LABELS } from '../types';
@@ -45,6 +46,10 @@ export default function WorkOrderReportsPage() {
 
   return (
     <div className="wo-page">
+      <Link to="/work-orders" className="wo-back">
+        <span className="wo-back__arrow" aria-hidden="true">&larr;</span>
+        Back to Work Orders
+      </Link>
       <div className="wo-page__header">
         <h1>Work Order Reports</h1>
       </div>

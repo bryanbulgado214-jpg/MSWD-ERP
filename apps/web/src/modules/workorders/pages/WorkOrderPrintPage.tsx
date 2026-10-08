@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
 import { getWorkOrder } from '../api';
@@ -20,6 +20,7 @@ function fmtDate(s: string | null): string {
 
 export default function WorkOrderPrintPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { organization } = useAuth();
   const [wo, setWo] = useState<WorkOrder | null>(null);
   const [error, setError] = useState('');
@@ -37,6 +38,15 @@ export default function WorkOrderPrintPage() {
   const customer =
     wo.customerName ||
     (wo.consumer ? `${wo.consumer.firstName} ${wo.consumer.lastName} (${wo.consumer.accountNumber})` : '');
+
+  // The section head who approved the work order (and assigned the crew). Show
+  // the person's real name; if no full name is on file, leave the line blank
+  // (never fall back to the raw username).
+  const approverName = wo.crewAssigner?.fullName || wo.creator?.fullName || '';
+  const approverRole =
+    wo.nature === 'technical'
+      ? 'Technical Services Section Head'
+      : 'Commercial Services Section Head';
 
   return (
     <div className="wop">
@@ -57,12 +67,17 @@ export default function WorkOrderPrintPage() {
         .wop-box { border: 1px solid #000; min-height: 48px; padding: 4px 6px; font-size: 11pt; white-space: pre-wrap; }
         .wop-crew { font-size: 11pt; }
         .wop-crew li { margin-bottom: 2px; }
-        .wop-sigs { display: flex; gap: 40px; margin-top: 40px; }
-        .wop-sig { flex: 1; text-align: center; font-size: 11pt; }
-        .wop-sig .line { border-top: 1px solid #000; margin-top: 34px; padding-top: 3px; font-weight: bold; }
+        .wop-sigs { display: flex; flex-wrap: nowrap; justify-content: space-around; gap: 12px; margin-top: 52px; page-break-inside: avoid; }
+        .wop-sig { width: 210px; flex: 0 0 auto; text-align: center; font-size: 11pt; page-break-inside: avoid; }
+        .wop-sig .line { border-top: 1px solid #000; margin-top: 44px; padding-top: 4px; font-weight: bold; }
         .wop-sig .role { font-size: 10pt; }
-        .wop-controls { text-align: center; padding: 16px; }
-        @media print { .wop-controls { display: none; } .wop-sheet { margin: 0; } }
+        .wop-controls { display: flex; justify-content: center; gap: 10px; padding: 16px; }
+        @media print {
+          .wop-controls { display: none; }
+          .wop-sheet { margin: 0; }
+          .wop-sigs { page-break-inside: avoid; }
+          .wop-sig { page-break-inside: avoid; }
+        }
       `}</style>
 
       <div className="wop-sheet">
@@ -95,19 +110,31 @@ export default function WorkOrderPrintPage() {
         </div>
 
         <div className="wop-sec">
-          <h4>Crew Assigned</h4>
+          <h4>{wo.soloTask ? 'Assigned Personnel' : 'Crew Assigned'}</h4>
           <div className="wop-crew">
-            <div><strong>Team Leader:</strong> {leaderName}{wo.team?.name ? ` (${wo.team.name})` : ''}</div>
-            <ol>
-              {members
-                .filter((m) => !m.isLeader)
-                .map((m) => (
-                  <li key={m.id}>
-                    {m.personnel?.name}
-                    {m.personnel?.designation ? ` — ${m.personnel.designation}` : ''}
-                  </li>
-                ))}
-            </ol>
+            {wo.soloTask ? (
+              <div>
+                <strong>Personnel:</strong> {leaderName}
+                {wo.teamLeader?.designation ? ` — ${wo.teamLeader.designation}` : ''}
+              </div>
+            ) : (
+              <>
+                <div>
+                  <strong>Team Leader:</strong> {leaderName}
+                  {wo.team?.name ? ` (${wo.team.name})` : ''}
+                </div>
+                <ol>
+                  {members
+                    .filter((m) => !m.isLeader)
+                    .map((m) => (
+                      <li key={m.id}>
+                        {m.personnel?.name}
+                        {m.personnel?.designation ? ` — ${m.personnel.designation}` : ''}
+                      </li>
+                    ))}
+                </ol>
+              </>
+            )}
           </div>
         </div>
 
@@ -128,7 +155,7 @@ export default function WorkOrderPrintPage() {
         <div className="wop-sigs">
           <div className="wop-sig">
             <div className="line">{leaderName || ' '}</div>
-            <div className="role">Team Leader</div>
+            <div className="role">{wo.soloTask ? 'Assigned Personnel' : 'Team Leader'}</div>
           </div>
           {wo.customerSignatureRequired && (
             <div className="wop-sig">
@@ -136,10 +163,15 @@ export default function WorkOrderPrintPage() {
               <div className="role">Customer / Concerned Client</div>
             </div>
           )}
+          <div className="wop-sig">
+            <div className="line">{approverName || ' '}</div>
+            <div className="role">Approved by &mdash; {approverRole}</div>
+          </div>
         </div>
       </div>
 
       <div className="wop-controls">
+        <button onClick={() => navigate(`/work-orders/${id}`)} className="wo-btn">&larr; Back</button>
         <button onClick={() => window.print()} className="wo-btn wo-btn--primary">Print</button>
       </div>
     </div>

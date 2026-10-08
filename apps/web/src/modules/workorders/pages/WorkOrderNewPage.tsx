@@ -2,12 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
-import { createWorkOrder, listPersonnel, listTeams } from '../api';
+import { createWorkOrder, listPersonnel, listStaff, listTeams } from '../api';
+import MemberPickerModal from '../components/MemberPickerModal';
 import {
   natureOfType,
   signatureRequiredByDefault,
+  STAFF_STATUS_LABELS,
   WO_NATURE_LABELS,
   WO_TYPE_LABELS,
+  type StaffAvailabilityStatus,
   type WorkOrderPersonnel,
   type WorkOrderTeam,
   type WorkOrderType,
@@ -42,13 +45,25 @@ export default function WorkOrderNewPage() {
 
   const [personnel, setPersonnel] = useState<WorkOrderPersonnel[]>([]);
   const [teams, setTeams] = useState<WorkOrderTeam[]>([]);
+  const [solo, setSolo] = useState(false);
   const [teamId, setTeamId] = useState('');
   const [leaderId, setLeaderId] = useState('');
   const [memberIds, setMemberIds] = useState<string[]>([]);
+  const [memberModalOpen, setMemberModalOpen] = useState(false);
+  const [staffStatus, setStaffStatus] = useState<Map<string, StaffAvailabilityStatus>>(new Map());
 
   useEffect(() => {
     listPersonnel().then(setPersonnel).catch(() => {});
     listTeams().then(setTeams).catch(() => {});
+    listStaff()
+      .then((staff) => {
+        const m = new Map<string, StaffAvailabilityStatus>();
+        for (const s of staff) {
+          if (s.workOrderPersonnelId) m.set(s.workOrderPersonnelId, s.status);
+        }
+        setStaffStatus(m);
+      })
+      .catch(() => {});
   }, []);
 
   // Default the signature toggle from the task type until the user overrides it.
@@ -67,6 +82,20 @@ export default function WorkOrderNewPage() {
 
   function toggleMember(id: string) {
     setMemberIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  // Personnel who aren't available (on field work, on leave, unavailable) can't
+  // be picked as leader / solo personnel — disabled and labelled with status.
+  function personnelOption(p: WorkOrderPersonnel) {
+    const st = staffStatus.get(p.id);
+    const unavailable = st !== undefined && st !== 'available';
+    return (
+      <option key={p.id} value={p.id} disabled={unavailable}>
+        {p.name}
+        {p.designation ? ` — ${p.designation}` : ''}
+        {st && st !== 'available' ? ` — ${STAFF_STATUS_LABELS[st]}` : ''}
+      </option>
+    );
   }
 
   const crewValid = useMemo(() => !!leaderId && (memberIds.length > 0 || !!leaderId), [leaderId, memberIds]);
@@ -89,9 +118,10 @@ export default function WorkOrderNewPage() {
         ...(instructions ? { instructions } : {}),
         ...(assigningNow
           ? {
-              ...(teamId ? { teamId } : {}),
+              soloTask: solo,
+              ...(solo || !teamId ? {} : { teamId }),
               teamLeaderId: leaderId,
-              memberIds: [...new Set([leaderId, ...memberIds])],
+              memberIds: solo ? [leaderId] : [...new Set([leaderId, ...memberIds])],
             }
           : {}),
       });
@@ -236,55 +266,108 @@ export default function WorkOrderNewPage() {
         {canAssign ? (
           <div className="wo-crew-box">
             <h3 className="wo-crew-box__title">Assign Crew (optional)</h3>
-            <div className="wo-form__grid">
-              <label className="wo-form__field">
-                <span className="wo-form__label">Use a team</span>
-                <select className="wo-select" value={teamId} onChange={(e) => applyTeam(e.target.value)}>
-                  <option value="">— Pick a team (prefills below) —</option>
-                  {teams.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="wo-form__field">
-                <span className="wo-form__label">Team Leader</span>
-                <select className="wo-select" value={leaderId} onChange={(e) => setLeaderId(e.target.value)}>
-                  <option value="">— Select leader —</option>
-                  {personnel.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                      {p.designation ? ` — ${p.designation}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="wo-form__field wo-form__field--full">
-              <span className="wo-form__label">Members</span>
-              <div className="wo-member-grid">
-                {personnel.map((p) => (
-                  <label key={p.id} className="wo-member-chip">
-                    <input
-                      type="checkbox"
-                      checked={memberIds.includes(p.id) || p.id === leaderId}
-                      disabled={p.id === leaderId}
-                      onChange={() => toggleMember(p.id)}
-                    />
-                    {p.name}
-                  </label>
-                ))}
-                {personnel.length === 0 && (
-                  <span style={{ fontSize: 12, color: '#667085' }}>
-                    No personnel yet — add them under Teams &amp; Personnel.
-                  </span>
-                )}
+
+            <div className="wo-form__field" style={{ marginBottom: 12 }}>
+              <span className="wo-form__label">Type of task</span>
+              <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                  <input type="radio" name="wo-new-crewtype" checked={solo} onChange={() => setSolo(true)} />
+                  One-man task <span style={{ color: '#667085', fontSize: 12 }}>(e.g. meter reading)</span>
+                </label>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                  <input type="radio" name="wo-new-crewtype" checked={!solo} onChange={() => setSolo(false)} />
+                  Team <span style={{ color: '#667085', fontSize: 12 }}>(leader + members)</span>
+                </label>
               </div>
-              <span style={{ fontSize: 12, color: '#667085', marginTop: 4 }}>
-                Leave the crew blank to create the order unassigned.
-              </span>
             </div>
+
+            {solo ? (
+              <label className="wo-form__field wo-form__field--full">
+                <span className="wo-form__label">Assigned personnel</span>
+                <select className="wo-select" value={leaderId} onChange={(e) => setLeaderId(e.target.value)}>
+                  <option value="">— Select personnel —</option>
+                  {personnel.map(personnelOption)}
+                </select>
+                <span style={{ fontSize: 12, color: '#667085', marginTop: 4 }}>
+                  Leave blank to create the order unassigned.
+                </span>
+              </label>
+            ) : (
+              <>
+                <div className="wo-form__grid">
+                  <label className="wo-form__field">
+                    <span className="wo-form__label">Use a team</span>
+                    <select className="wo-select" value={teamId} onChange={(e) => applyTeam(e.target.value)}>
+                      <option value="">— Pick a team (prefills below) —</option>
+                      {teams.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="wo-form__field">
+                    <span className="wo-form__label">Team Leader</span>
+                    <select className="wo-select" value={leaderId} onChange={(e) => setLeaderId(e.target.value)}>
+                      <option value="">— Select leader —</option>
+                      {personnel.map(personnelOption)}
+                    </select>
+                  </label>
+                </div>
+                <div className="wo-form__field wo-form__field--full">
+                  <button
+                    type="button"
+                    className="wo-btn wo-btn--primary wo-btn--sm"
+                    style={{ alignSelf: 'flex-start' }}
+                    onClick={() => setMemberModalOpen(true)}
+                  >
+                    + Add Members
+                  </button>
+                  <div className="wo-member-grid" style={{ marginTop: 8 }}>
+                    {[...new Set([...(leaderId ? [leaderId] : []), ...memberIds])].map((pid) => {
+                      const p = personnel.find((x) => x.id === pid);
+                      const isLeader = pid === leaderId;
+                      return (
+                        <span key={pid} className="wo-member-chip" style={{ cursor: 'default' }}>
+                          {p?.name ?? pid}
+                          {isLeader ? ' (leader)' : ''}
+                          {!isLeader && (
+                            <button
+                              type="button"
+                              onClick={() => toggleMember(pid)}
+                              title="Remove"
+                              style={{
+                                marginLeft: 6,
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                color: '#b42318',
+                              }}
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </span>
+                      );
+                    })}
+                    {!leaderId && memberIds.length === 0 && (
+                      <span style={{ fontSize: 12, color: '#667085' }}>
+                        No members added yet — leave the crew blank to create it unassigned.
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <MemberPickerModal
+                  open={memberModalOpen}
+                  onClose={() => setMemberModalOpen(false)}
+                  personnel={personnel}
+                  leaderId={leaderId}
+                  selectedIds={memberIds}
+                  onToggle={toggleMember}
+                  statusByPersonnel={staffStatus}
+                />
+              </>
+            )}
           </div>
         ) : (
           <div className="wo-note">

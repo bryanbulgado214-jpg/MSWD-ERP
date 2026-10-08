@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
 import { getWorkOrders } from '../api';
@@ -10,6 +10,7 @@ import '../workorders.css';
 
 export default function WorkOrderListPage() {
   const { permissions } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,13 +39,22 @@ export default function WorkOrderListPage() {
     <div className="wo-page">
       <div className="wo-page__header">
         <h1>Work Orders</h1>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <Link to="/work-orders/dashboard" className="wo-btn wo-btn--sm">Dashboard</Link>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <Link to="/work-orders/dashboard" className="wo-btn wo-btn--nav">
+            <span className="wo-btn__icon" aria-hidden="true">{'\u{1F4CA}'}</span> Dashboard
+          </Link>
+          <Link to="/work-orders/staff" className="wo-btn wo-btn--nav">
+            <span className="wo-btn__icon" aria-hidden="true">{'\u{1F465}'}</span> Staff Availability
+          </Link>
           {permissions.has('workorder.team.manage') && (
-            <Link to="/work-orders/teams" className="wo-btn wo-btn--sm">Teams &amp; Personnel</Link>
+            <Link to="/work-orders/teams" className="wo-btn wo-btn--nav">
+              <span className="wo-btn__icon" aria-hidden="true">{'\u{1F6E0}'}</span> Teams &amp; Personnel
+            </Link>
           )}
           {permissions.has('workorder.reports') && (
-            <Link to="/work-orders/reports" className="wo-btn wo-btn--sm">Reports</Link>
+            <Link to="/work-orders/reports" className="wo-btn wo-btn--nav">
+              <span className="wo-btn__icon" aria-hidden="true">{'\u{1F4C4}'}</span> Reports
+            </Link>
           )}
           {canCreate && (
             <Link to="/work-orders/new" className="wo-btn wo-btn--primary">
@@ -129,7 +139,15 @@ export default function WorkOrderListPage() {
             </thead>
             <tbody>
               {workOrders.map((wo) => (
-                <tr key={wo.id}>
+                <tr
+                  key={wo.id}
+                  className="wo-row--click"
+                  onClick={() => {
+                    // Don't navigate if the user is selecting/copying text in the row.
+                    if (window.getSelection()?.toString()) return;
+                    navigate(`/work-orders/${wo.id}`);
+                  }}
+                >
                   <td>
                     <Link to={`/work-orders/${wo.id}`} className="wo-link">
                       {wo.woNumber}

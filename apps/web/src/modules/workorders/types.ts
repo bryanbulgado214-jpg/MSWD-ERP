@@ -25,6 +25,7 @@ export interface WorkOrder {
   nature: WorkOrderNature;
   customerName: string | null;
   customerSignatureRequired: boolean;
+  soloTask: boolean;
   teamId: string | null;
   teamLeaderId: string | null;
   assignedCrewBy: string | null;
@@ -46,10 +47,10 @@ export interface WorkOrder {
   team?: { id: string; name: string } | null;
   teamLeader?: { id: string; name: string; designation?: string | null } | null;
   members?: WorkOrderMember[];
-  crewAssigner?: { id: string; username: string } | null;
-  verifier?: { id: string; username: string } | null;
-  creator?: { id: string; username: string } | null;
-  updater?: { id: string; username: string } | null;
+  crewAssigner?: { id: string; username: string; fullName?: string | null } | null;
+  verifier?: { id: string; username: string; fullName?: string | null } | null;
+  creator?: { id: string; username: string; fullName?: string | null } | null;
+  updater?: { id: string; username: string; fullName?: string | null } | null;
   materials?: WorkOrderMaterial[];
   notes?: WorkOrderNote[];
   _count?: { materials: number; notes: number; members?: number };
@@ -179,6 +180,31 @@ export const WO_NATURE_LABELS: Record<WorkOrderNature, string> = {
   technical: 'Technical',
   commercial: 'Commercial',
 };
+
+// ── Staff availability master list ──
+export type StaffAvailabilityStatus = 'available' | 'on_field' | 'on_leave' | 'unavailable';
+
+export const STAFF_STATUS_LABELS: Record<StaffAvailabilityStatus, string> = {
+  available: 'Available',
+  on_field: 'On field work',
+  on_leave: 'On leave',
+  unavailable: 'Unavailable',
+};
+
+export interface StaffMember {
+  id: string;
+  name: string;
+  designation: string | null;
+  department: string | null;
+  contactNumber: string | null;
+  status: StaffAvailabilityStatus;
+  statusNote: string | null;
+  isFieldPersonnel: boolean;
+  workOrderPersonnelId: string | null;
+  isActive: boolean;
+  version: number;
+  workOrderPersonnel?: { id: string; name: string } | null;
+}
 
 export const WO_PRIORITY_LABELS: Record<WorkOrderPriority, string> = {
   low: 'Low',

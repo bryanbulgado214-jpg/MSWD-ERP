@@ -14,6 +14,7 @@ import { getGrantedPermissionCodes } from '../../common/guards/get-granted-permi
 import { PrismaService } from '../../database/prisma.service';
 import { AutoJevService } from '../accounting/auto-jev.service';
 import { runAudited } from '../budgeting/audit-actor.util';
+import { NotificationService } from '../notification/notification.service';
 import {
   assignPermissionFor,
   natureOfType,
@@ -27,6 +28,7 @@ export class WorkOrderService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly autoJevService: AutoJevService,
+    private readonly notifications: NotificationService,
   ) {}
 
   async findAll(
@@ -83,10 +85,10 @@ export class WorkOrderService {
             position: { select: { title: true } },
           },
         },
-        verifier: { select: { id: true, username: true } },
-        creator: { select: { id: true, username: true } },
-        updater: { select: { id: true, username: true } },
-        crewAssigner: { select: { id: true, username: true } },
+        verifier: { select: { id: true, username: true, fullName: true } },
+        creator: { select: { id: true, username: true, fullName: true } },
+        updater: { select: { id: true, username: true, fullName: true } },
+        crewAssigner: { select: { id: true, username: true, fullName: true } },
         team: { select: { id: true, name: true } },
         teamLeader: { select: { id: true, name: true, designation: true } },
         members: {
@@ -134,6 +136,7 @@ export class WorkOrderService {
       customerSignatureRequired?: boolean;
       // Crew the creator wants to dispatch. Only applied when the creator holds
       // the assign permission for this work order's nature (technical/commercial).
+      soloTask?: boolean;
       teamId?: string;
       teamLeaderId?: string;
       memberIds?: string[];
@@ -157,9 +160,12 @@ export class WorkOrderService {
     }
 
     const woNumber = await this.generateWoNumber(organizationId);
-    const members = assignCrewNow ? this.buildMemberRows(dto.teamLeaderId, dto.memberIds) : [];
+    const solo = !!dto.soloTask;
+    const members = assignCrewNow
+      ? this.buildMemberRows(dto.teamLeaderId, solo ? [] : dto.memberIds)
+      : [];
 
-    return runAudited(this.prisma, userId, (tx) =>
+    const created = await runAudited(this.prisma, userId, (tx) =>
       tx.workOrder.create({
         data: {
           organizationId,
@@ -181,7 +187,8 @@ export class WorkOrderService {
           customerSignatureRequired: signatureRequired,
           ...(assignCrewNow
             ? {
-                teamId: dto.teamId ?? null,
+                soloTask: solo,
+                teamId: solo ? null : (dto.teamId ?? null),
                 teamLeaderId: dto.teamLeaderId ?? null,
                 assignedCrewBy: userId,
                 assignedCrewAt: new Date(),
@@ -193,6 +200,26 @@ export class WorkOrderService {
         },
       }),
     );
+
+    // Real-time hand-off: when the order still needs crew assignment (e.g.
+    // Commercial created a technical order), notify whoever can assign it for
+    // this nature — the Technical / Commercial Services Head(s). The creator is
+    // excluded so they don't notify themselves.
+    if (!assignCrewNow) {
+      await this.notifications.notifyUsersWithPermission(
+        organizationId,
+        assignPermissionFor(nature),
+        {
+          title: 'New work order needs crew assignment',
+          body: `${created.woNumber} — ${created.title}`,
+          linkUrl: `/work-orders/${created.id}`,
+          relatedTable: 'work_orders',
+          relatedId: created.id,
+        },
+        userId,
+      );
+    }
+    return created;
   }
 
   // Build the per-order crew rows: the leader (isLeader) + the other members,
@@ -220,7 +247,13 @@ export class WorkOrderService {
     organizationId: string,
     userId: string,
     id: string,
-    dto: { expectedVersion: number; teamId?: string; teamLeaderId?: string; memberIds?: string[] },
+    dto: {
+      expectedVersion: number;
+      soloTask?: boolean;
+      teamId?: string;
+      teamLeaderId?: string;
+      memberIds?: string[];
+    },
   ) {
     const wo = await this.findOneOrThrow(organizationId, id);
     this.checkVersion(wo.version, dto.expectedVersion);
@@ -235,18 +268,28 @@ export class WorkOrderService {
           : 'Only Commercial Services can assign the crew for this work order.',
       );
     }
-    if (!dto.teamLeaderId && !(dto.memberIds && dto.memberIds.length)) {
-      throw new BadRequestException('Select a team leader and at least one crew member.');
+    const solo = !!dto.soloTask;
+    if (solo) {
+      // A one-person job: exactly one assigned personnel, no team/members.
+      if (!dto.teamLeaderId) {
+        throw new BadRequestException('Select the personnel assigned to this task.');
+      }
+    } else if (!dto.teamLeaderId) {
+      throw new BadRequestException('Designate a team leader.');
     }
-    await this.assertCrewInOrg(organizationId, dto.teamLeaderId, dto.memberIds);
-    const members = this.buildMemberRows(dto.teamLeaderId, dto.memberIds);
+    // For a solo task the crew is just that one person; for a team it is the
+    // leader plus the chosen members.
+    const memberIds = solo ? [] : dto.memberIds;
+    await this.assertCrewInOrg(organizationId, dto.teamLeaderId, memberIds);
+    const members = this.buildMemberRows(dto.teamLeaderId, memberIds);
 
-    return runAudited(this.prisma, userId, async (tx) => {
+    const result = await runAudited(this.prisma, userId, async (tx) => {
       await tx.workOrderMember.deleteMany({ where: { workOrderId: id } });
       return tx.workOrder.update({
         where: { id },
         data: {
-          teamId: dto.teamId ?? null,
+          soloTask: solo,
+          teamId: solo ? null : (dto.teamId ?? null),
           teamLeaderId: dto.teamLeaderId ?? null,
           assignedCrewBy: userId,
           assignedCrewAt: new Date(),
@@ -257,6 +300,9 @@ export class WorkOrderService {
         },
       });
     });
+    // The hand-off is done — clear the "needs assignment" notification for this order.
+    await this.notifications.markReadByRelated(organizationId, 'work_orders', [id]);
+    return result;
   }
 
   // Dispatch the crew: records the time they left and moves to in_progress.
@@ -271,15 +317,44 @@ export class WorkOrderService {
     if (wo.status !== 'assigned') {
       throw new BadRequestException('Only an assigned work order (with a crew) can be dispatched.');
     }
-    return this.prisma.workOrder.update({
-      where: { id },
-      data: {
-        status: 'in_progress',
-        timeLeft: dto.timeLeft ? new Date(dto.timeLeft) : new Date(),
-        startedAt: new Date(),
-        updatedBy: userId,
-        version: { increment: 1 },
+    return runAudited(this.prisma, userId, async (tx) => {
+      const updated = await tx.workOrder.update({
+        where: { id },
+        data: {
+          status: 'in_progress',
+          timeLeft: dto.timeLeft ? new Date(dto.timeLeft) : new Date(),
+          startedAt: new Date(),
+          updatedBy: userId,
+          version: { increment: 1 },
+        },
+      });
+      // The crew is now in the field — flip their availability.
+      await this.setCrewStaffStatus(tx, id, 'on_field');
+      return updated;
+    });
+  }
+
+  // Flip the crew's linked staff availability when a work order moves to / from
+  // the field. Only staff currently "available" are sent on_field, and only those
+  // currently "on_field" are released — so an admin-set on_leave / unavailable is
+  // never overridden.
+  private async setCrewStaffStatus(
+    tx: Prisma.TransactionClient,
+    workOrderId: string,
+    to: 'on_field' | 'available',
+  ) {
+    const members = await tx.workOrderMember.findMany({
+      where: { workOrderId },
+      select: { personnelId: true },
+    });
+    const personnelIds = members.map((m) => m.personnelId);
+    if (!personnelIds.length) return;
+    await tx.staffMember.updateMany({
+      where: {
+        workOrderPersonnelId: { in: personnelIds },
+        status: to === 'on_field' ? 'available' : 'on_field',
       },
+      data: { status: to },
     });
   }
 
@@ -408,21 +483,26 @@ export class WorkOrderService {
       _sum: { totalCost: true },
     });
 
-    return this.prisma.workOrder.update({
-      where: { id },
-      data: {
-        status: 'completed',
-        completedAt: new Date(),
-        timeReturned: dto.timeReturned ? new Date(dto.timeReturned) : new Date(),
-        ...(dto.completionNotes ? { completionNotes: dto.completionNotes } : {}),
-        ...(dto.actualDurationHrs != null ? { actualDurationHrs: dto.actualDurationHrs } : {}),
-        ...(dto.tasksPerformed !== undefined ? { tasksPerformed: dto.tasksPerformed.trim() || null } : {}),
-        ...(dto.issuesEncountered !== undefined ? { issuesEncountered: dto.issuesEncountered.trim() || null } : {}),
-        ...(dto.remarks !== undefined ? { remarks: dto.remarks.trim() || null } : {}),
-        materialsCost: materialsCost._sum.totalCost ?? 0,
-        updatedBy: userId,
-        version: { increment: 1 },
-      },
+    return runAudited(this.prisma, userId, async (tx) => {
+      const updated = await tx.workOrder.update({
+        where: { id },
+        data: {
+          status: 'completed',
+          completedAt: new Date(),
+          timeReturned: dto.timeReturned ? new Date(dto.timeReturned) : new Date(),
+          ...(dto.completionNotes ? { completionNotes: dto.completionNotes } : {}),
+          ...(dto.actualDurationHrs != null ? { actualDurationHrs: dto.actualDurationHrs } : {}),
+          ...(dto.tasksPerformed !== undefined ? { tasksPerformed: dto.tasksPerformed.trim() || null } : {}),
+          ...(dto.issuesEncountered !== undefined ? { issuesEncountered: dto.issuesEncountered.trim() || null } : {}),
+          ...(dto.remarks !== undefined ? { remarks: dto.remarks.trim() || null } : {}),
+          materialsCost: materialsCost._sum.totalCost ?? 0,
+          updatedBy: userId,
+          version: { increment: 1 },
+        },
+      });
+      // The crew is back from the field — release their availability.
+      await this.setCrewStaffStatus(tx, id, 'available');
+      return updated;
     });
   }
 
@@ -477,14 +557,19 @@ export class WorkOrderService {
       throw new BadRequestException('Cannot cancel verified or already-cancelled work orders');
     }
 
-    return this.prisma.workOrder.update({
-      where: { id },
-      data: {
-        status: 'cancelled',
-        ...(dto.reason ? { completionNotes: dto.reason } : {}),
-        updatedBy: userId,
-        version: { increment: 1 },
-      },
+    return runAudited(this.prisma, userId, async (tx) => {
+      const updated = await tx.workOrder.update({
+        where: { id },
+        data: {
+          status: 'cancelled',
+          ...(dto.reason ? { completionNotes: dto.reason } : {}),
+          updatedBy: userId,
+          version: { increment: 1 },
+        },
+      });
+      // Release any crew that was out in the field for this order.
+      await this.setCrewStaffStatus(tx, id, 'available');
+      return updated;
     });
   }
 

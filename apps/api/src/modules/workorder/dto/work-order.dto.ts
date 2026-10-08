@@ -26,6 +26,7 @@ export class CreateWorkOrderDto {
   @IsBoolean() @IsOptional() customerSignatureRequired?: boolean;
   // Optional crew at creation (applied only if the creator may assign for the
   // derived nature).
+  @IsBoolean() @IsOptional() soloTask?: boolean;
   @IsUUID() @IsOptional() teamId?: string;
   @IsUUID() @IsOptional() teamLeaderId?: string;
   @IsArray() @IsUUID('all', { each: true }) @IsOptional() memberIds?: string[];
@@ -49,6 +50,7 @@ export class UpdateWorkOrderDto {
 
 export class AssignCrewDto {
   @IsNumber() @IsNotEmpty() expectedVersion!: number;
+  @IsBoolean() @IsOptional() soloTask?: boolean;
   @IsUUID() @IsOptional() teamId?: string;
   @IsUUID() @IsOptional() teamLeaderId?: string;
   @IsArray() @IsUUID('all', { each: true }) @IsOptional() memberIds?: string[];

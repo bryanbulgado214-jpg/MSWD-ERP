@@ -184,6 +184,7 @@ model Organization {
   workOrders            WorkOrder[]
   workOrderPersonnel    WorkOrderPersonnel[]
   workOrderTeams        WorkOrderTeam[]
+  staffMembers          StaffMember[]
   complaints            Complaint[]
   assetCategories       AssetCategory[]
   depreciationRuns      DepreciationRun[]
@@ -4886,6 +4887,9 @@ model WorkOrder {
   // new installation). consumerId still links an existing consumer when known.
   customerName              String?         @map("customer_name") @db.VarChar(255)
   customerSignatureRequired Boolean         @default(false) @map("customer_signature_required")
+  // A one-person job (e.g. a meter reading): a single assigned personnel, no team
+  // leader/members split. false = a team task with a leader and members.
+  soloTask                  Boolean         @default(false) @map("solo_task")
   teamId                    String?         @map("team_id") @db.Uuid
   teamLeaderId              String?         @map("team_leader_id") @db.Uuid
   assignedCrewBy            String?         @map("assigned_crew_by") @db.Uuid
@@ -4980,9 +4984,50 @@ model WorkOrderPersonnel {
   teamsLed         WorkOrderTeam[]       @relation("WorkOrderTeamLeaderPersonnel")
   workOrderMembers WorkOrderMember[]
   workOrdersLed    WorkOrder[]           @relation("WorkOrderTeamLeader")
+  staffMember      StaffMember?          @relation("StaffMemberPersonnel")
 
   @@index([organizationId])
   @@map("work_order_personnel")
+}
+
+enum StaffAvailabilityStatus {
+  available
+  on_field
+  on_leave
+  unavailable
+
+  @@map("staff_availability_status")
+}
+
+// The admin-maintained master list of all staff (office + field) and their
+// current availability. Section heads view it read-only; only the admin edits.
+// Field personnel link to a work-order crew roster entry (workOrderPersonnelId);
+// their status auto-flips to on_field when a work order they are on is dispatched
+// and back to available when it is completed or cancelled.
+model StaffMember {
+  id                   String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String                  @map("organization_id") @db.Uuid
+  name                 String                  @db.VarChar(255)
+  designation          String?                 @db.VarChar(150)
+  department           String?                 @db.VarChar(150)
+  contactNumber        String?                 @map("contact_number") @db.VarChar(50)
+  status               StaffAvailabilityStatus @default(available)
+  statusNote           String?                 @map("status_note") @db.VarChar(255)
+  isFieldPersonnel     Boolean                 @default(false) @map("is_field_personnel")
+  workOrderPersonnelId String?                 @unique @map("work_order_personnel_id") @db.Uuid
+  isActive             Boolean                 @default(true) @map("is_active")
+  createdBy            String?                 @map("created_by") @db.Uuid
+  updatedBy            String?                 @map("updated_by") @db.Uuid
+  createdAt            DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version              Int                     @default(1)
+
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  workOrderPersonnel WorkOrderPersonnel?  @relation("StaffMemberPersonnel", fields: [workOrderPersonnelId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([status])
+  @@map("staff_members")
 }
 
 // A reusable crew template: a named team with a default leader and members. When

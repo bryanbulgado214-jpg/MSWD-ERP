@@ -20,6 +20,7 @@ const PERMISSIONS: Array<{ code: string; name: string; module: string }> = [
   { code: 'workorder.assign.technical', name: 'Assign Crew (Technical)', module: 'workorder' },
   { code: 'workorder.assign.commercial', name: 'Assign Crew (Commercial)', module: 'workorder' },
   { code: 'workorder.team.manage', name: 'Manage Teams & Personnel', module: 'workorder' },
+  { code: 'workorder.staff.manage', name: 'Manage Staff Availability', module: 'workorder' },
   { code: 'workorder.execute', name: 'Execute Work Orders', module: 'workorder' },
   { code: 'workorder.verify', name: 'Verify Completed Work', module: 'workorder' },
   { code: 'workorder.reports', name: 'View Work Order Reports', module: 'workorder' },

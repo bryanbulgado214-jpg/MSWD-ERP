@@ -30,24 +30,31 @@ export default function WorkOrderDashboardPage() {
 
   return (
     <div className="wo-page">
+      <Link to="/work-orders" className="wo-back">
+        <span className="wo-back__arrow" aria-hidden="true">&larr;</span>
+        Back to Work Orders
+      </Link>
       <div className="wo-page__header">
         <h1>Work Order Dashboard</h1>
-        <Link to="/work-orders" className="wo-btn wo-btn--sm">View All Work Orders</Link>
       </div>
 
       <div className="wo-dash-cards">
-        <div className="wo-dash-card wo-dash-card--active">
+        <Link to="/work-orders" className="wo-dash-card wo-dash-card--active wo-dash-card--link">
           <div className="wo-dash-card__value">{totalActive}</div>
           <div className="wo-dash-card__label">Active Work Orders</div>
-        </div>
+        </Link>
         {statusOrder.map((s) => {
           const item = data.byStatus.find((x) => x.status === s);
           const count = item?._count ?? 0;
           return (
-            <div key={s} className={`wo-dash-card wo-dash-card--${s}`}>
+            <Link
+              key={s}
+              to={`/work-orders?status=${s}`}
+              className={`wo-dash-card wo-dash-card--${s} wo-dash-card--link`}
+            >
               <div className="wo-dash-card__value">{count}</div>
               <div className="wo-dash-card__label">{WO_STATUS_LABELS[s]}</div>
-            </div>
+            </Link>
           );
         })}
       </div>

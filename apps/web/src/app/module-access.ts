@@ -75,6 +75,7 @@ export const MODULE_GATES = {
     'workorder.assign.technical',
     'workorder.assign.commercial',
     'workorder.team.manage',
+    'workorder.staff.manage',
     'workorder.execute',
     'workorder.verify',
     'workorder.reports',
@@ -169,6 +170,22 @@ export function isCashierHome(permissions: Set<string>): boolean {
 export function isProcurementHome(permissions: Set<string>): boolean {
   return (
     hasModuleAccess(permissions, 'procurement') &&
+    !isAccountantHome(permissions) &&
+    !isCashierHome(permissions) &&
+    !hasModuleAccess(permissions, 'admin')
+  );
+}
+
+/**
+ * A Technical / Commercial Services Section Head (holds a work-order crew-assign
+ * permission) who is not an admin, accountant, or cashier. Their home is a
+ * dedicated Section Head dashboard that surfaces their pending work-order items,
+ * notes, and due dates (and, later, their other modules).
+ */
+export function isSectionHeadHome(permissions: Set<string>): boolean {
+  return (
+    (permissions.has('workorder.assign.technical') ||
+      permissions.has('workorder.assign.commercial')) &&
     !isAccountantHome(permissions) &&
     !isCashierHome(permissions) &&
     !hasModuleAccess(permissions, 'admin')

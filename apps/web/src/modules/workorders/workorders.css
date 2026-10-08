@@ -107,6 +107,29 @@
   font-size: 0.8125rem;
 }
 
+/* Prominent navigation buttons (Dashboard / Staff / Teams / Reports). A clear
+   blue, bordered, bold style so the links read unmistakably as buttons — many
+   of our end users are 50+ and the old faint outline was easy to miss. */
+.wo-btn--nav {
+  border: 1.5px solid #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.wo-btn--nav:hover {
+  background: #dbeafe;
+  border-color: #1d4ed8;
+}
+
+.wo-btn__icon {
+  font-size: 1.05em;
+  line-height: 1;
+}
+
 .wo-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -140,6 +163,14 @@
 
 .wo-table tbody tr:hover {
   background: #f8fafc;
+}
+
+/* Fully-clickable rows (the Work Orders list). */
+.wo-table tbody tr.wo-row--click {
+  cursor: pointer;
+}
+.wo-table tbody tr.wo-row--click:hover {
+  background: #eff6ff;
 }
 
 .wo-table--compact th,
@@ -192,6 +223,39 @@
 
 .wo-link:hover {
   text-decoration: underline;
+}
+
+/* Prominent "Back" button — large, bordered and high-contrast so it is easy to
+   spot (many end users are 50+). Used at the top of work-order pages. */
+.wo-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding: 0.6rem 1.1rem;
+  border: 2px solid #2563eb;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  text-decoration: none;
+  line-height: 1.1;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.wo-back:hover {
+  background: #dbeafe;
+  text-decoration: none;
+}
+.wo-back:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3);
+}
+.wo-back__arrow {
+  font-size: 1.25rem;
+  line-height: 1;
 }
 
 /* ── Messages ── */
@@ -438,6 +502,27 @@
 .wo-dash-card--active {
   border-color: #3b82f6;
   background: #eff6ff;
+}
+
+/* Clickable stat cards — each filters the Work Orders list by that status. */
+.wo-dash-card--link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.wo-dash-card--link:hover {
+  border-color: #2563eb;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.14);
+  transform: translateY(-2px);
+}
+
+.wo-dash-card--link:focus-visible {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
 }
 
 .wo-dash-card--pending    { border-left: 3px solid #f59e0b; }

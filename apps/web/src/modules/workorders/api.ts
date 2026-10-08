@@ -1,4 +1,6 @@
 import type {
+  StaffAvailabilityStatus,
+  StaffMember,
   WorkOrder,
   WorkOrderDashboard,
   WorkOrderMaterial,
@@ -91,6 +93,7 @@ export async function createWorkOrder(data: {
   instructions?: string;
   remarks?: string;
   customerSignatureRequired?: boolean;
+  soloTask?: boolean;
   teamId?: string;
   teamLeaderId?: string;
   memberIds?: string[];
@@ -120,7 +123,13 @@ export async function updateWorkOrder(
 
 export async function assignCrew(
   id: string,
-  data: { expectedVersion: number; teamId?: string; teamLeaderId?: string; memberIds: string[] },
+  data: {
+    expectedVersion: number;
+    soloTask?: boolean;
+    teamId?: string;
+    teamLeaderId?: string;
+    memberIds: string[];
+  },
 ): Promise<WorkOrder> {
   const res = await authFetchMutate(`/workorders/${id}/assign-crew`, 'POST', data);
   return res.json();
@@ -196,6 +205,65 @@ export async function updateTeam(
   data: { name?: string; section?: string; leaderId?: string; memberIds?: string[]; isActive?: boolean },
 ): Promise<WorkOrderTeam> {
   const res = await authFetchMutate(`/workorder-teams/${id}`, 'PATCH', data);
+  return res.json();
+}
+
+// ── Staff availability master list ──
+
+export async function listStaff(): Promise<StaffMember[]> {
+  const res = await authFetch('/workorder-staff');
+  return res.json();
+}
+
+export async function listStaffLinkOptions(): Promise<
+  Array<{ id: string; name: string; designation: string | null }>
+> {
+  const res = await authFetch('/workorder-staff/link-options');
+  return res.json();
+}
+
+export async function createStaff(data: {
+  name: string;
+  designation?: string;
+  department?: string;
+  contactNumber?: string;
+  isFieldPersonnel?: boolean;
+  workOrderPersonnelId?: string;
+}): Promise<StaffMember> {
+  const res = await authFetchMutate('/workorder-staff', 'POST', data);
+  return res.json();
+}
+
+export async function updateStaff(
+  id: string,
+  data: {
+    name?: string;
+    designation?: string;
+    department?: string;
+    contactNumber?: string;
+    isFieldPersonnel?: boolean;
+    isActive?: boolean;
+    workOrderPersonnelId?: string;
+  },
+): Promise<StaffMember> {
+  const res = await authFetchMutate(`/workorder-staff/${id}`, 'PATCH', data);
+  return res.json();
+}
+
+export async function setStaffStatus(
+  id: string,
+  status: StaffAvailabilityStatus,
+  statusNote?: string,
+): Promise<StaffMember> {
+  const res = await authFetchMutate(`/workorder-staff/${id}/status`, 'PATCH', {
+    status,
+    ...(statusNote ? { statusNote } : {}),
+  });
+  return res.json();
+}
+
+export async function removeStaff(id: string): Promise<StaffMember> {
+  const res = await authFetchMutate(`/workorder-staff/${id}`, 'DELETE');
   return res.json();
 }
 
