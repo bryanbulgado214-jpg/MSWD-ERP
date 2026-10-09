@@ -572,15 +572,9 @@ export function PurchaseRequestDetailPage() {
             </button>
           )}
 
-        {pr.status === 'draft' && isCreator && hasPermission('procurement.pr.cancel') && (
-          <button
-            className="pr-btn pr-btn--danger"
-            onClick={() => doAction('cancel')}
-            disabled={acting}
-          >
-            Cancel
-          </button>
-        )}
+        {/* The draft "Cancel" action was removed — it only set the PR to
+            "cancelled" (keeping the record) and was easily mistaken for a
+            delete. Use "Delete PR" to remove an unwanted draft outright. */}
 
         {/* Post-procurement lifecycle buttons */}
         {pr.status === 'po_issued' && hasPermission('procurement.pr.mark_lifecycle') && (
