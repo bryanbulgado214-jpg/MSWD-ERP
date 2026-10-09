@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { formatPeso } from '../../budgeting/format-peso';
@@ -43,6 +43,9 @@ export function CreatePurchaseRequestPage() {
   // request is selected here so their PPMP allocations can be drawn from.
   const [endUsers, setEndUsers] = useState<EndUser[]>([]);
   const [endUserId, setEndUserId] = useState('');
+  // Free-text filter over the PPMP allocations table (code / description / unit),
+  // so a long allocation list is quick to search.
+  const [ppmpSearch, setPpmpSearch] = useState('');
 
   const [prNumber, setPrNumber] = useState('');
   const [prDate, setPrDate] = useState('');
@@ -135,13 +138,36 @@ export function CreatePurchaseRequestPage() {
     setItems((prev) => prev.filter((_, i) => i !== index));
   }
 
+  const itemsRef = useRef<HTMLDivElement>(null);
+  const [addedTick, setAddedTick] = useState(0);
+
   function addItem() {
     setItems((prev) => [...prev, emptyItem()]);
+    setAddedTick((t) => t + 1);
   }
+
+  // After an item is added, scroll it into view and focus it.
+  useEffect(() => {
+    if (addedTick === 0) return;
+    const cards = itemsRef.current?.querySelectorAll('.pr-item-card');
+    const last = cards?.[cards.length - 1] as HTMLElement | undefined;
+    last?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    (last?.querySelector('input') as HTMLInputElement | undefined)?.focus({ preventScroll: true });
+  }, [addedTick]);
 
   const totalAmount = items.reduce((sum, item) => sum + item.quantity * item.estimatedUnitCost, 0);
   const selectedPpmpIds = [...new Set(items.map((it) => it.ppmpItemId).filter(Boolean))] as string[];
   const linkedAppItems = appItems;
+
+  const ppmpQuery = ppmpSearch.trim().toLowerCase();
+  const filteredPpmpItems = ppmpQuery
+    ? myPpmpItems.filter(
+        (p) =>
+          p.code.toLowerCase().includes(ppmpQuery) ||
+          p.itemDescription.toLowerCase().includes(ppmpQuery) ||
+          p.unitOfMeasure.toLowerCase().includes(ppmpQuery),
+      )
+    : myPpmpItems;
 
   const canSubmit =
     title.trim() &&
@@ -292,6 +318,23 @@ export function CreatePurchaseRequestPage() {
             Check one or more items from the PPMP to add them to this purchase request. Click a
             "Purchased to Date" figure to see the documents behind it.
           </p>
+          <input
+            type="text"
+            value={ppmpSearch}
+            onChange={(e) => setPpmpSearch(e.target.value)}
+            placeholder="🔍 Search allocations by code, description, or unit…"
+            style={{
+              width: '100%',
+              maxWidth: 420,
+              padding: '8px 10px',
+              border: '1.5px solid #d0d5dd',
+              borderRadius: 6,
+              fontSize: 13,
+              fontFamily: 'inherit',
+              marginBottom: 10,
+              boxSizing: 'border-box',
+            }}
+          />
           <div style={{ overflowX: 'auto' }}>
             <table className="pr-table" style={{ fontSize: 12 }}>
               <thead>
@@ -308,7 +351,14 @@ export function CreatePurchaseRequestPage() {
                 </tr>
               </thead>
               <tbody>
-                {myPpmpItems.map((ppmp) => {
+                {filteredPpmpItems.length === 0 && (
+                  <tr>
+                    <td colSpan={9} style={{ textAlign: 'center', color: '#667085', padding: 16 }}>
+                      No allocations match "{ppmpSearch}".
+                    </td>
+                  </tr>
+                )}
+                {filteredPpmpItems.map((ppmp) => {
                   const remQty = parseFloat(ppmp.remainingQuantity);
                   const purchased = parseFloat(ppmp.purchasedQuantity ?? '0');
                   const isSelected = items.some((it) => it.ppmpItemId === ppmp.id);
@@ -520,6 +570,7 @@ export function CreatePurchaseRequestPage() {
             </button>
           </div>
 
+          <div ref={itemsRef}>
           {items.map((item, idx) => (
             <div key={idx} className="pr-item-card">
               {items.length > 1 && (
@@ -614,6 +665,7 @@ export function CreatePurchaseRequestPage() {
               </p>
             </div>
           ))}
+          </div>
 
           <p
             style={{ textAlign: 'right', fontSize: 15, fontWeight: 700, color: 'var(--mswd-navy)' }}

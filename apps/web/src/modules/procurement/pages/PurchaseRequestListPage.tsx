@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
 import { formatPeso } from '../../budgeting/format-peso';
@@ -91,6 +91,7 @@ const QUEUES: PendingQueue[] = [
 
 export function PurchaseRequestListPage() {
   const { hasPermission } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialStatus = searchParams.get('status') ?? '';
   const [statusFilter, setStatusFilter] = useState(initialStatus);
@@ -274,7 +275,15 @@ export function PurchaseRequestListPage() {
             </thead>
             <tbody>
               {state.data.map((pr) => (
-                <tr key={pr.id}>
+                <tr
+                  key={pr.id}
+                  className="pr-row--click"
+                  onClick={() => {
+                    // Don't navigate if the user is selecting/copying text.
+                    if (window.getSelection()?.toString()) return;
+                    navigate(`/procurement/purchase-requests/${pr.id}`);
+                  }}
+                >
                   <td>
                     <Link to={`/procurement/purchase-requests/${pr.id}`} className="pr-table__link">
                       {pr.prNumber}

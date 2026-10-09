@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { formatPeso } from '../../budgeting/format-peso';
@@ -71,7 +71,7 @@ export function EditPurchaseRequestPage() {
     if (!id) return;
     Promise.all([getPurchaseRequest(id), listAvailableBudgetReleases(), listLookupDepartments()])
       .then(([prData, relData, deptData]) => {
-        if (prData.status !== 'draft' && prData.status !== 'returned') {
+        if (!['draft', 'returned', 'procurement_in_progress'].includes(prData.status)) {
           setError(`This PR cannot be edited (status: ${prData.status}).`);
           return;
         }
@@ -115,12 +115,27 @@ export function EditPurchaseRequestPage() {
     setItems((prev) => prev.filter((_, i) => i !== index));
   }
 
+  const itemsRef = useRef<HTMLDivElement>(null);
+  const [addedTick, setAddedTick] = useState(0);
+
   function addItem() {
+    // A new line starts empty (blank quantity) so it is simply ignored until
+    // filled in — it never blocks Save.
     setItems((prev) => [
       ...prev,
-      { description: '', quantity: '1', unitOfMeasure: 'pc', estimatedUnitCost: '' },
+      { description: '', quantity: '', unitOfMeasure: 'pc', estimatedUnitCost: '' },
     ]);
+    setAddedTick((t) => t + 1);
   }
+
+  // After an item is added, scroll it into view and focus it.
+  useEffect(() => {
+    if (addedTick === 0) return;
+    const cards = itemsRef.current?.querySelectorAll('.pr-item-card');
+    const last = cards?.[cards.length - 1] as HTMLElement | undefined;
+    last?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    (last?.querySelector('input') as HTMLInputElement | undefined)?.focus({ preventScroll: true });
+  }, [addedTick]);
 
   // An item with a blank / zero quantity is treated as "not ordering this line"
   // and is simply left out on save — so to drop a line from the PR you clear its
@@ -344,6 +359,7 @@ export function EditPurchaseRequestPage() {
             Tip: clear an item's quantity to leave it off this PR (e.g. lines a PO didn't cover).
           </p>
 
+          <div ref={itemsRef}>
           {items.map((item, idx) => (
             <div key={idx} className="pr-item-card">
               {items.length > 1 && (
@@ -484,6 +500,7 @@ export function EditPurchaseRequestPage() {
               </p>
             </div>
           ))}
+          </div>
 
           <p
             style={{ textAlign: 'right', fontSize: 15, fontWeight: 700, color: 'var(--mswd-navy)' }}

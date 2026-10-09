@@ -369,16 +369,41 @@
   margin-bottom: 24px;
 }
 
+/* Prominent back button — a clear bordered pill rather than faint small text,
+   so it's easy to spot (many end users are 50+). */
 .pr-back {
-  display: inline-block;
-  margin-bottom: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 18px;
+  padding: 0.5rem 1rem;
+  border: 2px solid var(--mswd-blue);
+  border-radius: 8px;
+  background: #eff6ff;
   color: var(--mswd-blue);
   text-decoration: none;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 0.95rem;
+  font-weight: 700;
 }
 
-.pr-back:hover { text-decoration: underline; }
+.pr-back:hover {
+  background: #dbeafe;
+  text-decoration: none;
+}
+
+.pr-back:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(11, 87, 255, 0.25);
+}
+
+/* Fully clickable table rows (whole row opens the record). */
+.pr-table tbody tr.pr-row--click {
+  cursor: pointer;
+}
+
+.pr-table tbody tr.pr-row--click:hover {
+  background: #eff6ff;
+}
 
 /* ── Pending Action Queue ── */
 .pr-pending-queue {
