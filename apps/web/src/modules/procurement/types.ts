@@ -11,6 +11,13 @@ export interface PurchaseRequestItem {
   accountCode: string | null;
   technicalSpecification: string | null;
   classification: ItemClassification | null;
+  // The PPMP item this line draws from, carrying the requesting end-user — set
+  // on detail/print loads so a consolidated PR can show who requested each line.
+  ppmpItem?: {
+    id: string;
+    code: string;
+    endUser: { id: string; name: string } | null;
+  } | null;
 }
 
 export type PurchaseRequestStatus =

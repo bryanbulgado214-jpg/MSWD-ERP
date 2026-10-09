@@ -137,11 +137,11 @@ export function EditPurchaseRequestPage() {
     (last?.querySelector('input') as HTMLInputElement | undefined)?.focus({ preventScroll: true });
   }, [addedTick]);
 
-  // An item with a blank / zero quantity is treated as "not ordering this line"
-  // and is simply left out on save — so to drop a line from the PR you clear its
-  // quantity (e.g. for PR items a PO didn't cover). Only the kept lines must be
-  // fully filled in.
-  const keptItems = items.filter((item) => toNumber(item.quantity) > 0);
+  // Every line that has a description is saved — its Qty and Unit Cost may be 0
+  // or blank (e.g. a line a PO didn't cover is still kept on record). Only a
+  // truly blank row (no description) is ignored, so adding a line never blocks
+  // Save. Use the × on a line to remove it entirely.
+  const keptItems = items.filter((item) => item.description.trim());
   const totalAmount = keptItems.reduce(
     (sum, item) => sum + toNumber(item.quantity) * toNumber(item.estimatedUnitCost),
     0,
@@ -149,26 +149,19 @@ export function EditPurchaseRequestPage() {
   const selectedRelease = releases.find((r) => r.id === budgetReleaseId);
 
   // A budget release is NOT required here — PRs can be created without one, so
-  // requiring it on edit would leave those PRs permanently unsaveable (the Save
-  // button greyed out with no explanation). Only a title and the kept items are
-  // required, matching the create form and the API.
+  // requiring it on edit would leave those PRs permanently unsaveable. Only a
+  // title and at least one described line (with a unit) are required; Qty and
+  // Unit Cost may be 0.
   const itemsOk =
     keptItems.length > 0 &&
-    keptItems.every(
-      (item) =>
-        item.description.trim() &&
-        toNumber(item.quantity) > 0 &&
-        toNumber(item.estimatedUnitCost) > 0 &&
-        item.unitOfMeasure.trim(),
-    );
+    keptItems.every((item) => item.description.trim() && item.unitOfMeasure.trim());
   const canSubmit = Boolean(pr && title.trim() && itemsOk && !submitting);
 
   // Surface why Save is disabled so the user is never stuck guessing.
   const missing: string[] = [];
   if (!title.trim()) missing.push('a title');
-  if (keptItems.length === 0) missing.push('at least one item with a quantity above 0');
-  else if (!itemsOk)
-    missing.push('each kept item (quantity above 0) to have a description, unit, and a unit cost above 0');
+  if (keptItems.length === 0) missing.push('at least one item with a description');
+  else if (!itemsOk) missing.push('each item to have a description and a unit');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -356,7 +349,8 @@ export function EditPurchaseRequestPage() {
             </button>
           </div>
           <p style={{ fontSize: 12, color: '#667085', margin: '0 0 10px' }}>
-            Tip: clear an item's quantity to leave it off this PR (e.g. lines a PO didn't cover).
+            Tip: every line with a description is saved — even if its Qty or Unit Cost is 0. Use ×
+            on a line to remove it entirely.
           </p>
 
           <div ref={itemsRef}>

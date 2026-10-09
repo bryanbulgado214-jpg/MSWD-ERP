@@ -26,11 +26,20 @@ function emptyItem(): CreatePurchaseRequestItemInput {
   return { description: '', quantity: 1, unitOfMeasure: 'pc', estimatedUnitCost: 0 };
 }
 
+// One requesting end-user plus their approved PPMP allocations (the APP basis).
+interface AllocationGroup {
+  user: EndUser;
+  items: PpmpItemWithRemaining[];
+}
+
 export function CreatePurchaseRequestPage() {
   const navigate = useNavigate();
   const [fiscalYears, setFiscalYears] = useState<ProcurementFiscalYear[]>([]);
   const [selectedFiscalYear, setSelectedFiscalYear] = useState('');
-  const [myPpmpItems, setMyPpmpItems] = useState<PpmpItemWithRemaining[]>([]);
+  // A PR can be prepared on behalf of several end-users: each selected end-user's
+  // approved PPMP allocations are loaded into its own section, and every line
+  // keeps its PPMP item (which records the requesting end-user).
+  const [allocByUser, setAllocByUser] = useState<AllocationGroup[]>([]);
   const [loadingPpmp, setLoadingPpmp] = useState(false);
   const [acqModal, setAcqModal] = useState<{
     id: string;
@@ -39,12 +48,11 @@ export function CreatePurchaseRequestPage() {
   } | null>(null);
   const [departments, setDepartments] = useState<LookupDepartment[]>([]);
   const [appItems, setAppItems] = useState<AppItem[]>([]);
-  // The purchase officer prepares every PR; the end-user who initiated the
-  // request is selected here so their PPMP allocations can be drawn from.
   const [endUsers, setEndUsers] = useState<EndUser[]>([]);
-  const [endUserId, setEndUserId] = useState('');
-  // Free-text filter over the PPMP allocations table (code / description / unit),
-  // so a long allocation list is quick to search.
+  // The end-users this PR is being prepared for (add one at a time).
+  const [endUserIds, setEndUserIds] = useState<string[]>([]);
+  const [pickerValue, setPickerValue] = useState('');
+  // Free-text filter over the PPMP allocations (code / description / unit).
   const [ppmpSearch, setPpmpSearch] = useState('');
 
   const [prNumber, setPrNumber] = useState('');
@@ -71,26 +79,50 @@ export function CreatePurchaseRequestPage() {
       .catch(() => setError('Failed to load form data.'));
   }, []);
 
+  // Approved APP items for the fiscal year (for the optional APP-item link).
   useEffect(() => {
     if (!selectedFiscalYear) return;
     let cancelled = false;
-    // A new end-user means new allocations — clear any allocation-derived lines.
-    setItems([emptyItem()]);
-    setAppItemId('');
-    // PPMP allocations belong to the end-user who initiated the request; load
-    // them only once the officer has picked that end-user.
-    setLoadingPpmp(!!endUserId);
-    Promise.all([
-      endUserId
-        ? listAllocationsForEndUser(endUserId, selectedFiscalYear)
-        : Promise.resolve([] as PpmpItemWithRemaining[]),
-      listAppItems({ fiscalYearId: selectedFiscalYear, status: 'approved' }),
-    ])
-      .then(([ppmpData, appData]) => {
-        if (!cancelled) {
-          setMyPpmpItems(ppmpData);
-          setAppItems(appData);
-        }
+    listAppItems({ fiscalYearId: selectedFiscalYear, status: 'approved' })
+      .then((data) => {
+        if (!cancelled) setAppItems(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedFiscalYear]);
+
+  // Load each selected end-user's approved PPMP allocations into its own group.
+  // Selected lines are kept as the end-user list changes (removal is handled
+  // explicitly), so switching fiscal year or adding a user never wipes the cart.
+  useEffect(() => {
+    if (!selectedFiscalYear) {
+      setAllocByUser([]);
+      return;
+    }
+    if (endUserIds.length === 0) {
+      setAllocByUser([]);
+      setLoadingPpmp(false);
+      return;
+    }
+    let cancelled = false;
+    setLoadingPpmp(true);
+    Promise.all(
+      endUserIds.map((id) =>
+        listAllocationsForEndUser(id, selectedFiscalYear).then((rows) => ({ id, rows })),
+      ),
+    )
+      .then((results) => {
+        if (cancelled) return;
+        const byId = new Map(results.map((r) => [r.id, r.rows]));
+        const groups = endUserIds
+          .map((id) => {
+            const user = endUsers.find((u) => u.id === id);
+            return user ? { user, items: byId.get(id) ?? [] } : null;
+          })
+          .filter((g): g is AllocationGroup => g !== null);
+        setAllocByUser(groups);
       })
       .catch(() => {})
       .finally(() => {
@@ -99,10 +131,27 @@ export function CreatePurchaseRequestPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedFiscalYear, endUserId]);
+  }, [selectedFiscalYear, endUserIds, endUsers]);
 
-  // Multi-select: each checked allocation becomes a PR line that remembers its
-  // PPMP item; unchecking removes that line. Manual (non-PPMP) lines are kept.
+  function addEndUser(id: string) {
+    if (!id) return;
+    setEndUserIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setPickerValue('');
+  }
+
+  function removeEndUser(id: string) {
+    // Drop this end-user and any PR lines drawn from their allocations.
+    const group = allocByUser.find((g) => g.user.id === id);
+    const ppmpIds = new Set((group?.items ?? []).map((p) => p.id));
+    setItems((prev) => {
+      const next = prev.filter((it) => !it.ppmpItemId || !ppmpIds.has(it.ppmpItemId));
+      return next.length ? next : [emptyItem()];
+    });
+    setEndUserIds((prev) => prev.filter((x) => x !== id));
+  }
+
+  // Each checked allocation becomes a PR line that remembers its PPMP item (and
+  // through it, the requesting end-user); unchecking removes that line.
   function toggleAllocation(ppmp: PpmpItemWithRemaining) {
     const already = items.some((it) => it.ppmpItemId === ppmp.id);
     if (already) {
@@ -160,14 +209,17 @@ export function CreatePurchaseRequestPage() {
   const linkedAppItems = appItems;
 
   const ppmpQuery = ppmpSearch.trim().toLowerCase();
-  const filteredPpmpItems = ppmpQuery
-    ? myPpmpItems.filter(
-        (p) =>
-          p.code.toLowerCase().includes(ppmpQuery) ||
-          p.itemDescription.toLowerCase().includes(ppmpQuery) ||
-          p.unitOfMeasure.toLowerCase().includes(ppmpQuery),
-      )
-    : myPpmpItems;
+  function filterAlloc(rows: PpmpItemWithRemaining[]): PpmpItemWithRemaining[] {
+    if (!ppmpQuery) return rows;
+    return rows.filter(
+      (p) =>
+        p.code.toLowerCase().includes(ppmpQuery) ||
+        p.itemDescription.toLowerCase().includes(ppmpQuery) ||
+        p.unitOfMeasure.toLowerCase().includes(ppmpQuery),
+    );
+  }
+
+  const anyAllocations = allocByUser.some((g) => g.items.length > 0);
 
   const canSubmit =
     title.trim() &&
@@ -193,7 +245,9 @@ export function CreatePurchaseRequestPage() {
         ...(description.trim() ? { description: description.trim() } : {}),
         ...(purpose.trim() ? { purpose: purpose.trim() } : {}),
         ...(departmentId ? { departmentId } : {}),
-        ...(endUserId ? { endUserId } : {}),
+        // A PR-level end-user is recorded only when there is exactly one; with
+        // several, each line carries its own end-user via its PPMP item.
+        ...(endUserIds.length === 1 ? { endUserId: endUserIds[0] } : {}),
         ...(requestedDeliveryDate ? { requestedDeliveryDate } : {}),
         ...(selectedPpmpIds.length === 1 ? { ppmpItemId: selectedPpmpIds[0] } : {}),
         ...(appItemId ? { appItemId } : {}),
@@ -222,6 +276,107 @@ export function CreatePurchaseRequestPage() {
     }
   }
 
+  function renderAllocTable(rows: PpmpItemWithRemaining[]) {
+    return (
+      <div style={{ overflowX: 'auto' }}>
+        <table className="pr-table" style={{ fontSize: 12 }}>
+          <thead>
+            <tr>
+              <th></th>
+              <th>Code</th>
+              <th>Description</th>
+              <th>UOM</th>
+              <th style={{ textAlign: 'right' }}>Allocated Qty</th>
+              <th style={{ textAlign: 'right' }}>Purchased to Date</th>
+              <th style={{ textAlign: 'right' }}>Remaining Qty</th>
+              <th style={{ textAlign: 'right' }}>Unit Cost</th>
+              <th style={{ textAlign: 'right' }}>Remaining Budget</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={9} style={{ textAlign: 'center', color: '#667085', padding: 16 }}>
+                  No allocations match "{ppmpSearch}".
+                </td>
+              </tr>
+            )}
+            {rows.map((ppmp) => {
+              const remQty = parseFloat(ppmp.remainingQuantity);
+              const purchased = parseFloat(ppmp.purchasedQuantity ?? '0');
+              const isSelected = items.some((it) => it.ppmpItemId === ppmp.id);
+              const exhausted = remQty <= 0;
+              return (
+                <tr
+                  key={ppmp.id}
+                  style={{
+                    background: isSelected ? '#eff8ff' : exhausted ? '#f9fafb' : undefined,
+                    opacity: exhausted && !isSelected ? 0.55 : 1,
+                    cursor: exhausted ? 'not-allowed' : 'pointer',
+                  }}
+                  onClick={() => !exhausted && toggleAllocation(ppmp)}
+                >
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      disabled={exhausted && !isSelected}
+                      onChange={() => toggleAllocation(ppmp)}
+                      style={{ cursor: exhausted ? 'not-allowed' : 'pointer' }}
+                    />
+                  </td>
+                  <td>
+                    <strong>{ppmp.code}</strong>
+                  </td>
+                  <td>{ppmp.itemDescription}</td>
+                  <td>{ppmp.unitOfMeasure}</td>
+                  <td style={{ textAlign: 'right' }}>{parseFloat(ppmp.quantity).toLocaleString()}</td>
+                  <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAcqModal({
+                          id: ppmp.id,
+                          code: ppmp.code,
+                          description: ppmp.itemDescription,
+                        })
+                      }
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        color: '#175cd3',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                        textDecoration: 'underline dotted',
+                      }}
+                      title="View the PO/DV documents behind this"
+                    >
+                      {purchased.toLocaleString()}
+                    </button>
+                  </td>
+                  <td
+                    style={{
+                      textAlign: 'right',
+                      color: exhausted ? '#b42318' : '#067647',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {remQty.toLocaleString()}
+                  </td>
+                  <td style={{ textAlign: 'right' }}>{formatPeso(ppmp.estimatedUnitCost)}</td>
+                  <td style={{ textAlign: 'right', fontWeight: 600 }}>
+                    {formatPeso(ppmp.remainingAmount)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
   return (
     <div className="pr-page">
       <a
@@ -239,7 +394,7 @@ export function CreatePurchaseRequestPage() {
       {error && <div className="pr-error">{error}</div>}
 
       {/* The purchase officer prepares every PR on behalf of the requesting
-          end-user; it then routes to the signatories. */}
+          end-user(s); it then routes to the signatories. */}
       <div
         style={{
           background: '#eff8ff',
@@ -258,17 +413,61 @@ export function CreatePurchaseRequestPage() {
             marginBottom: 6,
           }}
         >
-          Requesting End-User
+          Requesting End-User(s)
         </label>
+
+        {endUserIds.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+            {endUserIds.map((id) => {
+              const u = endUsers.find((x) => x.id === id);
+              return (
+                <span
+                  key={id}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: '#fff',
+                    border: '1.5px solid #b2ddff',
+                    borderRadius: 16,
+                    padding: '4px 6px 4px 12px',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: '#175cd3',
+                  }}
+                >
+                  {u?.name ?? 'Unknown end-user'}
+                  <button
+                    type="button"
+                    onClick={() => removeEndUser(id)}
+                    title="Remove this end-user"
+                    style={{
+                      border: 'none',
+                      background: 'none',
+                      color: '#175cd3',
+                      cursor: 'pointer',
+                      fontSize: 18,
+                      lineHeight: 1,
+                      padding: '0 4px',
+                    }}
+                  >
+                    &times;
+                  </button>
+                </span>
+              );
+            })}
+          </div>
+        )}
+
         <div style={{ maxWidth: 480 }}>
           <EndUserPicker
             endUsers={endUsers}
-            value={endUserId}
+            value={pickerValue}
             departments={departments}
-            onChange={setEndUserId}
+            onChange={(id) => addEndUser(id)}
             onCreated={(created) => {
               setEndUsers((prev) => [...prev, created]);
-              setEndUserId(created.id);
+              addEndUser(created.id);
             }}
             onUpdated={(updated) => {
               setEndUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
@@ -276,13 +475,13 @@ export function CreatePurchaseRequestPage() {
           />
         </div>
         <p style={{ fontSize: 12, color: '#475467', margin: '6px 0 0' }}>
-          Pick the end-user to load their PPMP allocations, or add a new one. You (the purchase
-          officer) prepare the PR; it then routes to the signatories for review and approval.
+          Add one or more end-users to pull their approved PPMP allocations (the APP). One PR can be
+          prepared on behalf of several end-users; each line records who requested it.
         </p>
       </div>
 
-      {/* PPMP Allocations */}
-      {!loadingPpmp && myPpmpItems.length > 0 && (
+      {/* PPMP Allocations — one section per selected end-user */}
+      {!loadingPpmp && anyAllocations && (
         <div style={{ marginBottom: 24 }}>
           <div
             style={{
@@ -293,7 +492,7 @@ export function CreatePurchaseRequestPage() {
             }}
           >
             <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--mswd-navy)' }}>
-              {endUsers.find((u) => u.id === endUserId)?.name ?? 'End-user'}&apos;s PPMP Allocations
+              PPMP Allocations
             </h3>
             {fiscalYears.length > 1 && (
               <select
@@ -331,108 +530,29 @@ export function CreatePurchaseRequestPage() {
               borderRadius: 6,
               fontSize: 13,
               fontFamily: 'inherit',
-              marginBottom: 10,
+              marginBottom: 12,
               boxSizing: 'border-box',
             }}
           />
-          <div style={{ overflowX: 'auto' }}>
-            <table className="pr-table" style={{ fontSize: 12 }}>
-              <thead>
-                <tr>
-                  <th></th>
-                  <th>Code</th>
-                  <th>Description</th>
-                  <th>UOM</th>
-                  <th style={{ textAlign: 'right' }}>Allocated Qty</th>
-                  <th style={{ textAlign: 'right' }}>Purchased to Date</th>
-                  <th style={{ textAlign: 'right' }}>Remaining Qty</th>
-                  <th style={{ textAlign: 'right' }}>Unit Cost</th>
-                  <th style={{ textAlign: 'right' }}>Remaining Budget</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredPpmpItems.length === 0 && (
-                  <tr>
-                    <td colSpan={9} style={{ textAlign: 'center', color: '#667085', padding: 16 }}>
-                      No allocations match "{ppmpSearch}".
-                    </td>
-                  </tr>
-                )}
-                {filteredPpmpItems.map((ppmp) => {
-                  const remQty = parseFloat(ppmp.remainingQuantity);
-                  const purchased = parseFloat(ppmp.purchasedQuantity ?? '0');
-                  const isSelected = items.some((it) => it.ppmpItemId === ppmp.id);
-                  const exhausted = remQty <= 0;
-                  return (
-                    <tr
-                      key={ppmp.id}
-                      style={{
-                        background: isSelected ? '#eff8ff' : exhausted ? '#f9fafb' : undefined,
-                        opacity: exhausted && !isSelected ? 0.55 : 1,
-                        cursor: exhausted ? 'not-allowed' : 'pointer',
-                      }}
-                      onClick={() => !exhausted && toggleAllocation(ppmp)}
-                    >
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          disabled={exhausted && !isSelected}
-                          onChange={() => toggleAllocation(ppmp)}
-                          style={{ cursor: exhausted ? 'not-allowed' : 'pointer' }}
-                        />
-                      </td>
-                      <td>
-                        <strong>{ppmp.code}</strong>
-                      </td>
-                      <td>{ppmp.itemDescription}</td>
-                      <td>{ppmp.unitOfMeasure}</td>
-                      <td style={{ textAlign: 'right' }}>
-                        {parseFloat(ppmp.quantity).toLocaleString()}
-                      </td>
-                      <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setAcqModal({
-                              id: ppmp.id,
-                              code: ppmp.code,
-                              description: ppmp.itemDescription,
-                            })
-                          }
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            padding: 0,
-                            color: '#175cd3',
-                            cursor: 'pointer',
-                            fontWeight: 600,
-                            textDecoration: 'underline dotted',
-                          }}
-                          title="View the PO/DV documents behind this"
-                        >
-                          {purchased.toLocaleString()}
-                        </button>
-                      </td>
-                      <td
-                        style={{
-                          textAlign: 'right',
-                          color: exhausted ? '#b42318' : '#067647',
-                          fontWeight: 600,
-                        }}
-                      >
-                        {remQty.toLocaleString()}
-                      </td>
-                      <td style={{ textAlign: 'right' }}>{formatPeso(ppmp.estimatedUnitCost)}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 600 }}>
-                        {formatPeso(ppmp.remainingAmount)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+
+          {allocByUser.map((group) =>
+            group.items.length === 0 ? null : (
+              <div key={group.user.id} style={{ marginBottom: 18 }}>
+                <h4
+                  style={{
+                    margin: '0 0 6px',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: '#175cd3',
+                  }}
+                >
+                  {group.user.name}&apos;s PPMP Allocations ({group.items.length})
+                </h4>
+                {renderAllocTable(filterAlloc(group.items))}
+              </div>
+            ),
+          )}
+
           {selectedPpmpIds.length > 0 && (
             <div
               style={{
@@ -450,10 +570,8 @@ export function CreatePurchaseRequestPage() {
           )}
         </div>
       )}
-      {loadingPpmp && (
-        <p style={{ color: '#667085', fontSize: 13 }}>Loading PPMP allocations...</p>
-      )}
-      {!loadingPpmp && myPpmpItems.length === 0 && (
+      {loadingPpmp && <p style={{ color: '#667085', fontSize: 13 }}>Loading PPMP allocations...</p>}
+      {!loadingPpmp && endUserIds.length > 0 && !anyAllocations && (
         <div
           style={{
             background: '#f9fafb',
@@ -464,9 +582,23 @@ export function CreatePurchaseRequestPage() {
             color: '#667085',
           }}
         >
-          {!endUserId
-            ? 'Select the requesting end-user above to load their PPMP allocations — or create a PR manually below.'
-            : 'No approved PPMP allocations for this end-user in the current fiscal year. You can still create a PR manually below.'}
+          No approved PPMP allocations for the selected end-user(s) in the current fiscal year. You
+          can still add items manually below.
+        </div>
+      )}
+      {!loadingPpmp && endUserIds.length === 0 && (
+        <div
+          style={{
+            background: '#f9fafb',
+            borderRadius: 8,
+            padding: '16px',
+            marginBottom: 24,
+            fontSize: 13,
+            color: '#667085',
+          }}
+        >
+          Add one or more end-users above to load their PPMP allocations — or create a PR manually
+          below.
         </div>
       )}
 
@@ -571,100 +703,100 @@ export function CreatePurchaseRequestPage() {
           </div>
 
           <div ref={itemsRef}>
-          {items.map((item, idx) => (
-            <div key={idx} className="pr-item-card">
-              {items.length > 1 && (
-                <button
-                  type="button"
-                  className="pr-item-card__remove"
-                  onClick={() => removeItem(idx)}
-                  title="Remove item"
-                >
-                  &times;
-                </button>
-              )}
-              <div className="pr-item-grid">
-                <div>
-                  <label>Description</label>
-                  <input
-                    type="text"
-                    value={item.description}
-                    onChange={(e) => updateItem(idx, { description: e.target.value })}
-                    required
-                    maxLength={500}
-                  />
-                </div>
-                <div>
-                  <label>Qty</label>
-                  <input
-                    type="number"
-                    value={item.quantity}
-                    onChange={(e) => updateItem(idx, { quantity: parseFloat(e.target.value) || 0 })}
-                    min={0.0001}
-                    step="any"
-                    required
-                  />
-                </div>
-                <div>
-                  <label>Unit</label>
-                  <input
-                    type="text"
-                    value={item.unitOfMeasure}
-                    onChange={(e) => updateItem(idx, { unitOfMeasure: e.target.value })}
-                    required
-                    maxLength={20}
-                  />
-                </div>
-                <div>
-                  <label>Unit Cost</label>
-                  <input
-                    type="number"
-                    value={item.estimatedUnitCost}
-                    onChange={(e) =>
-                      updateItem(idx, { estimatedUnitCost: parseFloat(e.target.value) || 0 })
-                    }
-                    min={0.01}
-                    step="0.01"
-                    required
-                  />
-                </div>
-              </div>
-              <div style={{ marginTop: 8 }}>
-                <div>
-                  <label
-                    style={{
-                      display: 'block',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: '#475467',
-                      marginBottom: 2,
-                    }}
+            {items.map((item, idx) => (
+              <div key={idx} className="pr-item-card">
+                {items.length > 1 && (
+                  <button
+                    type="button"
+                    className="pr-item-card__remove"
+                    onClick={() => removeItem(idx)}
+                    title="Remove item"
                   >
-                    Technical Specification
-                  </label>
-                  <input
-                    type="text"
-                    value={item.technicalSpecification ?? ''}
-                    onChange={(e) => updateItem(idx, { technicalSpecification: e.target.value })}
-                    placeholder="e.g. A4, 80gsm, 500 sheets/ream"
-                    maxLength={500}
-                    style={{
-                      width: '100%',
-                      padding: '6px 8px',
-                      border: '1.5px solid #d0d5dd',
-                      borderRadius: 4,
-                      fontSize: 13,
-                      fontFamily: 'inherit',
-                      boxSizing: 'border-box',
-                    }}
-                  />
+                    &times;
+                  </button>
+                )}
+                <div className="pr-item-grid">
+                  <div>
+                    <label>Description</label>
+                    <input
+                      type="text"
+                      value={item.description}
+                      onChange={(e) => updateItem(idx, { description: e.target.value })}
+                      required
+                      maxLength={500}
+                    />
+                  </div>
+                  <div>
+                    <label>Qty</label>
+                    <input
+                      type="number"
+                      value={item.quantity}
+                      onChange={(e) => updateItem(idx, { quantity: parseFloat(e.target.value) || 0 })}
+                      min={0.0001}
+                      step="any"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label>Unit</label>
+                    <input
+                      type="text"
+                      value={item.unitOfMeasure}
+                      onChange={(e) => updateItem(idx, { unitOfMeasure: e.target.value })}
+                      required
+                      maxLength={20}
+                    />
+                  </div>
+                  <div>
+                    <label>Unit Cost</label>
+                    <input
+                      type="number"
+                      value={item.estimatedUnitCost}
+                      onChange={(e) =>
+                        updateItem(idx, { estimatedUnitCost: parseFloat(e.target.value) || 0 })
+                      }
+                      min={0.01}
+                      step="0.01"
+                      required
+                    />
+                  </div>
                 </div>
+                <div style={{ marginTop: 8 }}>
+                  <div>
+                    <label
+                      style={{
+                        display: 'block',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: '#475467',
+                        marginBottom: 2,
+                      }}
+                    >
+                      Technical Specification
+                    </label>
+                    <input
+                      type="text"
+                      value={item.technicalSpecification ?? ''}
+                      onChange={(e) => updateItem(idx, { technicalSpecification: e.target.value })}
+                      placeholder="e.g. A4, 80gsm, 500 sheets/ream"
+                      maxLength={500}
+                      style={{
+                        width: '100%',
+                        padding: '6px 8px',
+                        border: '1.5px solid #d0d5dd',
+                        borderRadius: 4,
+                        fontSize: 13,
+                        fontFamily: 'inherit',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                </div>
+                <p style={{ textAlign: 'right', fontSize: 12, color: '#475467', margin: '8px 0 0' }}>
+                  Line total: {formatPeso((item.quantity * item.estimatedUnitCost).toFixed(2))}
+                </p>
               </div>
-              <p style={{ textAlign: 'right', fontSize: 12, color: '#475467', margin: '8px 0 0' }}>
-                Line total: {formatPeso((item.quantity * item.estimatedUnitCost).toFixed(2))}
-              </p>
-            </div>
-          ))}
+            ))}
           </div>
 
           <p

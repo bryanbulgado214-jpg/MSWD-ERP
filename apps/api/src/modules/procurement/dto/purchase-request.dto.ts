@@ -7,8 +7,10 @@ export class PurchaseRequestItemDto {
   @MaxLength(500)
   description!: string;
 
+  // Qty may be 0 — a line a PO didn't cover is still kept on the PR for the
+  // record. The create form enforces a positive quantity on its own side.
   @IsNumber({ maxDecimalPlaces: 4 })
-  @Min(0.0001)
+  @Min(0)
   quantity!: number;
 
   @IsString()
@@ -16,8 +18,9 @@ export class PurchaseRequestItemDto {
   @MaxLength(20)
   unitOfMeasure!: string;
 
+  // Unit Cost may be 0 (see quantity above).
   @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0.01)
+  @Min(0)
   estimatedUnitCost!: number;
 
   @IsOptional()

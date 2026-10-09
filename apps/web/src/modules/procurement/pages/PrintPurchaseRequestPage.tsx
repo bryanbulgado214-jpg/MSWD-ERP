@@ -56,6 +56,13 @@ export function PrintPurchaseRequestPage() {
   const itemRows = pr.items.length;
   const emptyRows = Math.max(0, MAX_ROWS - itemRows);
 
+  // On a consolidated PR (items from several end-users), note each line's
+  // requesting end-user under its description. A single-end-user PR stays clean.
+  const distinctEndUsers = new Set(
+    pr.items.map((i) => i.ppmpItem?.endUser?.id).filter((v): v is string => !!v),
+  );
+  const showPerLineEndUser = distinctEndUsers.size > 1;
+
   return (
     <div className="pr-print-page">
       <div className="pr-print-sheet">
@@ -145,7 +152,14 @@ export function PrintPurchaseRequestPage() {
               <tr key={item.id}>
                 <td className="pr-print-td pr-print-td--center">{idx + 1}</td>
                 <td className="pr-print-td pr-print-td--center">{item.unitOfMeasure}</td>
-                <td className="pr-print-td">{item.description}</td>
+                <td className="pr-print-td">
+                  {item.description}
+                  {showPerLineEndUser && item.ppmpItem?.endUser && (
+                    <div style={{ fontSize: 10, color: '#555', fontStyle: 'italic' }}>
+                      End-user: {item.ppmpItem.endUser.name}
+                    </div>
+                  )}
+                </td>
                 <td className="pr-print-td pr-print-td--center">
                   {parseFloat(item.quantity).toLocaleString()}
                 </td>

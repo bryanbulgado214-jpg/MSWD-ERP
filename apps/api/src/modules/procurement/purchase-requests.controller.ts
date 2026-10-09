@@ -139,7 +139,16 @@ export class PurchaseRequestsController {
     return this.prisma.purchaseRequest.findFirstOrThrow({
       where: { id, organizationId: user.organizationId },
       include: {
-        items: { orderBy: { itemNumber: 'asc' } },
+        items: {
+          orderBy: { itemNumber: 'asc' },
+          // The requesting end-user of each line, via its PPMP item — lets a
+          // consolidated PR (several end-users) show who asked for what.
+          include: {
+            ppmpItem: {
+              select: { id: true, code: true, endUser: { select: { id: true, name: true } } },
+            },
+          },
+        },
         budgetRelease: {
           select: {
             releaseNumber: true,

@@ -852,6 +852,7 @@ export function PurchaseRequestDetailPage() {
               <th>Unit Cost</th>
               <th>Total</th>
               <th>Class</th>
+              <th>End-User</th>
             </tr>
           </thead>
           <tbody>
@@ -879,13 +880,14 @@ export function PurchaseRequestDetailPage() {
                 <td style={{ fontSize: 11, textTransform: 'capitalize' }}>
                   {item.classification ?? '—'}
                 </td>
+                <td style={{ fontSize: 12 }}>{item.ppmpItem?.endUser?.name ?? '—'}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr>
               <td
-                colSpan={6}
+                colSpan={7}
                 style={{ textAlign: 'right', fontWeight: 700, color: 'var(--mswd-navy)' }}
               >
                 Total
