@@ -14,6 +14,7 @@ import {
   AssignCrewDto,
   AssignWorkOrderDto,
   CancelWorkOrderDto,
+  CompleteCrewDto,
   CompleteWorkOrderDto,
   CreateWorkOrderDto,
   DispatchWorkOrderDto,
@@ -124,6 +125,30 @@ export class WorkOrderController {
     @Body() dto: DispatchWorkOrderDto,
   ) {
     return this.workOrderService.dispatch(user.organizationId, user.userId, id, dto);
+  }
+
+  // Per-crew dispatch / completion for multi-crew work orders. Each crew is
+  // sent out and brought back on its own; the order completes when all are done.
+  @Post(':id/crews/:crewId/dispatch')
+  @RequireAnyPermissions('workorder.assign.technical', 'workorder.assign.commercial')
+  dispatchCrew(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Param('crewId') crewId: string,
+    @Body() dto: DispatchWorkOrderDto,
+  ) {
+    return this.workOrderService.dispatchCrew(user.organizationId, user.userId, id, crewId, dto);
+  }
+
+  @Post(':id/crews/:crewId/complete')
+  @RequireAnyPermissions('workorder.assign.technical', 'workorder.assign.commercial')
+  completeCrew(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Param('crewId') crewId: string,
+    @Body() dto: CompleteCrewDto,
+  ) {
+    return this.workOrderService.completeCrew(user.organizationId, user.userId, id, crewId, dto);
   }
 
   @Post(':id/start')

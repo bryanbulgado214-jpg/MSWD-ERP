@@ -4918,6 +4918,7 @@ model WorkOrder {
   teamLeader   WorkOrderPersonnel? @relation("WorkOrderTeamLeader", fields: [teamLeaderId], references: [id], onDelete: SetNull)
 
   members    WorkOrderMember[]
+  crews      WorkOrderCrew[]
   materials  WorkOrderMaterial[]
   notes      WorkOrderNote[]
   complaints Complaint[]
@@ -4984,6 +4985,7 @@ model WorkOrderPersonnel {
   teamsLed         WorkOrderTeam[]       @relation("WorkOrderTeamLeaderPersonnel")
   workOrderMembers WorkOrderMember[]
   workOrdersLed    WorkOrder[]           @relation("WorkOrderTeamLeader")
+  crewsLed         WorkOrderCrew[]       @relation("WorkOrderCrewLeader")
   staffMember      StaffMember?          @relation("StaffMemberPersonnel")
 
   @@index([organizationId])
@@ -5047,9 +5049,10 @@ model WorkOrderTeam {
   version        Int              @default(1)
 
   organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  leader       WorkOrderPersonnel?   @relation("WorkOrderTeamLeaderPersonnel", fields: [leaderId], references: [id], onDelete: SetNull)
-  members      WorkOrderTeamMember[]
-  workOrders   WorkOrder[]
+  leader         WorkOrderPersonnel?   @relation("WorkOrderTeamLeaderPersonnel", fields: [leaderId], references: [id], onDelete: SetNull)
+  members        WorkOrderTeamMember[]
+  workOrders     WorkOrder[]
+  workOrderCrews WorkOrderCrew[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -5070,18 +5073,59 @@ model WorkOrderTeamMember {
 }
 
 // The crew actually assigned to one work order (copied from a team, then edited).
+// A work order can carry several crews; each member belongs to one crew (crewId).
 model WorkOrderMember {
   id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   workOrderId String  @map("work_order_id") @db.Uuid
+  crewId      String? @map("crew_id") @db.Uuid
   personnelId String  @map("personnel_id") @db.Uuid
   isLeader    Boolean @default(false) @map("is_leader")
 
   workOrder WorkOrder          @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  crew      WorkOrderCrew?     @relation(fields: [crewId], references: [id], onDelete: Cascade)
   personnel WorkOrderPersonnel @relation(fields: [personnelId], references: [id], onDelete: Restrict)
 
   @@unique([workOrderId, personnelId])
   @@index([workOrderId])
+  @@index([crewId])
   @@map("work_order_members")
+}
+
+enum WorkOrderCrewStatus {
+  assigned
+  dispatched
+  completed
+  cancelled
+
+  @@map("work_order_crew_status")
+}
+
+// One crew on a work order — its own leader, members, and field lifecycle. A
+// work order can have several crews that are dispatched and completed on their
+// own; the work order is "completed" once every crew is done.
+model WorkOrderCrew {
+  id           String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workOrderId  String              @map("work_order_id") @db.Uuid
+  crewNumber   Int                 @map("crew_number") @db.SmallInt
+  soloTask     Boolean             @default(false) @map("solo_task")
+  teamId       String?             @map("team_id") @db.Uuid
+  teamLeaderId String?             @map("team_leader_id") @db.Uuid
+  status       WorkOrderCrewStatus @default(assigned)
+  timeLeft     DateTime?           @map("time_left") @db.Timestamptz(6)
+  timeReturned DateTime?           @map("time_returned") @db.Timestamptz(6)
+  dispatchedAt DateTime?           @map("dispatched_at") @db.Timestamptz(6)
+  completedAt  DateTime?           @map("completed_at") @db.Timestamptz(6)
+  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  workOrder  WorkOrder           @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  team       WorkOrderTeam?      @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  teamLeader WorkOrderPersonnel? @relation("WorkOrderCrewLeader", fields: [teamLeaderId], references: [id], onDelete: SetNull)
+  members    WorkOrderMember[]
+
+  @@unique([workOrderId, crewNumber])
+  @@index([workOrderId])
+  @@map("work_order_crews")
 }
 
 // ─── Customer Service & Complaints ───

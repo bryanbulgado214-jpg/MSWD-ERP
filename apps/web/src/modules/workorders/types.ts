@@ -47,6 +47,7 @@ export interface WorkOrder {
   team?: { id: string; name: string } | null;
   teamLeader?: { id: string; name: string; designation?: string | null } | null;
   members?: WorkOrderMember[];
+  crews?: WorkOrderCrew[];
   crewAssigner?: { id: string; username: string; fullName?: string | null } | null;
   verifier?: { id: string; username: string; fullName?: string | null } | null;
   creator?: { id: string; username: string; fullName?: string | null } | null;
@@ -82,9 +83,35 @@ export interface WorkOrderTeam {
 export interface WorkOrderMember {
   id: string;
   workOrderId: string;
+  crewId?: string | null;
   personnelId: string;
   isLeader: boolean;
   personnel?: { id: string; name: string; designation?: string | null; section?: WorkOrderNature | null };
+}
+
+export type WorkOrderCrewStatus = 'assigned' | 'dispatched' | 'completed' | 'cancelled';
+
+export const WO_CREW_STATUS_LABELS: Record<WorkOrderCrewStatus, string> = {
+  assigned: 'Assigned',
+  dispatched: 'Dispatched',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+};
+
+// One crew on a work order — its own leader, members, and field lifecycle.
+export interface WorkOrderCrew {
+  id: string;
+  crewNumber: number;
+  soloTask: boolean;
+  teamId: string | null;
+  teamLeaderId: string | null;
+  status: WorkOrderCrewStatus;
+  timeLeft: string | null;
+  timeReturned: string | null;
+  dispatchedAt: string | null;
+  completedAt: string | null;
+  teamLeader?: { id: string; name: string; designation?: string | null } | null;
+  members: WorkOrderMember[];
 }
 
 export interface WorkOrderMaterial {

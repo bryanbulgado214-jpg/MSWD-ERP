@@ -121,15 +121,16 @@ export async function updateWorkOrder(
   return res.json();
 }
 
+export interface CrewInput {
+  soloTask?: boolean;
+  teamId?: string;
+  teamLeaderId: string;
+  memberIds: string[];
+}
+
 export async function assignCrew(
   id: string,
-  data: {
-    expectedVersion: number;
-    soloTask?: boolean;
-    teamId?: string;
-    teamLeaderId?: string;
-    memberIds: string[];
-  },
+  data: { expectedVersion: number; crews: CrewInput[] },
 ): Promise<WorkOrder> {
   const res = await authFetchMutate(`/workorders/${id}/assign-crew`, 'POST', data);
   return res.json();
@@ -140,6 +141,33 @@ export async function dispatchWorkOrder(
   data: { expectedVersion: number; timeLeft?: string },
 ): Promise<WorkOrder> {
   const res = await authFetchMutate(`/workorders/${id}/dispatch`, 'POST', data);
+  return res.json();
+}
+
+// Dispatch / complete a single crew (multi-crew work orders).
+export async function dispatchCrew(
+  id: string,
+  crewId: string,
+  data: { expectedVersion: number; timeLeft?: string },
+): Promise<WorkOrder> {
+  const res = await authFetchMutate(`/workorders/${id}/crews/${crewId}/dispatch`, 'POST', data);
+  return res.json();
+}
+
+export async function completeCrew(
+  id: string,
+  crewId: string,
+  data: {
+    expectedVersion: number;
+    timeReturned?: string;
+    completionNotes?: string;
+    actualDurationHrs?: number;
+    tasksPerformed?: string;
+    issuesEncountered?: string;
+    remarks?: string;
+  },
+): Promise<WorkOrder> {
+  const res = await authFetchMutate(`/workorders/${id}/crews/${crewId}/complete`, 'POST', data);
   return res.json();
 }
 

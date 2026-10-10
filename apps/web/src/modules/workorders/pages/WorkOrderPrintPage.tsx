@@ -110,9 +110,42 @@ export default function WorkOrderPrintPage() {
         </div>
 
         <div className="wop-sec">
-          <h4>{wo.soloTask ? 'Assigned Personnel' : 'Crew Assigned'}</h4>
+          <h4>
+            {(wo.crews?.length ?? 0) > 1
+              ? 'Crews Assigned'
+              : wo.soloTask
+                ? 'Assigned Personnel'
+                : 'Crew Assigned'}
+          </h4>
           <div className="wop-crew">
-            {wo.soloTask ? (
+            {wo.crews && wo.crews.length ? (
+              wo.crews.map((c) => {
+                const cMembers = c.members.filter((m) => !m.isLeader);
+                const label = c.soloTask
+                  ? 'Personnel'
+                  : (wo.crews?.length ?? 0) > 1
+                    ? `Crew ${c.crewNumber} — Leader`
+                    : 'Team Leader';
+                return (
+                  <div key={c.id} style={{ marginBottom: 8 }}>
+                    <div>
+                      <strong>{label}:</strong> {c.teamLeader?.name ?? '—'}
+                      {c.teamLeader?.designation ? ` — ${c.teamLeader.designation}` : ''}
+                    </div>
+                    {!c.soloTask && cMembers.length > 0 && (
+                      <ol>
+                        {cMembers.map((m) => (
+                          <li key={m.id}>
+                            {m.personnel?.name}
+                            {m.personnel?.designation ? ` — ${m.personnel.designation}` : ''}
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </div>
+                );
+              })
+            ) : wo.soloTask ? (
               <div>
                 <strong>Personnel:</strong> {leaderName}
                 {wo.teamLeader?.designation ? ` — ${wo.teamLeader.designation}` : ''}

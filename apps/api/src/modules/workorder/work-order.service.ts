@@ -97,6 +97,18 @@ export class WorkOrderService {
           },
           orderBy: { isLeader: 'desc' },
         },
+        crews: {
+          include: {
+            teamLeader: { select: { id: true, name: true, designation: true } },
+            members: {
+              include: {
+                personnel: { select: { id: true, name: true, designation: true, section: true } },
+              },
+              orderBy: { isLeader: 'desc' },
+            },
+          },
+          orderBy: { crewNumber: 'asc' },
+        },
         materials: {
           include: {
             inventoryItem: {
@@ -165,8 +177,8 @@ export class WorkOrderService {
       ? this.buildMemberRows(dto.teamLeaderId, solo ? [] : dto.memberIds)
       : [];
 
-    const created = await runAudited(this.prisma, userId, (tx) =>
-      tx.workOrder.create({
+    const created = await runAudited(this.prisma, userId, async (tx) => {
+      const workOrder = await tx.workOrder.create({
         data: {
           organizationId,
           woNumber,
@@ -198,8 +210,26 @@ export class WorkOrderService {
           createdBy: userId,
           updatedBy: userId,
         },
-      }),
-    );
+      });
+      // Seed Crew 1 and attach the members to it when a crew was assigned now.
+      if (assignCrewNow) {
+        const crew = await tx.workOrderCrew.create({
+          data: {
+            workOrderId: workOrder.id,
+            crewNumber: 1,
+            soloTask: solo,
+            teamId: solo ? null : (dto.teamId ?? null),
+            teamLeaderId: dto.teamLeaderId ?? null,
+            status: 'assigned',
+          },
+        });
+        await tx.workOrderMember.updateMany({
+          where: { workOrderId: workOrder.id },
+          data: { crewId: crew.id },
+        });
+      }
+      return workOrder;
+    });
 
     // Real-time hand-off: when the order still needs crew assignment (e.g.
     // Commercial created a technical order), notify whoever can assign it for
@@ -249,6 +279,9 @@ export class WorkOrderService {
     id: string,
     dto: {
       expectedVersion: number;
+      // Preferred: one or more crews, each with its own leader + members.
+      crews?: { soloTask?: boolean; teamId?: string; teamLeaderId?: string; memberIds?: string[] }[];
+      // Legacy single-crew fields (kept for backward compatibility).
       soloTask?: boolean;
       teamId?: string;
       teamLeaderId?: string;
@@ -260,49 +293,228 @@ export class WorkOrderService {
     if (!['pending', 'assigned'].includes(wo.status)) {
       throw new BadRequestException('Crew can only be assigned while the work order is pending or assigned.');
     }
-    const granted = await getGrantedPermissionCodes(this.prisma, userId);
-    if (!granted.has(assignPermissionFor(wo.nature))) {
-      throw new ForbiddenException(
-        wo.nature === 'technical'
-          ? 'This is a technical work order — only Technical Services can assign the crew.'
-          : 'Only Commercial Services can assign the crew for this work order.',
-      );
-    }
-    const solo = !!dto.soloTask;
-    if (solo) {
-      // A one-person job: exactly one assigned personnel, no team/members.
-      if (!dto.teamLeaderId) {
-        throw new BadRequestException('Select the personnel assigned to this task.');
-      }
-    } else if (!dto.teamLeaderId) {
-      throw new BadRequestException('Designate a team leader.');
-    }
-    // For a solo task the crew is just that one person; for a team it is the
-    // leader plus the chosen members.
-    const memberIds = solo ? [] : dto.memberIds;
-    await this.assertCrewInOrg(organizationId, dto.teamLeaderId, memberIds);
-    const members = this.buildMemberRows(dto.teamLeaderId, memberIds);
+    await this.assertCanAssign(userId, wo.nature);
 
-    const result = await runAudited(this.prisma, userId, async (tx) => {
+    // Accept the multi-crew shape, or fold the legacy single-crew fields into a
+    // one-crew list.
+    const crewInputs =
+      dto.crews && dto.crews.length
+        ? dto.crews
+        : dto.teamLeaderId
+          ? [{ soloTask: dto.soloTask, teamId: dto.teamId, teamLeaderId: dto.teamLeaderId, memberIds: dto.memberIds }]
+          : [];
+    if (!crewInputs.length) {
+      throw new BadRequestException('Assign at least one crew with a leader.');
+    }
+
+    // Validate each crew; a person can be on only one crew of this work order.
+    const seen = new Set<string>();
+    const normalized = crewInputs.map((c) => {
+      const solo = !!c.soloTask;
+      if (!c.teamLeaderId) {
+        throw new BadRequestException(
+          solo ? 'Select the personnel for the one-man task.' : 'Designate a team leader for each crew.',
+        );
+      }
+      const memberIds = solo ? [] : (c.memberIds ?? []);
+      for (const pid of [c.teamLeaderId, ...memberIds]) {
+        if (seen.has(pid)) {
+          throw new BadRequestException('A person can be on only one crew of this work order.');
+        }
+        seen.add(pid);
+      }
+      return { solo, teamId: c.teamId, teamLeaderId: c.teamLeaderId, memberIds };
+    });
+    for (const c of normalized) {
+      await this.assertCrewInOrg(organizationId, c.teamLeaderId, c.memberIds);
+    }
+
+    await runAudited(this.prisma, userId, async (tx) => {
+      // Replace any existing crews (and their members) for this order.
       await tx.workOrderMember.deleteMany({ where: { workOrderId: id } });
-      return tx.workOrder.update({
+      await tx.workOrderCrew.deleteMany({ where: { workOrderId: id } });
+      let crewNumber = 1;
+      for (const c of normalized) {
+        const rows = this.buildMemberRows(c.teamLeaderId, c.memberIds);
+        await tx.workOrderCrew.create({
+          data: {
+            workOrderId: id,
+            crewNumber: crewNumber++,
+            soloTask: c.solo,
+            teamId: c.solo ? null : (c.teamId ?? null),
+            teamLeaderId: c.teamLeaderId,
+            status: 'assigned',
+            members: {
+              create: rows.map((r) => ({
+                workOrderId: id,
+                personnelId: r.personnelId,
+                isLeader: r.isLeader,
+              })),
+            },
+          },
+        });
+      }
+      const first = normalized[0]!;
+      const single = normalized.length === 1;
+      await tx.workOrder.update({
         where: { id },
         data: {
-          soloTask: solo,
-          teamId: solo ? null : (dto.teamId ?? null),
-          teamLeaderId: dto.teamLeaderId ?? null,
+          soloTask: single ? first.solo : false,
+          teamId: single && !first.solo ? (first.teamId ?? null) : null,
+          teamLeaderId: first.teamLeaderId,
           assignedCrewBy: userId,
           assignedCrewAt: new Date(),
           status: 'assigned',
           updatedBy: userId,
           version: { increment: 1 },
-          members: { create: members },
         },
       });
     });
-    // The hand-off is done — clear the "needs assignment" notification for this order.
+    // The hand-off is done — clear the "needs assignment" notification.
     await this.notifications.markReadByRelated(organizationId, 'work_orders', [id]);
-    return result;
+    return this.findOne(organizationId, id);
+  }
+
+  // Dispatch ONE crew to the field: flips only that crew's members to on_field,
+  // and moves the work order to in_progress on the first dispatch.
+  async dispatchCrew(
+    organizationId: string,
+    userId: string,
+    id: string,
+    crewId: string,
+    dto: { expectedVersion: number; timeLeft?: string },
+  ) {
+    const wo = await this.findOneOrThrow(organizationId, id);
+    this.checkVersion(wo.version, dto.expectedVersion);
+    await this.assertCanAssign(userId, wo.nature);
+    const crew = await this.prisma.workOrderCrew.findFirst({ where: { id: crewId, workOrderId: id } });
+    if (!crew) throw new NotFoundException('Crew not found on this work order.');
+    if (crew.status !== 'assigned') {
+      throw new BadRequestException('Only an assigned crew can be dispatched.');
+    }
+    if (!['assigned', 'in_progress'].includes(wo.status)) {
+      throw new BadRequestException('The work order is not in a state where a crew can be dispatched.');
+    }
+    const when = dto.timeLeft ? new Date(dto.timeLeft) : new Date();
+    await runAudited(this.prisma, userId, async (tx) => {
+      await tx.workOrderCrew.update({
+        where: { id: crewId },
+        data: { status: 'dispatched', dispatchedAt: new Date(), timeLeft: when },
+      });
+      await this.setCrewMembersStatus(tx, crewId, 'on_field');
+      await tx.workOrder.update({
+        where: { id },
+        data: {
+          ...(wo.status === 'assigned'
+            ? { status: 'in_progress', startedAt: wo.startedAt ?? new Date(), timeLeft: wo.timeLeft ?? when }
+            : {}),
+          updatedBy: userId,
+          version: { increment: 1 },
+        },
+      });
+    });
+    return this.findOne(organizationId, id);
+  }
+
+  // Mark ONE crew back from the field: releases only that crew's members. When
+  // every crew is done, the whole work order is completed (resolution report
+  // accepted on that final crew).
+  async completeCrew(
+    organizationId: string,
+    userId: string,
+    id: string,
+    crewId: string,
+    dto: {
+      expectedVersion: number;
+      timeReturned?: string;
+      completionNotes?: string;
+      actualDurationHrs?: number;
+      tasksPerformed?: string;
+      issuesEncountered?: string;
+      remarks?: string;
+    },
+  ) {
+    const wo = await this.findOneOrThrow(organizationId, id);
+    this.checkVersion(wo.version, dto.expectedVersion);
+    await this.assertCanAssign(userId, wo.nature);
+    const crew = await this.prisma.workOrderCrew.findFirst({ where: { id: crewId, workOrderId: id } });
+    if (!crew) throw new NotFoundException('Crew not found on this work order.');
+    if (crew.status !== 'dispatched') {
+      throw new BadRequestException('Only a dispatched crew can be marked complete.');
+    }
+    const when = dto.timeReturned ? new Date(dto.timeReturned) : new Date();
+    await runAudited(this.prisma, userId, async (tx) => {
+      await tx.workOrderCrew.update({
+        where: { id: crewId },
+        data: { status: 'completed', completedAt: new Date(), timeReturned: when },
+      });
+      await this.setCrewMembersStatus(tx, crewId, 'available');
+      const remaining = await tx.workOrderCrew.count({
+        where: { workOrderId: id, status: { in: ['assigned', 'dispatched'] } },
+      });
+      if (remaining === 0) {
+        const materialsCost = await tx.workOrderMaterial.aggregate({
+          where: { workOrderId: id },
+          _sum: { totalCost: true },
+        });
+        await tx.workOrder.update({
+          where: { id },
+          data: {
+            status: 'completed',
+            completedAt: new Date(),
+            timeReturned: when,
+            ...(dto.completionNotes ? { completionNotes: dto.completionNotes } : {}),
+            ...(dto.actualDurationHrs != null ? { actualDurationHrs: dto.actualDurationHrs } : {}),
+            ...(dto.tasksPerformed !== undefined ? { tasksPerformed: dto.tasksPerformed.trim() || null } : {}),
+            ...(dto.issuesEncountered !== undefined ? { issuesEncountered: dto.issuesEncountered.trim() || null } : {}),
+            ...(dto.remarks !== undefined ? { remarks: dto.remarks.trim() || null } : {}),
+            materialsCost: materialsCost._sum.totalCost ?? 0,
+            updatedBy: userId,
+            version: { increment: 1 },
+          },
+        });
+      } else {
+        await tx.workOrder.update({
+          where: { id },
+          data: { updatedBy: userId, version: { increment: 1 } },
+        });
+      }
+    });
+    return this.findOne(organizationId, id);
+  }
+
+  // Flip ONE crew's linked staff availability. Only staff currently "available"
+  // go on_field, and only those currently "on_field" are released — so an
+  // admin-set on_leave / unavailable is never overridden.
+  private async setCrewMembersStatus(
+    tx: Prisma.TransactionClient,
+    crewId: string,
+    to: 'on_field' | 'available',
+  ) {
+    const members = await tx.workOrderMember.findMany({
+      where: { crewId },
+      select: { personnelId: true },
+    });
+    const personnelIds = members.map((m) => m.personnelId);
+    if (!personnelIds.length) return;
+    await tx.staffMember.updateMany({
+      where: {
+        workOrderPersonnelId: { in: personnelIds },
+        status: to === 'on_field' ? 'available' : 'on_field',
+      },
+      data: { status: to },
+    });
+  }
+
+  private async assertCanAssign(userId: string, nature: Parameters<typeof assignPermissionFor>[0]) {
+    const granted = await getGrantedPermissionCodes(this.prisma, userId);
+    if (!granted.has(assignPermissionFor(nature))) {
+      throw new ForbiddenException(
+        nature === 'technical'
+          ? 'This is a technical work order — only Technical Services can act on its crews.'
+          : 'Only Commercial Services can act on the crews for this work order.',
+      );
+    }
   }
 
   // Dispatch the crew: records the time they left and moves to in_progress.
@@ -317,12 +529,18 @@ export class WorkOrderService {
     if (wo.status !== 'assigned') {
       throw new BadRequestException('Only an assigned work order (with a crew) can be dispatched.');
     }
-    return runAudited(this.prisma, userId, async (tx) => {
-      const updated = await tx.workOrder.update({
+    const when = dto.timeLeft ? new Date(dto.timeLeft) : new Date();
+    await runAudited(this.prisma, userId, async (tx) => {
+      // Dispatch every assigned crew (one crew is the common case).
+      await tx.workOrderCrew.updateMany({
+        where: { workOrderId: id, status: 'assigned' },
+        data: { status: 'dispatched', dispatchedAt: new Date(), timeLeft: when },
+      });
+      await tx.workOrder.update({
         where: { id },
         data: {
           status: 'in_progress',
-          timeLeft: dto.timeLeft ? new Date(dto.timeLeft) : new Date(),
+          timeLeft: when,
           startedAt: new Date(),
           updatedBy: userId,
           version: { increment: 1 },
@@ -330,8 +548,8 @@ export class WorkOrderService {
       });
       // The crew is now in the field — flip their availability.
       await this.setCrewStaffStatus(tx, id, 'on_field');
-      return updated;
     });
+    return this.findOne(organizationId, id);
   }
 
   // Flip the crew's linked staff availability when a work order moves to / from
@@ -483,13 +701,19 @@ export class WorkOrderService {
       _sum: { totalCost: true },
     });
 
-    return runAudited(this.prisma, userId, async (tx) => {
-      const updated = await tx.workOrder.update({
+    const when = dto.timeReturned ? new Date(dto.timeReturned) : new Date();
+    await runAudited(this.prisma, userId, async (tx) => {
+      // Close out every crew that is still open.
+      await tx.workOrderCrew.updateMany({
+        where: { workOrderId: id, status: { in: ['assigned', 'dispatched'] } },
+        data: { status: 'completed', completedAt: new Date(), timeReturned: when },
+      });
+      await tx.workOrder.update({
         where: { id },
         data: {
           status: 'completed',
           completedAt: new Date(),
-          timeReturned: dto.timeReturned ? new Date(dto.timeReturned) : new Date(),
+          timeReturned: when,
           ...(dto.completionNotes ? { completionNotes: dto.completionNotes } : {}),
           ...(dto.actualDurationHrs != null ? { actualDurationHrs: dto.actualDurationHrs } : {}),
           ...(dto.tasksPerformed !== undefined ? { tasksPerformed: dto.tasksPerformed.trim() || null } : {}),
@@ -500,10 +724,10 @@ export class WorkOrderService {
           version: { increment: 1 },
         },
       });
-      // The crew is back from the field — release their availability.
+      // The crews are back from the field — release their availability.
       await this.setCrewStaffStatus(tx, id, 'available');
-      return updated;
     });
+    return this.findOne(organizationId, id);
   }
 
   async verify(
@@ -558,6 +782,10 @@ export class WorkOrderService {
     }
 
     return runAudited(this.prisma, userId, async (tx) => {
+      await tx.workOrderCrew.updateMany({
+        where: { workOrderId: id, status: { in: ['assigned', 'dispatched'] } },
+        data: { status: 'cancelled' },
+      });
       const updated = await tx.workOrder.update({
         where: { id },
         data: {

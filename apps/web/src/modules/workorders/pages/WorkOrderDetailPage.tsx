@@ -5,8 +5,8 @@ import { useAuth } from '../../../app/auth';
 import {
   assignCrew,
   cancelWorkOrder,
-  completeWorkOrder,
-  dispatchWorkOrder,
+  completeCrew,
+  dispatchCrew,
   getWorkOrder,
   listPersonnel,
   listStaff,
@@ -15,16 +15,25 @@ import {
 import MemberPickerModal from '../components/MemberPickerModal';
 import {
   STAFF_STATUS_LABELS,
+  WO_CREW_STATUS_LABELS,
   WO_NATURE_LABELS,
   WO_PRIORITY_LABELS,
   WO_STATUS_LABELS,
   WO_TYPE_LABELS,
   type StaffAvailabilityStatus,
   type WorkOrder,
+  type WorkOrderCrew,
   type WorkOrderPersonnel,
   type WorkOrderTeam,
   type WorkOrderType,
 } from '../types';
+
+interface CrewDraft {
+  solo: boolean;
+  teamId: string;
+  leaderId: string;
+  memberIds: string[];
+}
 import '../workorders.css';
 
 function fmtDateTime(s: string | null): string {
@@ -55,6 +64,12 @@ export default function WorkOrderDetailPage() {
   const [issues, setIssues] = useState('');
   const [remarks, setRemarks] = useState('');
   const [cancelReason, setCancelReason] = useState('');
+  // Crews staged for this work order (each a leader + members); the builder
+  // below them holds the crew currently being put together.
+  const [stagedCrews, setStagedCrews] = useState<CrewDraft[]>([]);
+  // When completing the final crew, this holds it so the completion report is
+  // saved to the work order.
+  const [completingCrew, setCompletingCrew] = useState<WorkOrderCrew | null>(null);
 
   const load = useCallback(() => {
     if (!id) return;
@@ -89,15 +104,41 @@ export default function WorkOrderDetailPage() {
   const canAssign = hasPermission(
     wo.nature === 'technical' ? 'workorder.assign.technical' : 'workorder.assign.commercial',
   );
-  const canExecute = hasPermission('workorder.execute');
   const canEdit = hasPermission('workorder.create');
 
+  function resetBuilder() {
+    setSolo(false);
+    setTeamId('');
+    setLeaderId('');
+    setMemberIds([]);
+  }
   function openAssign() {
     if (!wo) return;
-    setSolo(wo.soloTask);
-    setTeamId(wo.teamId ?? '');
-    setLeaderId(wo.teamLeaderId ?? '');
-    setMemberIds((wo.members ?? []).map((m) => m.personnelId));
+    // Pre-load the existing crews so a re-assign keeps them; build any new crew
+    // in the empty builder below.
+    const existing = (wo.crews ?? []).filter((c) => c.status !== 'cancelled');
+    if (existing.length) {
+      setStagedCrews(
+        existing.map((c) => ({
+          solo: c.soloTask,
+          teamId: c.teamId ?? '',
+          leaderId: c.teamLeaderId ?? '',
+          memberIds: c.members.filter((m) => !m.isLeader).map((m) => m.personnelId),
+        })),
+      );
+    } else if (wo.teamLeaderId) {
+      setStagedCrews([
+        {
+          solo: wo.soloTask,
+          teamId: wo.teamId ?? '',
+          leaderId: wo.teamLeaderId,
+          memberIds: (wo.members ?? []).filter((m) => !m.isLeader).map((m) => m.personnelId),
+        },
+      ]);
+    } else {
+      setStagedCrews([]);
+    }
+    resetBuilder();
     setError('');
     setPanel('assign');
   }
@@ -111,6 +152,18 @@ export default function WorkOrderDetailPage() {
   }
   function toggleMember(pid: string) {
     setMemberIds((prev) => (prev.includes(pid) ? prev.filter((x) => x !== pid) : [...prev, pid]));
+  }
+  function addAnotherCrew() {
+    if (!leaderId) {
+      setError('Pick a leader for this crew before adding another.');
+      return;
+    }
+    setStagedCrews((prev) => [...prev, { solo, teamId, leaderId, memberIds }]);
+    resetBuilder();
+    setError('');
+  }
+  function removeStagedCrew(i: number) {
+    setStagedCrews((prev) => prev.filter((_, x) => x !== i));
   }
 
   // A personnel option for the leader / solo picker. Someone who isn't available
@@ -142,26 +195,56 @@ export default function WorkOrderDetailPage() {
     }
   }
 
-  const doAssign = () =>
-    run(() =>
+  const doAssign = () => {
+    if (!wo) return;
+    const drafts: CrewDraft[] = [...stagedCrews];
+    if (leaderId) drafts.push({ solo, teamId, leaderId, memberIds });
+    if (!drafts.length) {
+      setError('Add at least one crew with a leader.');
+      return;
+    }
+    return run(() =>
       assignCrew(wo.id, {
         expectedVersion: wo.version,
-        soloTask: solo,
-        ...(solo || !teamId ? {} : { teamId }),
-        teamLeaderId: leaderId,
-        memberIds: solo ? [leaderId] : [...new Set([leaderId, ...memberIds])],
+        crews: drafts.map((c) => ({
+          soloTask: c.solo,
+          ...(c.teamId && !c.solo ? { teamId: c.teamId } : {}),
+          teamLeaderId: c.leaderId,
+          memberIds: c.solo ? [] : c.memberIds.filter((m) => m !== c.leaderId),
+        })),
       }),
     );
-  const doDispatch = () => run(() => dispatchWorkOrder(wo.id, { expectedVersion: wo.version }));
-  const doComplete = () =>
-    run(() =>
-      completeWorkOrder(wo.id, {
+  };
+  const doDispatchCrew = (crewId: string) =>
+    run(() => dispatchCrew(wo.id, crewId, { expectedVersion: wo.version }));
+  const openCrews = (wo.crews ?? []).filter(
+    (c) => c.status === 'assigned' || c.status === 'dispatched',
+  );
+  function clickCompleteCrew(crew: WorkOrderCrew) {
+    if (!wo) return;
+    if (openCrews.length <= 1) {
+      // Last crew out — collect the work order's completion report.
+      setCompletingCrew(crew);
+      setTasksPerformed('');
+      setIssues('');
+      setRemarks('');
+      setError('');
+      setPanel('complete');
+    } else {
+      run(() => completeCrew(wo.id, crew.id, { expectedVersion: wo.version }));
+    }
+  }
+  const doCompleteCrew = () => {
+    if (!wo || !completingCrew) return;
+    return run(() =>
+      completeCrew(wo.id, completingCrew.id, {
         expectedVersion: wo.version,
         tasksPerformed,
         issuesEncountered: issues,
         remarks,
       }),
     );
+  };
   const doCancel = () =>
     run(() => cancelWorkOrder(wo.id, { expectedVersion: wo.version, reason: cancelReason }));
 
@@ -172,7 +255,21 @@ export default function WorkOrderDetailPage() {
   const awaitingTechApproval =
     wo.nature === 'technical' && wo.status === 'pending' && !wo.teamLeaderId;
 
-  const members = wo.members ?? [];
+  const crews = wo.crews ?? [];
+  // People already placed on a staged crew can't be picked again for the crew
+  // being built (one crew per person on a work order).
+  const stagedPersonnelIds = new Set<string>();
+  for (const c of stagedCrews) {
+    if (c.leaderId) stagedPersonnelIds.add(c.leaderId);
+    for (const m of c.memberIds) stagedPersonnelIds.add(m);
+  }
+  const builderPersonnel = personnel.filter((p) => !stagedPersonnelIds.has(p.id));
+  const CREW_STATUS_COLOR: Record<string, { bg: string; fg: string }> = {
+    assigned: { bg: '#f2f4f7', fg: '#475467' },
+    dispatched: { bg: '#eff8ff', fg: '#175cd3' },
+    completed: { bg: '#ecfdf3', fg: '#067647' },
+    cancelled: { bg: '#fef3f2', fg: '#b42318' },
+  };
   const customerDisplay =
     wo.customerName ||
     (wo.consumer ? `${wo.consumer.firstName} ${wo.consumer.lastName} (${wo.consumer.accountNumber})` : '—');
@@ -240,31 +337,102 @@ export default function WorkOrderDetailPage() {
         </div>
 
         <div className="wo-card">
-          <div className="wo-card__title">Crew</div>
-          <dl className="wo-kv">
-            {wo.soloTask ? (
-              <>
-                <dt>Task type</dt><dd>One-man task</dd>
-                <dt>Assigned personnel</dt><dd>{wo.teamLeader?.name || '—'}</dd>
-              </>
-            ) : (
-              <>
-                <dt>Team</dt><dd>{wo.team?.name || '—'}</dd>
-                <dt>Team Leader</dt><dd>{wo.teamLeader?.name || '—'}</dd>
-                <dt>Members</dt>
-                <dd>
-                  {members.length
-                    ? members.map((m) => `${m.personnel?.name ?? ''}${m.isLeader ? ' (leader)' : ''}`).join(', ')
-                    : '—'}
-                </dd>
-              </>
-            )}
-            <dt>Assigned by</dt><dd>{wo.crewAssigner?.username || '—'} {wo.assignedCrewAt ? `· ${fmtDateTime(wo.assignedCrewAt)}` : ''}</dd>
+          <div className="wo-card__title">
+            {crews.length > 1 ? `Crews (${crews.length})` : 'Crew'}
+          </div>
+          {crews.length === 0 ? (
+            <p style={{ color: '#667085', fontSize: 13, margin: '4px 0' }}>No crew assigned yet.</p>
+          ) : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {crews.map((c) => {
+                const col = CREW_STATUS_COLOR[c.status] ?? CREW_STATUS_COLOR.assigned!;
+                const crewMembers = c.members.filter((m) => !m.isLeader);
+                return (
+                  <div
+                    key={c.id}
+                    style={{
+                      border: '1px solid #eaecf0',
+                      borderRadius: 8,
+                      padding: 12,
+                      opacity: c.status === 'cancelled' ? 0.6 : 1,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: 8,
+                        marginBottom: 6,
+                      }}
+                    >
+                      <strong style={{ fontSize: 14 }}>
+                        {c.soloTask ? 'One-man task' : `Crew ${c.crewNumber}`}
+                      </strong>
+                      <span
+                        className="wo-badge"
+                        style={{ background: col.bg, color: col.fg, fontWeight: 700 }}
+                      >
+                        {WO_CREW_STATUS_LABELS[c.status]}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 13 }}>
+                      <span style={{ color: '#667085' }}>
+                        {c.soloTask ? 'Personnel: ' : 'Leader: '}
+                      </span>
+                      {c.teamLeader?.name ?? '—'}
+                    </div>
+                    {!c.soloTask && (
+                      <div style={{ fontSize: 13, marginTop: 2 }}>
+                        <span style={{ color: '#667085' }}>Members: </span>
+                        {crewMembers.length
+                          ? crewMembers.map((m) => m.personnel?.name).filter(Boolean).join(', ')
+                          : '—'}
+                      </div>
+                    )}
+                    {(c.dispatchedAt || c.completedAt) && (
+                      <div style={{ fontSize: 12, color: '#667085', marginTop: 4 }}>
+                        {c.dispatchedAt && <>Out: {fmtDateTime(c.timeLeft ?? c.dispatchedAt)}</>}
+                        {c.completedAt && <> · Back: {fmtDateTime(c.timeReturned ?? c.completedAt)}</>}
+                      </div>
+                    )}
+                    {canAssign && (
+                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                        {c.status === 'assigned' &&
+                          ['assigned', 'in_progress'].includes(wo.status) && (
+                            <button
+                              className="wo-btn wo-btn--primary wo-btn--sm"
+                              onClick={() => doDispatchCrew(c.id)}
+                              disabled={acting}
+                            >
+                              Dispatch
+                            </button>
+                          )}
+                        {c.status === 'dispatched' && (
+                          <button
+                            className="wo-btn wo-btn--success wo-btn--sm"
+                            onClick={() => clickCompleteCrew(c)}
+                            disabled={acting}
+                          >
+                            Mark complete
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <dl className="wo-kv" style={{ marginTop: 12 }}>
+            <dt>Assigned by</dt>
+            <dd>
+              {wo.crewAssigner?.username || '—'}{' '}
+              {wo.assignedCrewAt ? `· ${fmtDateTime(wo.assignedCrewAt)}` : ''}
+            </dd>
           </dl>
-          <div className="wo-card__title" style={{ marginTop: 16 }}>Field Execution</div>
+          <div className="wo-card__title" style={{ marginTop: 16 }}>Completion Report</div>
           <dl className="wo-kv">
-            <dt>Time out (left)</dt><dd>{fmtDateTime(wo.timeLeft)}</dd>
-            <dt>Time returned</dt><dd>{fmtDateTime(wo.timeReturned)}</dd>
             <dt>Tasks performed</dt><dd>{wo.tasksPerformed || '—'}</dd>
             <dt>Issues encountered</dt><dd>{wo.issuesEncountered || '—'}</dd>
             <dt>Remarks</dt><dd>{wo.remarks || '—'}</dd>
@@ -284,19 +452,9 @@ export default function WorkOrderDetailPage() {
           justifyContent: 'flex-end',
         }}
       >
-        {['pending', 'assigned'].includes(wo.status) && canAssign && (
+        {['pending', 'assigned', 'in_progress'].includes(wo.status) && canAssign && (
           <button className="wo-btn wo-btn--primary wo-btn--sm" onClick={openAssign} disabled={acting}>
-            {wo.status === 'assigned' ? 'Reassign Crew' : 'Assign Crew'}
-          </button>
-        )}
-        {wo.status === 'assigned' && canExecute && (
-          <button className="wo-btn wo-btn--primary wo-btn--sm" onClick={doDispatch} disabled={acting}>
-            Dispatch (record time out)
-          </button>
-        )}
-        {wo.status === 'in_progress' && canExecute && (
-          <button className="wo-btn wo-btn--success wo-btn--sm" onClick={() => setPanel('complete')} disabled={acting}>
-            Complete
+            {crews.length ? 'Reassign Crews' : 'Assign Crew'}
           </button>
         )}
         {!['completed', 'verified', 'cancelled'].includes(wo.status) && canEdit && (
@@ -309,7 +467,56 @@ export default function WorkOrderDetailPage() {
       {/* Assign crew panel */}
       {panel === 'assign' && (
         <div className="wo-crew-box" style={{ marginTop: 16 }}>
-          <h3 className="wo-crew-box__title">Assign Crew</h3>
+          <h3 className="wo-crew-box__title">Assign Crew{stagedCrews.length ? 's' : ''}</h3>
+
+          {stagedCrews.length > 0 && (
+            <div style={{ marginBottom: 12, display: 'grid', gap: 8 }}>
+              {stagedCrews.map((c, i) => {
+                const lp = personnel.find((p) => p.id === c.leaderId);
+                const mNames = c.memberIds
+                  .filter((m) => m !== c.leaderId)
+                  .map((m) => personnel.find((p) => p.id === m)?.name ?? '')
+                  .filter(Boolean);
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      border: '1px solid #eaecf0',
+                      borderRadius: 8,
+                      padding: 10,
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    <div style={{ fontSize: 13 }}>
+                      <strong>{c.solo ? 'One-man task' : `Crew ${i + 1}`}</strong>
+                      {' — '}
+                      {c.solo ? '' : 'Leader: '}
+                      {lp?.name ?? '—'}
+                      {!c.solo && mNames.length > 0 && (
+                        <span style={{ color: '#667085' }}> · {mNames.join(', ')}</span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="wo-btn wo-btn--danger wo-btn--sm"
+                      onClick={() => removeStagedCrew(i)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {stagedCrews.length > 0 && (
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#175cd3', margin: '0 0 8px' }}>
+              Add another crew
+            </div>
+          )}
 
           {/* Step 1 — is this a one-person job or a team task? */}
           <div className="wo-form__field" style={{ marginBottom: 12 }}>
@@ -331,7 +538,7 @@ export default function WorkOrderDetailPage() {
               <span className="wo-form__label">Assigned personnel *</span>
               <select className="wo-select" value={leaderId} onChange={(e) => setLeaderId(e.target.value)}>
                 <option value="">— Select personnel —</option>
-                {personnel.map(personnelOption)}
+                {builderPersonnel.map(personnelOption)}
               </select>
             </label>
           ) : (
@@ -348,7 +555,7 @@ export default function WorkOrderDetailPage() {
                   <span className="wo-form__label">Team Leader *</span>
                   <select className="wo-select" value={leaderId} onChange={(e) => setLeaderId(e.target.value)}>
                     <option value="">— Select leader —</option>
-                    {personnel.map(personnelOption)}
+                    {builderPersonnel.map(personnelOption)}
                   </select>
                 </label>
               </div>
@@ -396,17 +603,32 @@ export default function WorkOrderDetailPage() {
             </>
           )}
 
-          <div className="wo-form__actions">
+          <div className="wo-form__actions" style={{ flexWrap: 'wrap', gap: 8 }}>
             <button className="wo-btn" onClick={() => setPanel('')}>Cancel</button>
-            <button className="wo-btn wo-btn--primary" onClick={doAssign} disabled={acting || !leaderId}>
-              {acting ? 'Saving…' : solo ? 'Assign Personnel' : 'Assign Crew'}
+            <button
+              type="button"
+              className="wo-btn"
+              onClick={addAnotherCrew}
+              disabled={acting || !leaderId}
+              title="Stage this crew and start another"
+            >
+              + Add another crew
+            </button>
+            <button
+              className="wo-btn wo-btn--primary"
+              onClick={doAssign}
+              disabled={acting || (!leaderId && stagedCrews.length === 0)}
+            >
+              {acting
+                ? 'Saving…'
+                : `Assign ${stagedCrews.length + (leaderId ? 1 : 0) > 1 ? 'Crews' : 'Crew'}`}
             </button>
           </div>
 
           <MemberPickerModal
             open={memberModalOpen}
             onClose={() => setMemberModalOpen(false)}
-            personnel={personnel}
+            personnel={builderPersonnel}
             leaderId={leaderId}
             selectedIds={memberIds}
             onToggle={toggleMember}
@@ -419,6 +641,11 @@ export default function WorkOrderDetailPage() {
       {panel === 'complete' && (
         <div className="wo-complete-form" style={{ marginTop: 16, padding: 16, border: '1px solid #e4e7ec', borderRadius: 10, background: '#f9fafb' }}>
           <h3 style={{ marginTop: 0 }}>Complete Work Order</h3>
+          <p style={{ marginTop: -6, fontSize: 13, color: '#667085' }}>
+            {completingCrew
+              ? `This is the last crew out (${completingCrew.soloTask ? 'One-man task' : `Crew ${completingCrew.crewNumber}`}). Record the work order's completion report.`
+              : 'Record the completion report.'}
+          </p>
           <label className="wo-form__field wo-form__field--full">
             <span className="wo-form__label">Tasks performed</span>
             <textarea className="wo-textarea" rows={3} value={tasksPerformed} onChange={(e) => setTasksPerformed(e.target.value)} />
@@ -433,8 +660,8 @@ export default function WorkOrderDetailPage() {
           </label>
           <span style={{ fontSize: 12, color: '#667085' }}>The time returned is recorded as now on completion.</span>
           <div className="wo-form__actions">
-            <button className="wo-btn" onClick={() => setPanel('')}>Cancel</button>
-            <button className="wo-btn wo-btn--success" onClick={doComplete} disabled={acting}>
+            <button className="wo-btn" onClick={() => { setPanel(''); setCompletingCrew(null); }}>Cancel</button>
+            <button className="wo-btn wo-btn--success" onClick={doCompleteCrew} disabled={acting}>
               {acting ? 'Saving…' : 'Mark Completed'}
             </button>
           </div>

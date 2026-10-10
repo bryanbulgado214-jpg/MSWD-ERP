@@ -48,8 +48,19 @@ export class UpdateWorkOrderDto {
   @IsBoolean() @IsOptional() customerSignatureRequired?: boolean;
 }
 
+// One crew: a leader plus members (or a single person for a one-man task).
+export class CrewInputDto {
+  @IsBoolean() @IsOptional() soloTask?: boolean;
+  @IsUUID() @IsOptional() teamId?: string;
+  @IsUUID() teamLeaderId!: string;
+  @IsArray() @IsUUID('all', { each: true }) @IsOptional() memberIds?: string[];
+}
+
 export class AssignCrewDto {
   @IsNumber() @IsNotEmpty() expectedVersion!: number;
+  // One or more crews. The legacy single-crew fields below are still accepted
+  // and folded into a one-crew list.
+  @IsArray() @ValidateNested({ each: true }) @Type(() => CrewInputDto) @IsOptional() crews?: CrewInputDto[];
   @IsBoolean() @IsOptional() soloTask?: boolean;
   @IsUUID() @IsOptional() teamId?: string;
   @IsUUID() @IsOptional() teamLeaderId?: string;
@@ -59,6 +70,18 @@ export class AssignCrewDto {
 export class DispatchWorkOrderDto {
   @IsNumber() @IsNotEmpty() expectedVersion!: number;
   @IsString() @IsOptional() timeLeft?: string;
+}
+
+// Marking one crew back from the field. The resolution fields are accepted when
+// this is the last crew to finish (the work order then becomes "completed").
+export class CompleteCrewDto {
+  @IsNumber() @IsNotEmpty() expectedVersion!: number;
+  @IsString() @IsOptional() timeReturned?: string;
+  @IsString() @IsOptional() completionNotes?: string;
+  @IsNumber() @IsOptional() actualDurationHrs?: number;
+  @IsString() @IsOptional() tasksPerformed?: string;
+  @IsString() @IsOptional() issuesEncountered?: string;
+  @IsString() @IsOptional() remarks?: string;
 }
 
 export class AssignWorkOrderDto {
