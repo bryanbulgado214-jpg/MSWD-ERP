@@ -211,6 +211,15 @@ export function CreatePurchaseRequestPage() {
   const selectedPpmpIds = [...new Set(items.map((it) => it.ppmpItemId).filter(Boolean))] as string[];
   const linkedAppItems = appItems;
 
+  // Map each PPMP item back to the end-user who requested it (and its PPMP code),
+  // so every line in the Items section can show who it is for.
+  const requesterByPpmpId = new Map<string, { userName: string; code: string }>();
+  for (const g of allocByUser) {
+    for (const p of g.items) {
+      requesterByPpmpId.set(p.id, { userName: g.user.name, code: p.code });
+    }
+  }
+
   const ppmpQuery = ppmpSearch.trim().toLowerCase();
   function filterAlloc(rows: PpmpItemWithRemaining[]): PpmpItemWithRemaining[] {
     if (!ppmpQuery) return rows;
@@ -750,6 +759,47 @@ export function CreatePurchaseRequestPage() {
                     &times;
                   </button>
                 )}
+                {/* Who requested this line — the end-user behind its PPMP item. */}
+                {(() => {
+                  const req = item.ppmpItemId ? requesterByPpmpId.get(item.ppmpItemId) : undefined;
+                  return (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        flexWrap: 'wrap',
+                        marginBottom: 10,
+                      }}
+                    >
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#475467' }}>
+                        Requested by:
+                      </span>
+                      {req ? (
+                        <>
+                          <span
+                            style={{
+                              background: '#eff8ff',
+                              color: '#175cd3',
+                              border: '1px solid #b2ddff',
+                              borderRadius: 12,
+                              padding: '2px 10px',
+                              fontSize: 12,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {req.userName}
+                          </span>
+                          <span style={{ fontSize: 11, color: '#667085' }}>PPMP {req.code}</span>
+                        </>
+                      ) : (
+                        <span style={{ fontSize: 12, color: '#98a2b3', fontStyle: 'italic' }}>
+                          manual entry — no end-user
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div className="pr-item-grid">
                   <div>
                     <label>Description</label>
