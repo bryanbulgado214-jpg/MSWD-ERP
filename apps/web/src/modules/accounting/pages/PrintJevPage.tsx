@@ -168,12 +168,15 @@ export function PrintJevPage() {
                 </td>
               </tr>
             ))}
-            {/* Explanation row */}
+            {/* Explanation row. The Responsibility Center cell spills into this
+                row via its rowSpan, so only four column slots remain: the
+                Accounts+UACS+Debit span and the Credit cell. (A second empty
+                cell here overflowed into a phantom column that overlapped the
+                Credit box.) */}
             <tr>
               <td colSpan={3} style={{ fontSize: '9pt', fontStyle: 'italic' }}>
                 To record: {jev.particulars}
               </td>
-              <td className="gov-right"></td>
               <td className="gov-right"></td>
             </tr>
             {/* Total */}
