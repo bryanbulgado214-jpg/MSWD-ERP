@@ -456,7 +456,7 @@ export function PurchaseRequestDetailPage() {
 
       {/* Action Buttons — gated by status + permissions */}
       <div className="pr-detail-actions">
-        {['draft', 'returned', 'procurement_in_progress'].includes(pr.status) &&
+        {!['completed', 'verified', 'rejected', 'cancelled', 'voided'].includes(pr.status) &&
           isCreator &&
           hasPermission('procurement.pr.edit') && (
             <Link

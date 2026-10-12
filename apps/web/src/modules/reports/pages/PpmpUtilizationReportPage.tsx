@@ -18,6 +18,7 @@ export function PpmpUtilizationReportPage() {
   const [fyId, setFyId] = useState('');
   const [rows, setRows] = useState<PpmpUtilizationRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     getFiscalYears()
@@ -44,13 +45,22 @@ export function PpmpUtilizationReportPage() {
     };
   }, [fyId]);
 
-  const totals = rows.reduce(
+  const q = search.trim().toLowerCase();
+  const filteredRows = q
+    ? rows.filter((r) =>
+        [r.code, r.description, r.section, r.endUser, r.poReferences]
+          .some((v) => (v ?? '').toLowerCase().includes(q)),
+      )
+    : rows;
+
+  const totals = filteredRows.reduce(
     (a, r) => ({
       approvedBudget: a.approvedBudget + Number(r.approvedBudget),
       purchasedAmount: a.purchasedAmount + Number(r.purchasedAmount),
       remainingBudget: a.remainingBudget + Number(r.remainingBudget),
+      overUnder: a.overUnder + Number(r.overUnder),
     }),
-    { approvedBudget: 0, purchasedAmount: 0, remainingBudget: 0 },
+    { approvedBudget: 0, purchasedAmount: 0, remainingBudget: 0, overUnder: 0 },
   );
 
   return (
@@ -68,6 +78,20 @@ export function PpmpUtilizationReportPage() {
             </option>
           ))}
         </select>
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="🔍 Search code, description, section, end-user…"
+          style={{
+            flex: 1,
+            maxWidth: 360,
+            padding: '6px 10px',
+            border: '1px solid #d0d5dd',
+            borderRadius: 6,
+            fontSize: 13,
+          }}
+        />
       </div>
 
       <p style={{ color: '#667085', fontSize: 13, margin: '0 0 12px' }}>
@@ -77,10 +101,12 @@ export function PpmpUtilizationReportPage() {
 
       {loading ? (
         <div className="reports-loading">Loading PPMP utilization…</div>
-      ) : rows.length === 0 ? (
-        <div className="reports-empty">No approved PPMP items for this fiscal year.</div>
+      ) : filteredRows.length === 0 ? (
+        <div className="reports-empty">
+          {q ? `No items match "${search}".` : 'No approved PPMP items for this fiscal year.'}
+        </div>
       ) : (
-        <div className="reports-table-wrap">
+        <div className="reports-table-wrap reports-table-wrap--sticky">
           <table className="reports-table">
             <thead>
               <tr>
@@ -97,10 +123,11 @@ export function PpmpUtilizationReportPage() {
                 <th>PO Reference</th>
                 <th style={{ textAlign: 'right' }}>Remaining Qty</th>
                 <th style={{ textAlign: 'right' }}>Remaining Budget</th>
+                <th style={{ textAlign: 'right' }}>Over/Under Utilization</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r, i) => (
+              {filteredRows.map((r, i) => (
                 <tr key={`${r.code}-${i}`}>
                   <td className="code">{r.code}</td>
                   <td>{r.description}</td>
@@ -115,6 +142,9 @@ export function PpmpUtilizationReportPage() {
                   <td>{r.poReferences || '—'}</td>
                   <td className="num">{qty(r.remainingQty)}</td>
                   <td className="num">{formatPeso(r.remainingBudget)}</td>
+                  <td className="num" style={{ color: Number(r.overUnder) < 0 ? '#b42318' : '#067647' }}>
+                    {formatPeso(r.overUnder)}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -126,6 +156,9 @@ export function PpmpUtilizationReportPage() {
                 <td className="num">{formatPeso(totals.purchasedAmount.toString())}</td>
                 <td colSpan={2} />
                 <td className="num">{formatPeso(totals.remainingBudget.toString())}</td>
+                <td className="num" style={{ color: totals.overUnder < 0 ? '#b42318' : '#067647' }}>
+                  {formatPeso(totals.overUnder.toString())}
+                </td>
               </tr>
             </tfoot>
           </table>

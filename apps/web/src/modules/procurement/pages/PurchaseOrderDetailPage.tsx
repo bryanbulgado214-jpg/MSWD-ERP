@@ -13,6 +13,7 @@ import {
   listCafs,
   ProcurementApiError,
   submitPoForCaf,
+  updatePurchaseOrder,
 } from '../api';
 import type { Caf, PurchaseOrder, PurchaseOrderStatus } from '../types';
 import { DocDateEditor } from './DocDateEditor';
@@ -39,6 +40,31 @@ export function PurchaseOrderDetailPage() {
   const [linkedCAFs, setLinkedCAFs] = useState<Caf[]>([]);
   const [acting, setActing] = useState(false);
   const [error, setError] = useState('');
+  // Inline edit of the contract amount (allowed at any live status for catch-up).
+  const [editAmount, setEditAmount] = useState<string | null>(null);
+
+  async function saveAmount() {
+    if (state.status !== 'loaded' || editAmount === null) return;
+    const value = parseFloat(editAmount);
+    if (!Number.isFinite(value) || value <= 0) {
+      setError('Enter a valid contract amount.');
+      return;
+    }
+    setActing(true);
+    setError('');
+    try {
+      const updated = await updatePurchaseOrder(state.data.id, {
+        expectedVersion: state.data.version,
+        contractAmount: value,
+      });
+      setState({ status: 'loaded', data: updated });
+      setEditAmount(null);
+    } catch (e) {
+      setError(e instanceof ProcurementApiError ? e.message : 'Failed to update amount.');
+    } finally {
+      setActing(false);
+    }
+  }
 
   function load() {
     if (!id) return;
@@ -244,7 +270,68 @@ export function PurchaseOrderDetailPage() {
         )}
         <div>
           <dt>Contract Amount</dt>
-          <dd style={{ fontVariantNumeric: 'tabular-nums' }}>{formatPeso(po.contractAmount)}</dd>
+          <dd style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {editAmount === null ? (
+              <>
+                {formatPeso(po.contractAmount)}
+                {canCreate && po.status !== 'cancelled' && (
+                  <button
+                    type="button"
+                    onClick={() => setEditAmount(po.contractAmount)}
+                    style={{
+                      marginLeft: 8,
+                      border: 'none',
+                      background: 'none',
+                      color: '#175cd3',
+                      cursor: 'pointer',
+                      fontSize: 12,
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    Edit
+                  </button>
+                )}
+              </>
+            ) : (
+              <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                <input
+                  type="number"
+                  value={editAmount}
+                  onChange={(e) => setEditAmount(e.target.value)}
+                  step="0.01"
+                  min="0"
+                  autoFocus
+                  style={{
+                    width: 140,
+                    padding: '4px 8px',
+                    border: '1.5px solid #d0d5dd',
+                    borderRadius: 4,
+                    fontSize: 13,
+                  }}
+                />
+                <button
+                  type="button"
+                  className="pr-btn pr-btn--primary"
+                  style={{ padding: '2px 10px', fontSize: 12 }}
+                  disabled={acting}
+                  onClick={saveAmount}
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  className="pr-btn"
+                  style={{ padding: '2px 10px', fontSize: 12 }}
+                  onClick={() => {
+                    setEditAmount(null);
+                    setError('');
+                  }}
+                >
+                  Cancel
+                </button>
+              </span>
+            )}
+          </dd>
         </div>
         <div>
           <dt>PO Date</dt>
@@ -290,6 +377,50 @@ export function PurchaseOrderDetailPage() {
           </div>
         )}
       </dl>
+
+      {po.purchaseRequest.items && po.purchaseRequest.items.length > 0 && (
+        <div style={{ marginTop: 8, marginBottom: 24 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--mswd-navy)', margin: '0 0 12px' }}>
+            Line Items ({po.purchaseRequest.items.length})
+          </h3>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="pr-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Description</th>
+                  <th style={{ textAlign: 'right' }}>Qty</th>
+                  <th>Unit</th>
+                  <th style={{ textAlign: 'right' }}>Unit Cost</th>
+                  <th style={{ textAlign: 'right' }}>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {po.purchaseRequest.items.map((it) => (
+                  <tr key={it.id}>
+                    <td>{it.itemNumber}</td>
+                    <td>{it.description}</td>
+                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                      {parseFloat(it.quantity).toLocaleString()}
+                    </td>
+                    <td>{it.unitOfMeasure}</td>
+                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                      {formatPeso(it.estimatedUnitCost)}
+                    </td>
+                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                      {formatPeso(it.estimatedTotalCost)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p style={{ fontSize: 12, color: '#667085', margin: '6px 0 0' }}>
+            Quantities and unit costs are from the purchase request. The PO's contract amount above
+            is the awarded total.
+          </p>
+        </div>
+      )}
 
       {/* Audit Trail */}
       <div className="pr-audit-trail">

@@ -107,24 +107,39 @@ export function PrintPurchaseOrderPage() {
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td className="gov-center">—</td>
-              <td className="gov-center">—</td>
-              <td>{po.purchaseRequest.title}</td>
-              <td className="gov-center">—</td>
-              <td className="gov-right gov-mono">—</td>
-              <td className="gov-right gov-mono gov-bold">{formatPeso(po.contractAmount)}</td>
-            </tr>
-            {Array.from({ length: 12 }).map((_, i) => (
-              <tr key={i}>
-                <td>&nbsp;</td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
+            {po.purchaseRequest.items && po.purchaseRequest.items.length > 0 ? (
+              po.purchaseRequest.items.map((it) => (
+                <tr key={it.id}>
+                  <td className="gov-center">{it.itemNumber}</td>
+                  <td className="gov-center">{it.unitOfMeasure}</td>
+                  <td>{it.description}</td>
+                  <td className="gov-center">{parseFloat(it.quantity).toLocaleString()}</td>
+                  <td className="gov-right gov-mono">{formatPeso(it.estimatedUnitCost)}</td>
+                  <td className="gov-right gov-mono">{formatPeso(it.estimatedTotalCost)}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td className="gov-center">—</td>
+                <td className="gov-center">—</td>
+                <td>{po.purchaseRequest.title}</td>
+                <td className="gov-center">—</td>
+                <td className="gov-right gov-mono">—</td>
+                <td className="gov-right gov-mono gov-bold">{formatPeso(po.contractAmount)}</td>
               </tr>
-            ))}
+            )}
+            {Array.from({ length: Math.max(0, 12 - (po.purchaseRequest.items?.length ?? 1)) }).map(
+              (_, i) => (
+                <tr key={`filler-${i}`}>
+                  <td>&nbsp;</td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+              ),
+            )}
           </tbody>
           <tfoot>
             <tr>

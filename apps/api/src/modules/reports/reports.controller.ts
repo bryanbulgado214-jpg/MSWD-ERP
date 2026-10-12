@@ -81,7 +81,17 @@ export class ReportsController {
               OR: [{ ppmpItemId: it.id }, { items: { some: { ppmpItemId: it.id } } }],
             },
           },
-          select: { poNumber: true },
+          select: {
+            poNumber: true,
+            contractAmount: true,
+            purchaseRequest: {
+              select: {
+                totalAmount: true,
+                ppmpItemId: true,
+                items: { where: { ppmpItemId: it.id }, select: { estimatedTotalCost: true } },
+              },
+            },
+          },
           orderBy: { poDate: 'asc' },
         });
         const qAgg = await this.prisma.purchaseRequestItem.aggregate({
@@ -107,7 +117,11 @@ export class ReportsController {
           _sum: { quantity: true },
         });
         const purchasedQty = qAgg._sum.quantity ?? new Prisma.Decimal(0);
-        const purchasedAmount = purchasedQty.mul(it.estimatedUnitCost);
+        // ABC (estimated) amount — kept only for the quantity-based remaining budget.
+        const abcAmount = purchasedQty.mul(it.estimatedUnitCost);
+        // Actual purchase cost: each PO's actual contract amount, pro-rated to this
+        // PPMP item's share of its purchase request.
+        const actualAmount = this.actualPoCost(pos, it.id);
         return {
           code: it.code,
           description: it.itemDescription,
@@ -118,16 +132,44 @@ export class ReportsController {
           unitCost: it.estimatedUnitCost.toString(),
           approvedBudget: it.estimatedTotalCost.toString(),
           purchasedQty: purchasedQty.toString(),
-          purchasedAmount: purchasedAmount.toString(),
+          purchasedAmount: actualAmount.toString(),
           poReferences: pos.map((p) => p.poNumber).join(', '),
           remainingQty: it.quantity.sub(purchasedQty).toString(),
-          remainingBudget: it.estimatedTotalCost.sub(purchasedAmount).toString(),
+          remainingBudget: it.estimatedTotalCost.sub(abcAmount).toString(),
+          overUnder: it.estimatedTotalCost.sub(actualAmount).toString(),
         };
       }),
     );
 
     const fy = items[0]?.fiscalYear;
     return { rows, fiscalYear: fy ? `${fy.name} (${fy.year})` : '' };
+  }
+
+  // Sum each PO's actual contract amount, pro-rated to one PPMP item's share of
+  // its purchase request (so a PR spanning several PPMP items splits correctly).
+  private actualPoCost(
+    pos: {
+      contractAmount: Prisma.Decimal;
+      purchaseRequest: {
+        totalAmount: Prisma.Decimal;
+        ppmpItemId: string | null;
+        items: { estimatedTotalCost: Prisma.Decimal }[];
+      };
+    }[],
+    ppmpItemId: string,
+  ): Prisma.Decimal {
+    let total = new Prisma.Decimal(0);
+    for (const po of pos) {
+      const pr = po.purchaseRequest;
+      const share = pr.items.length
+        ? pr.items.reduce((s, x) => s.plus(x.estimatedTotalCost), new Prisma.Decimal(0))
+        : pr.ppmpItemId === ppmpItemId
+          ? pr.totalAmount
+          : new Prisma.Decimal(0);
+      const ratio = pr.totalAmount.gt(0) ? share.div(pr.totalAmount) : new Prisma.Decimal(0);
+      total = total.plus(po.contractAmount.mul(ratio));
+    }
+    return total;
   }
 
   // APP utilization: per approved APP line — approved budget/qty (qty from the
@@ -173,7 +215,17 @@ export class ReportsController {
               OR: [{ ppmpItemId: ppmpId }, { items: { some: { ppmpItemId: ppmpId } } }],
             },
           },
-          select: { poNumber: true },
+          select: {
+            poNumber: true,
+            contractAmount: true,
+            purchaseRequest: {
+              select: {
+                totalAmount: true,
+                ppmpItemId: true,
+                items: { where: { ppmpItemId: ppmpId }, select: { estimatedTotalCost: true } },
+              },
+            },
+          },
           orderBy: { poDate: 'asc' },
         });
         const qAgg = await this.prisma.purchaseRequestItem.aggregate({
@@ -199,7 +251,8 @@ export class ReportsController {
           _sum: { quantity: true },
         });
         const purchasedQty = qAgg._sum.quantity ?? new Prisma.Decimal(0);
-        const purchasedAmount = purchasedQty.mul(it.ppmpItem.estimatedUnitCost);
+        const abcAmount = purchasedQty.mul(it.ppmpItem.estimatedUnitCost);
+        const actualAmount = ppmpId ? this.actualPoCost(pos, ppmpId) : new Prisma.Decimal(0);
         const approvedQty = it.ppmpItem.quantity;
         return {
           appNumber: it.appNumber,
@@ -210,10 +263,11 @@ export class ReportsController {
           approvedQty: approvedQty.toString(),
           approvedBudget: it.approvedBudget.toString(),
           purchasedQty: purchasedQty.toString(),
-          purchasedAmount: purchasedAmount.toString(),
+          purchasedAmount: actualAmount.toString(),
           poReferences: pos.map((p) => p.poNumber).join(', '),
           remainingQty: approvedQty.sub(purchasedQty).toString(),
-          remainingBudget: it.approvedBudget.sub(purchasedAmount).toString(),
+          remainingBudget: it.approvedBudget.sub(abcAmount).toString(),
+          overUnder: it.approvedBudget.sub(actualAmount).toString(),
         };
       }),
     );

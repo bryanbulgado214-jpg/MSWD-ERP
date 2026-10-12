@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
 import { formatPeso } from '../../budgeting/format-peso';
@@ -34,6 +34,7 @@ const STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
 
 export function PurchaseOrderListPage() {
   const { hasPermission } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialStatus = searchParams.get('status') ?? '';
   const [statusFilter, setStatusFilter] = useState(initialStatus);
@@ -118,9 +119,20 @@ export function PurchaseOrderListPage() {
             </thead>
             <tbody>
               {state.data.map((po) => (
-                <tr key={po.id}>
+                <tr
+                  key={po.id}
+                  className="pr-row--click"
+                  onClick={() => {
+                    if (window.getSelection()?.toString()) return;
+                    navigate(`/procurement/purchase-orders/${po.id}`);
+                  }}
+                >
                   <td>
-                    <Link to={`/procurement/purchase-orders/${po.id}`} className="pr-table__link">
+                    <Link
+                      to={`/procurement/purchase-orders/${po.id}`}
+                      className="pr-table__link"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       {po.poNumber}
                     </Link>
                   </td>
@@ -128,6 +140,7 @@ export function PurchaseOrderListPage() {
                     <Link
                       to={`/procurement/purchase-requests/${po.purchaseRequest.id}`}
                       className="pr-table__link"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       {po.purchaseRequest.prNumber}
                     </Link>

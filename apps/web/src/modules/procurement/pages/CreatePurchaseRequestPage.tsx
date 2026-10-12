@@ -54,6 +54,9 @@ export function CreatePurchaseRequestPage() {
   const [pickerValue, setPickerValue] = useState('');
   // Free-text filter over the PPMP allocations (code / description / unit).
   const [ppmpSearch, setPpmpSearch] = useState('');
+  // Pop-up item picker (search icon beside the search box).
+  const [itemModalOpen, setItemModalOpen] = useState(false);
+  const [modalSearch, setModalSearch] = useState('');
 
   const [prNumber, setPrNumber] = useState('');
   const [prDate, setPrDate] = useState('');
@@ -517,23 +520,55 @@ export function CreatePurchaseRequestPage() {
             Check one or more items from the PPMP to add them to this purchase request. Click a
             "Purchased to Date" figure to see the documents behind it.
           </p>
-          <input
-            type="text"
-            value={ppmpSearch}
-            onChange={(e) => setPpmpSearch(e.target.value)}
-            placeholder="🔍 Search allocations by code, description, or unit…"
+          <div
             style={{
-              width: '100%',
-              maxWidth: 420,
-              padding: '8px 10px',
-              border: '1.5px solid #d0d5dd',
-              borderRadius: 6,
-              fontSize: 13,
-              fontFamily: 'inherit',
+              display: 'flex',
+              gap: 8,
+              alignItems: 'center',
               marginBottom: 12,
-              boxSizing: 'border-box',
+              maxWidth: 420,
             }}
-          />
+          >
+            <input
+              type="text"
+              value={ppmpSearch}
+              onChange={(e) => setPpmpSearch(e.target.value)}
+              placeholder="Search allocations by code, description, or unit…"
+              style={{
+                flex: 1,
+                padding: '8px 10px',
+                border: '1.5px solid #d0d5dd',
+                borderRadius: 6,
+                fontSize: 13,
+                fontFamily: 'inherit',
+                boxSizing: 'border-box',
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setModalSearch('');
+                setItemModalOpen(true);
+              }}
+              title="Browse all items tagged to the selected end-user(s)"
+              style={{
+                flexShrink: 0,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 38,
+                height: 38,
+                border: '1.5px solid #175cd3',
+                background: '#eff8ff',
+                color: '#175cd3',
+                borderRadius: 6,
+                fontSize: 16,
+                cursor: 'pointer',
+              }}
+            >
+              🔍
+            </button>
+          </div>
 
           {allocByUser.map((group) =>
             group.items.length === 0 ? null : (
@@ -815,6 +850,180 @@ export function CreatePurchaseRequestPage() {
           </button>
         </div>
       </form>
+
+      {itemModalOpen &&
+        (() => {
+          const mq = modalSearch.trim().toLowerCase();
+          // All items tagged to the selected end-user(s), flattened with their owner.
+          const all = allocByUser.flatMap((g) =>
+            g.items.map((ppmp) => ({ ppmp, userName: g.user.name })),
+          );
+          const matches = mq
+            ? all.filter(
+                ({ ppmp }) =>
+                  ppmp.code.toLowerCase().includes(mq) ||
+                  ppmp.itemDescription.toLowerCase().includes(mq) ||
+                  ppmp.unitOfMeasure.toLowerCase().includes(mq),
+              )
+            : all;
+          return (
+            <div
+              onClick={() => setItemModalOpen(false)}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(16,24,40,0.5)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000,
+                padding: 16,
+              }}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  background: '#fff',
+                  borderRadius: 12,
+                  width: '100%',
+                  maxWidth: 720,
+                  maxHeight: '85vh',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  boxShadow: '0 20px 48px rgba(16,24,40,0.24)',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '16px 20px',
+                    borderBottom: '1px solid #eaecf0',
+                  }}
+                >
+                  <h3 style={{ margin: 0, fontSize: 16, color: 'var(--mswd-navy)' }}>
+                    Add an Item to this Request
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setItemModalOpen(false)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      fontSize: 22,
+                      lineHeight: 1,
+                      cursor: 'pointer',
+                      color: '#667085',
+                    }}
+                    title="Close"
+                  >
+                    &times;
+                  </button>
+                </div>
+                <div style={{ padding: '14px 20px 0' }}>
+                  <input
+                    type="text"
+                    autoFocus
+                    value={modalSearch}
+                    onChange={(e) => setModalSearch(e.target.value)}
+                    placeholder="🔍 Search items by code, description, or unit…"
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      border: '1.5px solid #d0d5dd',
+                      borderRadius: 6,
+                      fontSize: 13,
+                      fontFamily: 'inherit',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <div style={{ overflowY: 'auto', padding: '12px 20px 20px' }}>
+                  {matches.length === 0 ? (
+                    <p
+                      style={{
+                        textAlign: 'center',
+                        color: '#667085',
+                        fontSize: 13,
+                        padding: '24px 0',
+                      }}
+                    >
+                      {all.length === 0
+                        ? 'No items are tagged to the selected end-user(s).'
+                        : `No items match "${modalSearch}".`}
+                    </p>
+                  ) : (
+                    <table className="pr-table" style={{ fontSize: 12 }}>
+                      <thead>
+                        <tr>
+                          <th>End-User</th>
+                          <th>Code</th>
+                          <th>Description</th>
+                          <th>UOM</th>
+                          <th style={{ textAlign: 'right' }}>Remaining Qty</th>
+                          <th style={{ textAlign: 'right' }}>Unit Cost</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {matches.map(({ ppmp, userName }) => {
+                          const remQty = parseFloat(ppmp.remainingQuantity);
+                          const exhausted = remQty <= 0;
+                          const isSelected = items.some((it) => it.ppmpItemId === ppmp.id);
+                          const disabled = exhausted || isSelected;
+                          return (
+                            <tr
+                              key={ppmp.id}
+                              style={{
+                                background: isSelected ? '#f0fdf4' : exhausted ? '#f9fafb' : undefined,
+                                opacity: exhausted && !isSelected ? 0.55 : 1,
+                                cursor: disabled ? 'default' : 'pointer',
+                              }}
+                              onClick={() => {
+                                if (disabled) return;
+                                toggleAllocation(ppmp);
+                                setItemModalOpen(false);
+                              }}
+                            >
+                              <td>{userName}</td>
+                              <td>
+                                <strong>{ppmp.code}</strong>
+                              </td>
+                              <td>{ppmp.itemDescription}</td>
+                              <td>{ppmp.unitOfMeasure}</td>
+                              <td
+                                style={{
+                                  textAlign: 'right',
+                                  color: exhausted ? '#b42318' : '#067647',
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {remQty.toLocaleString()}
+                              </td>
+                              <td style={{ textAlign: 'right' }}>
+                                {formatPeso(ppmp.estimatedUnitCost)}
+                              </td>
+                              <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                {isSelected ? (
+                                  <span style={{ color: '#067647', fontWeight: 600 }}>✓ Added</span>
+                                ) : exhausted ? (
+                                  <span style={{ color: '#b42318' }}>Exhausted</span>
+                                ) : (
+                                  <span style={{ color: '#175cd3', fontWeight: 600 }}>+ Add</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
       {acqModal && (
         <AcquisitionsModal

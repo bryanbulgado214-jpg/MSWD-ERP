@@ -184,6 +184,15 @@ export interface PurchaseOrder {
     title: string;
     totalAmount: string;
     status: string;
+    items?: Array<{
+      id: string;
+      itemNumber: number;
+      description: string;
+      quantity: string;
+      unitOfMeasure: string;
+      estimatedUnitCost: string;
+      estimatedTotalCost: string;
+    }>;
   };
   supplier: { id: string; name: string; tin: string | null; address: string | null };
   approver?: UserRef;

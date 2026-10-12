@@ -177,6 +177,18 @@
   margin-bottom: 24px;
 }
 
+/* Freeze the header row on tall tables (utilization reports). */
+.reports-table-wrap--sticky {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.reports-table-wrap--sticky thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
 .reports-table {
   width: 100%;
   border-collapse: collapse;

@@ -110,10 +110,30 @@ export class PurchaseRequestService {
     input: UpdatePurchaseRequestInput,
   ): Promise<PurchaseRequestWithItems> {
     const pr = await this.requirePR(organizationId, prId);
-    // Editable while still a draft or returned for correction, and also once it
-    // is in procurement — the preparer reconciles the lines against the actual
-    // PO (e.g. back-entry / catch-up). Saving does not change the status.
-    this.assertStatus(pr, ['draft', 'returned', 'procurement_in_progress'], 'edited');
+    // Editable at any live stage — including after approval and once in
+    // procurement — so a catch-up / back-entered PR can be reconciled against
+    // the actual PO. Only truly closed PRs (completed / verified / rejected /
+    // cancelled / voided) are locked. Saving does not change the status.
+    this.assertStatus(
+      pr,
+      [
+        'draft',
+        'submitted',
+        'endorsed',
+        'budget_review',
+        'budget_certified',
+        'approved',
+        'procurement_review',
+        'accepted_for_procurement',
+        'procurement_in_progress',
+        'awarded',
+        'po_issued',
+        'delivered',
+        'inspected',
+        'returned',
+      ],
+      'edited',
+    );
 
     return runAudited(this.prisma, input.updatedBy, async (tx) => {
       const data: Prisma.PurchaseRequestUncheckedUpdateManyInput = {

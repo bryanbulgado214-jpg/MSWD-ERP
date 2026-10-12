@@ -71,7 +71,7 @@ export function EditPurchaseRequestPage() {
     if (!id) return;
     Promise.all([getPurchaseRequest(id), listAvailableBudgetReleases(), listLookupDepartments()])
       .then(([prData, relData, deptData]) => {
-        if (!['draft', 'returned', 'procurement_in_progress'].includes(prData.status)) {
+        if (['completed', 'verified', 'rejected', 'cancelled', 'voided'].includes(prData.status)) {
           setError(`This PR cannot be edited (status: ${prData.status}).`);
           return;
         }

@@ -686,6 +686,24 @@ export async function createPurchaseOrder(data: {
   return res.json();
 }
 
+export async function updatePurchaseOrder(
+  id: string,
+  data: {
+    expectedVersion: number;
+    contractAmount?: number;
+    poDate?: string;
+    awardDate?: string;
+    awardNoticeNumber?: string;
+    modeOfProcurement?: string;
+    deliveryTerms?: string;
+    paymentTerms?: string;
+    remarks?: string;
+  },
+): Promise<PurchaseOrder> {
+  const res = await authFetchMutate(`/procurement/purchase-orders/${id}`, 'PATCH', data);
+  return res.json();
+}
+
 export async function changePoNumber(
   id: string,
   expectedVersion: number,

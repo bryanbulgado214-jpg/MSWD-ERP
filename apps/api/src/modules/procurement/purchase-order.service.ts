@@ -64,7 +64,32 @@ export class PurchaseOrderService {
   async findOne(organizationId: string, id: string) {
     const po = await this.prisma.purchaseOrder.findFirst({
       where: { id, organizationId },
-      select: PO_SELECT,
+      // Include the purchase request's line items so the PO can show quantity
+      // and unit cost per item.
+      select: {
+        ...PO_SELECT,
+        purchaseRequest: {
+          select: {
+            id: true,
+            prNumber: true,
+            title: true,
+            totalAmount: true,
+            status: true,
+            items: {
+              orderBy: { itemNumber: 'asc' },
+              select: {
+                id: true,
+                itemNumber: true,
+                description: true,
+                quantity: true,
+                unitOfMeasure: true,
+                estimatedUnitCost: true,
+                estimatedTotalCost: true,
+              },
+            },
+          },
+        },
+      },
     });
     if (!po) throw new NotFoundException('Purchase order not found.');
     return po;
@@ -172,8 +197,10 @@ export class PurchaseOrderService {
       where: { id, organizationId },
     });
     if (!po) throw new NotFoundException('Purchase order not found.');
-    if (po.status !== 'draft' && po.status !== 'pending_caf') {
-      throw new BadRequestException('Purchase order can only be edited in draft or pending_caf status.');
+    // Editable at any live status (including after approval) so a catch-up /
+    // back-entered PO can be corrected; only a cancelled PO is locked.
+    if (po.status === 'cancelled') {
+      throw new BadRequestException('A cancelled purchase order cannot be edited.');
     }
     if (po.version !== data.expectedVersion) {
       throw new ConflictException('Purchase order was modified by another user. Please refresh and try again.');

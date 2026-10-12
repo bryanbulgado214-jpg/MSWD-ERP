@@ -126,6 +126,7 @@ export interface PpmpUtilizationRow {
   poReferences: string;
   remainingQty: string;
   remainingBudget: string;
+  overUnder: string;
 }
 
 export interface AppUtilizationRow {
@@ -141,6 +142,7 @@ export interface AppUtilizationRow {
   poReferences: string;
   remainingQty: string;
   remainingBudget: string;
+  overUnder: string;
 }
 
 export interface UtilizationReport<T> {
