@@ -55,17 +55,6 @@ const TERMINAL_STATUSES = new Set<PurchaseRequestStatus>([
   'voided',
 ]);
 
-// A PR can be permanently deleted only before it carries any financial
-// commitment — a draft, or one that ended in a dead state. Mirrors the API's
-// allowed-from list. (The backend still blocks it if anything downstream — a
-// PO, CAF, ORS or DV — is attached.)
-const DELETABLE_STATUSES = new Set<PurchaseRequestStatus>([
-  'draft',
-  'returned',
-  'cancelled',
-  'rejected',
-]);
-
 // Any pre-procurement status can be caught up straight to procurement (records
 // back-entry), mirroring the API's allowed-from list.
 const CATCH_UP_PR_STATUSES = new Set<PurchaseRequestStatus>([
@@ -217,7 +206,7 @@ export function PurchaseRequestDetailPage() {
     const pr = state.data;
     if (
       !window.confirm(
-        `Permanently delete ${pr.prNumber}? This removes the purchase request and its items for good. This cannot be undone.`,
+        `Permanently delete ${pr.prNumber}? This removes the purchase request and its items, and releases any budget reserved for it. This cannot be undone.`,
       )
     ) {
       return;
@@ -643,9 +632,12 @@ export function PurchaseRequestDetailPage() {
           </button>
         )}
 
-        {/* Permanently delete an uncommitted PR (draft / returned / cancelled /
-            rejected). The creator can clear their own; an admin can clear any. */}
-        {DELETABLE_STATUSES.has(pr.status) &&
+        {/* Permanently delete a PR up until a purchase order is issued — allowed
+            at any stage (incl. "in procurement") as long as no PO, CAF or ORS is
+            attached. The creator can clear their own; an admin can clear any. */}
+        {linkedPOs.length === 0 &&
+          linkedCAFs.length === 0 &&
+          linkedORS.length === 0 &&
           (isCreator || hasPermission('procurement.pr.mark_lifecycle')) &&
           hasPermission('procurement.pr.cancel') && (
             <button

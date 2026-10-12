@@ -616,24 +616,41 @@ export class PurchaseRequestService {
     }, actorUserId);
   }
 
-  // Permanently delete a purchase request that never carried a financial
-  // commitment — a draft the preparer is cleaning up, or one that ended in a
-  // dead state (cancelled / rejected / returned). Blocked the moment anything
-  // downstream is attached (a PO, a CAF, an ORS, a DV): the FK constraints on
-  // those child tables are Restrict, so the database itself refuses the delete
-  // and we surface that as a friendly message. PR items are removed by their
-  // cascade; the internal revision log is cleared first (it is Restrict).
+  // Permanently delete a purchase request up until a purchase order is issued.
+  // A PO or a certification of availability of funds (CAF) is a hard financial
+  // commitment, so the delete is blocked until those are voided — but the PR can
+  // be removed at any earlier stage (including "in procurement"), not just while
+  // a draft. Any budget reservation made at certification is released first so
+  // the funds are not left reserved against a deleted PR. PR items cascade; the
+  // internal revision log (Restrict) is cleared first; a lingering ORS/DV
+  // (Restrict) surfaces as a friendly message.
   async remove(organizationId: string, prId: string, actorUserId?: string): Promise<void> {
-    const pr = await this.requirePR(organizationId, prId);
-    this.assertStatus(pr, ['draft', 'returned', 'cancelled', 'rejected'], 'deleted');
+    await this.requirePR(organizationId, prId);
 
     const [poCount, cafCount] = await Promise.all([
       this.prisma.purchaseOrder.count({ where: { purchaseRequestId: prId } }),
       this.prisma.certificationOfAvailability.count({ where: { purchaseRequestId: prId } }),
     ]);
-    if (poCount > 0 || cafCount > 0) {
+    if (poCount > 0) {
       throw new ConflictException(
-        'This purchase request has linked purchase orders or certifications of funds, so it cannot be deleted. Void those documents first.',
+        'A purchase order has already been issued for this purchase request, so it cannot be deleted. Cancel or void the purchase order first.',
+      );
+    }
+    if (cafCount > 0) {
+      throw new ConflictException(
+        'This purchase request has a certification of availability of funds attached, so it cannot be deleted. Void that certification first.',
+      );
+    }
+
+    // Release any active budget reservation (made at budget certification) so
+    // the funds return to the budget release instead of staying reserved.
+    const reservation = await this.findLinkedReservation(prId);
+    if (reservation) {
+      await this.reservationService.cancel(
+        organizationId,
+        reservation.id,
+        reservation.version,
+        actorUserId,
       );
     }
 

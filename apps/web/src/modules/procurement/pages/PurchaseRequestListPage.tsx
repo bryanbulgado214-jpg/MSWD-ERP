@@ -285,7 +285,11 @@ export function PurchaseRequestListPage() {
                   }}
                 >
                   <td>
-                    <Link to={`/procurement/purchase-requests/${pr.id}`} className="pr-table__link">
+                    <Link
+                      to={`/procurement/purchase-requests/${pr.id}`}
+                      className="pr-table__link"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       {pr.prNumber}
                     </Link>
                   </td>
