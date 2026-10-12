@@ -33,7 +33,15 @@ function titleLines(container: HTMLElement, meta: ExportMeta): string[] {
       .filter(Boolean);
     if (lines.length) return lines;
   }
-  return [meta.organizationName, meta.reportLabel, `As of ${meta.dateStr}`];
+  // A report can expose a page-specific subtitle (e.g. the account code & name on
+  // a subsidiary ledger) by marking an element with data-export-subtitle; it is
+  // placed between the report label and the as-of date.
+  const subtitleEl = container.querySelector('[data-export-subtitle]') as HTMLElement | null;
+  const subtitle = subtitleEl?.textContent?.replace(/\s+/g, ' ').trim();
+  const lines = [meta.organizationName, meta.reportLabel];
+  if (subtitle) lines.push(subtitle);
+  lines.push(`As of ${meta.dateStr}`);
+  return lines;
 }
 
 /** Columns that are mostly numeric (right-aligned in the PDF). */

@@ -83,7 +83,7 @@ export default function SubsidiaryLedgerPage() {
 
       {account && (
         <div style={{ marginBottom: 20 }}>
-          <h1 style={{ marginBottom: 4 }}>
+          <h1 style={{ marginBottom: 4 }} data-export-subtitle>
             {account.accountCode} — {account.name}
           </h1>
           <div style={{ display: 'flex', gap: 8 }}>
