@@ -52,9 +52,8 @@ export function CreatePurchaseRequestPage() {
   // The end-users this PR is being prepared for (add one at a time).
   const [endUserIds, setEndUserIds] = useState<string[]>([]);
   const [pickerValue, setPickerValue] = useState('');
-  // Free-text filter over the PPMP allocations (code / description / unit).
-  const [ppmpSearch, setPpmpSearch] = useState('');
-  // Pop-up item picker (search icon beside the search box).
+  // Pop-up item picker — the single "Search or browse items" control opens it;
+  // it has its own search box and multi-select list.
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [modalSearch, setModalSearch] = useState('');
 
@@ -220,16 +219,6 @@ export function CreatePurchaseRequestPage() {
     }
   }
 
-  const ppmpQuery = ppmpSearch.trim().toLowerCase();
-  function filterAlloc(rows: PpmpItemWithRemaining[]): PpmpItemWithRemaining[] {
-    if (!ppmpQuery) return rows;
-    return rows.filter(
-      (p) =>
-        p.code.toLowerCase().includes(ppmpQuery) ||
-        p.itemDescription.toLowerCase().includes(ppmpQuery) ||
-        p.unitOfMeasure.toLowerCase().includes(ppmpQuery),
-    );
-  }
 
   const anyAllocations = allocByUser.some((g) => g.items.length > 0);
 
@@ -309,7 +298,7 @@ export function CreatePurchaseRequestPage() {
             {rows.length === 0 && (
               <tr>
                 <td colSpan={9} style={{ textAlign: 'center', color: '#667085', padding: 16 }}>
-                  No allocations match "{ppmpSearch}".
+                  No allocations for this end-user.
                 </td>
               </tr>
             )}
@@ -529,55 +518,38 @@ export function CreatePurchaseRequestPage() {
             Check one or more items from the PPMP to add them to this purchase request. Click a
             "Purchased to Date" figure to see the documents behind it.
           </p>
-          <div
+          {/* A single search-box-styled control: clicking it opens the pop-up
+              picker (which has its own search + multi-select) rather than
+              filtering inline. */}
+          <button
+            type="button"
+            onClick={() => {
+              setModalSearch('');
+              setItemModalOpen(true);
+            }}
+            title="Search and add items tagged to the selected end-user(s)"
             style={{
               display: 'flex',
-              gap: 8,
               alignItems: 'center',
-              marginBottom: 12,
+              gap: 8,
+              width: '100%',
               maxWidth: 420,
+              marginBottom: 12,
+              padding: '9px 12px',
+              border: '1.5px solid #175cd3',
+              background: '#eff8ff',
+              borderRadius: 6,
+              fontSize: 13,
+              fontFamily: 'inherit',
+              color: '#175cd3',
+              fontWeight: 600,
+              cursor: 'pointer',
+              textAlign: 'left',
             }}
           >
-            <input
-              type="text"
-              value={ppmpSearch}
-              onChange={(e) => setPpmpSearch(e.target.value)}
-              placeholder="Search allocations by code, description, or unit…"
-              style={{
-                flex: 1,
-                padding: '8px 10px',
-                border: '1.5px solid #d0d5dd',
-                borderRadius: 6,
-                fontSize: 13,
-                fontFamily: 'inherit',
-                boxSizing: 'border-box',
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => {
-                setModalSearch('');
-                setItemModalOpen(true);
-              }}
-              title="Browse all items tagged to the selected end-user(s)"
-              style={{
-                flexShrink: 0,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 38,
-                height: 38,
-                border: '1.5px solid #175cd3',
-                background: '#eff8ff',
-                color: '#175cd3',
-                borderRadius: 6,
-                fontSize: 16,
-                cursor: 'pointer',
-              }}
-            >
-              🔍
-            </button>
-          </div>
+            <span style={{ fontSize: 15 }}>🔍</span>
+            <span>Search or browse items to add…</span>
+          </button>
 
           {allocByUser.map((group) =>
             group.items.length === 0 ? null : (
@@ -592,7 +564,7 @@ export function CreatePurchaseRequestPage() {
                 >
                   {group.user.name}&apos;s PPMP Allocations ({group.items.length})
                 </h4>
-                {renderAllocTable(filterAlloc(group.items))}
+                {renderAllocTable(group.items)}
               </div>
             ),
           )}
