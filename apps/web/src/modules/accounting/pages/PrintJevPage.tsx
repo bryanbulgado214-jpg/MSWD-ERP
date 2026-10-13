@@ -48,9 +48,12 @@ export function PrintJevPage() {
   const rc = jev.responsibilityCenter
     ? `${jev.responsibilityCenter.code} — ${jev.responsibilityCenter.name}`
     : '';
-  // Particulars often already start with "To record …"; strip that so the
-  // template's own "To record:" label is not duplicated.
-  const particulars = jev.particulars.replace(/^\s*to record\s*:?\s*/i, '');
+  // When the particulars already begin with "To record …" (how the accountant
+  // writes them), show them verbatim — no extra "To record:" label. Only
+  // particulars that don't already carry it get the standard label prepended.
+  const particularsLine = /^\s*to record\b/i.test(jev.particulars)
+    ? jev.particulars.trim()
+    : `To record: ${jev.particulars.trim()}`;
 
   return (
     <div className="gov-print-page">
@@ -178,7 +181,7 @@ export function PrintJevPage() {
                 Credit box.) */}
             <tr>
               <td colSpan={3} style={{ fontSize: '9pt', fontStyle: 'italic' }}>
-                To record: {particulars}
+                {particularsLine}
               </td>
               <td className="gov-right"></td>
             </tr>
