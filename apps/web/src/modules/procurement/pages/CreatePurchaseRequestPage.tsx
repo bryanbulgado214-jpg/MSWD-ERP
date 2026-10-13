@@ -52,6 +52,8 @@ export function CreatePurchaseRequestPage() {
   // The end-users this PR is being prepared for (add one at a time).
   const [endUserIds, setEndUserIds] = useState<string[]>([]);
   const [pickerValue, setPickerValue] = useState('');
+  // Inline type-to-filter over the on-page allocation tables.
+  const [ppmpSearch, setPpmpSearch] = useState('');
   // Pop-up item picker — the single "Search or browse items" control opens it;
   // it has its own search box and multi-select list.
   const [itemModalOpen, setItemModalOpen] = useState(false);
@@ -219,6 +221,17 @@ export function CreatePurchaseRequestPage() {
     }
   }
 
+  // Inline filter for the on-page allocation tables (separate from the pop-up).
+  const ppmpQuery = ppmpSearch.trim().toLowerCase();
+  function filterAlloc(rows: PpmpItemWithRemaining[]): PpmpItemWithRemaining[] {
+    if (!ppmpQuery) return rows;
+    return rows.filter(
+      (p) =>
+        p.code.toLowerCase().includes(ppmpQuery) ||
+        p.itemDescription.toLowerCase().includes(ppmpQuery) ||
+        p.unitOfMeasure.toLowerCase().includes(ppmpQuery),
+    );
+  }
 
   const anyAllocations = allocByUser.some((g) => g.items.length > 0);
 
@@ -551,8 +564,32 @@ export function CreatePurchaseRequestPage() {
             <span>Search or browse items to add…</span>
           </button>
 
-          {allocByUser.map((group) =>
-            group.items.length === 0 ? null : (
+          {/* Inline type-to-filter for the allocation tables shown below. */}
+          <input
+            type="text"
+            value={ppmpSearch}
+            onChange={(e) => setPpmpSearch(e.target.value)}
+            placeholder="Or filter the lists below by code, description, or unit…"
+            style={{
+              display: 'block',
+              width: '100%',
+              maxWidth: 420,
+              marginBottom: 12,
+              padding: '8px 10px',
+              border: '1.5px solid #d0d5dd',
+              borderRadius: 6,
+              fontSize: 13,
+              fontFamily: 'inherit',
+              boxSizing: 'border-box',
+            }}
+          />
+
+          {allocByUser.map((group) => {
+            if (group.items.length === 0) return null;
+            const rows = filterAlloc(group.items);
+            // While filtering, hide a user whose items don't match at all.
+            if (ppmpQuery && rows.length === 0) return null;
+            return (
               <div key={group.user.id} style={{ marginBottom: 18 }}>
                 <h4
                   style={{
@@ -562,12 +599,13 @@ export function CreatePurchaseRequestPage() {
                     color: '#175cd3',
                   }}
                 >
-                  {group.user.name}&apos;s PPMP Allocations ({group.items.length})
+                  {group.user.name}&apos;s PPMP Allocations (
+                  {ppmpQuery ? `${rows.length} of ${group.items.length}` : group.items.length})
                 </h4>
-                {renderAllocTable(group.items)}
+                {renderAllocTable(rows)}
               </div>
-            ),
-          )}
+            );
+          })}
 
           {selectedPpmpIds.length > 0 && (
             <div
