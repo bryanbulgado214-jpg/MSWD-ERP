@@ -923,16 +923,19 @@ export default function JevDetailPage() {
             Approve JEV
           </button>
         )}
-        {(jev.status === 'for_review' || jev.status === 'approved') && canPost && (
-          <button
-            className="acct-btn acct-btn--primary"
-            onClick={handlePost}
-            disabled={saving || hasPending}
-            title={hasPending ? 'Classify the "Other" lines first' : undefined}
-          >
-            Post JEV
-          </button>
-        )}
+        {canPost &&
+          (jev.createdByAccountant
+            ? jev.status === 'for_review' || jev.status === 'approved'
+            : jev.status === 'approved') && (
+            <button
+              className="acct-btn acct-btn--primary"
+              onClick={handlePost}
+              disabled={saving || hasPending}
+              title={hasPending ? 'Classify the "Other" lines first' : undefined}
+            >
+              Post JEV
+            </button>
+          )}
         {jev.status === 'posted' && !jev.reversedBy && canReverse && (
           <button
             className="acct-btn"
@@ -957,6 +960,13 @@ export default function JevDetailPage() {
             </button>
           )}
       </div>
+
+      {jev.status === 'for_review' && jev.createdByAccountant === false && (
+        <p style={{ fontSize: 12, color: '#667085', margin: '10px 0 0' }}>
+          Prepared by a non-accountant — this JEV must be reviewed and approved by a different user
+          before it can be posted.
+        </p>
+      )}
 
       {showReverseForm && (
         <div className="acct-form" style={{ marginTop: 16 }}>

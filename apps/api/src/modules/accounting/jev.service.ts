@@ -164,7 +164,22 @@ export class JevService {
       select: JEV_DETAIL_SELECT,
     });
     if (!jev) throw new NotFoundException('JEV not found.');
-    return jev;
+    // Expose whether the preparer is an accountant so the UI can offer direct
+    // posting (vs. the review → approve → post flow required for everyone else).
+    return { ...jev, createdByAccountant: await this.isAccountant(jev.createdBy) };
+  }
+
+  /**
+   * Whether a user holds the Accountant role. Accountant-prepared JEVs may be
+   * posted directly by the accountant; everyone else's must be reviewed and
+   * approved by a different user first (separation of duties).
+   */
+  private async isAccountant(userId: string | null): Promise<boolean> {
+    if (!userId) return false;
+    const count = await this.prisma.userRole.count({
+      where: { userId, role: { code: 'ACCOUNTANT', isActive: true } },
+    });
+    return count > 0;
   }
 
   async create(
@@ -513,9 +528,6 @@ export class JevService {
       include: { accountingPeriod: true, lines: { select: { pendingClassification: true } } },
     });
     if (!jev) throw new NotFoundException('JEV not found.');
-    if (jev.status !== 'for_review' && jev.status !== 'approved') {
-      throw new BadRequestException('Only JEVs under review or approved can be posted.');
-    }
     if (jev.version !== expectedVersion) {
       throw new ConflictException('JEV was modified. Please refresh.');
     }
@@ -524,13 +536,28 @@ export class JevService {
         'Assign a GL account to every unclassified "Other" line before posting.',
       );
     }
-    // Separation of duties: the person who prepared/created a JEV may not be
-    // the one who posts it. Enforced server-side (not just in the UI) so it
-    // holds regardless of client.
-    if (jev.createdBy && jev.createdBy === userId) {
-      throw new ForbiddenException(
-        'The preparer of a JEV cannot post it. Posting must be done by a different user (separation of duties).',
-      );
+    // Two-track posting rule:
+    //  • A JEV prepared by an accountant can be posted directly by that same
+    //    accountant, straight from review or approved — no separate approver.
+    //  • A JEV prepared by anyone else must first be reviewed and approved by a
+    //    different user, and still be posted by someone other than the preparer
+    //    (separation of duties). Both are enforced server-side.
+    const createdByAccountant = await this.isAccountant(jev.createdBy);
+    if (createdByAccountant) {
+      if (jev.status !== 'for_review' && jev.status !== 'approved') {
+        throw new BadRequestException('Only JEVs under review or approved can be posted.');
+      }
+    } else {
+      if (jev.status !== 'approved') {
+        throw new BadRequestException(
+          'This JEV must be reviewed and approved by a different user before it can be posted.',
+        );
+      }
+      if (jev.createdBy && jev.createdBy === userId) {
+        throw new ForbiddenException(
+          'The preparer of a JEV cannot post it. Posting must be done by a different user (separation of duties).',
+        );
+      }
     }
     if (jev.accountingPeriod.status !== 'open') {
       throw new BadRequestException('Cannot post to a closed accounting period.');

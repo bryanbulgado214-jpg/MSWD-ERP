@@ -195,22 +195,70 @@ describe('JevService lifecycle & controls', () => {
     expect(reloaded.particulars).not.toBe('tampered after posting');
   });
 
-  it('enforces SEPARATION OF DUTIES: the preparer cannot post their own JEV, a different user can', async () => {
-    const draft = await createDraft(750, 'Separation of duties');
-    const submitted = await service.submit(organizationId, draft.id, creatorId, draft.version);
+  it('TWO-TRACK POSTING: an accountant may post their own JEV directly; a non-accountant JEV must be approved by a different user first', async () => {
+    // The seed's first user (creatorId) holds the Accountant role.
+    const creatorIsAccountant =
+      (await prisma.userRole.count({
+        where: { userId: creatorId, role: { code: 'ACCOUNTANT', isActive: true } },
+      })) > 0;
+    expect(creatorIsAccountant).toBe(true);
 
-    // Same user who created it tries to post → Forbidden.
+    // (1) Accountant posts their OWN JEV directly from review — allowed.
+    const own = await createDraft(750, 'Accountant direct post');
+    const ownSubmitted = await service.submit(organizationId, own.id, creatorId, own.version);
+    const ownPosted = await service.post(
+      organizationId,
+      ownSubmitted.id,
+      creatorId,
+      ownSubmitted.version,
+    );
+    expect(ownPosted.status).toBe('posted');
+    expect(ownPosted.poster?.id).toBe(creatorId);
+
+    // (2) A JEV prepared by a NON-accountant must be reviewed and approved by a
+    // different user before posting, and the preparer still cannot post it.
+    const nonAccountant = await prisma.user.findFirst({
+      where: { organizationId, userRoles: { none: { role: { code: 'ACCOUNTANT' } } } },
+      orderBy: { username: 'asc' },
+    });
+    if (!nonAccountant) throw new Error('Seed must provide a non-accountant user.');
+    const nonAcctId = nonAccountant.id;
+
+    const other = track(
+      await service.create(organizationId, nonAcctId, {
+        jevDate,
+        particulars: 'Non-accountant separation of duties',
+        lines: balancedLines(640),
+      }),
+    );
+    const otherSubmitted = await service.submit(
+      organizationId,
+      other.id,
+      nonAcctId,
+      other.version,
+    );
+
+    // Cannot post straight from review — approval is required first.
     await expect(
-      service.post(organizationId, submitted.id, creatorId, submitted.version),
+      service.post(organizationId, otherSubmitted.id, creatorId, otherSubmitted.version),
+    ).rejects.toThrow(BadRequestException);
+
+    // A different user (the accountant) approves it.
+    const approved = await service.approve(
+      organizationId,
+      otherSubmitted.id,
+      creatorId,
+      otherSubmitted.version,
+    );
+    expect(approved.status).toBe('approved');
+
+    // The preparer still cannot post their own approved JEV (separation of duties).
+    await expect(
+      service.post(organizationId, approved.id, nonAcctId, approved.version),
     ).rejects.toThrow(ForbiddenException);
 
-    // Rejected attempt left the JEV untouched (still under review).
-    const stillReview = await service.findOne(organizationId, submitted.id);
-    expect(stillReview.status).toBe('for_review');
-    expect(stillReview.version).toBe(submitted.version);
-
-    // A DIFFERENT user posts it successfully.
-    const posted = await service.post(organizationId, submitted.id, posterId, submitted.version);
+    // A different user posts the approved JEV successfully.
+    const posted = await service.post(organizationId, approved.id, creatorId, approved.version);
     expect(posted.status).toBe('posted');
   });
 

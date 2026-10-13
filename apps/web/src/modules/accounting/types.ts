@@ -134,6 +134,9 @@ export interface JevDetail extends JevListItem {
   sourceTable: string | null;
   sourceId: string | null;
   createdBy: string | null;
+  // True when the preparer holds the Accountant role — such JEVs may be posted
+  // directly; all others must be reviewed and approved by a different user first.
+  createdByAccountant?: boolean;
   reversalOfId: string | null;
   reversalOf: JevRef | null;
   reversedBy: JevRef | null;
@@ -182,6 +185,10 @@ export interface SupplierInvoiceSummary {
   journalEntryId: string | null;
   apAccountId: string | null;
   createdAt: string;
+  // Present on draft invoices auto-created from an IAR — links back to the
+  // receiving report where the accountant enters costs and posts it.
+  iarId?: string;
+  iarNumber?: string;
 }
 
 export interface SupplierInvoicePayment {
