@@ -48,10 +48,12 @@ export function PrintJevPage() {
   const rc = jev.responsibilityCenter
     ? `${jev.responsibilityCenter.code} — ${jev.responsibilityCenter.name}`
     : '';
-  // When the particulars already begin with "To record …" (how the accountant
-  // writes them), show them verbatim — no extra "To record:" label. Only
-  // particulars that don't already carry it get the standard label prepended.
-  const particularsLine = /^\s*to record\b/i.test(jev.particulars)
+  // The accountant writes the full narration as an infinitive — "To record …",
+  // "To reclassify …", "To adjust …", "To take up …". When the particulars
+  // already begin with "To …", print them verbatim with no added "To record:"
+  // label (and no extra colon). Only particulars that don't start that way get
+  // the standard label prepended.
+  const particularsLine = /^\s*to\s/i.test(jev.particulars)
     ? jev.particulars.trim()
     : `To record: ${jev.particulars.trim()}`;
 
