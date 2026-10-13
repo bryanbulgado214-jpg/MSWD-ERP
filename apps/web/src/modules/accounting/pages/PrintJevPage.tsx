@@ -48,6 +48,9 @@ export function PrintJevPage() {
   const rc = jev.responsibilityCenter
     ? `${jev.responsibilityCenter.code} — ${jev.responsibilityCenter.name}`
     : '';
+  // Particulars often already start with "To record …"; strip that so the
+  // template's own "To record:" label is not duplicated.
+  const particulars = jev.particulars.replace(/^\s*to record\s*:?\s*/i, '');
 
   return (
     <div className="gov-print-page">
@@ -175,7 +178,7 @@ export function PrintJevPage() {
                 Credit box.) */}
             <tr>
               <td colSpan={3} style={{ fontSize: '9pt', fontStyle: 'italic' }}>
-                To record: {jev.particulars}
+                To record: {particulars}
               </td>
               <td className="gov-right"></td>
             </tr>
