@@ -916,6 +916,8 @@ export function CreatePurchaseRequestPage() {
                   ppmp.unitOfMeasure.toLowerCase().includes(mq),
               )
             : all;
+          // How many allocation-linked items are currently on the request.
+          const selectedCount = items.filter((it) => it.ppmpItemId).length;
           return (
             <div
               onClick={() => setItemModalOpen(false)}
@@ -952,9 +954,14 @@ export function CreatePurchaseRequestPage() {
                     borderBottom: '1px solid #eaecf0',
                   }}
                 >
-                  <h3 style={{ margin: 0, fontSize: 16, color: 'var(--mswd-navy)' }}>
-                    Add an Item to this Request
-                  </h3>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 16, color: 'var(--mswd-navy)' }}>
+                      Add Items to this Request
+                    </h3>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: '#667085' }}>
+                      Tick one or more items, then click Done. Click a ticked item to remove it.
+                    </p>
+                  </div>
                   <button
                     type="button"
                     onClick={() => setItemModalOpen(false)}
@@ -1007,13 +1014,13 @@ export function CreatePurchaseRequestPage() {
                     <table className="pr-table" style={{ fontSize: 12 }}>
                       <thead>
                         <tr>
+                          <th></th>
                           <th>End-User</th>
                           <th>Code</th>
                           <th>Description</th>
                           <th>UOM</th>
                           <th style={{ textAlign: 'right' }}>Remaining Qty</th>
                           <th style={{ textAlign: 'right' }}>Unit Cost</th>
-                          <th></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1021,21 +1028,31 @@ export function CreatePurchaseRequestPage() {
                           const remQty = parseFloat(ppmp.remainingQuantity);
                           const exhausted = remQty <= 0;
                           const isSelected = items.some((it) => it.ppmpItemId === ppmp.id);
-                          const disabled = exhausted || isSelected;
+                          // Exhausted items can't be newly added, but an already-
+                          // selected one can still be unticked.
+                          const disabled = exhausted && !isSelected;
                           return (
                             <tr
                               key={ppmp.id}
                               style={{
                                 background: isSelected ? '#f0fdf4' : exhausted ? '#f9fafb' : undefined,
-                                opacity: exhausted && !isSelected ? 0.55 : 1,
-                                cursor: disabled ? 'default' : 'pointer',
+                                opacity: disabled ? 0.55 : 1,
+                                cursor: disabled ? 'not-allowed' : 'pointer',
                               }}
                               onClick={() => {
                                 if (disabled) return;
-                                toggleAllocation(ppmp);
-                                setItemModalOpen(false);
+                                toggleAllocation(ppmp); // keep the pop-up open for multi-select
                               }}
                             >
+                              <td onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  disabled={disabled}
+                                  onChange={() => !disabled && toggleAllocation(ppmp)}
+                                  style={{ cursor: disabled ? 'not-allowed' : 'pointer' }}
+                                />
+                              </td>
                               <td>{userName}</td>
                               <td>
                                 <strong>{ppmp.code}</strong>
@@ -1050,18 +1067,10 @@ export function CreatePurchaseRequestPage() {
                                 }}
                               >
                                 {remQty.toLocaleString()}
+                                {exhausted && !isSelected ? ' (exhausted)' : ''}
                               </td>
                               <td style={{ textAlign: 'right' }}>
                                 {formatPeso(ppmp.estimatedUnitCost)}
-                              </td>
-                              <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                {isSelected ? (
-                                  <span style={{ color: '#067647', fontWeight: 600 }}>✓ Added</span>
-                                ) : exhausted ? (
-                                  <span style={{ color: '#b42318' }}>Exhausted</span>
-                                ) : (
-                                  <span style={{ color: '#175cd3', fontWeight: 600 }}>+ Add</span>
-                                )}
                               </td>
                             </tr>
                           );
@@ -1069,6 +1078,27 @@ export function CreatePurchaseRequestPage() {
                       </tbody>
                     </table>
                   )}
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '12px 20px',
+                    borderTop: '1px solid #eaecf0',
+                  }}
+                >
+                  <span style={{ fontSize: 13, color: '#475467' }}>
+                    <strong>{selectedCount}</strong> item{selectedCount === 1 ? '' : 's'} on this
+                    request
+                  </span>
+                  <button
+                    type="button"
+                    className="pr-btn pr-btn--primary"
+                    onClick={() => setItemModalOpen(false)}
+                  >
+                    Done
+                  </button>
                 </div>
               </div>
             </div>
