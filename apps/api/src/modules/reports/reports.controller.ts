@@ -272,8 +272,71 @@ export class ReportsController {
       }),
     );
 
+    // ── Off-APP purchases (catch-up lines flagged "not in the APP") ──
+    // Procurement-officer-flagged PR lines with no plan backing that reached a
+    // purchase order. Surfaced as a separate section so their cost can be
+    // realigned against planned APP items that go unpurchased for the year.
+    const offAppLines = await this.prisma.purchaseRequestItem.findMany({
+      where: {
+        notInApp: true,
+        purchaseRequest: {
+          organizationId: orgId,
+          ...(fiscalYearId ? { fiscalYearId } : {}),
+          purchaseOrders: { some: { status: { not: 'cancelled' } } },
+        },
+      },
+      select: {
+        description: true,
+        quantity: true,
+        unitOfMeasure: true,
+        estimatedUnitCost: true,
+        estimatedTotalCost: true,
+        purchaseRequest: {
+          select: {
+            prNumber: true,
+            createdAt: true,
+            totalAmount: true,
+            department: { select: { name: true } },
+            endUser: { select: { name: true } },
+            purchaseOrders: {
+              where: { status: { not: 'cancelled' } },
+              select: { poNumber: true, contractAmount: true },
+            },
+          },
+        },
+      },
+      orderBy: [{ purchaseRequest: { createdAt: 'asc' } }, { itemNumber: 'asc' }],
+    });
+
+    const offAppRows = offAppLines.map((line) => {
+      const pr = line.purchaseRequest;
+      // Actual cost = each non-cancelled PO's contract amount pro-rated to this
+      // line's share of the PR total (the PO is a header-only document).
+      const poTotal = pr.purchaseOrders.reduce(
+        (s, p) => s.plus(p.contractAmount),
+        new Prisma.Decimal(0),
+      );
+      const ratio = pr.totalAmount.gt(0)
+        ? line.estimatedTotalCost.div(pr.totalAmount)
+        : new Prisma.Decimal(0);
+      const actualAmount = poTotal.mul(ratio);
+      return {
+        prNumber: pr.prNumber,
+        date: pr.createdAt.toISOString().slice(0, 10),
+        description: line.description,
+        section: pr.department?.name ?? '',
+        endUser: pr.endUser?.name ?? '',
+        unitOfMeasure: line.unitOfMeasure,
+        quantity: line.quantity.toString(),
+        unitCost: line.estimatedUnitCost.toString(),
+        estimatedAmount: line.estimatedTotalCost.toString(),
+        actualAmount: actualAmount.toString(),
+        poReferences: pr.purchaseOrders.map((p) => p.poNumber).join(', '),
+      };
+    });
+
     const fy = items[0]?.fiscalYear;
-    return { rows, fiscalYear: fy ? `${fy.name} (${fy.year})` : '' };
+    return { rows, offAppRows, fiscalYear: fy ? `${fy.name} (${fy.year})` : '' };
   }
 
   @Get('procurement-by-department')

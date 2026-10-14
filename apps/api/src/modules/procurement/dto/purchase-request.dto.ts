@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
 
 export class PurchaseRequestItemDto {
   @IsString()
@@ -40,6 +40,12 @@ export class PurchaseRequestItemDto {
   @IsOptional()
   @IsUUID()
   ppmpItemId?: string;
+
+  // Procurement officer flag: this line is NOT in the Annual Procurement Plan
+  // (an off-plan / catch-up purchase) — surfaced for budget realignment.
+  @IsOptional()
+  @IsBoolean()
+  notInApp?: boolean;
 }
 
 export class CreatePurchaseRequestDto {

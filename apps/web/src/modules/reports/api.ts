@@ -145,9 +145,29 @@ export interface AppUtilizationRow {
   overUnder: string;
 }
 
+// A purchased line flagged "not in the APP" (off-plan catch-up) — surfaced for
+// budget realignment against planned items that go unpurchased.
+export interface OffAppRow {
+  prNumber: string;
+  date: string;
+  description: string;
+  section: string;
+  endUser: string;
+  unitOfMeasure: string;
+  quantity: string;
+  unitCost: string;
+  estimatedAmount: string;
+  actualAmount: string;
+  poReferences: string;
+}
+
 export interface UtilizationReport<T> {
   rows: T[];
   fiscalYear: string;
+}
+
+export interface AppUtilizationReport extends UtilizationReport<AppUtilizationRow> {
+  offAppRows: OffAppRow[];
 }
 
 export async function getPpmpUtilization(
@@ -158,9 +178,7 @@ export async function getPpmpUtilization(
   return res.json();
 }
 
-export async function getAppUtilization(
-  fiscalYearId?: string,
-): Promise<UtilizationReport<AppUtilizationRow>> {
+export async function getAppUtilization(fiscalYearId?: string): Promise<AppUtilizationReport> {
   const qs = fiscalYearId ? `?fiscalYearId=${fiscalYearId}` : '';
   const res = await authFetch(`/reports/app-utilization${qs}`);
   return res.json();

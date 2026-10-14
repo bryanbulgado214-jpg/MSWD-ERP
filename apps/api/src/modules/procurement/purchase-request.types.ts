@@ -33,6 +33,7 @@ export interface CreatePurchaseRequestItemInput {
   technicalSpecification?: string;
   classification?: 'inventory' | 'asset' | 'expense' | 'infrastructure' | 'service';
   ppmpItemId?: string;
+  notInApp?: boolean;
 }
 
 export interface UpdatePurchaseRequestInput {

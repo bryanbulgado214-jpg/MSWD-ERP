@@ -274,6 +274,7 @@ export function CreatePurchaseRequestPage() {
           unitOfMeasure: item.unitOfMeasure.trim(),
           estimatedUnitCost: item.estimatedUnitCost,
           ...(item.ppmpItemId ? { ppmpItemId: item.ppmpItemId } : {}),
+          ...(item.notInApp ? { notInApp: true } : {}),
           ...(item.accountCode?.trim() ? { accountCode: item.accountCode.trim() } : {}),
           ...(item.technicalSpecification?.trim()
             ? { technicalSpecification: item.technicalSpecification.trim() }
@@ -810,6 +811,28 @@ export function CreatePurchaseRequestPage() {
                     </div>
                   );
                 })()}
+                {/* Off-plan flag — only meaningful for manual lines (a PPMP-picked
+                    line is already in the plan). */}
+                {!item.ppmpItemId && (
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      marginBottom: 10,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: '#b54708',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!!item.notInApp}
+                      onChange={(e) => updateItem(idx, { notInApp: e.target.checked })}
+                    />
+                    Not in the APP (off-plan / catch-up — flag for realignment)
+                  </label>
+                )}
                 <div className="pr-item-grid">
                   <div>
                     <label>Description</label>

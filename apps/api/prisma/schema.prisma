@@ -1486,6 +1486,9 @@ model PurchaseRequestItem {
   // The PPMP item this line draws from — lets one PR span several PPMP items and
   // keeps per-item purchased/remaining tracking accurate.
   ppmpItemId             String?             @map("ppmp_item_id") @db.Uuid
+  // Procurement officer flag: this line is NOT in the Annual Procurement Plan —
+  // a catch-up/off-plan purchase to be surfaced for budget realignment.
+  notInApp               Boolean             @default(false) @map("not_in_app")
   createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 

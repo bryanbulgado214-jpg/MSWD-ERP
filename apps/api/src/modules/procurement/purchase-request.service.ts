@@ -52,6 +52,7 @@ export class PurchaseRequestService {
         accountCode: item.accountCode ?? null,
         technicalSpecification: item.technicalSpecification ?? null,
         ppmpItemId: item.ppmpItemId ?? null,
+        notInApp: item.notInApp ?? false,
         ...(item.classification ? { classification: item.classification as ItemClassification } : {}),
       };
     });
@@ -177,6 +178,7 @@ export class PurchaseRequestService {
             accountCode: item.accountCode ?? null,
             technicalSpecification: item.technicalSpecification ?? null,
             ppmpItemId: item.ppmpItemId ?? null,
+            notInApp: item.notInApp ?? false,
             ...(item.classification ? { classification: item.classification as ItemClassification } : {}),
           };
         });

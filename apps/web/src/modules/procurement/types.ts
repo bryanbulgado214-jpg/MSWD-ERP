@@ -107,6 +107,9 @@ export interface CreatePurchaseRequestItemInput {
   technicalSpecification?: string;
   classification?: ItemClassification;
   ppmpItemId?: string;
+  // Flagged by the procurement officer: this line is not in the Annual
+  // Procurement Plan (off-plan / catch-up), for budget realignment.
+  notInApp?: boolean;
 }
 
 export interface CreatePurchaseRequestInput {
