@@ -21,7 +21,6 @@ const workOrderRoutes: RouteObject[] = [
     children: [
       { index: true, element: <WorkOrderListPage /> },
       { path: 'dashboard', element: <WorkOrderDashboardPage /> },
-      { path: 'reports', element: <WorkOrderReportsPage /> },
       { path: 'teams', element: <WorkOrderTeamsPage /> },
       { path: 'staff', element: <StaffAvailabilityPage /> },
       { path: 'ccf', element: <CcfListPage /> },
@@ -32,6 +31,9 @@ const workOrderRoutes: RouteObject[] = [
       { path: ':id/edit', element: <WorkOrderEditPage /> },
     ],
   },
+  // Reports is its own navbar tab (not a Work Order sub-page), so it sits
+  // outside the module shell and shows no left rail.
+  { path: 'reports', element: <WorkOrderReportsPage /> },
   { path: ':id/print', element: <WorkOrderPrintPage /> },
 ];
 

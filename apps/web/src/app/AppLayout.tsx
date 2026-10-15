@@ -8,6 +8,7 @@ import {
   isAccountantHome,
   isCashierHome,
   isProcurementHome,
+  isSectionHeadHome,
 } from './module-access';
 import { NotificationBell } from './NotificationBell';
 import './app-layout.css';
@@ -107,10 +108,14 @@ export function AppLayout() {
       !(cashierHome && mod.module === 'accounting') &&
       !(import.meta.env.PROD && LIVE_HIDDEN_MODULES.has(mod.module)),
   ).map((mod) => (cashierHome && mod.module === 'billing' ? { ...mod, label: 'Cashiering' } : mod));
-  // The accountant's, cashier's, and procurement officer's homes are their own
-  // dashboards — hide the generic Home tab for them.
+  // The accountant's, cashier's, procurement officer's, and section head's homes
+  // are their own dashboards (the section head's is the Work Order Dashboard) —
+  // hide the generic Home tab for them.
   const showHome =
-    !isAccountantHome(permissions) && !cashierHome && !isProcurementHome(permissions);
+    !isAccountantHome(permissions) &&
+    !cashierHome &&
+    !isProcurementHome(permissions) &&
+    !isSectionHeadHome(permissions);
 
   function handleLogout() {
     logout();
