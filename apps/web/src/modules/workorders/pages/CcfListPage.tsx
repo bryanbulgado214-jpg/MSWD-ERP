@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
@@ -32,13 +32,21 @@ export function ccfStatusStyle(status: CcfStatus): React.CSSProperties {
 }
 
 export function formatReceived(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString('en-PH', {
+  return new Date(iso).toLocaleString('en-PH', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+  });
+}
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-PH', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
   });
 }
 
@@ -76,25 +84,45 @@ export default function CcfListPage() {
     setSearchParams(p);
   };
 
+  const summary = useMemo(() => {
+    const open = rows.filter((r) => r.isOpen);
+    const overdue = open.filter((r) => r.overdue);
+    const resolved = rows.filter((r) => !r.isOpen);
+    const avgResolveDays = resolved.length
+      ? Math.round(resolved.reduce((s, r) => s + r.daysOpen, 0) / resolved.length)
+      : 0;
+    return { total: rows.length, open: open.length, overdue: overdue.length, avgResolveDays };
+  }, [rows]);
+
   const canCreate = permissions.has('workorder.create');
 
   return (
     <div className="wo-page">
       <div className="wo-page__header">
-        <h1>Customer Complaints / Concerns (CCF)</h1>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <Link to="/work-orders" className="wo-btn wo-btn--nav">
-            &larr; Work Orders
+        <h1>Customer Feedback &amp; Resolution Register (CFRR)</h1>
+        {canCreate && (
+          <Link to="/work-orders/ccf/new" className="wo-btn wo-btn--primary">
+            + New CCF
           </Link>
-          <Link to="/work-orders/cfrr" className="wo-btn wo-btn--nav">
-            <span className="wo-btn__icon" aria-hidden="true">{'\u{1F4CB}'}</span> CFRR Register
-          </Link>
-          {canCreate && (
-            <Link to="/work-orders/ccf/new" className="wo-btn wo-btn--primary">
-              + New CCF
-            </Link>
-          )}
-        </div>
+        )}
+      </div>
+
+      {/* Summary cards */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, margin: '0 0 16px' }}>
+        {[
+          { label: 'Total concerns', value: summary.total, bg: '#f2f4f7', fg: '#344054' },
+          { label: 'Still open', value: summary.open, bg: '#eff8ff', fg: '#175cd3' },
+          { label: 'Open & overdue', value: summary.overdue, bg: '#fef3f2', fg: '#b42318' },
+          { label: 'Avg days to resolve', value: summary.avgResolveDays, bg: '#ecfdf3', fg: '#067647' },
+        ].map((c) => (
+          <div
+            key={c.label}
+            style={{ flex: '1 1 150px', background: c.bg, borderRadius: 10, padding: '12px 16px' }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 700, color: c.fg }}>{c.label}</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: c.fg }}>{c.value}</div>
+          </div>
+        ))}
       </div>
 
       <div className="wo-filters">
@@ -127,6 +155,12 @@ export default function CcfListPage() {
         </select>
       </div>
 
+      <p style={{ fontSize: 13, color: '#667085', margin: '0 0 12px' }}>
+        Consolidated register of all customer complaints/concerns. "Days Open" counts from the date
+        received to resolution (or today if still open); rows shaded red are open past their target
+        resolution date. Click a row to open and update it.
+      </p>
+
       {error && <div className="wo-error">{error}</div>}
       {loading ? (
         <div className="wo-empty">Loading…</div>
@@ -134,14 +168,18 @@ export default function CcfListPage() {
         <div className="wo-empty">No customer concerns found.</div>
       ) : (
         <div className="wo-table-wrap">
-          <table className="wo-table">
+          <table className="wo-table wo-table--compact">
             <thead>
               <tr>
                 <th>Reference</th>
                 <th>Received</th>
                 <th>Customer / Account</th>
                 <th>Category</th>
+                <th>Nature</th>
+                <th>Action Taken</th>
                 <th>Status</th>
+                <th>Target</th>
+                <th>Resolved</th>
                 <th style={{ textAlign: 'right' }}>Days Open</th>
               </tr>
             </thead>
@@ -149,7 +187,7 @@ export default function CcfListPage() {
               {rows.map((r) => (
                 <tr
                   key={r.id}
-                  style={{ cursor: 'pointer' }}
+                  style={{ cursor: 'pointer', ...(r.overdue ? { background: '#fef3f2' } : {}) }}
                   onClick={() => {
                     if (window.getSelection()?.toString()) return;
                     navigate(`/work-orders/ccf/${r.id}`);
@@ -168,22 +206,26 @@ export default function CcfListPage() {
                   <td>
                     {r.customerName}
                     {r.accountNumber ? (
-                      <div style={{ fontSize: 12, color: '#667085' }}>{r.accountNumber}</div>
+                      <div style={{ fontSize: 11, color: '#667085' }}>{r.accountNumber}</div>
                     ) : null}
                   </td>
                   <td>{CCF_CATEGORY_LABELS[r.category]}</td>
+                  <td style={{ maxWidth: 220 }}>{r.nature}</td>
+                  <td style={{ maxWidth: 200 }}>{r.actionTaken || '—'}</td>
                   <td>
                     <span style={ccfStatusStyle(r.status)}>{CCF_STATUS_LABELS[r.status]}</span>
                   </td>
-                  <td style={{ textAlign: 'right', fontWeight: 600 }}>
-                    {r.isOpen ? (
-                      <span style={{ color: r.overdue ? '#b42318' : '#344054' }}>
-                        {r.daysOpen}
-                        {r.overdue ? ' ⚠' : ''}
-                      </span>
-                    ) : (
-                      <span style={{ color: '#98a2b3' }}>{r.daysOpen}</span>
-                    )}
+                  <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(r.targetResolutionDate)}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(r.resolvedAt)}</td>
+                  <td
+                    style={{
+                      textAlign: 'right',
+                      fontWeight: 700,
+                      color: r.overdue ? '#b42318' : r.isOpen ? '#344054' : '#98a2b3',
+                    }}
+                  >
+                    {r.daysOpen}
+                    {r.overdue ? ' ⚠' : ''}
                   </td>
                 </tr>
               ))}

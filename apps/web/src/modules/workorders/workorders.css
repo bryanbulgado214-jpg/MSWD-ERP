@@ -1,9 +1,62 @@
 /* ── Work Orders Module ── */
 
 .wo-page {
-  padding: 1.5rem;
-  max-width: 1200px;
-  margin: 0 auto;
+  position: relative;
+  max-width: 1240px;
+  margin: 0 auto 0 var(--subnav-left, 24px);
+  padding: 1.5rem 1.5rem 2rem 224px; /* left space reserved for the vertical rail */
+}
+
+/* ── Work Orders sub-navigation (vertical left rail) ── */
+.wo-subnav {
+  position: fixed;
+  left: var(--subnav-left, 24px);
+  top: calc(var(--app-header-h, 74px) + 26px);
+  z-index: 50;
+  width: 178px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wo-subnav__link {
+  display: block;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #667085;
+  text-decoration: none;
+  border-radius: 6px;
+  border-left: 3px solid transparent;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.wo-subnav__link:hover {
+  color: var(--mswd-navy, #0b3a67);
+  background: #f2f4f7;
+}
+.wo-subnav__link--active {
+  color: var(--mswd-blue, #175cd3);
+  background: #eff4ff;
+  border-left-color: var(--mswd-blue, #175cd3);
+}
+
+@media (max-width: 900px) {
+  .wo-page {
+    margin: 0 auto;
+    padding: 1.5rem;
+  }
+  .wo-subnav {
+    position: static;
+    width: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin: 0 1rem 0.5rem;
+  }
+}
+@media print {
+  .wo-subnav {
+    display: none;
+  }
 }
 
 .wo-page__header {

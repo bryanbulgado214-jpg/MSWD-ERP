@@ -2,15 +2,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
-import { createWorkOrder, getCcfLookup, listPersonnel, listStaff, listTeams } from '../api';
+import { createWorkOrder, getCcf, getCcfLookup, listPersonnel, listStaff, listTeams } from '../api';
 import MemberPickerModal from '../components/MemberPickerModal';
 import {
   CCF_CATEGORY_LABELS,
+  CCF_STATUS_LABELS,
   natureOfType,
   signatureRequiredByDefault,
   STAFF_STATUS_LABELS,
   WO_NATURE_LABELS,
   WO_TYPE_LABELS,
+  type Ccf,
   type CcfLookup,
   type StaffAvailabilityStatus,
   type WorkOrderPersonnel,
@@ -42,6 +44,24 @@ export default function WorkOrderNewPage() {
   // Optional tag to a Customer Complaint/Concern Form (CCF).
   const [customerConcernId, setCustomerConcernId] = useState('');
   const [ccfOptions, setCcfOptions] = useState<CcfLookup[]>([]);
+  // The selected CCF's full details, shown in a pop-up when picked.
+  const [ccfDetail, setCcfDetail] = useState<Ccf | null>(null);
+  const [ccfModalOpen, setCcfModalOpen] = useState(false);
+
+  function pickCcf(id: string) {
+    setCustomerConcernId(id);
+    if (!id) {
+      setCcfDetail(null);
+      setCcfModalOpen(false);
+      return;
+    }
+    getCcf(id)
+      .then((c) => {
+        setCcfDetail(c);
+        setCcfModalOpen(true);
+      })
+      .catch(() => {});
+  }
 
   const nature = natureOfType(type);
   const canAssign = hasPermission(
@@ -217,7 +237,7 @@ export default function WorkOrderNewPage() {
             <select
               className="wo-select"
               value={customerConcernId}
-              onChange={(e) => setCustomerConcernId(e.target.value)}
+              onChange={(e) => pickCcf(e.target.value)}
             >
               <option value="">— None (office-initiated) —</option>
               {ccfOptions.map((c) => (
@@ -226,6 +246,25 @@ export default function WorkOrderNewPage() {
                 </option>
               ))}
             </select>
+            {customerConcernId && (
+              <button
+                type="button"
+                onClick={() => ccfDetail && setCcfModalOpen(true)}
+                style={{
+                  marginTop: 4,
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  color: '#175cd3',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                View CCF details
+              </button>
+            )}
           </label>
 
           <label className="wo-form__field">
@@ -412,6 +451,130 @@ export default function WorkOrderNewPage() {
           </button>
         </div>
       </form>
+
+      {/* CCF details pop-up — shown when a complaint is tagged. */}
+      {ccfModalOpen && ccfDetail && (
+        <div
+          onClick={() => setCcfModalOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(16,24,40,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#fff',
+              borderRadius: 12,
+              width: '100%',
+              maxWidth: 560,
+              maxHeight: '85vh',
+              overflowY: 'auto',
+              boxShadow: '0 20px 48px rgba(16,24,40,0.24)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '16px 20px',
+                borderBottom: '1px solid #eaecf0',
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: 16, color: 'var(--mswd-navy)' }}>
+                {ccfDetail.referenceNumber} — Complaint Details
+              </h3>
+              <button
+                type="button"
+                onClick={() => setCcfModalOpen(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: 22,
+                  lineHeight: 1,
+                  cursor: 'pointer',
+                  color: '#667085',
+                }}
+                title="Close"
+              >
+                &times;
+              </button>
+            </div>
+            <dl
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '150px 1fr',
+                gap: '8px 14px',
+                margin: 0,
+                padding: '16px 20px',
+                fontSize: 13,
+              }}
+            >
+              <dt style={{ color: '#667085', fontWeight: 600 }}>Status</dt>
+              <dd style={{ margin: 0 }}>
+                {CCF_STATUS_LABELS[ccfDetail.status]}
+                {ccfDetail.isOpen
+                  ? ` · ${ccfDetail.daysOpen} day${ccfDetail.daysOpen === 1 ? '' : 's'} open${ccfDetail.overdue ? ' (OVERDUE)' : ''}`
+                  : ''}
+              </dd>
+              <dt style={{ color: '#667085', fontWeight: 600 }}>Received</dt>
+              <dd style={{ margin: 0 }}>{new Date(ccfDetail.receivedAt).toLocaleString('en-PH')}</dd>
+              <dt style={{ color: '#667085', fontWeight: 600 }}>Customer / Account</dt>
+              <dd style={{ margin: 0 }}>
+                {ccfDetail.customerName}
+                {ccfDetail.accountNumber ? ` · ${ccfDetail.accountNumber}` : ''}
+              </dd>
+              <dt style={{ color: '#667085', fontWeight: 600 }}>Category</dt>
+              <dd style={{ margin: 0 }}>{CCF_CATEGORY_LABELS[ccfDetail.category]}</dd>
+              <dt style={{ color: '#667085', fontWeight: 600 }}>Nature</dt>
+              <dd style={{ margin: 0 }}>{ccfDetail.nature}</dd>
+              <dt style={{ color: '#667085', fontWeight: 600 }}>Requested Action</dt>
+              <dd style={{ margin: 0 }}>{ccfDetail.requestedAction || '—'}</dd>
+              <dt style={{ color: '#667085', fontWeight: 600 }}>Target Resolution</dt>
+              <dd style={{ margin: 0 }}>
+                {ccfDetail.targetResolutionDate
+                  ? new Date(ccfDetail.targetResolutionDate).toLocaleDateString('en-PH')
+                  : '—'}
+              </dd>
+              <dt style={{ color: '#667085', fontWeight: 600 }}>Remarks</dt>
+              <dd style={{ margin: 0 }}>{ccfDetail.remarks || '—'}</dd>
+            </dl>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: 8,
+                padding: '12px 20px',
+                borderTop: '1px solid #eaecf0',
+              }}
+            >
+              <button
+                type="button"
+                className="wo-btn"
+                onClick={() => {
+                  pickCcf('');
+                }}
+              >
+                Unlink
+              </button>
+              <button
+                type="button"
+                className="wo-btn wo-btn--primary"
+                onClick={() => setCcfModalOpen(false)}
+              >
+                Keep &amp; Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

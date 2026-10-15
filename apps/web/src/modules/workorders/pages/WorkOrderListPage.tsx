@@ -39,32 +39,11 @@ export default function WorkOrderListPage() {
     <div className="wo-page">
       <div className="wo-page__header">
         <h1>Work Orders</h1>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <Link to="/work-orders/dashboard" className="wo-btn wo-btn--nav">
-            <span className="wo-btn__icon" aria-hidden="true">{'\u{1F4CA}'}</span> Dashboard
+        {canCreate && (
+          <Link to="/work-orders/new" className="wo-btn wo-btn--primary">
+            + New Work Order
           </Link>
-          <Link to="/work-orders/staff" className="wo-btn wo-btn--nav">
-            <span className="wo-btn__icon" aria-hidden="true">{'\u{1F465}'}</span> Staff Availability
-          </Link>
-          <Link to="/work-orders/ccf" className="wo-btn wo-btn--nav">
-            <span className="wo-btn__icon" aria-hidden="true">{'\u{1F4DD}'}</span> Customer Complaints
-          </Link>
-          {permissions.has('workorder.team.manage') && (
-            <Link to="/work-orders/teams" className="wo-btn wo-btn--nav">
-              <span className="wo-btn__icon" aria-hidden="true">{'\u{1F6E0}'}</span> Teams &amp; Personnel
-            </Link>
-          )}
-          {permissions.has('workorder.reports') && (
-            <Link to="/work-orders/reports" className="wo-btn wo-btn--nav">
-              <span className="wo-btn__icon" aria-hidden="true">{'\u{1F4C4}'}</span> Reports
-            </Link>
-          )}
-          {canCreate && (
-            <Link to="/work-orders/new" className="wo-btn wo-btn--primary">
-              + New Work Order
-            </Link>
-          )}
-        </div>
+        )}
       </div>
 
       <div className="wo-filters">

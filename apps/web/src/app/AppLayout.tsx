@@ -12,18 +12,38 @@ import {
 import { NotificationBell } from './NotificationBell';
 import './app-layout.css';
 
-const MODULE_NAV = [
-  { to: '/budgeting', label: 'Budgeting', module: 'budgeting' as const },
-  { to: '/procurement', label: 'Procurement', module: 'procurement' as const },
-  { to: '/inventory', label: 'Inventory', module: 'inventory' as const },
-  { to: '/billing', label: 'Billing & Collection', module: 'billing' as const },
-  { to: '/hr', label: 'HR & Payroll', module: 'hr' as const },
-  { to: '/work-orders', label: 'Work Orders', module: 'workorder' as const },
-  { to: '/complaints', label: 'Complaints', module: 'complaint' as const },
-  { to: '/assets', label: 'Assets', module: 'asset' as const },
-  { to: '/accounting', label: 'Accounting', module: 'accounting' as const },
-  { to: '/reports', label: 'Reports', module: 'reports' as const },
-  { to: '/admin', label: 'Admin', module: 'admin' as const },
+const MODULE_NAV: Array<{
+  to: string;
+  label: string;
+  module:
+    | 'budgeting'
+    | 'procurement'
+    | 'inventory'
+    | 'billing'
+    | 'hr'
+    | 'workorder'
+    | 'complaint'
+    | 'asset'
+    | 'accounting'
+    | 'reports'
+    | 'admin';
+  // Optional extra permission gate (beyond module access) for this nav entry.
+  perm?: string;
+}> = [
+  { to: '/budgeting', label: 'Budgeting', module: 'budgeting' },
+  { to: '/procurement', label: 'Procurement', module: 'procurement' },
+  { to: '/inventory', label: 'Inventory', module: 'inventory' },
+  { to: '/billing', label: 'Billing & Collection', module: 'billing' },
+  { to: '/hr', label: 'HR & Payroll', module: 'hr' },
+  // Clicking "Work Orders" opens the dashboard (the module's main page).
+  { to: '/work-orders/dashboard', label: 'Work Orders', module: 'workorder' },
+  // Work Order reports sit in the navbar next to Work Orders (not its sub-nav).
+  { to: '/work-orders/reports', label: 'Reports', module: 'workorder', perm: 'workorder.reports' },
+  { to: '/complaints', label: 'Complaints', module: 'complaint' },
+  { to: '/assets', label: 'Assets', module: 'asset' },
+  { to: '/accounting', label: 'Accounting', module: 'accounting' },
+  { to: '/reports', label: 'Reports', module: 'reports' },
+  { to: '/admin', label: 'Admin', module: 'admin' },
 ];
 
 // Modules that exist in the codebase but are not part of the initial LIVE rollout
@@ -83,6 +103,7 @@ export function AppLayout() {
   const visibleLinks = MODULE_NAV.filter(
     (mod) =>
       hasModuleAccess(permissions, mod.module) &&
+      (!mod.perm || permissions.has(mod.perm)) &&
       !(cashierHome && mod.module === 'accounting') &&
       !(import.meta.env.PROD && LIVE_HIDDEN_MODULES.has(mod.module)),
   ).map((mod) => (cashierHome && mod.module === 'billing' ? { ...mod, label: 'Cashiering' } : mod));
@@ -160,6 +181,11 @@ export function AppLayout() {
                 // disbursement screens they reach under /accounting.
                 const active =
                   location.pathname.startsWith(link.to) ||
+                  // "Work Orders" stays active across the whole module except its
+                  // Reports page, which is its own navbar tab.
+                  (link.to === '/work-orders/dashboard' &&
+                    location.pathname.startsWith('/work-orders') &&
+                    !location.pathname.startsWith('/work-orders/reports')) ||
                   (cashierHome &&
                     link.module === 'billing' &&
                     location.pathname.startsWith('/accounting'));
