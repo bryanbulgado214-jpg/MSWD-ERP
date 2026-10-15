@@ -1,4 +1,18 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Header,
+  Param,
+  Post,
+  Query,
+  StreamableFile,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
@@ -30,11 +44,38 @@ export class AppItemController {
       quantity?: number | string;
       unitOfMeasure?: string;
       estimatedUnitCost?: number | string;
+      classification?: 'inventory' | 'asset' | 'expense' | 'infrastructure' | 'service';
     },
   ) {
     return this.appItemService.create(user.organizationId, {
       ...body,
       createdBy: user.userId,
+    });
+  }
+
+  // Download the "Upload Official APP" Excel template.
+  @Get('template')
+  @RequirePermissions('procurement.app.manage')
+  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  @Header('Content-Disposition', 'attachment; filename="APP-Template.xlsx"')
+  template() {
+    return new StreamableFile(this.appItemService.buildTemplate());
+  }
+
+  // Bulk-upload the official APP (direct items not in any PPMP) for a year.
+  @Post('upload')
+  @RequirePermissions('procurement.app.manage')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  async upload(
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: { fiscalYearId: string },
+  ) {
+    if (!file) throw new BadRequestException('No file uploaded.');
+    if (!body.fiscalYearId) throw new BadRequestException('A fiscal year is required.');
+    return this.appItemService.uploadExcel(user.organizationId, file.buffer, {
+      fiscalYearId: body.fiscalYearId,
+      actorUserId: user.userId,
     });
   }
 

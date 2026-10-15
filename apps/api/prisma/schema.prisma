@@ -1629,6 +1629,9 @@ model AppItem {
   quantity                Decimal?                @db.Decimal(12, 4)
   unitOfMeasure           String?                 @map("unit_of_measure") @db.VarChar(30)
   estimatedUnitCost       Decimal?                @map("estimated_unit_cost") @db.Decimal(18, 2)
+  // Expense class hint (CAPEX → asset/infrastructure, MOOE → expense) carried to
+  // a PR line raised from this APP item so it hits the right account.
+  classification          ItemClassification?
   status                  AppStatus               @default(draft)
   createdAt               DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt               DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)

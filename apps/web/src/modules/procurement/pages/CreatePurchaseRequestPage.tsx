@@ -199,6 +199,28 @@ export function CreatePurchaseRequestPage() {
     setAddedTick((t) => t + 1);
   }
 
+  // Add a direct (non-PPMP) APP item as a prefilled line — carries its CAPEX /
+  // MOOE classification onto the PR line so it hits the right account.
+  function addDirectAppLine(a: AppItem) {
+    const qty = a.quantity ? parseFloat(a.quantity) || 0 : 0;
+    const unitCost = a.estimatedUnitCost ? parseFloat(a.estimatedUnitCost) || 0 : 0;
+    const budget = parseFloat(a.approvedBudget) || 0;
+    const line: CreatePurchaseRequestItemInput = {
+      description: a.procurementProjectTitle,
+      quantity: qty > 0 ? qty : 1,
+      unitOfMeasure: a.unitOfMeasure || 'unit',
+      estimatedUnitCost: unitCost > 0 ? unitCost : qty > 0 ? budget / qty : budget,
+      ...(a.classification ? { classification: a.classification } : {}),
+    };
+    setItems((prev) => {
+      if (prev.some((it) => it.description === line.description && !it.ppmpItemId)) return prev;
+      const onlyEmpty = prev.length === 1 && !prev[0]?.description && !prev[0]?.ppmpItemId;
+      return onlyEmpty ? [line] : [...prev, line];
+    });
+    if (!title.trim()) setTitle(a.procurementProjectTitle);
+    setAddedTick((t) => t + 1);
+  }
+
   // After an item is added, scroll it into view and focus it.
   useEffect(() => {
     if (addedTick === 0) return;
@@ -746,6 +768,26 @@ export function CreatePurchaseRequestPage() {
                 </option>
               ))}
             </select>
+            {/* A direct (non-PPMP) APP item has no PPMP allocation to pick from,
+                so offer to add it straight to the item list. */}
+            {(() => {
+              const sel = appItems.find((a) => a.id === appItemId);
+              if (!sel || sel.ppmpItem) return null;
+              const added = items.some(
+                (it) => it.description === sel.procurementProjectTitle && !it.ppmpItemId,
+              );
+              return (
+                <button
+                  type="button"
+                  className="pr-btn"
+                  style={{ marginTop: 8, alignSelf: 'flex-start' }}
+                  disabled={added}
+                  onClick={() => addDirectAppLine(sel)}
+                >
+                  {added ? '✓ Added as an item line' : '+ Add this APP item as a line'}
+                </button>
+              );
+            })()}
           </div>
         </div>
 

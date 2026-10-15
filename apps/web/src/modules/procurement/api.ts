@@ -1011,8 +1011,11 @@ export interface AppItem {
   quantity?: string | null;
   unitOfMeasure?: string | null;
   estimatedUnitCost?: string | null;
+  classification?: 'inventory' | 'asset' | 'expense' | 'infrastructure' | 'service' | null;
   fiscalYear: { id: string; year: number; name: string };
 }
+
+export type AppItemClassification = 'inventory' | 'asset' | 'expense' | 'infrastructure' | 'service';
 
 export interface CreateDirectAppItemInput {
   fiscalYearId: string;
@@ -1026,11 +1029,46 @@ export interface CreateDirectAppItemInput {
   quantity?: number | string;
   unitOfMeasure?: string;
   estimatedUnitCost?: number | string;
+  classification?: AppItemClassification;
 }
 
 /** Create a direct APP item (not from a PPMP), e.g. a GenSet. */
 export async function createAppItem(input: CreateDirectAppItemInput): Promise<AppItem> {
   const res = await authFetchMutate('/procurement/app-items', 'POST', input);
+  return res.json();
+}
+
+export interface AppUploadResult {
+  created: number;
+  skipped: number;
+  errors: { row: number; message: string }[];
+  warnings: { row: number; message: string }[];
+}
+
+/** Download the official-APP upload template (.xlsx). */
+export async function downloadAppTemplate(): Promise<void> {
+  const token = getAccessToken();
+  const res = await fetch(`${API_BASE_URL}/procurement/app-items/template`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new ProcurementApiError('Failed to download the template.', res.status);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'APP-Template.xlsx';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Bulk-upload the official APP (direct, non-PPMP items) for a fiscal year. */
+export async function uploadAppExcel(file: File, fiscalYearId: string): Promise<AppUploadResult> {
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('fiscalYearId', fiscalYearId);
+  const res = await authFetchUpload('/procurement/app-items/upload', fd);
   return res.json();
 }
 

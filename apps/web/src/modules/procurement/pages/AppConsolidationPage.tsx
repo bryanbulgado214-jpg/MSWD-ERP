@@ -5,14 +5,34 @@ import { formatPeso } from '../../budgeting/format-peso';
 import {
   consolidateApp,
   createAppItem,
+  downloadAppTemplate,
   listAppItems,
   listEndUsers,
   listLookupDepartments,
   listProcurementFiscalYears,
   ProcurementApiError,
+  uploadAppExcel,
 } from '../api';
-import type { AppItem, EndUser, LookupDepartment, ProcurementFiscalYear } from '../api';
+import type {
+  AppItem,
+  AppItemClassification,
+  AppUploadResult,
+  EndUser,
+  LookupDepartment,
+  ProcurementFiscalYear,
+} from '../api';
 import './procurement.css';
+
+// Expense-class options for a direct APP line (CAPEX → asset / infrastructure,
+// MOOE → expense). Blank leaves it unclassified.
+const CLASS_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: '— None —' },
+  { value: 'asset', label: 'CAPEX — Asset / PPE' },
+  { value: 'infrastructure', label: 'CAPEX — Infrastructure' },
+  { value: 'expense', label: 'MOOE — Expense' },
+  { value: 'inventory', label: 'Inventory / Supplies' },
+  { value: 'service', label: 'Service' },
+];
 
 const CATEGORY_LABEL: Record<string, string> = {
   goods: 'Goods',
@@ -34,6 +54,7 @@ const MONTHS = [
 interface DirectForm {
   title: string;
   category: string;
+  classification: string;
   departmentId: string;
   endUserId: string;
   quantity: string;
@@ -47,6 +68,7 @@ interface DirectForm {
 const EMPTY_DIRECT: DirectForm = {
   title: '',
   category: 'goods',
+  classification: '',
   departmentId: '',
   endUserId: '',
   quantity: '',
@@ -79,6 +101,12 @@ export function AppConsolidationPage() {
   const [showDirect, setShowDirect] = useState(false);
   const [direct, setDirect] = useState<DirectForm>(EMPTY_DIRECT);
   const [savingDirect, setSavingDirect] = useState(false);
+
+  // "Upload Official APP" (bulk, non-PPMP items).
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<AppUploadResult | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -175,6 +203,9 @@ export function AppConsolidationPage() {
         ...(direct.quantity ? { quantity: direct.quantity } : {}),
         ...(direct.unitOfMeasure.trim() ? { unitOfMeasure: direct.unitOfMeasure.trim() } : {}),
         ...(direct.estimatedUnitCost ? { estimatedUnitCost: direct.estimatedUnitCost } : {}),
+        ...(direct.classification
+          ? { classification: direct.classification as AppItemClassification }
+          : {}),
       });
       setSuccess(`Added "${direct.title.trim()}" to the APP (not in any PPMP).`);
       setDirect(EMPTY_DIRECT);
@@ -184,6 +215,41 @@ export function AppConsolidationPage() {
       setError(err instanceof ProcurementApiError ? err.message : 'Failed to add APP item.');
     } finally {
       setSavingDirect(false);
+    }
+  }
+
+  async function handleTemplate() {
+    try {
+      await downloadAppTemplate();
+    } catch (err) {
+      setError(err instanceof ProcurementApiError ? err.message : 'Failed to download template.');
+    }
+  }
+
+  async function handleUpload() {
+    setError(null);
+    setSuccess(null);
+    setUploadResult(null);
+    if (!selectedFiscalYear || !uploadFile) return;
+    setUploading(true);
+    try {
+      const res = await uploadAppExcel(uploadFile, selectedFiscalYear);
+      setUploadResult(res);
+      if (res.created > 0) {
+        setSuccess(
+          `Uploaded ${res.created} APP item(s)` +
+            (res.skipped ? `, skipped ${res.skipped} already in the APP` : '') +
+            '.',
+        );
+        loadItems();
+      } else if (res.skipped > 0 && res.errors.length === 0) {
+        setSuccess(`Nothing new — all ${res.skipped} row(s) are already in the APP.`);
+      }
+      setUploadFile(null);
+    } catch (err) {
+      setError(err instanceof ProcurementApiError ? err.message : 'Upload failed.');
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -290,7 +356,88 @@ export function AppConsolidationPage() {
         >
           ➕ Add item not in PPMP
         </button>
+        <button
+          className="pr-btn"
+          type="button"
+          onClick={() => {
+            setUploadResult(null);
+            setShowUpload((v) => !v);
+          }}
+          disabled={!selectedFiscalYear}
+          title="Upload the official APP (bulk) — items not in any PPMP, mostly CAPEX"
+        >
+          ⬆ Upload Official APP
+        </button>
       </div>
+
+      {showUpload && (
+        <div
+          style={{
+            border: '1px solid #d0d5dd',
+            borderRadius: 10,
+            padding: 20,
+            marginBottom: 20,
+            background: '#fcfcfd',
+          }}
+        >
+          <h3 style={{ margin: '0 0 4px', fontSize: 15, color: 'var(--mswd-navy)' }}>
+            Upload Official APP (items not in any PPMP)
+          </h3>
+          <p style={{ margin: '0 0 14px', color: '#667085', fontSize: 13 }}>
+            For the official APP's non-PPMP lines (mostly CAPEX). Keep using “Generate / Refresh”
+            for PPMP-derived items — this adds only the extras. Rows already in the APP (same item +
+            office) are skipped, so re-uploading is safe. Use the <strong>Classification</strong>{' '}
+            column (CAPEX / MOOE) so a PR raised from a line defaults to the right account.
+          </p>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            <button className="pr-btn" type="button" onClick={handleTemplate}>
+              ⬇ Download template
+            </button>
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
+            />
+            <button
+              className="pr-btn pr-btn--primary"
+              type="button"
+              onClick={handleUpload}
+              disabled={uploading || !uploadFile}
+            >
+              {uploading ? 'Uploading…' : 'Upload'}
+            </button>
+          </div>
+
+          {uploadResult && (
+            <div style={{ marginTop: 14, fontSize: 13 }}>
+              <div style={{ marginBottom: 6 }}>
+                <strong>{uploadResult.created}</strong> created
+                {uploadResult.skipped > 0 && <> · {uploadResult.skipped} skipped (already in APP)</>}
+                {uploadResult.errors.length > 0 && (
+                  <> · <span style={{ color: '#b42318' }}>{uploadResult.errors.length} error(s)</span></>
+                )}
+                {uploadResult.warnings.length > 0 && (
+                  <> · <span style={{ color: '#b54708' }}>{uploadResult.warnings.length} warning(s)</span></>
+                )}
+              </div>
+              {uploadResult.errors.length > 0 && (
+                <ul style={{ margin: '4px 0', paddingLeft: 18, color: '#b42318' }}>
+                  {uploadResult.errors.map((er, i) => (
+                    <li key={`e${i}`}>Row {er.row}: {er.message}</li>
+                  ))}
+                </ul>
+              )}
+              {uploadResult.warnings.length > 0 && (
+                <ul style={{ margin: '4px 0', paddingLeft: 18, color: '#b54708' }}>
+                  {uploadResult.warnings.map((w, i) => (
+                    <li key={`w${i}`}>Row {w.row}: {w.message}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {showDirect && (
         <form
@@ -329,6 +476,19 @@ export function AppConsolidationPage() {
                 <option value="services">Services</option>
                 <option value="infrastructure">Infrastructure</option>
                 <option value="consulting_services">Consulting Services</option>
+              </select>
+            </div>
+            <div className="pr-field">
+              <label>Classification (CAPEX / MOOE)</label>
+              <select
+                value={direct.classification}
+                onChange={(e) => setDirect((d) => ({ ...d, classification: e.target.value }))}
+              >
+                {CLASS_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
               </select>
             </div>
             <div className="pr-field">
