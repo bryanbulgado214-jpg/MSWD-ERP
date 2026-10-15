@@ -141,7 +141,6 @@ export default function CcfListPage() {
                 <th>Received</th>
                 <th>Customer / Account</th>
                 <th>Category</th>
-                <th>Assigned</th>
                 <th>Status</th>
                 <th style={{ textAlign: 'right' }}>Days Open</th>
               </tr>
@@ -173,7 +172,6 @@ export default function CcfListPage() {
                     ) : null}
                   </td>
                   <td>{CCF_CATEGORY_LABELS[r.category]}</td>
-                  <td>{r.assignedTo || '—'}</td>
                   <td>
                     <span style={ccfStatusStyle(r.status)}>{CCF_STATUS_LABELS[r.status]}</span>
                   </td>

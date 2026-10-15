@@ -21,7 +21,6 @@ export default function CcfNewPage() {
   const [category, setCategory] = useState<CcfCategory>('billing');
   const [nature, setNature] = useState('');
   const [requestedAction, setRequestedAction] = useState('');
-  const [assignedTo, setAssignedTo] = useState('');
   const [targetResolutionDate, setTargetResolutionDate] = useState('');
   const [remarks, setRemarks] = useState('');
   const [saving, setSaving] = useState(false);
@@ -42,7 +41,6 @@ export default function CcfNewPage() {
         category,
         nature: nature.trim(),
         ...(requestedAction.trim() ? { requestedAction: requestedAction.trim() } : {}),
-        ...(assignedTo.trim() ? { assignedTo: assignedTo.trim() } : {}),
         ...(targetResolutionDate ? { targetResolutionDate } : {}),
         ...(remarks.trim() ? { remarks: remarks.trim() } : {}),
       });
@@ -129,16 +127,6 @@ export default function CcfNewPage() {
               onChange={(e) => setRequestedAction(e.target.value)}
               rows={2}
               placeholder="What the customer is asking for"
-            />
-          </div>
-          <div className="wo-form__field">
-            <label className="wo-form__label">Assigned Personnel/Unit</label>
-            <input
-              type="text"
-              className="wo-input"
-              value={assignedTo}
-              onChange={(e) => setAssignedTo(e.target.value)}
-              maxLength={200}
             />
           </div>
           <div className="wo-form__field">

@@ -37,7 +37,6 @@ export default function CcfDetailPage() {
   const [category, setCategory] = useState<CcfCategory>('billing');
   const [nature, setNature] = useState('');
   const [requestedAction, setRequestedAction] = useState('');
-  const [assignedTo, setAssignedTo] = useState('');
   const [actionTaken, setActionTaken] = useState('');
   const [status, setStatus] = useState<CcfStatus>('pending');
   const [targetResolutionDate, setTargetResolutionDate] = useState('');
@@ -52,7 +51,6 @@ export default function CcfDetailPage() {
     setCategory(c.category);
     setNature(c.nature);
     setRequestedAction(c.requestedAction ?? '');
-    setAssignedTo(c.assignedTo ?? '');
     setActionTaken(c.actionTaken ?? '');
     setStatus(c.status);
     setTargetResolutionDate(c.targetResolutionDate ? c.targetResolutionDate.slice(0, 10) : '');
@@ -85,7 +83,6 @@ export default function CcfDetailPage() {
         category,
         nature: nature.trim(),
         requestedAction: requestedAction.trim(),
-        assignedTo: assignedTo.trim(),
         actionTaken: actionTaken.trim(),
         status,
         ...(targetResolutionDate ? { targetResolutionDate } : {}),
@@ -190,16 +187,6 @@ export default function CcfDetailPage() {
               value={requestedAction}
               onChange={(e) => setRequestedAction(e.target.value)}
               rows={2}
-            />
-          </div>
-          <div className="wo-form__field">
-            <label className="wo-form__label">Assigned Personnel/Unit</label>
-            <input
-              type="text"
-              className="wo-input"
-              value={assignedTo}
-              onChange={(e) => setAssignedTo(e.target.value)}
-              maxLength={200}
             />
           </div>
           <div className="wo-form__field">

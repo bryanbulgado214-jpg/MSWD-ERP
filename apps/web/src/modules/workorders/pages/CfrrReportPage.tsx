@@ -137,7 +137,6 @@ export default function CfrrReportPage() {
                 <th>Customer / Account</th>
                 <th>Category</th>
                 <th>Nature</th>
-                <th>Assigned</th>
                 <th>Action Taken</th>
                 <th>Status</th>
                 <th>Target</th>
@@ -162,7 +161,6 @@ export default function CfrrReportPage() {
                   </td>
                   <td>{CCF_CATEGORY_LABELS[r.category]}</td>
                   <td style={{ maxWidth: 220 }}>{r.nature}</td>
-                  <td>{r.assignedTo || '—'}</td>
                   <td style={{ maxWidth: 200 }}>{r.actionTaken || '—'}</td>
                   <td>
                     <span style={ccfStatusStyle(r.status)}>{CCF_STATUS_LABELS[r.status]}</span>
