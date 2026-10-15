@@ -36,6 +36,7 @@ export interface WorkOrder {
   remarks: string | null;
   tasksPerformed: string | null;
   issuesEncountered: string | null;
+  customerConcernId: string | null;
   createdBy: string | null;
   updatedBy: string | null;
   createdAt: string;
@@ -54,7 +55,105 @@ export interface WorkOrder {
   updater?: { id: string; username: string; fullName?: string | null } | null;
   materials?: WorkOrderMaterial[];
   notes?: WorkOrderNote[];
+  customerConcern?: {
+    id: string;
+    referenceNumber: string;
+    customerName: string;
+    category: CcfCategory;
+    status: CcfStatus;
+  } | null;
   _count?: { materials: number; notes: number; members?: number };
+}
+
+// ── Customer Complaint/Concern Form (CCF) ──
+export type CcfCategory =
+  | 'billing'
+  | 'water_quality'
+  | 'leakage'
+  | 'low_pressure'
+  | 'no_water'
+  | 'meter_issue'
+  | 'other';
+
+export type CcfStatus = 'pending' | 'in_progress' | 'resolved' | 'closed';
+
+export const CCF_CATEGORY_LABELS: Record<CcfCategory, string> = {
+  billing: 'Billing',
+  water_quality: 'Water Quality',
+  leakage: 'Leakage',
+  low_pressure: 'Low Pressure',
+  no_water: 'No Water',
+  meter_issue: 'Meter Issue',
+  other: 'Other',
+};
+
+export const CCF_STATUS_LABELS: Record<CcfStatus, string> = {
+  pending: 'Pending',
+  in_progress: 'In Progress',
+  resolved: 'Resolved',
+  closed: 'Closed',
+};
+
+export interface Ccf {
+  id: string;
+  organizationId: string;
+  referenceNumber: string;
+  receivedAt: string;
+  customerName: string;
+  accountNumber: string | null;
+  category: CcfCategory;
+  nature: string;
+  requestedAction: string | null;
+  assignedTo: string | null;
+  actionTaken: string | null;
+  status: CcfStatus;
+  targetResolutionDate: string | null;
+  resolvedAt: string | null;
+  remarks: string | null;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+  // Aging indicators computed by the API.
+  daysOpen: number;
+  isOpen: boolean;
+  overdue: boolean;
+  workOrders?: Array<{ id: string; woNumber: string; status: WorkOrderStatus; title: string }>;
+}
+
+export interface CcfLookup {
+  id: string;
+  referenceNumber: string;
+  customerName: string;
+  category: CcfCategory;
+  status: CcfStatus;
+}
+
+export interface CcfCreateInput {
+  receivedAt: string;
+  customerName: string;
+  accountNumber?: string;
+  category: CcfCategory;
+  nature: string;
+  requestedAction?: string;
+  assignedTo?: string;
+  targetResolutionDate?: string;
+  remarks?: string;
+}
+
+export interface CcfUpdateInput {
+  expectedVersion: number;
+  receivedAt?: string;
+  customerName?: string;
+  accountNumber?: string;
+  category?: CcfCategory;
+  nature?: string;
+  requestedAction?: string;
+  assignedTo?: string;
+  actionTaken?: string;
+  status?: CcfStatus;
+  targetResolutionDate?: string;
+  resolvedAt?: string;
+  remarks?: string;
 }
 
 export type WorkOrderNature = 'technical' | 'commercial';

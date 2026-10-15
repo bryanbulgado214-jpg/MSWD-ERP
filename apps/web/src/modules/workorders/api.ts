@@ -1,4 +1,8 @@
 import type {
+  Ccf,
+  CcfCreateInput,
+  CcfLookup,
+  CcfUpdateInput,
   StaffAvailabilityStatus,
   StaffMember,
   WorkOrder,
@@ -93,6 +97,7 @@ export async function createWorkOrder(data: {
   instructions?: string;
   remarks?: string;
   customerSignatureRequired?: boolean;
+  customerConcernId?: string;
   soloTask?: boolean;
   teamId?: string;
   teamLeaderId?: string;
@@ -115,9 +120,38 @@ export async function updateWorkOrder(
     instructions?: string;
     remarks?: string;
     customerSignatureRequired?: boolean;
+    customerConcernId?: string | null;
   },
 ): Promise<WorkOrder> {
   const res = await authFetchMutate(`/workorders/${id}`, 'PATCH', data);
+  return res.json();
+}
+
+// ── Customer Complaint/Concern Forms (CCF) ──
+
+export async function getCcfs(params?: string): Promise<Ccf[]> {
+  const qs = params ? `?${params}` : '';
+  const res = await authFetch(`/ccf${qs}`);
+  return res.json();
+}
+
+export async function getCcf(id: string): Promise<Ccf> {
+  const res = await authFetch(`/ccf/${id}`);
+  return res.json();
+}
+
+export async function getCcfLookup(): Promise<CcfLookup[]> {
+  const res = await authFetch('/ccf/lookup');
+  return res.json();
+}
+
+export async function createCcf(data: CcfCreateInput): Promise<Ccf> {
+  const res = await authFetchMutate('/ccf', 'POST', data);
+  return res.json();
+}
+
+export async function updateCcf(id: string, data: CcfUpdateInput): Promise<Ccf> {
+  const res = await authFetchMutate(`/ccf/${id}`, 'PATCH', data);
   return res.json();
 }
 

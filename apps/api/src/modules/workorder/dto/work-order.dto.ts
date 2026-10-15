@@ -24,6 +24,8 @@ export class CreateWorkOrderDto {
   @IsString() @IsOptional() instructions?: string;
   @IsString() @IsOptional() remarks?: string;
   @IsBoolean() @IsOptional() customerSignatureRequired?: boolean;
+  // Optional tag to the Customer Complaint/Concern Form (CCF) this WO addresses.
+  @IsUUID() @IsOptional() customerConcernId?: string;
   // Optional crew at creation (applied only if the creator may assign for the
   // derived nature).
   @IsBoolean() @IsOptional() soloTask?: boolean;
@@ -46,6 +48,8 @@ export class UpdateWorkOrderDto {
   @IsString() @IsOptional() instructions?: string;
   @IsString() @IsOptional() remarks?: string;
   @IsBoolean() @IsOptional() customerSignatureRequired?: boolean;
+  // Pass null (empty) to clear the CCF tag, or a CCF id to (re)link it.
+  @IsString() @IsOptional() customerConcernId?: string | null;
 }
 
 // One crew: a leader plus members (or a single person for a one-man task).

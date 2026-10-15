@@ -328,6 +328,16 @@ export default function WorkOrderDetailPage() {
             <dt>Priority</dt><dd>{WO_PRIORITY_LABELS[wo.priority]}</dd>
             <dt>Title</dt><dd>{wo.title}</dd>
             <dt>Customer</dt><dd>{customerDisplay}</dd>
+            <dt>Customer Complaint (CCF)</dt>
+            <dd>
+              {wo.customerConcern ? (
+                <Link to={`/work-orders/ccf/${wo.customerConcern.id}`}>
+                  {wo.customerConcern.referenceNumber} — {wo.customerConcern.customerName}
+                </Link>
+              ) : (
+                '—'
+              )}
+            </dd>
             <dt>Location</dt><dd>{wo.location || '—'}</dd>
             <dt>Scheduled</dt><dd>{fmtDate(wo.scheduledDate)}</dd>
             <dt>Customer signature</dt><dd>{wo.customerSignatureRequired ? 'Required' : 'Not required'}</dd>

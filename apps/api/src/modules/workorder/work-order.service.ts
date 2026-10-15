@@ -123,6 +123,15 @@ export class WorkOrderService {
           },
           orderBy: { createdAt: 'desc' },
         },
+        customerConcern: {
+          select: {
+            id: true,
+            referenceNumber: true,
+            customerName: true,
+            category: true,
+            status: true,
+          },
+        },
       },
     });
     if (!wo) throw new NotFoundException('Work order not found');
@@ -146,6 +155,7 @@ export class WorkOrderService {
       instructions?: string;
       remarks?: string;
       customerSignatureRequired?: boolean;
+      customerConcernId?: string;
       // Crew the creator wants to dispatch. Only applied when the creator holds
       // the assign permission for this work order's nature (technical/commercial).
       soloTask?: boolean;
@@ -196,6 +206,7 @@ export class WorkOrderService {
           ...(dto.estimatedDurationHrs != null ? { estimatedDurationHrs: dto.estimatedDurationHrs } : {}),
           ...(dto.instructions ? { instructions: dto.instructions.trim() } : {}),
           ...(dto.remarks ? { remarks: dto.remarks.trim() } : {}),
+          ...(dto.customerConcernId ? { customerConcernId: dto.customerConcernId } : {}),
           customerSignatureRequired: signatureRequired,
           ...(assignCrewNow
             ? {
@@ -594,6 +605,7 @@ export class WorkOrderService {
       instructions?: string;
       remarks?: string;
       customerSignatureRequired?: boolean;
+      customerConcernId?: string | null;
     },
   ) {
     const wo = await this.findOneOrThrow(organizationId, id);
@@ -619,6 +631,9 @@ export class WorkOrderService {
         ...(dto.remarks !== undefined ? { remarks: dto.remarks.trim() || null } : {}),
         ...(dto.customerSignatureRequired !== undefined
           ? { customerSignatureRequired: dto.customerSignatureRequired }
+          : {}),
+        ...(dto.customerConcernId !== undefined
+          ? { customerConcernId: dto.customerConcernId || null }
           : {}),
         updatedBy: userId,
         version: { increment: 1 },

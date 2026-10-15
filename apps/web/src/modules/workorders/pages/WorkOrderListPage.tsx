@@ -46,6 +46,9 @@ export default function WorkOrderListPage() {
           <Link to="/work-orders/staff" className="wo-btn wo-btn--nav">
             <span className="wo-btn__icon" aria-hidden="true">{'\u{1F465}'}</span> Staff Availability
           </Link>
+          <Link to="/work-orders/ccf" className="wo-btn wo-btn--nav">
+            <span className="wo-btn__icon" aria-hidden="true">{'\u{1F4DD}'}</span> Customer Complaints
+          </Link>
           {permissions.has('workorder.team.manage') && (
             <Link to="/work-orders/teams" className="wo-btn wo-btn--nav">
               <span className="wo-btn__icon" aria-hidden="true">{'\u{1F6E0}'}</span> Teams &amp; Personnel

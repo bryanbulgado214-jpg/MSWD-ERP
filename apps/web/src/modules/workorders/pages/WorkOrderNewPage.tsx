@@ -2,14 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
-import { createWorkOrder, listPersonnel, listStaff, listTeams } from '../api';
+import { createWorkOrder, getCcfLookup, listPersonnel, listStaff, listTeams } from '../api';
 import MemberPickerModal from '../components/MemberPickerModal';
 import {
+  CCF_CATEGORY_LABELS,
   natureOfType,
   signatureRequiredByDefault,
   STAFF_STATUS_LABELS,
   WO_NATURE_LABELS,
   WO_TYPE_LABELS,
+  type CcfLookup,
   type StaffAvailabilityStatus,
   type WorkOrderPersonnel,
   type WorkOrderTeam,
@@ -37,6 +39,9 @@ export default function WorkOrderNewPage() {
   const [instructions, setInstructions] = useState('');
   const [sigRequired, setSigRequired] = useState(signatureRequiredByDefault('installation'));
   const [sigTouched, setSigTouched] = useState(false);
+  // Optional tag to a Customer Complaint/Concern Form (CCF).
+  const [customerConcernId, setCustomerConcernId] = useState('');
+  const [ccfOptions, setCcfOptions] = useState<CcfLookup[]>([]);
 
   const nature = natureOfType(type);
   const canAssign = hasPermission(
@@ -55,6 +60,7 @@ export default function WorkOrderNewPage() {
   useEffect(() => {
     listPersonnel().then(setPersonnel).catch(() => {});
     listTeams().then(setTeams).catch(() => {});
+    getCcfLookup().then(setCcfOptions).catch(() => {});
     listStaff()
       .then((staff) => {
         const m = new Map<string, StaffAvailabilityStatus>();
@@ -116,6 +122,7 @@ export default function WorkOrderNewPage() {
         ...(location ? { location } : {}),
         ...(scheduledDate ? { scheduledDate } : {}),
         ...(instructions ? { instructions } : {}),
+        ...(customerConcernId ? { customerConcernId } : {}),
         ...(assigningNow
           ? {
               soloTask: solo,
@@ -203,6 +210,22 @@ export default function WorkOrderNewPage() {
               onChange={(e) => setCustomerName(e.target.value)}
               placeholder="Name of the concerned customer (if any)"
             />
+          </label>
+
+          <label className="wo-form__field">
+            <span className="wo-form__label">Customer Complaint (CCF)</span>
+            <select
+              className="wo-select"
+              value={customerConcernId}
+              onChange={(e) => setCustomerConcernId(e.target.value)}
+            >
+              <option value="">— None (office-initiated) —</option>
+              {ccfOptions.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.referenceNumber} — {c.customerName} ({CCF_CATEGORY_LABELS[c.category]})
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="wo-form__field">

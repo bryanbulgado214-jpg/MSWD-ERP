@@ -4903,6 +4903,9 @@ model WorkOrder {
   remarks                   String?
   tasksPerformed            String?         @map("tasks_performed")
   issuesEncountered         String?         @map("issues_encountered")
+  // Optional link to the Customer Complaint/Concern Form (CCF) that this work
+  // order addresses; blank for office-initiated work.
+  customerConcernId         String?         @map("customer_concern_id") @db.Uuid
   createdBy             String?           @map("created_by") @db.Uuid
   updatedBy             String?           @map("updated_by") @db.Uuid
   createdAt             DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -4919,6 +4922,7 @@ model WorkOrder {
   crewAssigner User?        @relation("WorkOrdersCrewAssignedBy", fields: [assignedCrewBy], references: [id], onDelete: SetNull)
   team         WorkOrderTeam?      @relation(fields: [teamId], references: [id], onDelete: SetNull)
   teamLeader   WorkOrderPersonnel? @relation("WorkOrderTeamLeader", fields: [teamLeaderId], references: [id], onDelete: SetNull)
+  customerConcern CustomerConcern? @relation(fields: [customerConcernId], references: [id], onDelete: SetNull)
 
   members    WorkOrderMember[]
   crews      WorkOrderCrew[]
@@ -4933,6 +4937,7 @@ model WorkOrder {
   @@index([assignedTo])
   @@index([consumerId])
   @@index([scheduledDate])
+  @@index([customerConcernId])
   @@map("work_orders")
 }
 
@@ -5262,6 +5267,62 @@ model ComplaintAttachment {
 
   @@index([complaintId])
   @@map("complaint_attachments")
+}
+
+// ─── Customer Complaint/Concern Form (CCF) — Work Order module ───
+// A standalone customer-concern register, distinct from the Complaint module.
+// Work orders optionally tag a CCF (WorkOrder.customerConcernId).
+
+enum CcfCategory {
+  billing
+  water_quality
+  leakage
+  low_pressure
+  no_water
+  meter_issue
+  other
+
+  @@map("ccf_category")
+}
+
+enum CcfStatus {
+  pending
+  in_progress
+  resolved
+  closed
+
+  @@map("ccf_status")
+}
+
+model CustomerConcern {
+  id                   String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String      @map("organization_id") @db.Uuid
+  referenceNumber      String      @map("reference_number") @db.VarChar(20)
+  receivedAt           DateTime    @map("received_at") @db.Timestamptz(6)
+  customerName         String      @map("customer_name") @db.VarChar(200)
+  accountNumber        String?     @map("account_number") @db.VarChar(50)
+  category             CcfCategory
+  nature               String
+  requestedAction      String?     @map("requested_action")
+  assignedTo           String?     @map("assigned_to") @db.VarChar(200)
+  actionTaken          String?     @map("action_taken")
+  status               CcfStatus   @default(pending)
+  targetResolutionDate DateTime?   @map("target_resolution_date") @db.Date
+  resolvedAt           DateTime?   @map("resolved_at") @db.Timestamptz(6)
+  remarks              String?
+  createdBy            String?     @map("created_by") @db.Uuid
+  updatedBy            String?     @map("updated_by") @db.Uuid
+  createdAt            DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version              Int         @default(1)
+
+  workOrders WorkOrder[]
+
+  @@unique([organizationId, referenceNumber])
+  @@index([organizationId, status])
+  @@index([organizationId, category])
+  @@index([receivedAt])
+  @@map("customer_concerns")
 }
 
 // ─── Asset Management ─────────────────────────────────────────
