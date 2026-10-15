@@ -993,6 +993,7 @@ export interface AppItem {
   procurementMode: string | null;
   scheduleMonth: number | null;
   status: string;
+  // Null for a direct APP line (in the APP but not in any PPMP).
   ppmpItem: {
     id: string;
     code: string;
@@ -1003,8 +1004,34 @@ export interface AppItem {
     scheduleQuarter?: number | null;
     department?: { id: string; code: string; name: string };
     assignedUser?: { id: string; username: string } | null;
-  };
+  } | null;
+  // Own office / end-user and figures for a direct line.
+  department?: { id: string; code: string; name: string } | null;
+  endUser?: { id: string; name: string } | null;
+  quantity?: string | null;
+  unitOfMeasure?: string | null;
+  estimatedUnitCost?: string | null;
   fiscalYear: { id: string; year: number; name: string };
+}
+
+export interface CreateDirectAppItemInput {
+  fiscalYearId: string;
+  procurementProjectTitle: string;
+  procurementCategory: string;
+  approvedBudget: number | string;
+  procurementMode?: string;
+  scheduleMonth?: number;
+  departmentId?: string;
+  endUserId?: string;
+  quantity?: number | string;
+  unitOfMeasure?: string;
+  estimatedUnitCost?: number | string;
+}
+
+/** Create a direct APP item (not from a PPMP), e.g. a GenSet. */
+export async function createAppItem(input: CreateDirectAppItemInput): Promise<AppItem> {
+  const res = await authFetchMutate('/procurement/app-items', 'POST', input);
+  return res.json();
 }
 
 export async function listAppItems(filters?: {

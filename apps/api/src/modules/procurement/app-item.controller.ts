@@ -18,13 +18,18 @@ export class AppItemController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() body: {
       fiscalYearId: string;
-      ppmpItemId: string;
-      appNumber: string;
+      ppmpItemId?: string;
+      appNumber?: string;
       procurementProjectTitle: string;
       procurementCategory: 'goods' | 'services' | 'infrastructure' | 'consulting_services';
       approvedBudget: number | string;
       procurementMode?: string;
       scheduleMonth?: number;
+      departmentId?: string;
+      endUserId?: string;
+      quantity?: number | string;
+      unitOfMeasure?: string;
+      estimatedUnitCost?: number | string;
     },
   ) {
     return this.appItemService.create(user.organizationId, {

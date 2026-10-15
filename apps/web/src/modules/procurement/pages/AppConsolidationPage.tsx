@@ -4,11 +4,14 @@ import { Link } from 'react-router-dom';
 import { formatPeso } from '../../budgeting/format-peso';
 import {
   consolidateApp,
+  createAppItem,
   listAppItems,
+  listEndUsers,
+  listLookupDepartments,
   listProcurementFiscalYears,
   ProcurementApiError,
 } from '../api';
-import type { AppItem, ProcurementFiscalYear } from '../api';
+import type { AppItem, EndUser, LookupDepartment, ProcurementFiscalYear } from '../api';
 import './procurement.css';
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -16,6 +19,42 @@ const CATEGORY_LABEL: Record<string, string> = {
   services: 'Services',
   infrastructure: 'Infrastructure',
   consulting_services: 'Consulting Services',
+};
+
+// Month (1-12) → quarter label; used for a direct line's schedule display.
+function quarterOf(month: number | null | undefined): number | null {
+  return month && month >= 1 && month <= 12 ? Math.ceil(month / 3) : null;
+}
+
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+interface DirectForm {
+  title: string;
+  category: string;
+  departmentId: string;
+  endUserId: string;
+  quantity: string;
+  unitOfMeasure: string;
+  estimatedUnitCost: string;
+  approvedBudget: string;
+  procurementMode: string;
+  scheduleMonth: string;
+}
+
+const EMPTY_DIRECT: DirectForm = {
+  title: '',
+  category: 'goods',
+  departmentId: '',
+  endUserId: '',
+  quantity: '',
+  unitOfMeasure: '',
+  estimatedUnitCost: '',
+  approvedBudget: '',
+  procurementMode: '',
+  scheduleMonth: '',
 };
 
 interface Group {
@@ -34,6 +73,13 @@ export function AppConsolidationPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  // "Add item not in PPMP" form.
+  const [departments, setDepartments] = useState<LookupDepartment[]>([]);
+  const [endUsers, setEndUsers] = useState<EndUser[]>([]);
+  const [showDirect, setShowDirect] = useState(false);
+  const [direct, setDirect] = useState<DirectForm>(EMPTY_DIRECT);
+  const [savingDirect, setSavingDirect] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     listProcurementFiscalYears()
@@ -45,6 +91,13 @@ export function AppConsolidationPage() {
       .catch(() => {
         if (!cancelled) setError('Failed to load fiscal years.');
       });
+    // Offices + end-users for the direct-item form.
+    listLookupDepartments()
+      .then((d) => !cancelled && setDepartments(d))
+      .catch(() => {});
+    listEndUsers()
+      .then((e) => !cancelled && setEndUsers(e))
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -86,10 +139,58 @@ export function AppConsolidationPage() {
     }
   }
 
+  // Default the approved budget to quantity × unit cost unless the user set one.
+  const directBudget =
+    direct.approvedBudget.trim() !== ''
+      ? direct.approvedBudget
+      : direct.quantity && direct.estimatedUnitCost
+        ? ((parseFloat(direct.quantity) || 0) * (parseFloat(direct.estimatedUnitCost) || 0)).toFixed(2)
+        : '';
+
+  async function handleAddDirect(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    if (!selectedFiscalYear) return;
+    if (!direct.title.trim()) {
+      setError('Procurement project / item is required.');
+      return;
+    }
+    const budget = directBudget;
+    if (!budget || parseFloat(budget) <= 0) {
+      setError('Enter an estimated unit cost + quantity, or an approved budget.');
+      return;
+    }
+    setSavingDirect(true);
+    try {
+      await createAppItem({
+        fiscalYearId: selectedFiscalYear,
+        procurementProjectTitle: direct.title.trim(),
+        procurementCategory: direct.category,
+        approvedBudget: budget,
+        ...(direct.procurementMode.trim() ? { procurementMode: direct.procurementMode.trim() } : {}),
+        ...(direct.scheduleMonth ? { scheduleMonth: Number(direct.scheduleMonth) } : {}),
+        ...(direct.departmentId ? { departmentId: direct.departmentId } : {}),
+        ...(direct.endUserId ? { endUserId: direct.endUserId } : {}),
+        ...(direct.quantity ? { quantity: direct.quantity } : {}),
+        ...(direct.unitOfMeasure.trim() ? { unitOfMeasure: direct.unitOfMeasure.trim() } : {}),
+        ...(direct.estimatedUnitCost ? { estimatedUnitCost: direct.estimatedUnitCost } : {}),
+      });
+      setSuccess(`Added "${direct.title.trim()}" to the APP (not in any PPMP).`);
+      setDirect(EMPTY_DIRECT);
+      setShowDirect(false);
+      loadItems();
+    } catch (err) {
+      setError(err instanceof ProcurementApiError ? err.message : 'Failed to add APP item.');
+    } finally {
+      setSavingDirect(false);
+    }
+  }
+
   const groups = useMemo<Group[]>(() => {
     const map = new Map<string, Group>();
     for (const it of items) {
-      const dept = it.ppmpItem.department;
+      const dept = it.department ?? it.ppmpItem?.department;
       const key = dept?.id ?? 'unassigned';
       const office = dept ? `${dept.code} — ${dept.name}` : 'Unassigned office';
       let g = map.get(key);
@@ -177,7 +278,161 @@ export function AppConsolidationPage() {
         >
           {consolidating ? 'Consolidating…' : '↻ Generate / Refresh from approved PPMPs'}
         </button>
+        <button
+          className="pr-btn"
+          type="button"
+          onClick={() => {
+            setDirect(EMPTY_DIRECT);
+            setShowDirect((v) => !v);
+          }}
+          disabled={!selectedFiscalYear}
+          title="Add an item that is in the APP but not in any PPMP (e.g. a GenSet)"
+        >
+          ➕ Add item not in PPMP
+        </button>
       </div>
+
+      {showDirect && (
+        <form
+          onSubmit={handleAddDirect}
+          style={{
+            border: '1px solid #d0d5dd',
+            borderRadius: 10,
+            padding: 20,
+            marginBottom: 20,
+            background: '#fcfcfd',
+          }}
+        >
+          <h3 style={{ margin: '0 0 4px', fontSize: 15, color: 'var(--mswd-navy)' }}>
+            Add APP item (not in any PPMP)
+          </h3>
+          <p style={{ margin: '0 0 16px', color: '#667085', fontSize: 13 }}>
+            For items listed in the Annual Procurement Plan that did not come from an end-user PPMP
+            (e.g. a Generator Set). It is added as an approved APP line and can be cited on a PR.
+          </p>
+          <div className="pr-form-grid">
+            <div className="pr-field" style={{ gridColumn: '1 / -1' }}>
+              <label>Procurement Project / Item *</label>
+              <input
+                value={direct.title}
+                onChange={(e) => setDirect((d) => ({ ...d, title: e.target.value }))}
+                placeholder="e.g. Generator Set (GenSet), 50 kVA"
+              />
+            </div>
+            <div className="pr-field">
+              <label>Category</label>
+              <select
+                value={direct.category}
+                onChange={(e) => setDirect((d) => ({ ...d, category: e.target.value }))}
+              >
+                <option value="goods">Goods</option>
+                <option value="services">Services</option>
+                <option value="infrastructure">Infrastructure</option>
+                <option value="consulting_services">Consulting Services</option>
+              </select>
+            </div>
+            <div className="pr-field">
+              <label>Office / Department</label>
+              <select
+                value={direct.departmentId}
+                onChange={(e) => setDirect((d) => ({ ...d, departmentId: e.target.value, endUserId: '' }))}
+              >
+                <option value="">— Unassigned —</option>
+                {departments.map((dp) => (
+                  <option key={dp.id} value={dp.id}>
+                    {dp.code} — {dp.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="pr-field">
+              <label>End-User (optional)</label>
+              <select
+                value={direct.endUserId}
+                onChange={(e) => setDirect((d) => ({ ...d, endUserId: e.target.value }))}
+              >
+                <option value="">— None —</option>
+                {endUsers
+                  .filter((u) => !direct.departmentId || u.departmentId === direct.departmentId)
+                  .map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div className="pr-field">
+              <label>Mode of Procurement</label>
+              <input
+                value={direct.procurementMode}
+                onChange={(e) => setDirect((d) => ({ ...d, procurementMode: e.target.value }))}
+                placeholder="e.g. Public Bidding"
+              />
+            </div>
+            <div className="pr-field">
+              <label>Quantity</label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={direct.quantity}
+                onChange={(e) => setDirect((d) => ({ ...d, quantity: e.target.value }))}
+              />
+            </div>
+            <div className="pr-field">
+              <label>Unit of Measure</label>
+              <input
+                value={direct.unitOfMeasure}
+                onChange={(e) => setDirect((d) => ({ ...d, unitOfMeasure: e.target.value }))}
+                placeholder="e.g. unit"
+              />
+            </div>
+            <div className="pr-field">
+              <label>Estimated Unit Cost</label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={direct.estimatedUnitCost}
+                onChange={(e) => setDirect((d) => ({ ...d, estimatedUnitCost: e.target.value }))}
+              />
+            </div>
+            <div className="pr-field">
+              <label>Schedule (Month)</label>
+              <select
+                value={direct.scheduleMonth}
+                onChange={(e) => setDirect((d) => ({ ...d, scheduleMonth: e.target.value }))}
+              >
+                <option value="">—</option>
+                {MONTHS.map((m, i) => (
+                  <option key={m} value={i + 1}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="pr-field">
+              <label>Approved Budget (ABC)</label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={direct.approvedBudget}
+                onChange={(e) => setDirect((d) => ({ ...d, approvedBudget: e.target.value }))}
+                placeholder={directBudget ? `auto: ${directBudget}` : 'qty × unit cost, or enter'}
+              />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+            <button className="pr-btn pr-btn--primary" type="submit" disabled={savingDirect}>
+              {savingDirect ? 'Adding…' : 'Add to APP'}
+            </button>
+            <button className="pr-btn" type="button" onClick={() => setShowDirect(false)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
 
       {loading && <p style={{ color: '#667085' }}>Loading…</p>}
 
@@ -246,12 +501,25 @@ export function AppConsolidationPage() {
                         <td>
                           <strong>{it.appNumber}</strong>
                         </td>
-                        <td>{it.ppmpItem.code}</td>
+                        <td>
+                          {it.ppmpItem?.code ?? (
+                            <span
+                              className="pr-badge"
+                              style={{ background: '#fef0c7', color: '#b54708' }}
+                              title="In the APP but not in any PPMP"
+                            >
+                              Not in PPMP
+                            </span>
+                          )}
+                        </td>
                         <td>{it.procurementProjectTitle}</td>
                         <td>{CATEGORY_LABEL[it.procurementCategory] ?? it.procurementCategory}</td>
                         <td style={{ fontSize: 12 }}>{it.procurementMode ?? '—'}</td>
                         <td style={{ textAlign: 'center' }}>
-                          {it.ppmpItem.scheduleQuarter ? `Q${it.ppmpItem.scheduleQuarter}` : '—'}
+                          {(() => {
+                            const q = it.ppmpItem?.scheduleQuarter ?? quarterOf(it.scheduleMonth);
+                            return q ? `Q${q}` : '—';
+                          })()}
                         </td>
                         <td style={{ textAlign: 'right' }}>{formatPeso(it.approvedBudget)}</td>
                         <td>

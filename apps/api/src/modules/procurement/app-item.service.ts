@@ -6,13 +6,22 @@ import { runAudited } from '../budgeting/audit-actor.util';
 
 export interface CreateAppItemInput {
   fiscalYearId: string;
-  ppmpItemId: string;
-  appNumber: string;
+  // Optional: omit for a direct APP line (an item in the APP that is not in any
+  // PPMP, e.g. a GenSet). When set, it must be an approved PPMP item.
+  ppmpItemId?: string;
+  // Optional: auto-generated (APP-<year>-NNN) when omitted.
+  appNumber?: string;
   procurementProjectTitle: string;
   procurementCategory: 'goods' | 'services' | 'infrastructure' | 'consulting_services';
   approvedBudget: number | string;
   procurementMode?: string;
   scheduleMonth?: number;
+  // Direct-line detail (used when there is no PPMP parent).
+  departmentId?: string;
+  endUserId?: string;
+  quantity?: number | string;
+  unitOfMeasure?: string;
+  estimatedUnitCost?: number | string;
   createdBy?: string;
 }
 
@@ -21,29 +30,73 @@ export class AppItemService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(organizationId: string, input: CreateAppItemInput) {
-    const ppmpItem = await this.prisma.ppmpItem.findFirst({
-      where: { id: input.ppmpItemId, organizationId, status: 'approved' },
-    });
-    if (!ppmpItem) {
-      throw new BadRequestException('APP item must reference an approved PPMP item.');
+    // Two kinds of APP line: one derived from an approved PPMP item, or a direct
+    // entry (in the APP but not in any PPMP) that carries its own detail.
+    if (input.ppmpItemId) {
+      const ppmpItem = await this.prisma.ppmpItem.findFirst({
+        where: { id: input.ppmpItemId, organizationId, status: 'approved' },
+      });
+      if (!ppmpItem) {
+        throw new BadRequestException('APP item must reference an approved PPMP item.');
+      }
+    } else if (!input.procurementProjectTitle?.trim()) {
+      throw new BadRequestException('A direct APP item needs a procurement project / item title.');
     }
+
+    const appNumber = input.appNumber ?? (await this.nextAppNumber(organizationId, input.fiscalYearId));
 
     return runAudited(this.prisma, input.createdBy, (tx) =>
       tx.appItem.create({
         data: {
           organizationId,
           fiscalYearId: input.fiscalYearId,
-          ppmpItemId: input.ppmpItemId,
-          appNumber: input.appNumber,
+          ppmpItemId: input.ppmpItemId ?? null,
+          appNumber,
           procurementProjectTitle: input.procurementProjectTitle,
           procurementCategory: input.procurementCategory,
           approvedBudget: new Prisma.Decimal(input.approvedBudget),
           procurementMode: input.procurementMode ?? null,
           scheduleMonth: input.scheduleMonth ?? null,
+          // Direct-line detail; left null for PPMP-derived lines (read via ppmpItem).
+          departmentId: input.ppmpItemId ? null : (input.departmentId ?? null),
+          endUserId: input.ppmpItemId ? null : (input.endUserId ?? null),
+          quantity:
+            !input.ppmpItemId && input.quantity != null
+              ? new Prisma.Decimal(input.quantity)
+              : null,
+          unitOfMeasure: input.ppmpItemId ? null : (input.unitOfMeasure ?? null),
+          estimatedUnitCost:
+            !input.ppmpItemId && input.estimatedUnitCost != null
+              ? new Prisma.Decimal(input.estimatedUnitCost)
+              : null,
+          // A direct APP line is a management/BAC decision already approved, so it
+          // is immediately citeable on a PR and visible in the utilization report.
+          status: input.ppmpItemId ? 'draft' : 'approved',
           createdBy: input.createdBy ?? null,
         },
       }),
     );
+  }
+
+  /** Next free APP number (APP-<year>-NNN) for a fiscal year. */
+  private async nextAppNumber(organizationId: string, fiscalYearId: string): Promise<string> {
+    const fy = await this.prisma.fiscalYear.findFirst({
+      where: { id: fiscalYearId, organizationId },
+      select: { year: true },
+    });
+    if (!fy) throw new BadRequestException('Fiscal year not found.');
+    const existing = await this.prisma.appItem.findMany({
+      where: { organizationId, fiscalYearId },
+      select: { appNumber: true },
+    });
+    const used = new Set(existing.map((a) => a.appNumber));
+    let seq = existing.length + 1;
+    let n: string;
+    do {
+      n = `APP-${fy.year}-${String(seq).padStart(3, '0')}`;
+      seq++;
+    } while (used.has(n));
+    return n;
   }
 
   async findAll(organizationId: string, filters?: { fiscalYearId?: string; status?: string }) {
@@ -67,6 +120,9 @@ export class AppItemService {
             assignedUser: { select: { id: true, username: true } },
           },
         },
+        // Own office / end-user for direct (non-PPMP) lines.
+        department: { select: { id: true, code: true, name: true } },
+        endUser: { select: { id: true, name: true } },
         fiscalYear: { select: { id: true, year: true, name: true } },
       },
       orderBy: { appNumber: 'asc' },

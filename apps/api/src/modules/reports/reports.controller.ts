@@ -197,6 +197,9 @@ export class ReportsController {
             endUser: { select: { name: true } },
           },
         },
+        // Own office / end-user for direct (non-PPMP) APP lines.
+        department: { select: { name: true } },
+        endUser: { select: { name: true } },
         fiscalYear: { select: { name: true, year: true } },
       },
       orderBy: { appNumber: 'asc' },
@@ -204,70 +207,111 @@ export class ReportsController {
 
     const rows = await Promise.all(
       items.map(async (it) => {
-        // An APP line = one PPMP item; measure purchases against that PPMP item
-        // (via PR line links or the PR header), same basis as PPMP utilization.
+        // A PPMP-derived APP line is measured against its PPMP item (via PR line
+        // links or the PR header). A direct APP line (no PPMP) is measured against
+        // purchase requests that cite it directly (PurchaseRequest.appItemId).
         const ppmpId = it.ppmpItemId;
-        const pos = await this.prisma.purchaseOrder.findMany({
-          where: {
-            organizationId: orgId,
-            status: { not: 'cancelled' },
-            purchaseRequest: {
-              OR: [{ ppmpItemId: ppmpId }, { items: { some: { ppmpItemId: ppmpId } } }],
-            },
-          },
-          select: {
-            poNumber: true,
-            contractAmount: true,
-            purchaseRequest: {
-              select: {
-                totalAmount: true,
-                ppmpItemId: true,
-                items: { where: { ppmpItemId: ppmpId }, select: { estimatedTotalCost: true } },
+        // Effective planned detail: from the PPMP item, else the line's own.
+        const unitCost =
+          it.ppmpItem?.estimatedUnitCost ?? it.estimatedUnitCost ?? new Prisma.Decimal(0);
+        const approvedQty = it.ppmpItem?.quantity ?? it.quantity ?? new Prisma.Decimal(0);
+
+        let purchasedQty: Prisma.Decimal;
+        let actualAmount: Prisma.Decimal;
+        let poNumbers: string[];
+
+        if (ppmpId) {
+          const pos = await this.prisma.purchaseOrder.findMany({
+            where: {
+              organizationId: orgId,
+              status: { not: 'cancelled' },
+              purchaseRequest: {
+                OR: [{ ppmpItemId: ppmpId }, { items: { some: { ppmpItemId: ppmpId } } }],
               },
             },
-          },
-          orderBy: { poDate: 'asc' },
-        });
-        const qAgg = await this.prisma.purchaseRequestItem.aggregate({
-          where: {
-            OR: [
-              {
-                ppmpItemId: ppmpId,
-                purchaseRequest: {
-                  organizationId: orgId,
-                  purchaseOrders: { some: { status: { not: 'cancelled' } } },
+            select: {
+              poNumber: true,
+              contractAmount: true,
+              purchaseRequest: {
+                select: {
+                  totalAmount: true,
+                  ppmpItemId: true,
+                  items: { where: { ppmpItemId: ppmpId }, select: { estimatedTotalCost: true } },
                 },
               },
-              {
-                ppmpItemId: null,
-                purchaseRequest: {
+            },
+            orderBy: { poDate: 'asc' },
+          });
+          const qAgg = await this.prisma.purchaseRequestItem.aggregate({
+            where: {
+              OR: [
+                {
                   ppmpItemId: ppmpId,
-                  organizationId: orgId,
-                  purchaseOrders: { some: { status: { not: 'cancelled' } } },
+                  purchaseRequest: {
+                    organizationId: orgId,
+                    purchaseOrders: { some: { status: { not: 'cancelled' } } },
+                  },
                 },
+                {
+                  ppmpItemId: null,
+                  purchaseRequest: {
+                    ppmpItemId: ppmpId,
+                    organizationId: orgId,
+                    purchaseOrders: { some: { status: { not: 'cancelled' } } },
+                  },
+                },
+              ],
+            },
+            _sum: { quantity: true },
+          });
+          purchasedQty = qAgg._sum.quantity ?? new Prisma.Decimal(0);
+          actualAmount = this.actualPoCost(pos, ppmpId);
+          poNumbers = pos.map((p) => p.poNumber);
+        } else {
+          // Direct APP line: purchases are the POs under PRs that cite this APP
+          // item. The PR's whole value maps to this APP item, so the PO contract
+          // amounts sum directly (no PPMP-share proration needed).
+          const pos = await this.prisma.purchaseOrder.findMany({
+            where: {
+              organizationId: orgId,
+              status: { not: 'cancelled' },
+              purchaseRequest: { appItemId: it.id },
+            },
+            select: { poNumber: true, contractAmount: true },
+            orderBy: { poDate: 'asc' },
+          });
+          const qAgg = await this.prisma.purchaseRequestItem.aggregate({
+            where: {
+              purchaseRequest: {
+                appItemId: it.id,
+                organizationId: orgId,
+                purchaseOrders: { some: { status: { not: 'cancelled' } } },
               },
-            ],
-          },
-          _sum: { quantity: true },
-        });
-        const purchasedQty = qAgg._sum.quantity ?? new Prisma.Decimal(0);
-        const abcAmount = purchasedQty.mul(it.ppmpItem.estimatedUnitCost);
-        const actualAmount = ppmpId ? this.actualPoCost(pos, ppmpId) : new Prisma.Decimal(0);
-        const approvedQty = it.ppmpItem.quantity;
+            },
+            _sum: { quantity: true },
+          });
+          purchasedQty = qAgg._sum.quantity ?? new Prisma.Decimal(0);
+          actualAmount = pos.reduce((s, p) => s.plus(p.contractAmount), new Prisma.Decimal(0));
+          poNumbers = pos.map((p) => p.poNumber);
+        }
+
+        const abcAmount = purchasedQty.mul(unitCost);
         return {
           appNumber: it.appNumber,
           projectTitle: it.procurementProjectTitle,
-          section: it.ppmpItem.department?.name ?? '',
-          endUser: it.ppmpItem.endUser?.name ?? '',
-          unitOfMeasure: it.ppmpItem.unitOfMeasure,
+          section: it.ppmpItem?.department?.name ?? it.department?.name ?? '',
+          endUser: it.ppmpItem?.endUser?.name ?? it.endUser?.name ?? '',
+          unitOfMeasure: it.ppmpItem?.unitOfMeasure ?? it.unitOfMeasure ?? '',
           approvedQty: approvedQty.toString(),
           approvedBudget: it.approvedBudget.toString(),
           purchasedQty: purchasedQty.toString(),
           purchasedAmount: actualAmount.toString(),
-          poReferences: pos.map((p) => p.poNumber).join(', '),
+          poReferences: poNumbers.join(', '),
           remainingQty: approvedQty.sub(purchasedQty).toString(),
           remainingBudget: it.approvedBudget.sub(abcAmount).toString(),
           overUnder: it.approvedBudget.sub(actualAmount).toString(),
+          // Marks a direct APP line (in the APP but not in any PPMP).
+          notInPpmp: !ppmpId,
         };
       }),
     );

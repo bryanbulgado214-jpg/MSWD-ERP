@@ -281,6 +281,7 @@ model Department {
 
   purchaseRequests      PurchaseRequest[]
   ppmpItems             PpmpItem[]
+  appItems              AppItem[]
   ppmpEndUsers          PpmpEndUser[]
   delegationAuthorities DelegationAuthority[]
   obligationRequests    ObligationRequest[]
@@ -1599,6 +1600,7 @@ model PpmpEndUser {
 
   ppmpItems        PpmpItem[]
   purchaseRequests PurchaseRequest[] @relation("PurchaseRequestsEndUser")
+  appItems         AppItem[]
 
   @@unique([organizationId, departmentId, name])
   @@index([organizationId])
@@ -1610,13 +1612,23 @@ model AppItem {
   id                      String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId          String                  @map("organization_id") @db.Uuid
   fiscalYearId            String                  @map("fiscal_year_id") @db.Uuid
-  ppmpItemId              String                  @map("ppmp_item_id") @db.Uuid
+  // Nullable: a direct APP entry (e.g. a GenSet) can be listed in the Annual
+  // Procurement Plan without originating from any end-user's PPMP. PPMP-derived
+  // lines keep this set; direct lines carry their own detail in the fields below.
+  ppmpItemId              String?                 @map("ppmp_item_id") @db.Uuid
   appNumber               String                  @map("app_number") @db.VarChar(30)
   procurementProjectTitle String                  @map("procurement_project_title") @db.VarChar(500)
   procurementCategory     ProcurementCategoryEnum @default(goods) @map("procurement_category")
   approvedBudget          Decimal                 @map("approved_budget") @db.Decimal(18, 2)
   procurementMode         String?                 @map("procurement_mode") @db.VarChar(100)
   scheduleMonth           Int?                    @map("schedule_month") @db.SmallInt
+  // Own detail for a direct (non-PPMP) APP line — the office, end-user and
+  // quantity/unit figures normally read through the parent PPMP item.
+  departmentId            String?                 @map("department_id") @db.Uuid
+  endUserId               String?                 @map("end_user_id") @db.Uuid
+  quantity                Decimal?                @db.Decimal(12, 4)
+  unitOfMeasure           String?                 @map("unit_of_measure") @db.VarChar(30)
+  estimatedUnitCost       Decimal?                @map("estimated_unit_cost") @db.Decimal(18, 2)
   status                  AppStatus               @default(draft)
   createdAt               DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt               DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -1626,7 +1638,9 @@ model AppItem {
 
   organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   fiscalYear       FiscalYear        @relation(fields: [fiscalYearId], references: [id], onDelete: Restrict)
-  ppmpItem         PpmpItem          @relation(fields: [ppmpItemId], references: [id], onDelete: Restrict)
+  ppmpItem         PpmpItem?         @relation(fields: [ppmpItemId], references: [id], onDelete: Restrict)
+  department       Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  endUser          PpmpEndUser?      @relation(fields: [endUserId], references: [id], onDelete: SetNull)
   creator          User?             @relation("AppItemsCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
   updater          User?             @relation("AppItemsUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
 
@@ -1636,6 +1650,8 @@ model AppItem {
   @@index([organizationId])
   @@index([fiscalYearId])
   @@index([ppmpItemId])
+  @@index([departmentId])
+  @@index([endUserId])
   @@index([status])
   @@map("app_items")
 }

@@ -143,6 +143,8 @@ export interface AppUtilizationRow {
   remainingQty: string;
   remainingBudget: string;
   overUnder: string;
+  // True for a direct APP line (in the APP but not in any PPMP).
+  notInPpmp?: boolean;
 }
 
 // A purchased line flagged "not in the APP" (off-plan catch-up) — surfaced for

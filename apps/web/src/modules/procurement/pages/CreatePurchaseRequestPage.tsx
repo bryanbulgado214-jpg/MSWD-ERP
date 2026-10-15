@@ -178,7 +178,7 @@ export function CreatePurchaseRequestPage() {
     });
     if (!title.trim()) setTitle(ppmp.itemDescription);
     // Auto-link the APP line for a first single selection.
-    const linkedApp = appItems.find((a) => a.ppmpItem.id === ppmp.id);
+    const linkedApp = appItems.find((a) => a.ppmpItem?.id === ppmp.id);
     if (linkedApp && !appItemId) setAppItemId(linkedApp.id);
   }
 

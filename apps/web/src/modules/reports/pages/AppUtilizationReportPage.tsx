@@ -210,8 +210,27 @@ export function AppUtilizationReportPage() {
                     }
                   >
                     <td className="code">{r.appNumber}</td>
-                    <td>{r.projectTitle}</td>
-                    <td>{r.section}</td>
+                    <td>
+                      {r.projectTitle}
+                      {r.notInPpmp && (
+                        <span
+                          style={{
+                            marginLeft: 6,
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: '1px 6px',
+                            borderRadius: 10,
+                            background: '#fef0c7',
+                            color: '#b54708',
+                            whiteSpace: 'nowrap',
+                          }}
+                          title="In the APP but not in any PPMP"
+                        >
+                          Not in PPMP
+                        </span>
+                      )}
+                    </td>
+                    <td>{r.section || '—'}</td>
                     <td>{r.endUser || '—'}</td>
                     <td>{r.unitOfMeasure}</td>
                     <td className="num">{qty(r.approvedQty)}</td>
