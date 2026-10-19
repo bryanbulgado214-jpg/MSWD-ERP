@@ -498,8 +498,10 @@
 }
 @media print {
   .app-demo-banner { background: #fff; color: #7a2e0e; }
-  /* The district strip is chrome, not document content — hide it when printing. */
+  /* The district strip and the top navigation are chrome, not document
+     content — hide them so printouts (work orders, CCF forms, etc.) are clean. */
   .app-district { display: none; }
+  .app-nav { display: none; }
 }
 
 /* ── Header quick-search box ── */
