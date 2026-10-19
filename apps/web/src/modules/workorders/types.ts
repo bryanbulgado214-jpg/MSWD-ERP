@@ -129,6 +129,8 @@ export interface CcfLookup {
 }
 
 export interface CcfCreateInput {
+  // Series No. — editable; omitted falls back to the server's suggestion.
+  referenceNumber?: string;
   receivedAt: string;
   customerName: string;
   accountNumber?: string;
@@ -142,6 +144,7 @@ export interface CcfCreateInput {
 
 export interface CcfUpdateInput {
   expectedVersion: number;
+  referenceNumber?: string;
   receivedAt?: string;
   customerName?: string;
   accountNumber?: string;

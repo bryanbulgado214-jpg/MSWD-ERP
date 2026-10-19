@@ -21,6 +21,14 @@ export const CCF_CATEGORIES = [
 export const CCF_STATUSES = ['pending', 'in_progress', 'resolved', 'closed'] as const;
 
 export class CreateCustomerConcernDto {
+  // Series No. — user-editable, pre-filled with a suggested next value. Unique
+  // per organization. Omitted → the server assigns the suggested next value.
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(20)
+  referenceNumber?: string;
+
   @IsDateString()
   receivedAt!: string;
 
@@ -62,6 +70,13 @@ export class CreateCustomerConcernDto {
 export class UpdateCustomerConcernDto {
   @IsInt()
   expectedVersion!: number;
+
+  // Series No. — editable; must stay unique per organization.
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(20)
+  referenceNumber?: string;
 
   @IsOptional()
   @IsDateString()

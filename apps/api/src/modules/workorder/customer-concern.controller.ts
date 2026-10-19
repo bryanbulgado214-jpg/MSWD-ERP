@@ -42,6 +42,13 @@ export class CustomerConcernController {
     return this.service.lookup(user.organizationId);
   }
 
+  // Suggested next Series No. for the New-CCF form (editable on the client).
+  @Get('next-reference')
+  @RequirePermissions('workorder.read')
+  async nextReference(@CurrentUser() user: AuthenticatedUser) {
+    return { referenceNumber: await this.service.suggestReference(user.organizationId) };
+  }
+
   @Get(':id')
   @RequirePermissions('workorder.read')
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {

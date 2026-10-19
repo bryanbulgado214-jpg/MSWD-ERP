@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
-import { createCcf } from '../api';
+import { createCcf, getNextCcfReference } from '../api';
 import { CCF_CATEGORY_LABELS, type CcfCategory } from '../types';
 import '../workorders.css';
 
@@ -15,6 +15,7 @@ function nowLocal(): string {
 
 export default function CcfNewPage() {
   const navigate = useNavigate();
+  const [seriesNo, setSeriesNo] = useState('');
   const [receivedAt, setReceivedAt] = useState(nowLocal());
   const [customerName, setCustomerName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
@@ -26,7 +27,14 @@ export default function CcfNewPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const canSubmit = customerName.trim() && nature.trim() && receivedAt && !saving;
+  // Pre-fill the Series No. with the suggested next value (still editable).
+  useEffect(() => {
+    getNextCcfReference()
+      .then((ref) => setSeriesNo((cur) => cur || ref))
+      .catch(() => {});
+  }, []);
+
+  const canSubmit = seriesNo.trim() && customerName.trim() && nature.trim() && receivedAt && !saving;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -35,6 +43,7 @@ export default function CcfNewPage() {
     setError('');
     try {
       const ccf = await createCcf({
+        referenceNumber: seriesNo.trim(),
         receivedAt: new Date(receivedAt).toISOString(),
         customerName: customerName.trim(),
         ...(accountNumber.trim() ? { accountNumber: accountNumber.trim() } : {}),
@@ -64,6 +73,19 @@ export default function CcfNewPage() {
 
       <form onSubmit={handleSubmit} className="wo-form">
         <div className="wo-form__grid">
+          <div className="wo-form__field">
+            <label className="wo-form__label">Series No. *</label>
+            <input
+              type="text"
+              className="wo-input"
+              value={seriesNo}
+              onChange={(e) => setSeriesNo(e.target.value)}
+              maxLength={20}
+              placeholder="e.g. CCF-000002"
+              required
+            />
+            <span style={{ fontSize: 11, color: '#98a2b3' }}>Suggested — edit if needed.</span>
+          </div>
           <div className="wo-form__field">
             <label className="wo-form__label">Date &amp; Time Received *</label>
             <input

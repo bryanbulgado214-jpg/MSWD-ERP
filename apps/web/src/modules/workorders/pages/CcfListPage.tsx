@@ -178,9 +178,11 @@ export default function CcfListPage() {
                 <th>Nature</th>
                 <th>Action Taken</th>
                 <th>Status</th>
+                <th>Work Order Ref.</th>
                 <th>Target</th>
                 <th>Resolved</th>
                 <th style={{ textAlign: 'right' }}>Days Open</th>
+                <th aria-label="Print"></th>
               </tr>
             </thead>
             <tbody>
@@ -215,6 +217,11 @@ export default function CcfListPage() {
                   <td>
                     <span style={ccfStatusStyle(r.status)}>{CCF_STATUS_LABELS[r.status]}</span>
                   </td>
+                  <td style={{ fontSize: 12 }}>
+                    {r.workOrders && r.workOrders.length > 0
+                      ? r.workOrders.map((w) => w.woNumber).join(', ')
+                      : '—'}
+                  </td>
                   <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(r.targetResolutionDate)}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(r.resolvedAt)}</td>
                   <td
@@ -226,6 +233,16 @@ export default function CcfListPage() {
                   >
                     {r.daysOpen}
                     {r.overdue ? ' ⚠' : ''}
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    <Link
+                      to={`/work-orders/ccf/${r.id}/print`}
+                      className="wo-table__link"
+                      title="Print this CCF"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      🖨
+                    </Link>
                   </td>
                 </tr>
               ))}

@@ -73,26 +73,30 @@ export class CustomerConcernService {
   }
 
   async create(organizationId: string, userId: string, dto: CreateCustomerConcernDto) {
-    const referenceNumber = await this.generateReference(organizationId);
-    const row = await this.prisma.customerConcern.create({
-      data: {
-        organizationId,
-        referenceNumber,
-        receivedAt: new Date(dto.receivedAt),
-        customerName: dto.customerName.trim(),
-        accountNumber: dto.accountNumber?.trim() || null,
-        category: dto.category,
-        nature: dto.nature.trim(),
-        requestedAction: dto.requestedAction?.trim() || null,
-        assignedTo: dto.assignedTo?.trim() || null,
-        targetResolutionDate: dto.targetResolutionDate ? new Date(dto.targetResolutionDate) : null,
-        remarks: dto.remarks?.trim() || null,
-        status: 'pending',
-        createdBy: userId,
-      },
-      include: CCF_INCLUDE,
-    });
-    return this.withAging(row);
+    const referenceNumber = dto.referenceNumber?.trim() || (await this.suggestReference(organizationId));
+    try {
+      const row = await this.prisma.customerConcern.create({
+        data: {
+          organizationId,
+          referenceNumber,
+          receivedAt: new Date(dto.receivedAt),
+          customerName: dto.customerName.trim(),
+          accountNumber: dto.accountNumber?.trim() || null,
+          category: dto.category,
+          nature: dto.nature.trim(),
+          requestedAction: dto.requestedAction?.trim() || null,
+          assignedTo: dto.assignedTo?.trim() || null,
+          targetResolutionDate: dto.targetResolutionDate ? new Date(dto.targetResolutionDate) : null,
+          remarks: dto.remarks?.trim() || null,
+          status: 'pending',
+          createdBy: userId,
+        },
+        include: CCF_INCLUDE,
+      });
+      return this.withAging(row);
+    } catch (e) {
+      throw this.duplicateSeriesOr(e, referenceNumber);
+    }
   }
 
   async update(organizationId: string, id: string, userId: string, dto: UpdateCustomerConcernDto) {
@@ -105,6 +109,7 @@ export class CustomerConcernService {
       updatedBy: userId,
       version: { increment: 1 },
     };
+    if (dto.referenceNumber !== undefined) data.referenceNumber = dto.referenceNumber.trim();
     if (dto.receivedAt !== undefined) data.receivedAt = new Date(dto.receivedAt);
     if (dto.customerName !== undefined) data.customerName = dto.customerName.trim();
     if (dto.accountNumber !== undefined) data.accountNumber = dto.accountNumber.trim() || null;
@@ -132,12 +137,16 @@ export class CustomerConcernService {
       data.resolvedAt = dto.resolvedAt ? new Date(dto.resolvedAt) : null;
     }
 
-    const row = await this.prisma.customerConcern.update({
-      where: { id },
-      data,
-      include: CCF_INCLUDE,
-    });
-    return this.withAging(row);
+    try {
+      const row = await this.prisma.customerConcern.update({
+        where: { id },
+        data,
+        include: CCF_INCLUDE,
+      });
+      return this.withAging(row);
+    } catch (e) {
+      throw this.duplicateSeriesOr(e, dto.referenceNumber?.trim() ?? existing.referenceNumber);
+    }
   }
 
   // Minimal list for tagging a CCF from a work order (reference + customer).
@@ -157,25 +166,31 @@ export class CustomerConcernService {
     return rows;
   }
 
-  // Mint a CCF-000001 style reference from the shared document_sequences table,
-  // self-seeding the sequence row on first use (same pattern as WO/PR numbers).
-  private async generateReference(organizationId: string): Promise<string> {
-    const updated = await this.prisma.$queryRaw<{ next_number: bigint }[]>(Prisma.sql`
-      UPDATE document_sequences
-      SET next_number = next_number + 1, last_generated_at = now()
-      WHERE organization_id = ${organizationId}::uuid
-        AND document_type = 'customer_concern'
-        AND fiscal_year_id IS NULL
-      RETURNING next_number
-    `);
-    if (updated.length > 0) {
-      return `CCF-${String(Number(updated[0]!.next_number)).padStart(6, '0')}`;
+  // The next suggested Series No. for a new CCF: the highest CCF-NNNNNN on file
+  // plus one. Pre-fills the New-CCF form but stays editable, so custom-format
+  // series the user typed are simply ignored when computing the suggestion.
+  async suggestReference(organizationId: string): Promise<string> {
+    const rows = await this.prisma.customerConcern.findMany({
+      where: { organizationId },
+      select: { referenceNumber: true },
+    });
+    let max = 0;
+    for (const r of rows) {
+      const m = /^CCF-(\d+)$/i.exec(r.referenceNumber.trim());
+      if (m) max = Math.max(max, parseInt(m[1]!, 10));
     }
-    const inserted = await this.prisma.$queryRaw<{ next_number: bigint }[]>(Prisma.sql`
-      INSERT INTO document_sequences (organization_id, document_type, prefix, next_number)
-      VALUES (${organizationId}::uuid, 'customer_concern', 'CCF-', 1)
-      RETURNING next_number
-    `);
-    return `CCF-${String(Number(inserted[0]!.next_number)).padStart(6, '0')}`;
+    return `CCF-${String(max + 1).padStart(6, '0')}`;
+  }
+
+  // Turn a unique-constraint violation on the series number into a friendly 409.
+  private duplicateSeriesOr(e: unknown, series: string): unknown {
+    if (
+      e instanceof Prisma.PrismaClientKnownRequestError &&
+      e.code === 'P2002' &&
+      (e.meta?.target as string[] | undefined)?.some((t) => t.includes('reference'))
+    ) {
+      return new ConflictException(`Series No. "${series}" is already used. Choose another.`);
+    }
+    return e;
   }
 }

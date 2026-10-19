@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
-import { getWorkOrder, updateWorkOrder } from '../api';
-import { WO_TYPE_LABELS, type WorkOrder, type WorkOrderType } from '../types';
+import { getCcfLookup, getWorkOrder, updateWorkOrder } from '../api';
+import {
+  CCF_STATUS_LABELS,
+  WO_TYPE_LABELS,
+  type CcfLookup,
+  type WorkOrder,
+  type WorkOrderType,
+} from '../types';
 import '../workorders.css';
 
 export default function WorkOrderEditPage() {
@@ -22,6 +28,13 @@ export default function WorkOrderEditPage() {
   const [instructions, setInstructions] = useState('');
   const [remarks, setRemarks] = useState('');
   const [sigRequired, setSigRequired] = useState(false);
+  // Optional CCF mapping — what complaint this work order is for.
+  const [customerConcernId, setCustomerConcernId] = useState('');
+  const [ccfOptions, setCcfOptions] = useState<CcfLookup[]>([]);
+
+  useEffect(() => {
+    getCcfLookup().then(setCcfOptions).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -37,6 +50,7 @@ export default function WorkOrderEditPage() {
         setInstructions(order.instructions ?? '');
         setRemarks(order.remarks ?? '');
         setSigRequired(order.customerSignatureRequired);
+        setCustomerConcernId(order.customerConcernId ?? '');
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -58,6 +72,7 @@ export default function WorkOrderEditPage() {
         instructions,
         remarks,
         customerSignatureRequired: sigRequired,
+        customerConcernId: customerConcernId || null,
         ...(scheduledDate ? { scheduledDate } : {}),
       });
       navigate(`/work-orders/${wo.id}`);
@@ -121,6 +136,21 @@ export default function WorkOrderEditPage() {
           <label className="wo-form__field">
             <span className="wo-form__label">Scheduled Date</span>
             <input type="date" className="wo-input" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} />
+          </label>
+          <label className="wo-form__field wo-form__field--full">
+            <span className="wo-form__label">Customer Complaint (CCF) — optional</span>
+            <select
+              className="wo-select"
+              value={customerConcernId}
+              onChange={(e) => setCustomerConcernId(e.target.value)}
+            >
+              <option value="">Not from a complaint</option>
+              {ccfOptions.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.referenceNumber} — {c.customerName} ({CCF_STATUS_LABELS[c.status]})
+                </option>
+              ))}
+            </select>
           </label>
           <label className="wo-form__field" style={{ justifyContent: 'flex-end' }}>
             <span className="wo-form__label">Customer signature</span>

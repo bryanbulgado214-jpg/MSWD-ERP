@@ -31,6 +31,7 @@ export default function CcfDetailPage() {
   const [saving, setSaving] = useState(false);
 
   // Editable fields
+  const [seriesNo, setSeriesNo] = useState('');
   const [receivedAt, setReceivedAt] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
@@ -45,6 +46,7 @@ export default function CcfDetailPage() {
 
   function hydrate(c: Ccf) {
     setCcf(c);
+    setSeriesNo(c.referenceNumber);
     setReceivedAt(toLocalInput(c.receivedAt));
     setCustomerName(c.customerName);
     setAccountNumber(c.accountNumber ?? '');
@@ -77,6 +79,7 @@ export default function CcfDetailPage() {
     try {
       const updated = await updateCcf(ccf.id, {
         expectedVersion: ccf.version,
+        referenceNumber: seriesNo.trim(),
         receivedAt: new Date(receivedAt).toISOString(),
         customerName: customerName.trim(),
         accountNumber: accountNumber.trim(),
@@ -119,15 +122,30 @@ export default function CcfDetailPage() {
             )}
           </div>
         </div>
-        <Link to="/work-orders/ccf" className="wo-btn wo-btn--nav">
-          &larr; Back to CCF list
-        </Link>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Link to={`/work-orders/ccf/${ccf.id}/print`} className="wo-btn wo-btn--nav">
+            🖨 Print
+          </Link>
+          <Link to="/work-orders/ccf" className="wo-btn wo-btn--nav">
+            &larr; Back to CCF list
+          </Link>
+        </div>
       </div>
 
       {error && <div className="wo-error">{error}</div>}
 
       <form onSubmit={handleSave} className="wo-form">
         <div className="wo-form__grid">
+          <div className="wo-form__field">
+            <label className="wo-form__label">Series No.</label>
+            <input
+              type="text"
+              className="wo-input"
+              value={seriesNo}
+              onChange={(e) => setSeriesNo(e.target.value)}
+              maxLength={20}
+            />
+          </div>
           <div className="wo-form__field">
             <label className="wo-form__label">Date &amp; Time Received</label>
             <input

@@ -13,6 +13,7 @@ import WorkOrderTeamsPage from './pages/WorkOrderTeamsPage';
 import CcfListPage from './pages/CcfListPage';
 import CcfNewPage from './pages/CcfNewPage';
 import CcfDetailPage from './pages/CcfDetailPage';
+import CcfPrintPage from './pages/CcfPrintPage';
 
 const workOrderRoutes: RouteObject[] = [
   {
@@ -34,6 +35,8 @@ const workOrderRoutes: RouteObject[] = [
   // Reports is its own navbar tab (not a Work Order sub-page), so it sits
   // outside the module shell and shows no left rail.
   { path: 'reports', element: <WorkOrderReportsPage /> },
+  // Print pages render full-bleed (no left rail).
+  { path: 'ccf/:id/print', element: <CcfPrintPage /> },
   { path: ':id/print', element: <WorkOrderPrintPage /> },
 ];
 

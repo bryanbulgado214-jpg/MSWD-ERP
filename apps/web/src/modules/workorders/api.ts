@@ -145,6 +145,13 @@ export async function getCcfLookup(): Promise<CcfLookup[]> {
   return res.json();
 }
 
+/** Suggested next Series No. for a new CCF (editable on the form). */
+export async function getNextCcfReference(): Promise<string> {
+  const res = await authFetch('/ccf/next-reference');
+  const data = (await res.json()) as { referenceNumber: string };
+  return data.referenceNumber;
+}
+
 export async function createCcf(data: CcfCreateInput): Promise<Ccf> {
   const res = await authFetchMutate('/ccf', 'POST', data);
   return res.json();
