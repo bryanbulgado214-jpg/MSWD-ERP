@@ -84,6 +84,7 @@ export class CustomerConcernService {
           accountNumber: dto.accountNumber?.trim() || null,
           category: dto.category,
           nature: dto.nature.trim(),
+          location: dto.location?.trim() || null,
           requestedAction: dto.requestedAction?.trim() || null,
           assignedTo: dto.assignedTo?.trim() || null,
           targetResolutionDate: dto.targetResolutionDate ? new Date(dto.targetResolutionDate) : null,
@@ -115,6 +116,7 @@ export class CustomerConcernService {
     if (dto.accountNumber !== undefined) data.accountNumber = dto.accountNumber.trim() || null;
     if (dto.category !== undefined) data.category = dto.category;
     if (dto.nature !== undefined) data.nature = dto.nature.trim();
+    if (dto.location !== undefined) data.location = dto.location.trim() || null;
     if (dto.requestedAction !== undefined) data.requestedAction = dto.requestedAction.trim() || null;
     if (dto.assignedTo !== undefined) data.assignedTo = dto.assignedTo.trim() || null;
     if (dto.actionTaken !== undefined) data.actionTaken = dto.actionTaken.trim() || null;

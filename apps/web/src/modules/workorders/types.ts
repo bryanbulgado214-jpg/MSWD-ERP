@@ -103,6 +103,7 @@ export interface Ccf {
   accountNumber: string | null;
   category: CcfCategory;
   nature: string;
+  location: string | null;
   requestedAction: string | null;
   assignedTo: string | null;
   actionTaken: string | null;
@@ -136,6 +137,7 @@ export interface CcfCreateInput {
   accountNumber?: string;
   category: CcfCategory;
   nature: string;
+  location?: string;
   requestedAction?: string;
   assignedTo?: string;
   targetResolutionDate?: string;
@@ -150,6 +152,7 @@ export interface CcfUpdateInput {
   accountNumber?: string;
   category?: CcfCategory;
   nature?: string;
+  location?: string;
   requestedAction?: string;
   assignedTo?: string;
   actionTaken?: string;

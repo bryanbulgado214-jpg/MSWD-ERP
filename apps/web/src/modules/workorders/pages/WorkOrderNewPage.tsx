@@ -59,6 +59,9 @@ export default function WorkOrderNewPage() {
       .then((c) => {
         setCcfDetail(c);
         setCcfModalOpen(true);
+        // Auto-capture the complainant (and account) and the location from the CCF.
+        setCustomerName(`${c.customerName}${c.accountNumber ? ` (${c.accountNumber})` : ''}`);
+        if (c.location) setLocation(c.location);
       })
       .catch(() => {});
   }
@@ -202,37 +205,6 @@ export default function WorkOrderNewPage() {
           </label>
 
           <label className="wo-form__field">
-            <span className="wo-form__label">Priority</span>
-            <select className="wo-select" value={priority} onChange={(e) => setPriority(e.target.value)}>
-              <option value="low">Low</option>
-              <option value="normal">Normal</option>
-              <option value="high">High</option>
-              <option value="urgent">Urgent</option>
-            </select>
-          </label>
-
-          <label className="wo-form__field wo-form__field--full">
-            <span className="wo-form__label">Title *</span>
-            <input
-              className="wo-input"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              placeholder="Brief description of the work"
-            />
-          </label>
-
-          <label className="wo-form__field">
-            <span className="wo-form__label">Customer / Account</span>
-            <input
-              className="wo-input"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              placeholder="Name of the concerned customer (if any)"
-            />
-          </label>
-
-          <label className="wo-form__field">
             <span className="wo-form__label">Customer Complaint (CCF)</span>
             <select
               className="wo-select"
@@ -265,6 +237,37 @@ export default function WorkOrderNewPage() {
                 View CCF details
               </button>
             )}
+          </label>
+
+          <label className="wo-form__field wo-form__field--full">
+            <span className="wo-form__label">Title *</span>
+            <input
+              className="wo-input"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              placeholder="Brief description of the work"
+            />
+          </label>
+
+          <label className="wo-form__field">
+            <span className="wo-form__label">Customer / Account</span>
+            <input
+              className="wo-input"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              placeholder="Name of the concerned customer (if any)"
+            />
+          </label>
+
+          <label className="wo-form__field">
+            <span className="wo-form__label">Priority</span>
+            <select className="wo-select" value={priority} onChange={(e) => setPriority(e.target.value)}>
+              <option value="low">Low</option>
+              <option value="normal">Normal</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </select>
           </label>
 
           <label className="wo-form__field">
@@ -533,6 +536,8 @@ export default function WorkOrderNewPage() {
               </dd>
               <dt style={{ color: '#667085', fontWeight: 600 }}>Category</dt>
               <dd style={{ margin: 0 }}>{CCF_CATEGORY_LABELS[ccfDetail.category]}</dd>
+              <dt style={{ color: '#667085', fontWeight: 600 }}>Location</dt>
+              <dd style={{ margin: 0 }}>{ccfDetail.location || '—'}</dd>
               <dt style={{ color: '#667085', fontWeight: 600 }}>Nature</dt>
               <dd style={{ margin: 0 }}>{ccfDetail.nature}</dd>
               <dt style={{ color: '#667085', fontWeight: 600 }}>Requested Action</dt>

@@ -90,7 +90,7 @@ export default function CcfPrintPage() {
 
           <div className="ccfp-block">
             <span className="l">Details / Nature of Complaint / Concern &nbsp;({CCF_CATEGORY_LABELS[ccf.category]})</span>
-            <div className="fill">{ccf.nature}{ccf.requestedAction ? `\n\nRequested action: ${ccf.requestedAction}` : ''}</div>
+            <div className="fill">{ccf.location ? `Location: ${ccf.location}\n\n` : ''}{ccf.nature}{ccf.requestedAction ? `\n\nRequested action: ${ccf.requestedAction}` : ''}</div>
           </div>
 
           <div className="ccfp-block">

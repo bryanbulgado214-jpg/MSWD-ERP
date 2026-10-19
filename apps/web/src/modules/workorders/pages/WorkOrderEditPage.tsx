@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
-import { getCcfLookup, getWorkOrder, updateWorkOrder } from '../api';
+import { getCcf, getCcfLookup, getWorkOrder, updateWorkOrder } from '../api';
 import {
   CCF_STATUS_LABELS,
   WO_TYPE_LABELS,
@@ -55,6 +55,18 @@ export default function WorkOrderEditPage() {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [id]);
+
+  // Linking to a CCF auto-captures the complainant (and account) and location.
+  function pickCcf(ccfId: string) {
+    setCustomerConcernId(ccfId);
+    if (!ccfId) return;
+    getCcf(ccfId)
+      .then((c) => {
+        setCustomerName(`${c.customerName}${c.accountNumber ? ` (${c.accountNumber})` : ''}`);
+        if (c.location) setLocation(c.location);
+      })
+      .catch(() => {});
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -142,7 +154,7 @@ export default function WorkOrderEditPage() {
             <select
               className="wo-select"
               value={customerConcernId}
-              onChange={(e) => setCustomerConcernId(e.target.value)}
+              onChange={(e) => pickCcf(e.target.value)}
             >
               <option value="">Not from a complaint</option>
               {ccfOptions.map((c) => (

@@ -5322,6 +5322,7 @@ model CustomerConcern {
   accountNumber        String?     @map("account_number") @db.VarChar(50)
   category             CcfCategory
   nature               String
+  location             String?     @db.VarChar(255)
   requestedAction      String?     @map("requested_action")
   assignedTo           String?     @map("assigned_to") @db.VarChar(200)
   actionTaken          String?     @map("action_taken")

@@ -36,6 +36,7 @@ export default function CcfDetailPage() {
   const [customerName, setCustomerName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [category, setCategory] = useState<CcfCategory>('billing');
+  const [location, setLocation] = useState('');
   const [nature, setNature] = useState('');
   const [requestedAction, setRequestedAction] = useState('');
   const [actionTaken, setActionTaken] = useState('');
@@ -51,6 +52,7 @@ export default function CcfDetailPage() {
     setCustomerName(c.customerName);
     setAccountNumber(c.accountNumber ?? '');
     setCategory(c.category);
+    setLocation(c.location ?? '');
     setNature(c.nature);
     setRequestedAction(c.requestedAction ?? '');
     setActionTaken(c.actionTaken ?? '');
@@ -85,6 +87,7 @@ export default function CcfDetailPage() {
         accountNumber: accountNumber.trim(),
         category,
         nature: nature.trim(),
+        location: location.trim(),
         requestedAction: requestedAction.trim(),
         actionTaken: actionTaken.trim(),
         status,
@@ -187,6 +190,17 @@ export default function CcfDetailPage() {
               value={accountNumber}
               onChange={(e) => setAccountNumber(e.target.value)}
               maxLength={50}
+            />
+          </div>
+          <div className="wo-form__field wo-form__field--full">
+            <label className="wo-form__label">Location</label>
+            <input
+              type="text"
+              className="wo-input"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              maxLength={255}
+              placeholder="Address or area of the complaint"
             />
           </div>
           <div className="wo-form__field wo-form__field--full">

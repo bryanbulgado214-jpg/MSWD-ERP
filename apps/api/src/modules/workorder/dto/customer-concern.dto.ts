@@ -51,6 +51,11 @@ export class CreateCustomerConcernDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(255)
+  location?: string;
+
+  @IsOptional()
+  @IsString()
   requestedAction?: string;
 
   @IsOptional()
@@ -99,6 +104,11 @@ export class UpdateCustomerConcernDto {
   @IsOptional()
   @IsString()
   nature?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  location?: string;
 
   @IsOptional()
   @IsString()
