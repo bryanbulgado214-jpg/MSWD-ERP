@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
-import { getCcf, updateCcf } from '../api';
+import { useAuth } from '../../../app/auth';
+import { deleteCcf, getCcf, updateCcf } from '../api';
 import {
   CCF_CATEGORY_LABELS,
   CCF_STATUS_LABELS,
@@ -25,10 +26,13 @@ function toLocalInput(iso: string): string {
 export default function CcfDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { permissions } = useAuth();
   const [ccf, setCcf] = useState<Ccf | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const canDelete = permissions.has('workorder.create');
 
   // Editable fields
   const [seriesNo, setSeriesNo] = useState('');
@@ -100,6 +104,26 @@ export default function CcfDetailPage() {
       setError(err instanceof Error ? err.message : 'Failed to save.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!ccf || deleting) return;
+    const linked = ccf.workOrders?.length ?? 0;
+    const msg =
+      `Delete ${ccf.referenceNumber} (${ccf.customerName})? This cannot be undone.` +
+      (linked > 0
+        ? `\n\n${linked} linked work order${linked === 1 ? '' : 's'} will be kept but unlinked from this complaint.`
+        : '');
+    if (!window.confirm(msg)) return;
+    setDeleting(true);
+    setError('');
+    try {
+      await deleteCcf(ccf.id);
+      navigate('/work-orders/ccf');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete.');
+      setDeleting(false);
     }
   }
 
@@ -280,6 +304,17 @@ export default function CcfDetailPage() {
         </div>
 
         <div className="wo-form__actions">
+          {canDelete && (
+            <button
+              type="button"
+              className="wo-btn"
+              onClick={handleDelete}
+              disabled={deleting || saving}
+              style={{ marginRight: 'auto', color: '#b42318', borderColor: '#fda29b' }}
+            >
+              {deleting ? 'Deleting…' : '🗑 Delete'}
+            </button>
+          )}
           <button type="button" className="wo-btn" onClick={() => navigate('/work-orders/ccf')}>
             Close
           </button>

@@ -151,6 +151,14 @@ export class CustomerConcernService {
     }
   }
 
+  // Delete a CCF. Any work orders tagged to it are auto-unlinked
+  // (WorkOrder.customerConcernId is onDelete: SetNull), not deleted.
+  async remove(organizationId: string, id: string) {
+    await this.requireOne(organizationId, id);
+    await this.prisma.customerConcern.delete({ where: { id } });
+    return { id, deleted: true };
+  }
+
   // Minimal list for tagging a CCF from a work order (reference + customer).
   async lookup(organizationId: string) {
     const rows = await this.prisma.customerConcern.findMany({

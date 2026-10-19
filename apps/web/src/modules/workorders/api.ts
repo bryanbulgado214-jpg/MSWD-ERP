@@ -162,6 +162,11 @@ export async function updateCcf(id: string, data: CcfUpdateInput): Promise<Ccf> 
   return res.json();
 }
 
+/** Delete a CCF. Any work orders tagged to it are auto-unlinked, not deleted. */
+export async function deleteCcf(id: string): Promise<void> {
+  await authFetchMutate(`/ccf/${id}`, 'DELETE');
+}
+
 export interface CrewInput {
   soloTask?: boolean;
   teamId?: string;
