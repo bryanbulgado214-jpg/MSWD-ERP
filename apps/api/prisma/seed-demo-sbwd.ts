@@ -353,11 +353,19 @@ async function main() {
     email: string,
     roleCodes: string[],
     hash: string = passwordHash,
+    fullName?: string,
   ) => {
     const user = await prisma.user.upsert({
       where: { organizationId_username: { organizationId: org.id, username } },
-      update: { email, passwordHash: hash, isActive: true },
-      create: { organizationId: org.id, username, email, passwordHash: hash, isActive: true },
+      update: { email, passwordHash: hash, isActive: true, ...(fullName ? { fullName } : {}) },
+      create: {
+        organizationId: org.id,
+        username,
+        email,
+        passwordHash: hash,
+        isActive: true,
+        ...(fullName ? { fullName } : {}),
+      },
     });
     for (const rc of roleCodes) {
       const roleId = roles[rc]?.id;
@@ -382,6 +390,8 @@ async function main() {
   const approverUser = await mkUser('demo.approver', 'approver@sbwd.invalid', ['ACCOUNTANT']);
   const cashierUser = await mkUser('demo.cashier', 'cashier@sbwd.invalid', ['CASHIER']);
   await mkUser('demo.gm', 'gm@sbwd.invalid', ['GENERAL_MANAGER']);
+  // Owner / full-access demo login (the district's own system administrator).
+  await mkUser('sajumawan', 'sajumawan@sbwd.invalid', ['ADMIN', 'GENERAL_MANAGER'], undefined, 'Syrel Jumawan');
 
   // Three multi-device demo users — simple credentials, one JEV stage each.
   await mkUser('preparer', 'preparer@sbwd.invalid', ['JEV_PREPARER'], simpleHash);
