@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
 import {
@@ -67,21 +66,6 @@ export default function StaffAvailabilityPage() {
     }
   }
 
-  function openAdd() {
-    setEditId(null);
-    setFName('');
-    setFDesignation('');
-    setFDepartment('');
-    setFContact('');
-    setFField(false);
-    setFLinkId('');
-    setFLinkName('');
-    listStaffLinkOptions()
-      .then(setLinkOptions)
-      .catch(() => setLinkOptions([]));
-    setError('');
-    setShowForm(true);
-  }
   function openEdit(s: StaffMember) {
     setEditId(s.id);
     setFName(s.name);
@@ -160,17 +144,8 @@ export default function StaffAvailabilityPage() {
 
   return (
     <div className="wo-page">
-      <Link to="/work-orders" className="wo-back">
-        <span className="wo-back__arrow" aria-hidden="true">&larr;</span>
-        Back to Work Orders
-      </Link>
       <div className="wo-page__header">
         <h1>Staff Availability</h1>
-        {canManage && (
-          <button className="wo-btn wo-btn--primary" onClick={openAdd}>
-            + Add Staff
-          </button>
-        )}
       </div>
       <p style={{ color: '#667085', marginTop: -6 }}>
         {canManage

@@ -11,7 +11,7 @@ interface WoNavLink {
 
 // The named sub-sections; anything else under /work-orders (the list, a WO
 // detail/edit, "new") keeps the "Work Orders" link active.
-const NAMED = new Set(['dashboard', 'staff', 'teams', 'reports', 'ccf']);
+const NAMED = new Set(['dashboard', 'staff', 'reports', 'ccf']);
 
 export default function WorkOrdersSubNav() {
   const { pathname } = useLocation();
@@ -19,13 +19,14 @@ export default function WorkOrdersSubNav() {
 
   const seg = pathname.replace(/^\/work-orders\/?/, '').split('/')[0] || '';
 
-  const links: WoNavLink[] = [
+  const allLinks: WoNavLink[] = [
     { to: '/work-orders/dashboard', label: 'Dashboard' },
     { to: '/work-orders', label: 'Work Orders' },
+    // Teams & Personnel now lives as a tab inside Staff Availability.
     { to: '/work-orders/staff', label: 'Staff Availability' },
-    { to: '/work-orders/teams', label: 'Teams & Personnel', perm: 'workorder.team.manage' },
     { to: '/work-orders/ccf', label: 'Customer Complaints' },
-  ].filter((l) => !l.perm || permissions.has(l.perm));
+  ];
+  const links = allLinks.filter((l) => !l.perm || permissions.has(l.perm));
 
   const isActive = (to: string) => {
     const target = to.replace(/^\/work-orders\/?/, '');

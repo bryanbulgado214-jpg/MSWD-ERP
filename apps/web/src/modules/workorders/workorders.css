@@ -14,6 +14,31 @@
   padding: 1.5rem 1.5rem 2rem;
 }
 
+/* ── In-page tabs (e.g. the Staff Availability hub) ── */
+.wo-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  border-bottom: 2px solid #e4e7ec;
+}
+.wo-tab {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #667085;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  white-space: nowrap;
+}
+.wo-tab:hover {
+  color: var(--mswd-navy, #0b3a67);
+}
+.wo-tab--active {
+  color: var(--mswd-blue, #175cd3);
+  border-bottom-color: var(--mswd-blue, #175cd3);
+}
+
 /* ── Work Orders sub-navigation (vertical left rail) ── */
 .wo-subnav {
   position: fixed;

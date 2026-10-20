@@ -228,7 +228,7 @@ export default function CcfDetailPage() {
             />
           </div>
           <div className="wo-form__field wo-form__field--full">
-            <label className="wo-form__label">Nature of Complaint/Concern</label>
+            <label className="wo-form__label">Details/Nature of Complaint/Concern</label>
             <textarea
               className="wo-textarea"
               value={nature}

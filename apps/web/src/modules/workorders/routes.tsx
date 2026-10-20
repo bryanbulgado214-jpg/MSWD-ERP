@@ -1,4 +1,4 @@
-import type { RouteObject } from 'react-router-dom';
+import { Navigate, type RouteObject } from 'react-router-dom';
 
 import WorkOrdersLayout from './WorkOrdersLayout';
 import WorkOrderDashboardPage from './pages/WorkOrderDashboardPage';
@@ -6,6 +6,7 @@ import WorkOrderDetailPage from './pages/WorkOrderDetailPage';
 import WorkOrderEditPage from './pages/WorkOrderEditPage';
 import WorkOrderListPage from './pages/WorkOrderListPage';
 import WorkOrderNewPage from './pages/WorkOrderNewPage';
+import StaffHubLayout from './pages/StaffHubLayout';
 import StaffAvailabilityPage from './pages/StaffAvailabilityPage';
 import WorkOrderPrintPage from './pages/WorkOrderPrintPage';
 import WorkOrderReportsPage from './pages/WorkOrderReportsPage';
@@ -22,8 +23,18 @@ const workOrderRoutes: RouteObject[] = [
     children: [
       { index: true, element: <WorkOrderListPage /> },
       { path: 'dashboard', element: <WorkOrderDashboardPage /> },
-      { path: 'teams', element: <WorkOrderTeamsPage /> },
-      { path: 'staff', element: <StaffAvailabilityPage /> },
+      // Teams & Personnel moved under Staff Availability — keep the old path working.
+      { path: 'teams', element: <Navigate to="/work-orders/staff/teams" replace /> },
+      // Staff Availability is a tabbed hub: staff list, teams & personnel, work orders.
+      {
+        path: 'staff',
+        element: <StaffHubLayout />,
+        children: [
+          { index: true, element: <StaffAvailabilityPage /> },
+          { path: 'teams', element: <WorkOrderTeamsPage /> },
+          { path: 'orders', element: <WorkOrderListPage /> },
+        ],
+      },
       { path: 'ccf', element: <CcfListPage /> },
       { path: 'ccf/new', element: <CcfNewPage /> },
       { path: 'ccf/:id', element: <CcfDetailPage /> },

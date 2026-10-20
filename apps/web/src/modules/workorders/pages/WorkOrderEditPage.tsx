@@ -134,7 +134,7 @@ export default function WorkOrderEditPage() {
             </select>
           </label>
           <label className="wo-form__field wo-form__field--full">
-            <span className="wo-form__label">Title *</span>
+            <span className="wo-form__label">Details/Nature of Complaint/Concern *</span>
             <input className="wo-input" value={title} onChange={(e) => setTitle(e.target.value)} required />
           </label>
           <label className="wo-form__field">

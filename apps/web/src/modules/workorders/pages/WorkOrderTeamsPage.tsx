@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
 import {
@@ -132,10 +131,6 @@ export default function WorkOrderTeamsPage() {
 
   return (
     <div className="wo-page">
-      <Link to="/work-orders" className="wo-back">
-        <span className="wo-back__arrow" aria-hidden="true">&larr;</span>
-        Back to Work Orders
-      </Link>
       <div className="wo-page__header">
         <h1>Teams &amp; Personnel</h1>
       </div>
