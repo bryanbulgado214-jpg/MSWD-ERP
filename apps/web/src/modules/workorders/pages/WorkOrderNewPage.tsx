@@ -59,9 +59,11 @@ export default function WorkOrderNewPage() {
       .then((c) => {
         setCcfDetail(c);
         setCcfModalOpen(true);
-        // Auto-capture the complainant (and account) and the location from the CCF.
+        // Auto-capture the complainant (and account), location, and the
+        // complaint's details/nature from the CCF (capped at the title length).
         setCustomerName(`${c.customerName}${c.accountNumber ? ` (${c.accountNumber})` : ''}`);
         if (c.location) setLocation(c.location);
+        if (c.nature) setTitle(c.nature.slice(0, 255));
       })
       .catch(() => {});
   }
@@ -246,6 +248,7 @@ export default function WorkOrderNewPage() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
+              maxLength={255}
               placeholder="Details / nature of the complaint or work"
             />
           </label>

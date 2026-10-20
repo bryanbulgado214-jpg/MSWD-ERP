@@ -64,6 +64,7 @@ export default function WorkOrderEditPage() {
       .then((c) => {
         setCustomerName(`${c.customerName}${c.accountNumber ? ` (${c.accountNumber})` : ''}`);
         if (c.location) setLocation(c.location);
+        if (c.nature) setTitle(c.nature.slice(0, 255));
       })
       .catch(() => {});
   }
@@ -135,7 +136,7 @@ export default function WorkOrderEditPage() {
           </label>
           <label className="wo-form__field wo-form__field--full">
             <span className="wo-form__label">Details/Nature of Complaint/Concern *</span>
-            <input className="wo-input" value={title} onChange={(e) => setTitle(e.target.value)} required />
+            <input className="wo-input" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={255} />
           </label>
           <label className="wo-form__field">
             <span className="wo-form__label">Customer / Account</span>
