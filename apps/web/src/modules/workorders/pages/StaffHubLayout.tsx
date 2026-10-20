@@ -2,17 +2,16 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 
 import '../workorders.css';
 
-// Staff Availability is now a hub with tabs: the staff master list, the teams &
-// personnel roster (moved here from its own page), and the work-order list. The
-// Teams tab is shown to everyone — the page itself is read-only for users
-// without workorder.team.manage.
+// Staff Availability is a hub with two tabs: the staff master list and the
+// teams & personnel roster (moved here from its own page). The Teams tab is
+// shown to everyone — the page itself is read-only for users without
+// workorder.team.manage.
 export default function StaffHubLayout() {
   const { pathname } = useLocation();
 
   const tabs = [
     { to: '/work-orders/staff', label: 'Staff Availability', exact: true },
     { to: '/work-orders/staff/teams', label: 'Teams & Personnel' },
-    { to: '/work-orders/staff/orders', label: 'Work Orders' },
   ];
 
   const isActive = (to: string, exact?: boolean) =>

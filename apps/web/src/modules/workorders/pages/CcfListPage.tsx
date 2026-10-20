@@ -6,6 +6,7 @@ import { getCcfs } from '../api';
 import {
   CCF_CATEGORY_LABELS,
   CCF_STATUS_LABELS,
+  WO_STATUS_LABELS,
   type Ccf,
   type CcfCategory,
   type CcfStatus,
@@ -219,9 +220,26 @@ export default function CcfListPage() {
                     <span style={ccfStatusStyle(r.status)}>{CCF_STATUS_LABELS[r.status]}</span>
                   </td>
                   <td style={{ fontSize: 12 }}>
-                    {r.workOrders && r.workOrders.length > 0
-                      ? r.workOrders.map((w) => w.woNumber).join(', ')
-                      : '—'}
+                    {r.workOrders && r.workOrders.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {r.workOrders.map((w) => (
+                          <Link
+                            key={w.id}
+                            to={`/work-orders/${w.id}`}
+                            className="wo-table__link"
+                            onClick={(e) => e.stopPropagation()}
+                            title={w.title}
+                          >
+                            {w.woNumber}{' '}
+                            <span style={{ color: '#667085' }}>
+                              ({WO_STATUS_LABELS[w.status] ?? w.status})
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+                    ) : (
+                      '—'
+                    )}
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(r.targetResolutionDate)}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(r.resolvedAt)}</td>

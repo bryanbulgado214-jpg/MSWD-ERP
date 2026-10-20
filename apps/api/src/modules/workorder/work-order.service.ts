@@ -222,6 +222,16 @@ export class WorkOrderService {
           updatedBy: userId,
         },
       });
+
+      // When the order is tied to a complaint (CCF), copy its Details/Nature
+      // into the complaint so the two match. Copied once, at creation only.
+      if (dto.customerConcernId) {
+        await tx.customerConcern.updateMany({
+          where: { id: dto.customerConcernId, organizationId },
+          data: { nature: dto.title.trim() },
+        });
+      }
+
       // Seed Crew 1 and attach the members to it when a crew was assigned now.
       if (assignCrewNow) {
         const crew = await tx.workOrderCrew.create({

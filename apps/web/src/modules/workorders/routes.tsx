@@ -32,7 +32,6 @@ const workOrderRoutes: RouteObject[] = [
         children: [
           { index: true, element: <StaffAvailabilityPage /> },
           { path: 'teams', element: <WorkOrderTeamsPage /> },
-          { path: 'orders', element: <WorkOrderListPage /> },
         ],
       },
       { path: 'ccf', element: <CcfListPage /> },
