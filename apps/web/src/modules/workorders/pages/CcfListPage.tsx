@@ -114,7 +114,7 @@ export default function CcfListPage() {
           { label: 'Total concerns', value: summary.total, bg: '#f2f4f7', fg: '#344054' },
           { label: 'Still open', value: summary.open, bg: '#eff8ff', fg: '#175cd3' },
           { label: 'Open & overdue', value: summary.overdue, bg: '#fef3f2', fg: '#b42318' },
-          { label: 'Avg days to resolve', value: summary.avgResolveDays, bg: '#ecfdf3', fg: '#067647' },
+          { label: 'Avg days to complete', value: summary.avgResolveDays, bg: '#ecfdf3', fg: '#067647' },
         ].map((c) => (
           <div
             key={c.label}
@@ -158,8 +158,8 @@ export default function CcfListPage() {
 
       <p style={{ fontSize: 13, color: '#667085', margin: '0 0 12px' }}>
         Consolidated register of all customer complaints/concerns. "Days Open" counts from the date
-        received to resolution (or today if still open); rows shaded red are open past their target
-        resolution date. Click a row to open and update it.
+        received to completion (or today if still open); rows shaded red are open past their target
+        completion date. Click a row to open and update it.
       </p>
 
       {error && <div className="wo-error">{error}</div>}
@@ -181,7 +181,7 @@ export default function CcfListPage() {
                 <th>Status</th>
                 <th>Work Order Ref.</th>
                 <th>Target</th>
-                <th>Resolved</th>
+                <th>Completed</th>
                 <th style={{ textAlign: 'right' }}>Days Open</th>
               </tr>
             </thead>

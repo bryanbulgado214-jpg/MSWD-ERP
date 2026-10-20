@@ -223,12 +223,19 @@ export class WorkOrderService {
         },
       });
 
-      // When the order is tied to a complaint (CCF), copy its Details/Nature
-      // into the complaint so the two match. Copied once, at creation only.
+      // When the order is tied to a complaint (CCF): copy its Details/Nature
+      // into the complaint (once, at creation), and advance a still-pending
+      // complaint to "In Progress" now that work has started. A complaint only
+      // moves to Completed when it is marked complete by hand, so never touch a
+      // complaint that is already in progress, completed, or closed.
       if (dto.customerConcernId) {
         await tx.customerConcern.updateMany({
           where: { id: dto.customerConcernId, organizationId },
           data: { nature: dto.title.trim() },
+        });
+        await tx.customerConcern.updateMany({
+          where: { id: dto.customerConcernId, organizationId, status: 'pending' },
+          data: { status: 'in_progress' },
         });
       }
 

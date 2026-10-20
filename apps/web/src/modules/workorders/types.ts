@@ -90,7 +90,8 @@ export const CCF_CATEGORY_LABELS: Record<CcfCategory, string> = {
 export const CCF_STATUS_LABELS: Record<CcfStatus, string> = {
   pending: 'Pending',
   in_progress: 'In Progress',
-  resolved: 'Resolved',
+  // The "resolved" status is shown as "Completed" (set by hand in the CCF).
+  resolved: 'Completed',
   closed: 'Closed',
 };
 

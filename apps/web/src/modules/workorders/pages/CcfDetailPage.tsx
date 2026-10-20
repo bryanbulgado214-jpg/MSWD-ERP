@@ -145,7 +145,7 @@ export default function CcfDetailPage() {
                 {ccf.daysOpen} day{ccf.daysOpen === 1 ? '' : 's'} open{ccf.overdue ? ' · OVERDUE' : ''}
               </strong>
             ) : (
-              <span>resolved in {ccf.daysOpen} day{ccf.daysOpen === 1 ? '' : 's'}</span>
+              <span>completed in {ccf.daysOpen} day{ccf.daysOpen === 1 ? '' : 's'}</span>
             )}
           </div>
         </div>
@@ -270,7 +270,7 @@ export default function CcfDetailPage() {
             />
           </div>
           <div className="wo-form__field">
-            <label className="wo-form__label">Target Resolution Date</label>
+            <label className="wo-form__label">Target Completion Date</label>
             <input
               type="date"
               className="wo-input"
@@ -280,7 +280,7 @@ export default function CcfDetailPage() {
           </div>
           {resolvedShown && (
             <div className="wo-form__field">
-              <label className="wo-form__label">Actual Resolution Date</label>
+              <label className="wo-form__label">Completion Date</label>
               <input
                 type="datetime-local"
                 className="wo-input"
@@ -288,7 +288,7 @@ export default function CcfDetailPage() {
                 onChange={(e) => setResolvedAt(e.target.value)}
               />
               <span style={{ fontSize: 11, color: '#98a2b3' }}>
-                Left blank, it is stamped when you save as Resolved/Closed.
+                Left blank, it is stamped when you save as Completed/Closed.
               </span>
             </div>
           )}

@@ -115,8 +115,8 @@ export default function CcfPrintPage() {
           </div>
 
           <div className="ccfp-row">
-            <div className="ccfp-cell"><span className="l">Target Resolution Date:</span> <span className="v">{fmtDate(ccf.targetResolutionDate)}</span></div>
-            <div className="ccfp-cell"><span className="l">Date Resolved:</span> <span className="v">{fmtDateTime(ccf.resolvedAt)}</span></div>
+            <div className="ccfp-cell"><span className="l">Target Completion Date:</span> <span className="v">{fmtDate(ccf.targetResolutionDate)}</span></div>
+            <div className="ccfp-cell"><span className="l">Date Completed:</span> <span className="v">{fmtDateTime(ccf.resolvedAt)}</span></div>
           </div>
         </div>
 

@@ -165,7 +165,7 @@ export default function CcfNewPage() {
             />
           </div>
           <div className="wo-form__field">
-            <label className="wo-form__label">Target Resolution Date</label>
+            <label className="wo-form__label">Target Completion Date</label>
             <input
               type="date"
               className="wo-input"
