@@ -99,11 +99,13 @@ export async function createWorkOrder(data: {
   description?: string;
   consumerId?: string;
   customerName?: string;
+  contactNumber?: string;
   location?: string;
   scheduledDate?: string;
   estimatedDurationHrs?: number;
   instructions?: string;
   remarks?: string;
+  leaderReceivedAt?: string;
   customerSignatureRequired?: boolean;
   customerConcernId?: string;
   soloTask?: boolean;
@@ -119,14 +121,17 @@ export async function updateWorkOrder(
   id: string,
   data: {
     expectedVersion: number;
+    woNumber?: string;
     priority?: string;
     title?: string;
     description?: string;
     customerName?: string;
+    contactNumber?: string;
     location?: string;
     scheduledDate?: string;
     instructions?: string;
     remarks?: string;
+    leaderReceivedAt?: string | null;
     customerSignatureRequired?: boolean;
     customerConcernId?: string | null;
   },

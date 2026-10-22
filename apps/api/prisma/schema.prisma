@@ -4922,6 +4922,12 @@ model WorkOrder {
   remarks                   String?
   tasksPerformed            String?         @map("tasks_performed")
   issuesEncountered         String?         @map("issues_encountered")
+  // Contact number of the customer/complainant (free text; auto-captured from a
+  // linked CCF, else entered by hand). Shown on the printed work order.
+  contactNumber             String?         @map("contact_number") @db.VarChar(50)
+  // Date & time the team leader received the printed work order. Written by the
+  // team leader on paper, then keyed into the system by the section head.
+  leaderReceivedAt          DateTime?       @map("leader_received_at") @db.Timestamptz(6)
   // Optional link to the Customer Complaint/Concern Form (CCF) that this work
   // order addresses; blank for office-initiated work.
   customerConcernId         String?         @map("customer_concern_id") @db.Uuid
@@ -5320,6 +5326,7 @@ model CustomerConcern {
   receivedAt           DateTime    @map("received_at") @db.Timestamptz(6)
   customerName         String      @map("customer_name") @db.VarChar(200)
   accountNumber        String?     @map("account_number") @db.VarChar(50)
+  contactNumber        String?     @map("contact_number") @db.VarChar(50)
   category             CcfCategory
   nature               String
   location             String?     @db.VarChar(255)

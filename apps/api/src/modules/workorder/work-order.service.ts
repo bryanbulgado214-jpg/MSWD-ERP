@@ -149,12 +149,14 @@ export class WorkOrderService {
       description?: string;
       consumerId?: string;
       customerName?: string;
+      contactNumber?: string;
       meterId?: string;
       location?: string;
       scheduledDate?: string;
       estimatedDurationHrs?: number;
       instructions?: string;
       remarks?: string;
+      leaderReceivedAt?: string;
       customerSignatureRequired?: boolean;
       customerConcernId?: string;
       // Crew the creator wants to dispatch. Only applied when the creator holds
@@ -210,12 +212,14 @@ export class WorkOrderService {
           ...(dto.description ? { description: dto.description } : {}),
           ...(dto.consumerId ? { consumerId: dto.consumerId } : {}),
           ...(dto.customerName ? { customerName: dto.customerName.trim() } : {}),
+          ...(dto.contactNumber ? { contactNumber: dto.contactNumber.trim() } : {}),
           ...(dto.meterId ? { meterId: dto.meterId } : {}),
           ...(dto.location ? { location: dto.location } : {}),
           ...(dto.scheduledDate ? { scheduledDate: new Date(dto.scheduledDate) } : {}),
           ...(dto.estimatedDurationHrs != null ? { estimatedDurationHrs: dto.estimatedDurationHrs } : {}),
           ...(dto.instructions ? { instructions: dto.instructions.trim() } : {}),
           ...(dto.remarks ? { remarks: dto.remarks.trim() } : {}),
+          ...(dto.leaderReceivedAt ? { leaderReceivedAt: new Date(dto.leaderReceivedAt) } : {}),
           ...(dto.customerConcernId ? { customerConcernId: dto.customerConcernId } : {}),
           customerSignatureRequired: signatureRequired,
           ...(assignCrewNow
@@ -620,17 +624,20 @@ export class WorkOrderService {
     id: string,
     dto: {
       expectedVersion: number;
+      woNumber?: string;
       priority?: string;
       title?: string;
       description?: string;
       consumerId?: string;
       customerName?: string;
+      contactNumber?: string;
       meterId?: string;
       location?: string;
       scheduledDate?: string;
       estimatedDurationHrs?: number;
       instructions?: string;
       remarks?: string;
+      leaderReceivedAt?: string | null;
       customerSignatureRequired?: boolean;
       customerConcernId?: string | null;
     },
@@ -642,20 +649,34 @@ export class WorkOrderService {
       throw new BadRequestException('Can only edit a work order before it is dispatched.');
     }
 
+    // A changed Work Order No. must stay unique within the organization.
+    if (dto.woNumber?.trim() && dto.woNumber.trim() !== wo.woNumber) {
+      const clash = await this.prisma.workOrder.findFirst({
+        where: { organizationId, woNumber: dto.woNumber.trim(), id: { not: id } },
+        select: { id: true },
+      });
+      if (clash) throw new ConflictException(`Work Order No. "${dto.woNumber.trim()}" is already used. Choose another.`);
+    }
+
     return this.prisma.workOrder.update({
       where: { id },
       data: {
+        ...(dto.woNumber?.trim() ? { woNumber: dto.woNumber.trim() } : {}),
         ...(dto.priority ? { priority: dto.priority as never } : {}),
         ...(dto.title ? { title: dto.title } : {}),
         ...(dto.description !== undefined ? { description: dto.description } : {}),
         ...(dto.consumerId !== undefined ? { consumerId: dto.consumerId || null } : {}),
         ...(dto.customerName !== undefined ? { customerName: dto.customerName.trim() || null } : {}),
+        ...(dto.contactNumber !== undefined ? { contactNumber: dto.contactNumber.trim() || null } : {}),
         ...(dto.meterId !== undefined ? { meterId: dto.meterId || null } : {}),
         ...(dto.location !== undefined ? { location: dto.location } : {}),
         ...(dto.scheduledDate ? { scheduledDate: new Date(dto.scheduledDate) } : {}),
         ...(dto.estimatedDurationHrs != null ? { estimatedDurationHrs: dto.estimatedDurationHrs } : {}),
         ...(dto.instructions !== undefined ? { instructions: dto.instructions.trim() || null } : {}),
         ...(dto.remarks !== undefined ? { remarks: dto.remarks.trim() || null } : {}),
+        ...(dto.leaderReceivedAt !== undefined
+          ? { leaderReceivedAt: dto.leaderReceivedAt ? new Date(dto.leaderReceivedAt) : null }
+          : {}),
         ...(dto.customerSignatureRequired !== undefined
           ? { customerSignatureRequired: dto.customerSignatureRequired }
           : {}),

@@ -22,12 +22,15 @@ export class CreateWorkOrderDto {
   @IsString() @IsOptional() description?: string;
   @IsUUID() @IsOptional() consumerId?: string;
   @IsString() @IsOptional() customerName?: string;
+  @IsString() @IsOptional() contactNumber?: string;
   @IsUUID() @IsOptional() meterId?: string;
   @IsString() @IsOptional() location?: string;
   @IsString() @IsOptional() scheduledDate?: string;
   @IsNumber() @IsOptional() estimatedDurationHrs?: number;
   @IsString() @IsOptional() instructions?: string;
   @IsString() @IsOptional() remarks?: string;
+  // Date & time the team leader received the printed work order (ISO string).
+  @IsString() @IsOptional() leaderReceivedAt?: string;
   @IsBoolean() @IsOptional() customerSignatureRequired?: boolean;
   // Optional tag to the Customer Complaint/Concern Form (CCF) this WO addresses.
   @IsUUID() @IsOptional() customerConcernId?: string;
@@ -41,17 +44,21 @@ export class CreateWorkOrderDto {
 
 export class UpdateWorkOrderDto {
   @IsNumber() @IsNotEmpty() expectedVersion!: number;
+  @IsString() @IsOptional() @MaxLength(20) woNumber?: string;
   @IsString() @IsOptional() priority?: string;
   @IsString() @IsOptional() title?: string;
   @IsString() @IsOptional() description?: string;
   @IsString() @IsOptional() consumerId?: string;
   @IsString() @IsOptional() customerName?: string;
+  @IsString() @IsOptional() contactNumber?: string;
   @IsString() @IsOptional() meterId?: string;
   @IsString() @IsOptional() location?: string;
   @IsString() @IsOptional() scheduledDate?: string;
   @IsNumber() @IsOptional() estimatedDurationHrs?: number;
   @IsString() @IsOptional() instructions?: string;
   @IsString() @IsOptional() remarks?: string;
+  // Pass to set/clear the team-leader received timestamp (ISO string, or empty).
+  @IsString() @IsOptional() leaderReceivedAt?: string | null;
   @IsBoolean() @IsOptional() customerSignatureRequired?: boolean;
   // Pass null (empty) to clear the CCF tag, or a CCF id to (re)link it.
   @IsString() @IsOptional() customerConcernId?: string | null;

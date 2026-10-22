@@ -19,6 +19,7 @@ export default function CcfNewPage() {
   const [receivedAt, setReceivedAt] = useState(nowLocal());
   const [customerName, setCustomerName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
+  const [contactNumber, setContactNumber] = useState('');
   const [category, setCategory] = useState<CcfCategory>('billing');
   const [location, setLocation] = useState('');
   const [nature, setNature] = useState('');
@@ -48,6 +49,7 @@ export default function CcfNewPage() {
         receivedAt: new Date(receivedAt).toISOString(),
         customerName: customerName.trim(),
         ...(accountNumber.trim() ? { accountNumber: accountNumber.trim() } : {}),
+        ...(contactNumber.trim() ? { contactNumber: contactNumber.trim() } : {}),
         category,
         nature: nature.trim(),
         ...(location.trim() ? { location: location.trim() } : {}),
@@ -131,6 +133,17 @@ export default function CcfNewPage() {
               value={accountNumber}
               onChange={(e) => setAccountNumber(e.target.value)}
               maxLength={50}
+            />
+          </div>
+          <div className="wo-form__field">
+            <label className="wo-form__label">Contact Number</label>
+            <input
+              type="text"
+              className="wo-input"
+              value={contactNumber}
+              onChange={(e) => setContactNumber(e.target.value)}
+              maxLength={50}
+              placeholder="Mobile / landline"
             />
           </div>
           <div className="wo-form__field wo-form__field--full">

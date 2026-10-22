@@ -11,6 +11,13 @@ import {
 } from '../types';
 import '../workorders.css';
 
+// datetime-local wants a local wall-clock value, not the ISO/UTC string.
+function toLocalInput(iso: string): string {
+  const d = new Date(iso);
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+}
+
 export default function WorkOrderEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -19,12 +26,15 @@ export default function WorkOrderEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const [woNumber, setWoNumber] = useState('');
   const [priority, setPriority] = useState('normal');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [contactNumber, setContactNumber] = useState('');
   const [location, setLocation] = useState('');
   const [scheduledDate, setScheduledDate] = useState('');
+  const [leaderReceivedAt, setLeaderReceivedAt] = useState('');
   const [instructions, setInstructions] = useState('');
   const [remarks, setRemarks] = useState('');
   const [sigRequired, setSigRequired] = useState(false);
@@ -41,12 +51,15 @@ export default function WorkOrderEditPage() {
     getWorkOrder(id)
       .then((order) => {
         setWo(order);
+        setWoNumber(order.woNumber);
         setPriority(order.priority);
         setTitle(order.title);
         setDescription(order.description ?? '');
         setCustomerName(order.customerName ?? '');
+        setContactNumber(order.contactNumber ?? '');
         setLocation(order.location ?? '');
         setScheduledDate(order.scheduledDate ? order.scheduledDate.slice(0, 10) : '');
+        setLeaderReceivedAt(order.leaderReceivedAt ? toLocalInput(order.leaderReceivedAt) : '');
         setInstructions(order.instructions ?? '');
         setRemarks(order.remarks ?? '');
         setSigRequired(order.customerSignatureRequired);
@@ -63,6 +76,7 @@ export default function WorkOrderEditPage() {
     getCcf(ccfId)
       .then((c) => {
         setCustomerName(`${c.customerName}${c.accountNumber ? ` (${c.accountNumber})` : ''}`);
+        if (c.contactNumber) setContactNumber(c.contactNumber);
         if (c.location) setLocation(c.location);
         if (c.nature) setTitle(c.nature.slice(0, 255));
       })
@@ -77,13 +91,16 @@ export default function WorkOrderEditPage() {
     try {
       await updateWorkOrder(wo.id, {
         expectedVersion: wo.version,
+        ...(woNumber.trim() ? { woNumber: woNumber.trim() } : {}),
         priority,
         title,
         description,
         customerName,
+        contactNumber,
         location,
         instructions,
         remarks,
+        leaderReceivedAt: leaderReceivedAt ? new Date(leaderReceivedAt).toISOString() : null,
         customerSignatureRequired: sigRequired,
         customerConcernId: customerConcernId || null,
         ...(scheduledDate ? { scheduledDate } : {}),
@@ -122,6 +139,10 @@ export default function WorkOrderEditPage() {
       <form onSubmit={handleSubmit} className="wo-form">
         <div className="wo-form__grid">
           <label className="wo-form__field">
+            <span className="wo-form__label">Work Order No.</span>
+            <input className="wo-input" value={woNumber} onChange={(e) => setWoNumber(e.target.value)} maxLength={20} />
+          </label>
+          <label className="wo-form__field">
             <span className="wo-form__label">Task Type</span>
             <input className="wo-input" value={WO_TYPE_LABELS[wo.type as WorkOrderType] ?? wo.type} disabled />
           </label>
@@ -139,16 +160,32 @@ export default function WorkOrderEditPage() {
             <input className="wo-input" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={255} />
           </label>
           <label className="wo-form__field">
-            <span className="wo-form__label">Customer / Account</span>
+            <span className="wo-form__label">Customer / Complainant</span>
             <input className="wo-input" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
+          </label>
+          <label className="wo-form__field">
+            <span className="wo-form__label">Contact Number</span>
+            <input className="wo-input" value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} maxLength={50} />
           </label>
           <label className="wo-form__field">
             <span className="wo-form__label">Location</span>
             <input className="wo-input" value={location} onChange={(e) => setLocation(e.target.value)} />
           </label>
           <label className="wo-form__field">
-            <span className="wo-form__label">Scheduled Date</span>
+            <span className="wo-form__label">Date</span>
             <input type="date" className="wo-input" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} />
+          </label>
+          <label className="wo-form__field">
+            <span className="wo-form__label">Date &amp; Time Received</span>
+            <input
+              type="datetime-local"
+              className="wo-input"
+              value={leaderReceivedAt}
+              onChange={(e) => setLeaderReceivedAt(e.target.value)}
+            />
+            <span style={{ fontSize: 12, color: '#667085', marginTop: 4 }}>
+              When the team leader received the printed work order.
+            </span>
           </label>
           <label className="wo-form__field wo-form__field--full">
             <span className="wo-form__label">Customer Complaint (CCF) — optional</span>
@@ -177,7 +214,7 @@ export default function WorkOrderEditPage() {
             <textarea className="wo-textarea" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
           </label>
           <label className="wo-form__field wo-form__field--full">
-            <span className="wo-form__label">Instructions to crew</span>
+            <span className="wo-form__label">Detailed Instructions</span>
             <textarea className="wo-textarea" value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={2} />
           </label>
           <label className="wo-form__field wo-form__field--full">

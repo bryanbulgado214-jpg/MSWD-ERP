@@ -85,7 +85,7 @@ export default function CcfPrintPage() {
           </div>
           <div className="ccfp-row">
             <div className="ccfp-cell"><span className="l">Work Order No.:</span> <span className="v">{workOrderNos}</span></div>
-            <div className="ccfp-cell"><span className="l">Contact Number:</span> <span className="v"></span></div>
+            <div className="ccfp-cell"><span className="l">Contact Number:</span> <span className="v">{ccf.contactNumber || ''}</span></div>
           </div>
 
           <div className="ccfp-block">

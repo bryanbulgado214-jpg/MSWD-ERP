@@ -24,6 +24,8 @@ export interface WorkOrder {
   // ── Crew-dispatch flow ──
   nature: WorkOrderNature;
   customerName: string | null;
+  contactNumber: string | null;
+  leaderReceivedAt: string | null;
   customerSignatureRequired: boolean;
   soloTask: boolean;
   teamId: string | null;
@@ -102,6 +104,7 @@ export interface Ccf {
   receivedAt: string;
   customerName: string;
   accountNumber: string | null;
+  contactNumber: string | null;
   category: CcfCategory;
   nature: string;
   location: string | null;
@@ -136,6 +139,7 @@ export interface CcfCreateInput {
   receivedAt: string;
   customerName: string;
   accountNumber?: string;
+  contactNumber?: string;
   category: CcfCategory;
   nature: string;
   location?: string;
@@ -151,6 +155,7 @@ export interface CcfUpdateInput {
   receivedAt?: string;
   customerName?: string;
   accountNumber?: string;
+  contactNumber?: string;
   category?: CcfCategory;
   nature?: string;
   location?: string;

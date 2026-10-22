@@ -48,6 +48,7 @@ export default function WorkOrderNewPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [contactNumber, setContactNumber] = useState('');
   const [location, setLocation] = useState('');
   const [scheduledDate, setScheduledDate] = useState('');
   const [instructions, setInstructions] = useState('');
@@ -71,9 +72,10 @@ export default function WorkOrderNewPage() {
       .then((c) => {
         setCcfDetail(c);
         setCcfModalOpen(true);
-        // Auto-capture the complainant (and account), location, and the
-        // complaint's details/nature from the CCF (capped at the title length).
+        // Auto-capture the complainant (and account), contact number, location,
+        // and the complaint's details/nature from the CCF (capped at title len).
         setCustomerName(`${c.customerName}${c.accountNumber ? ` (${c.accountNumber})` : ''}`);
+        if (c.contactNumber) setContactNumber(c.contactNumber);
         if (c.location) setLocation(c.location);
         if (c.nature) setTitle(c.nature.slice(0, 255));
       })
@@ -161,6 +163,7 @@ export default function WorkOrderNewPage() {
         customerSignatureRequired: sigRequired,
         ...(description ? { description } : {}),
         ...(customerName ? { customerName } : {}),
+        ...(contactNumber.trim() ? { contactNumber: contactNumber.trim() } : {}),
         ...(location ? { location } : {}),
         ...(scheduledDate ? { scheduledDate } : {}),
         ...(instructions ? { instructions } : {}),
@@ -288,12 +291,23 @@ export default function WorkOrderNewPage() {
           </label>
 
           <label className="wo-form__field">
-            <span className="wo-form__label">Customer / Account</span>
+            <span className="wo-form__label">Customer / Complainant</span>
             <input
               className="wo-input"
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
               placeholder="Name of the concerned customer (if any)"
+            />
+          </label>
+
+          <label className="wo-form__field">
+            <span className="wo-form__label">Contact Number</span>
+            <input
+              className="wo-input"
+              value={contactNumber}
+              onChange={(e) => setContactNumber(e.target.value)}
+              maxLength={50}
+              placeholder="Mobile / landline (if any)"
             />
           </label>
 
@@ -318,7 +332,7 @@ export default function WorkOrderNewPage() {
           </label>
 
           <label className="wo-form__field">
-            <span className="wo-form__label">Scheduled Date</span>
+            <span className="wo-form__label">Date</span>
             <input
               type="date"
               className="wo-input"
@@ -353,13 +367,13 @@ export default function WorkOrderNewPage() {
           </label>
 
           <label className="wo-form__field wo-form__field--full">
-            <span className="wo-form__label">Instructions to crew</span>
+            <span className="wo-form__label">Detailed Instructions</span>
             <textarea
               className="wo-textarea"
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
               rows={2}
-              placeholder="What the office wants the crew to do"
+              placeholder="Instructions from the section head on what the crew should perform"
             />
           </label>
         </div>

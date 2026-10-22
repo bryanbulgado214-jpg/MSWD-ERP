@@ -42,6 +42,11 @@ export class CreateCustomerConcernDto {
   @MaxLength(50)
   accountNumber?: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  contactNumber?: string;
+
   @IsIn(CCF_CATEGORIES)
   category!: (typeof CCF_CATEGORIES)[number];
 
@@ -96,6 +101,11 @@ export class UpdateCustomerConcernDto {
   @IsString()
   @MaxLength(50)
   accountNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  contactNumber?: string;
 
   @IsOptional()
   @IsIn(CCF_CATEGORIES)

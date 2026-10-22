@@ -82,6 +82,7 @@ export class CustomerConcernService {
           receivedAt: new Date(dto.receivedAt),
           customerName: dto.customerName.trim(),
           accountNumber: dto.accountNumber?.trim() || null,
+          contactNumber: dto.contactNumber?.trim() || null,
           category: dto.category,
           nature: dto.nature.trim(),
           location: dto.location?.trim() || null,
@@ -114,6 +115,7 @@ export class CustomerConcernService {
     if (dto.receivedAt !== undefined) data.receivedAt = new Date(dto.receivedAt);
     if (dto.customerName !== undefined) data.customerName = dto.customerName.trim();
     if (dto.accountNumber !== undefined) data.accountNumber = dto.accountNumber.trim() || null;
+    if (dto.contactNumber !== undefined) data.contactNumber = dto.contactNumber.trim() || null;
     if (dto.category !== undefined) data.category = dto.category;
     if (dto.nature !== undefined) data.nature = dto.nature.trim();
     if (dto.location !== undefined) data.location = dto.location.trim() || null;
