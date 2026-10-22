@@ -2,7 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
-import { createWorkOrder, getCcf, getCcfLookup, listPersonnel, listStaff, listTeams } from '../api';
+import {
+  createWorkOrder,
+  getCcf,
+  getCcfLookup,
+  getNextWoNumber,
+  listPersonnel,
+  listStaff,
+  listTeams,
+} from '../api';
 import MemberPickerModal from '../components/MemberPickerModal';
 import {
   CCF_CATEGORY_LABELS,
@@ -31,6 +39,10 @@ export default function WorkOrderNewPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // Work Order No. — pre-filled with the next WO-NNNNNN but editable. `woTouched`
+  // stops the suggestion from overwriting a number the user has already typed.
+  const [woNumber, setWoNumber] = useState('');
+  const [woTouched, setWoTouched] = useState(false);
   const [type, setType] = useState<WorkOrderType>('installation');
   const [priority, setPriority] = useState('normal');
   const [title, setTitle] = useState('');
@@ -83,6 +95,10 @@ export default function WorkOrderNewPage() {
   const [staffStatus, setStaffStatus] = useState<Map<string, StaffAvailabilityStatus>>(new Map());
 
   useEffect(() => {
+    // Suggest the next Work Order No., unless the user has already typed one.
+    getNextWoNumber()
+      .then((n) => setWoNumber((prev) => (woTouched || prev ? prev : n)))
+      .catch(() => {});
     listPersonnel().then(setPersonnel).catch(() => {});
     listTeams().then(setTeams).catch(() => {});
     getCcfLookup().then(setCcfOptions).catch(() => {});
@@ -138,6 +154,7 @@ export default function WorkOrderNewPage() {
     try {
       const assigningNow = canAssign && !!leaderId;
       const wo = await createWorkOrder({
+        ...(woNumber.trim() ? { woNumber: woNumber.trim() } : {}),
         type,
         priority,
         title,
@@ -175,6 +192,23 @@ export default function WorkOrderNewPage() {
 
       <form onSubmit={handleSubmit} className="wo-form">
         <div className="wo-form__grid">
+          <label className="wo-form__field">
+            <span className="wo-form__label">Work Order No.</span>
+            <input
+              className="wo-input"
+              value={woNumber}
+              onChange={(e) => {
+                setWoTouched(true);
+                setWoNumber(e.target.value);
+              }}
+              maxLength={20}
+              placeholder="WO-000001"
+            />
+            <span style={{ fontSize: 12, color: '#667085', marginTop: 4 }}>
+              Auto-filled with the next number — edit it if you need a different one.
+            </span>
+          </label>
+
           <label className="wo-form__field">
             <span className="wo-form__label">Task Type *</span>
             <select

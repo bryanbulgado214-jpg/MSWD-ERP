@@ -7,10 +7,15 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  MaxLength,
   ValidateNested,
 } from 'class-validator';
 
 export class CreateWorkOrderDto {
+  // Optional Work Order No. The form pre-fills the next WO-NNNNNN but the user
+  // may type any number; left blank, the server assigns the next one. Capped at
+  // the column width (VarChar(20)) so an over-long value is a clean 400, not 500.
+  @IsString() @IsOptional() @MaxLength(20) woNumber?: string;
   @IsString() @IsNotEmpty() type!: string;
   @IsString() @IsOptional() priority?: string;
   @IsString() @IsNotEmpty() title!: string;

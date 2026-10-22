@@ -84,7 +84,15 @@ export async function getDashboard(): Promise<WorkOrderDashboard> {
   return res.json();
 }
 
+/** Suggested next Work Order No. for a new WO (editable on the form). */
+export async function getNextWoNumber(): Promise<string> {
+  const res = await authFetch('/workorders/next-number');
+  const data = (await res.json()) as { woNumber: string };
+  return data.woNumber;
+}
+
 export async function createWorkOrder(data: {
+  woNumber?: string;
   type: string;
   priority?: string;
   title: string;

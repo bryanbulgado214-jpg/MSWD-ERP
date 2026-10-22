@@ -142,6 +142,7 @@ export class WorkOrderService {
     organizationId: string,
     userId: string,
     dto: {
+      woNumber?: string;
       type: string;
       priority?: string;
       title: string;
@@ -181,7 +182,16 @@ export class WorkOrderService {
       await this.assertCrewInOrg(organizationId, dto.teamLeaderId, dto.memberIds);
     }
 
-    const woNumber = await this.generateWoNumber(organizationId);
+    const woNumber = dto.woNumber?.trim() || (await this.suggestWoNumber(organizationId));
+    // A Work Order No. must be unique. Reject a duplicate (whether suggested or
+    // typed in) with a clear message instead of a raw database error.
+    const woClash = await this.prisma.workOrder.findFirst({
+      where: { organizationId, woNumber },
+      select: { id: true },
+    });
+    if (woClash) {
+      throw new ConflictException(`Work Order No. "${woNumber}" is already used. Choose another.`);
+    }
     const solo = !!dto.soloTask;
     const members = assignCrewNow
       ? this.buildMemberRows(dto.teamLeaderId, solo ? [] : dto.memberIds)
@@ -1054,27 +1064,21 @@ export class WorkOrderService {
     }
   }
 
-  private async generateWoNumber(organizationId: string): Promise<string> {
-    const updated = await this.prisma.$queryRaw<{ next_number: bigint }[]>(Prisma.sql`
-      UPDATE document_sequences
-      SET next_number = next_number + 1, last_generated_at = now()
-      WHERE organization_id = ${organizationId}::uuid
-        AND document_type = 'work_order'
-        AND fiscal_year_id IS NULL
-      RETURNING next_number
-    `);
-
-    if (updated.length > 0) {
-      return `WO-${String(Number(updated[0]!.next_number)).padStart(6, '0')}`;
+  // The next suggested Work Order No.: the highest WO-NNNNNN on file plus one.
+  // Pre-fills the New-WO form but stays editable, so custom-format numbers the
+  // user typed are simply ignored when computing the suggestion. Scanning the
+  // existing numbers (rather than a stored counter) means accepting a suggested
+  // number can never desync a sequence — it mirrors how the CCF Series No. works.
+  async suggestWoNumber(organizationId: string): Promise<string> {
+    const rows = await this.prisma.workOrder.findMany({
+      where: { organizationId },
+      select: { woNumber: true },
+    });
+    let max = 0;
+    for (const r of rows) {
+      const m = /^WO-(\d+)$/i.exec(r.woNumber.trim());
+      if (m) max = Math.max(max, parseInt(m[1]!, 10));
     }
-
-    const inserted = await this.prisma.$queryRaw<{ next_number: bigint }[]>(Prisma.sql`
-      INSERT INTO document_sequences (organization_id, document_type, prefix, next_number)
-      VALUES (${organizationId}::uuid, 'work_order', 'WO-', 1)
-      RETURNING next_number
-    `);
-    const row = inserted[0];
-    if (!row) throw new Error('Failed to generate WO number from document_sequences.');
-    return `WO-${String(Number(row.next_number)).padStart(6, '0')}`;
+    return `WO-${String(max + 1).padStart(6, '0')}`;
   }
 }

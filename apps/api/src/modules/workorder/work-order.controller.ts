@@ -71,6 +71,13 @@ export class WorkOrderController {
     });
   }
 
+  // Suggested next Work Order No. for the New-WO form (editable on the client).
+  @Get('next-number')
+  @RequirePermissions('workorder.create')
+  async nextNumber(@CurrentUser() user: AuthenticatedUser) {
+    return { woNumber: await this.workOrderService.suggestWoNumber(user.organizationId) };
+  }
+
   @Get(':id')
   @RequirePermissions('workorder.read')
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
