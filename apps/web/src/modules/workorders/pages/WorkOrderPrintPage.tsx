@@ -57,7 +57,9 @@ export default function WorkOrderPrintPage() {
   // STATUS: In Progress / Completed / On Hold.
   const isCompleted = wo.status === 'completed' || wo.status === 'verified';
   const isOnHold = wo.status === 'cancelled';
-  const isInProgress = wo.status === 'in_progress' || wo.status === 'assigned';
+  // "In Progress" shows only once the crew is dispatched (time left entered);
+  // a merely-assigned order is still pending, so no status box is ticked yet.
+  const isInProgress = wo.status === 'in_progress';
 
   const actionTaken = wo.tasksPerformed || '';
   const remarksText = [wo.issuesEncountered, wo.remarks].filter(Boolean).join('\n');
@@ -199,13 +201,6 @@ export default function WorkOrderPrintPage() {
           </div>
 
           <div className="wop-seg">
-            <div className="wop-time">
-              <div className="wop-f"><span className="l">Time Left:</span><span className="v">{fmtDateTime(wo.timeLeft)}</span></div>
-              <div className="wop-f"><span className="l">Time Returned:</span><span className="v">{fmtDateTime(wo.timeReturned)}</span></div>
-            </div>
-          </div>
-
-          <div className="wop-seg">
             <div className="h">Action Taken:</div>
             <div className="wop-ruled" style={{ minHeight: 96 }}>{actionTaken}</div>
           </div>
@@ -213,6 +208,15 @@ export default function WorkOrderPrintPage() {
           <div className="wop-seg">
             <div className="h">Remarks:</div>
             <div className="wop-ruled" style={{ minHeight: 48 }}>{remarksText}</div>
+          </div>
+
+          {/* Time Left is filled by the field team and keyed in by dispatch before
+              they leave; Time Returned is logged when they report back. */}
+          <div className="wop-seg">
+            <div className="wop-time">
+              <div className="wop-f"><span className="l">Time Left:</span><span className="v">{fmtDateTime(wo.timeLeft)}</span></div>
+              <div className="wop-f"><span className="l">Time Returned:</span><span className="v">{fmtDateTime(wo.timeReturned)}</span></div>
+            </div>
           </div>
         </div>
 
