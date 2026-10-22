@@ -1315,6 +1315,58 @@ model BudgetTransactionLog {
   @@map("budget_transaction_logs")
 }
 
+// ─── Budget Utilization Report ────────────────────────────────────────
+// A standalone, category-based view of the year's budget vs. actual
+// DISBURSEMENTS, independent of the RC × fund-source BudgetHeader/Line
+// structure above. The budget officer defines per-fiscal-year lines under
+// three sections (Personnel Services, MOOE, Capital Outlay), enters the
+// year's budget per line, and maps the GL accounts whose posted
+// disbursements roll into each line. Utilization = sum of the disbursement
+// JEV debits (net of credits) to those accounts in the period.
+
+enum BudgetUtilizationSection {
+  personnel_services
+  mooe
+  capital_outlay
+
+  @@map("budget_utilization_section")
+}
+
+model BudgetUtilizationLine {
+  id             String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String                   @map("organization_id") @db.Uuid
+  fiscalYearId   String                   @map("fiscal_year_id") @db.Uuid
+  section        BudgetUtilizationSection
+  name           String                   @db.VarChar(200)
+  sortOrder      Int                      @default(0) @map("sort_order")
+  budgetAmount   Decimal                  @default(0) @map("budget_amount") @db.Decimal(18, 2)
+  // When true (the Supplies & Materials line), the report also shows APP
+  // utilization beside the disbursement figure for reconciliation.
+  appCrossCheck  Boolean                  @default(false) @map("app_cross_check")
+  createdBy      String?                  @map("created_by") @db.Uuid
+  updatedBy      String?                  @map("updated_by") @db.Uuid
+  createdAt      DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version        Int                      @default(1)
+
+  accounts BudgetUtilizationAccount[]
+
+  @@index([organizationId, fiscalYearId])
+  @@map("budget_utilization_lines")
+}
+
+model BudgetUtilizationAccount {
+  id                      String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  budgetUtilizationLineId String @map("budget_utilization_line_id") @db.Uuid
+  chartOfAccountId        String @map("chart_of_account_id") @db.Uuid
+
+  line BudgetUtilizationLine @relation(fields: [budgetUtilizationLineId], references: [id], onDelete: Cascade)
+
+  @@unique([budgetUtilizationLineId, chartOfAccountId])
+  @@index([chartOfAccountId])
+  @@map("budget_utilization_accounts")
+}
+
 // ════════════════════════════════════════════════════════════════════
 // PROCUREMENT (Phase 2+3 — Purchase Requests, PPMP, APP, Workflow)
 //

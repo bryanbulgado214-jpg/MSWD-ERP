@@ -6,6 +6,8 @@ import { BudgetDetailPage } from './pages/BudgetDetailPage';
 import { BudgetListPage } from './pages/BudgetListPage';
 import { BudgetReportsPage } from './pages/BudgetReportsPage';
 import { BudgetReviewPage } from './pages/BudgetReviewPage';
+import BudgetUtilizationReportPage from './pages/BudgetUtilizationReportPage';
+import BudgetUtilizationSetupPage from './pages/BudgetUtilizationSetupPage';
 import { CreateBudgetHeaderPage } from './pages/CreateBudgetHeaderPage';
 import { CreateBudgetReleasePage } from './pages/CreateBudgetReleasePage';
 import { CreateReservationPage } from './pages/CreateReservationPage';
@@ -23,6 +25,14 @@ export const budgetingRoutes: RouteObject[] = [
   {
     path: '/budgeting/reports',
     element: <BudgetReportsPage />,
+  },
+  {
+    path: '/budgeting/utilization',
+    element: <BudgetUtilizationReportPage />,
+  },
+  {
+    path: '/budgeting/utilization/setup',
+    element: <BudgetUtilizationSetupPage />,
   },
   {
     path: '/budgeting/budget-headers/new',

@@ -80,7 +80,7 @@ async function extractErrorMessage(response: Response, fallback: string): Promis
 
 async function authFetchMutate(
   path: string,
-  method: 'POST' | 'PATCH' | 'DELETE',
+  method: 'POST' | 'PATCH' | 'PUT' | 'DELETE',
   body?: unknown,
 ): Promise<Response> {
   const token = getAccessToken();
@@ -411,4 +411,148 @@ export interface FiscalYearLookupItem {
 
 export async function listFiscalYears(): Promise<FiscalYearLookupItem[]> {
   return (await authFetch('/budgeting/lookups/fiscal-years')).json();
+}
+
+// ── Budget Utilization Report ──
+
+export type UtilizationSection = 'personnel_services' | 'mooe' | 'capital_outlay';
+
+export const UTILIZATION_SECTION_LABELS: Record<UtilizationSection, string> = {
+  personnel_services: 'Personnel Services',
+  mooe: 'Maintenance and Other Operating Expenses',
+  capital_outlay: 'Capital Outlay',
+};
+
+export interface UtilizationAccountRef {
+  id: string;
+  accountCode: string;
+  name: string;
+}
+
+export interface UtilizationLineConfig {
+  id: string;
+  section: UtilizationSection;
+  name: string;
+  sortOrder: number;
+  budgetAmount: string;
+  appCrossCheck: boolean;
+  version: number;
+  accounts: UtilizationAccountRef[];
+}
+
+export interface UtilizationReportLine {
+  id: string;
+  section: UtilizationSection;
+  name: string;
+  appCrossCheck: boolean;
+  accountCount: number;
+  budget: number;
+  utilization: number;
+  remaining: number;
+  utilizationPct: number;
+  overBudget: boolean;
+  appUtilization?: number;
+}
+
+export interface UtilizationReportSection {
+  section: UtilizationSection;
+  lines: UtilizationReportLine[];
+  budget: number;
+  utilization: number;
+  remaining: number;
+  utilizationPct: number;
+  overBudget: boolean;
+}
+
+export interface UtilizationReport {
+  fiscalYear: { id: string; year: number; name: string; startDate: string; endDate: string };
+  period: { startDate: string; endDate: string };
+  sections: UtilizationReportSection[];
+  total: { budget: number; utilization: number; remaining: number; utilizationPct: number };
+}
+
+export interface UtilizationBreakdownRow {
+  jevId: string;
+  jevNumber: string;
+  jevDate: string;
+  particulars: string;
+  accountCode: string;
+  accountName: string;
+  amount: number;
+}
+
+export interface UtilizationBreakdown {
+  line: { id: string; name: string };
+  period: { startDate: string; endDate: string };
+  rows: UtilizationBreakdownRow[];
+  total: number;
+}
+
+export async function getUtilizationLines(fiscalYearId: string): Promise<UtilizationLineConfig[]> {
+  return (await authFetch(`/budgeting/utilization/lines?fiscalYearId=${fiscalYearId}`)).json();
+}
+
+export async function seedUtilizationLines(fiscalYearId: string): Promise<UtilizationLineConfig[]> {
+  return (await authFetchMutate('/budgeting/utilization/seed', 'POST', { fiscalYearId })).json();
+}
+
+export async function createUtilizationLine(input: {
+  fiscalYearId: string;
+  section: UtilizationSection;
+  name: string;
+  budgetAmount?: number;
+  sortOrder?: number;
+  appCrossCheck?: boolean;
+}): Promise<UtilizationLineConfig> {
+  return (await authFetchMutate('/budgeting/utilization/lines', 'POST', input)).json();
+}
+
+export async function updateUtilizationLine(
+  id: string,
+  input: {
+    expectedVersion: number;
+    section?: UtilizationSection;
+    name?: string;
+    budgetAmount?: number;
+    sortOrder?: number;
+    appCrossCheck?: boolean;
+  },
+): Promise<UtilizationLineConfig> {
+  return (await authFetchMutate(`/budgeting/utilization/lines/${id}`, 'PATCH', input)).json();
+}
+
+export async function deleteUtilizationLine(id: string): Promise<void> {
+  await authFetchMutate(`/budgeting/utilization/lines/${id}`, 'DELETE');
+}
+
+export async function setUtilizationAccounts(
+  id: string,
+  accountIds: string[],
+): Promise<UtilizationLineConfig[]> {
+  return (
+    await authFetchMutate(`/budgeting/utilization/lines/${id}/accounts`, 'PUT', { accountIds })
+  ).json();
+}
+
+export async function getUtilizationReport(
+  fiscalYearId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<UtilizationReport> {
+  const qs = new URLSearchParams({ fiscalYearId });
+  if (startDate) qs.set('startDate', startDate);
+  if (endDate) qs.set('endDate', endDate);
+  return (await authFetch(`/budgeting/utilization/report?${qs.toString()}`)).json();
+}
+
+export async function getUtilizationBreakdown(
+  lineId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<UtilizationBreakdown> {
+  const qs = new URLSearchParams();
+  if (startDate) qs.set('startDate', startDate);
+  if (endDate) qs.set('endDate', endDate);
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return (await authFetch(`/budgeting/utilization/lines/${lineId}/breakdown${suffix}`)).json();
 }

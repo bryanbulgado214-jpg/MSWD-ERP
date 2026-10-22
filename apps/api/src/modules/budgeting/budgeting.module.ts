@@ -10,6 +10,8 @@ import { BudgetLineService } from './budget-line.service';
 import { BudgetLinesController } from './budget-lines.controller';
 import { BudgetReleaseService } from './budget-release.service';
 import { BudgetReleasesController } from './budget-releases.controller';
+import { BudgetUtilizationController } from './budget-utilization.controller';
+import { BudgetUtilizationService } from './budget-utilization.service';
 import { BudgetVersionService } from './budget-version.service';
 import { BudgetVersionsController } from './budget-versions.controller';
 import { LookupController } from './lookup.controller';
@@ -34,6 +36,7 @@ import { ReservationsController } from './reservations.controller';
     BudgetReleasesController,
     ReservationsController,
     BudgetCalculationController,
+    BudgetUtilizationController,
     LookupController,
   ],
   providers: [
@@ -44,6 +47,7 @@ import { ReservationsController } from './reservations.controller';
     BudgetReleaseService,
     ReservationService,
     BudgetCalculationService,
+    BudgetUtilizationService,
   ],
   exports: [BudgetCalculationService, BudgetReleaseService, ReservationService],
 })

@@ -255,6 +255,18 @@ export function BudgetListPage() {
         </Link>
       </div>
 
+      <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 16, fontSize: 13 }}>
+        <Link to="/budgeting/utilization" style={{ fontWeight: 600, color: '#175cd3' }}>
+          📊 Budget Utilization Report →
+        </Link>
+        <Link to="/budgeting/reports" style={{ fontWeight: 600, color: '#175cd3' }}>
+          Budget Reports →
+        </Link>
+        <Link to="/budgeting/availability-inquiry" style={{ fontWeight: 600, color: '#175cd3' }}>
+          Availability Inquiry →
+        </Link>
+      </div>
+
       {canProcurementPlan && (
         <div
           style={{
