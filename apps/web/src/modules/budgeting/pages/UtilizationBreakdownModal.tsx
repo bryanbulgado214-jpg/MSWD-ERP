@@ -80,12 +80,12 @@ export function UtilizationBreakdownModal({
         >
           <div>
             <h3 style={{ margin: 0, fontSize: 16, color: 'var(--mswd-navy, #0a2540)' }}>
-              Disbursements — {lineName}
+              Entries — {lineName}
             </h3>
             {data && (
               <div style={{ fontSize: 12, color: '#667085', marginTop: 2 }}>
                 {fmtDate(data.period.startDate)} – {fmtDate(data.period.endDate)} ·{' '}
-                {data.rows.length} disbursement{data.rows.length === 1 ? '' : 's'}
+                {data.rows.length} {data.rows.length === 1 ? 'entry' : 'entries'}
               </div>
             )}
           </div>
@@ -104,7 +104,7 @@ export function UtilizationBreakdownModal({
           {!error && !data && <div style={{ padding: '16px 0', color: '#667085' }}>Loading…</div>}
           {data && data.rows.length === 0 && (
             <div style={{ padding: '16px 0', color: '#667085' }}>
-              No disbursements in this period for the accounts mapped to this line.
+              No entries in this period for the accounts mapped to this line.
             </div>
           )}
           {data && data.rows.length > 0 && (

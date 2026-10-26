@@ -438,6 +438,7 @@ export interface UtilizationLineConfig {
   appCrossCheck: boolean;
   version: number;
   accounts: UtilizationAccountRef[];
+  excludedContras: UtilizationAccountRef[];
 }
 
 export interface UtilizationReportLine {
@@ -531,6 +532,15 @@ export async function setUtilizationAccounts(
 ): Promise<UtilizationLineConfig[]> {
   return (
     await authFetchMutate(`/budgeting/utilization/lines/${id}/accounts`, 'PUT', { accountIds })
+  ).json();
+}
+
+export async function setUtilizationExcludedContras(
+  id: string,
+  accountIds: string[],
+): Promise<UtilizationLineConfig[]> {
+  return (
+    await authFetchMutate(`/budgeting/utilization/lines/${id}/excluded-contras`, 'PUT', { accountIds })
   ).json();
 }
 

@@ -9,6 +9,7 @@ import {
   listFiscalYears,
   seedUtilizationLines,
   setUtilizationAccounts,
+  setUtilizationExcludedContras,
   updateUtilizationLine,
   UTILIZATION_SECTION_LABELS,
   type FiscalYearLookupItem,
@@ -36,7 +37,7 @@ export default function BudgetUtilizationSetupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [mapFor, setMapFor] = useState<UtilizationLineConfig | null>(null);
+  const [mapFor, setMapFor] = useState<{ line: UtilizationLineConfig; kind: 'accounts' | 'excluded' } | null>(null);
   const [newName, setNewName] = useState<Record<UtilizationSection, string>>({
     personnel_services: '',
     mooe: '',
@@ -226,9 +227,33 @@ export default function BudgetUtilizationSetupPage() {
                               ))}
                             </div>
                           )}
-                          <button type="button" style={{ ...btn, marginTop: 6, padding: '4px 9px' }} onClick={() => setMapFor(line)}>
-                            Map accounts
-                          </button>
+                          {line.excludedContras.length > 0 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 5, alignItems: 'center' }}>
+                              <span style={{ fontSize: 11, color: '#98a2b3' }}>ignore offsets:</span>
+                              {line.excludedContras.map((a) => (
+                                <span
+                                  key={a.id}
+                                  style={{ background: '#fef3f2', color: '#b42318', borderRadius: 6, padding: '2px 7px', fontSize: 12 }}
+                                  title={a.name}
+                                >
+                                  {a.accountCode}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                            <button type="button" style={{ ...btn, padding: '4px 9px' }} onClick={() => setMapFor({ line, kind: 'accounts' })}>
+                              Map accounts
+                            </button>
+                            <button
+                              type="button"
+                              style={{ ...btn, padding: '4px 9px' }}
+                              onClick={() => setMapFor({ line, kind: 'excluded' })}
+                              title="Ignore entries offset by chosen accounts (e.g. the month-end inventory reclass)"
+                            >
+                              Ignore offsets…
+                            </button>
+                          </div>
                         </td>
                         <td style={{ padding: '9px 10px', textAlign: 'right' }}>
                           <button
@@ -267,7 +292,8 @@ export default function BudgetUtilizationSetupPage() {
 
       {mapFor && (
         <AccountMapModal
-          line={mapFor}
+          line={mapFor.line}
+          kind={mapFor.kind}
           onClose={() => setMapFor(null)}
           onSaved={(updated) => {
             setLines(updated);
@@ -281,15 +307,19 @@ export default function BudgetUtilizationSetupPage() {
 
 function AccountMapModal({
   line,
+  kind,
   onClose,
   onSaved,
 }: {
   line: UtilizationLineConfig;
+  kind: 'accounts' | 'excluded';
   onClose: () => void;
   onSaved: (lines: UtilizationLineConfig[]) => void;
 }) {
+  const isExcluded = kind === 'excluded';
+  const initial = isExcluded ? line.excludedContras : line.accounts;
   const [accounts, setAccounts] = useState<PostableAccount[]>([]);
-  const [selected, setSelected] = useState<Set<string>>(new Set(line.accounts.map((a) => a.id)));
+  const [selected, setSelected] = useState<Set<string>>(new Set(initial.map((a) => a.id)));
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -319,7 +349,9 @@ function AccountMapModal({
     setSaving(true);
     setError('');
     try {
-      const updated = await setUtilizationAccounts(line.id, [...selected]);
+      const updated = isExcluded
+        ? await setUtilizationExcludedContras(line.id, [...selected])
+        : await setUtilizationAccounts(line.id, [...selected]);
       onSaved(updated);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save.');
@@ -337,9 +369,13 @@ function AccountMapModal({
         style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 560, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
       >
         <div style={{ padding: '14px 18px', borderBottom: '1px solid #eaecf0' }}>
-          <h3 style={{ margin: 0, fontSize: 16 }}>Map GL accounts — {line.name}</h3>
+          <h3 style={{ margin: 0, fontSize: 16 }}>
+            {isExcluded ? 'Ignore entries offset by' : 'Map GL accounts'} — {line.name}
+          </h3>
           <p style={{ margin: '4px 0 0', fontSize: 12, color: '#667085' }}>
-            Pick the accounts whose posted disbursements count toward this line.
+            {isExcluded
+              ? 'Pick the contra accounts to ignore: a debit to this line is dropped when its voucher also credits one of these (e.g. the month-end Supplies Inventory reclass).'
+              : 'Pick the accounts whose posted voucher debits count toward this line.'}
           </p>
         </div>
         <div style={{ padding: '10px 18px' }}>
@@ -376,7 +412,7 @@ function AccountMapModal({
               disabled={saving}
               style={{ ...btn, background: '#175cd3', color: '#fff', borderColor: '#175cd3' }}
             >
-              {saving ? 'Saving…' : 'Save mapping'}
+              {saving ? 'Saving…' : isExcluded ? 'Save ignore list' : 'Save mapping'}
             </button>
           </div>
         </div>

@@ -1316,13 +1316,18 @@ model BudgetTransactionLog {
 }
 
 // ─── Budget Utilization Report ────────────────────────────────────────
-// A standalone, category-based view of the year's budget vs. actual
-// DISBURSEMENTS, independent of the RC × fund-source BudgetHeader/Line
-// structure above. The budget officer defines per-fiscal-year lines under
-// three sections (Personnel Services, MOOE, Capital Outlay), enters the
-// year's budget per line, and maps the GL accounts whose posted
-// disbursements roll into each line. Utilization = sum of the disbursement
-// JEV debits (net of credits) to those accounts in the period.
+// A standalone, category-based view of the year's budget vs. actual spend,
+// independent of the RC × fund-source BudgetHeader/Line structure above. The
+// budget officer defines per-fiscal-year lines under three sections (Personnel
+// Services, MOOE, Capital Outlay), enters the year's budget per line, and maps
+// the GL accounts whose postings roll into each line. Utilization = sum of
+// POSTED journal-voucher DEBITS to those accounts in the period (any source —
+// so a month-end accrual "Dr expense / Cr A/P" counts, not only DVs; the later
+// payment "Dr A/P / Cr Cash" doesn't double-count since it never debits the
+// expense/asset). Opening-balance and reversed vouchers are excluded. A line
+// may also list "excluded contra" accounts: a debit whose voucher credits one
+// of those is dropped — used so the month-end "Dr Supplies Expense / Cr
+// Supplies Inventory" reclass is not counted on top of the inventory purchase.
 
 enum BudgetUtilizationSection {
   personnel_services
@@ -1349,7 +1354,8 @@ model BudgetUtilizationLine {
   updatedAt      DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   version        Int                      @default(1)
 
-  accounts BudgetUtilizationAccount[]
+  accounts        BudgetUtilizationAccount[]
+  excludedContras BudgetUtilizationExcludedContra[]
 
   @@index([organizationId, fiscalYearId])
   @@map("budget_utilization_lines")
@@ -1365,6 +1371,22 @@ model BudgetUtilizationAccount {
   @@unique([budgetUtilizationLineId, chartOfAccountId])
   @@index([chartOfAccountId])
   @@map("budget_utilization_accounts")
+}
+
+// Contra accounts to ignore for a line: a debit to one of the line's mapped
+// accounts is dropped when its voucher also credits one of these. Keeps the
+// month-end "Dr Supplies Expense / Cr Supplies Inventory" reclass out of the
+// Supplies utilization without losing the petty-cash buys (whose contra is cash).
+model BudgetUtilizationExcludedContra {
+  id                      String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  budgetUtilizationLineId String @map("budget_utilization_line_id") @db.Uuid
+  chartOfAccountId        String @map("chart_of_account_id") @db.Uuid
+
+  line BudgetUtilizationLine @relation(fields: [budgetUtilizationLineId], references: [id], onDelete: Cascade)
+
+  @@unique([budgetUtilizationLineId, chartOfAccountId])
+  @@index([chartOfAccountId])
+  @@map("budget_utilization_excluded_contras")
 }
 
 // ════════════════════════════════════════════════════════════════════

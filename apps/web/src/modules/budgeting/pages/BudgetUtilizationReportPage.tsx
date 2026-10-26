@@ -79,7 +79,7 @@ export default function BudgetUtilizationReportPage() {
         <div>
           <h1 style={{ margin: '0 0 4px' }}>Budget Utilization Report</h1>
           <p style={{ margin: 0, color: '#667085', fontSize: 14 }}>
-            Actual disbursements against the year's budget, by category.
+            Actual spend against the year's budget, by category.
             {report && (
               <>
                 {' '}
@@ -268,7 +268,7 @@ function SectionBlock({
                   cursor: 'pointer',
                   fontVariantNumeric: 'tabular-nums',
                 }}
-                title="Show the disbursements behind this figure"
+                title="Show the entries behind this figure"
               >
                 {formatPeso(l.utilization)}
               </button>

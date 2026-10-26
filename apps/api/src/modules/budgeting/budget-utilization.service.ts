@@ -75,11 +75,16 @@ export class BudgetUtilizationService {
   async listLines(orgId: string, fiscalYearId: string) {
     const lines = await this.prisma.budgetUtilizationLine.findMany({
       where: { organizationId: orgId, fiscalYearId },
-      include: { accounts: true },
+      include: { accounts: true, excludedContras: true },
       orderBy: [{ section: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
     });
     const accountIds = [
-      ...new Set(lines.flatMap((l) => l.accounts.map((a) => a.chartOfAccountId))),
+      ...new Set(
+        lines.flatMap((l) => [
+          ...l.accounts.map((a) => a.chartOfAccountId),
+          ...l.excludedContras.map((e) => e.chartOfAccountId),
+        ]),
+      ),
     ];
     const coas = accountIds.length
       ? await this.prisma.chartOfAccount.findMany({
@@ -88,6 +93,11 @@ export class BudgetUtilizationService {
         })
       : [];
     const coaMap = new Map(coas.map((c) => [c.id, c]));
+    const toRef = (id: string) => ({
+      id,
+      accountCode: coaMap.get(id)?.accountCode ?? '',
+      name: coaMap.get(id)?.name ?? '',
+    });
     return lines.map((l) => ({
       id: l.id,
       section: l.section,
@@ -96,11 +106,8 @@ export class BudgetUtilizationService {
       budgetAmount: l.budgetAmount,
       appCrossCheck: l.appCrossCheck,
       version: l.version,
-      accounts: l.accounts.map((a) => ({
-        id: a.chartOfAccountId,
-        accountCode: coaMap.get(a.chartOfAccountId)?.accountCode ?? '',
-        name: coaMap.get(a.chartOfAccountId)?.name ?? '',
-      })),
+      accounts: l.accounts.map((a) => toRef(a.chartOfAccountId)),
+      excludedContras: l.excludedContras.map((e) => toRef(e.chartOfAccountId)),
     }));
   }
 
@@ -189,6 +196,39 @@ export class BudgetUtilizationService {
     return this.listLines(orgId, line.fiscalYearId);
   }
 
+  // Replace the "excluded contra" accounts for a line — a debit to one of the
+  // line's mapped accounts is dropped when its voucher also credits one of these.
+  async setExcludedContras(orgId: string, lineId: string, accountIds: string[]) {
+    const line = await this.prisma.budgetUtilizationLine.findFirst({
+      where: { id: lineId, organizationId: orgId },
+    });
+    if (!line) throw new NotFoundException('Budget utilization line not found.');
+    const ids = [...new Set(accountIds)];
+    if (ids.length) {
+      const count = await this.prisma.chartOfAccount.count({
+        where: { organizationId: orgId, id: { in: ids } },
+      });
+      if (count !== ids.length) throw new BadRequestException('One or more accounts are invalid.');
+    }
+    await this.prisma.$transaction([
+      this.prisma.budgetUtilizationExcludedContra.deleteMany({
+        where: { budgetUtilizationLineId: lineId },
+      }),
+      ...(ids.length
+        ? [
+            this.prisma.budgetUtilizationExcludedContra.createMany({
+              data: ids.map((chartOfAccountId) => ({
+                budgetUtilizationLineId: lineId,
+                chartOfAccountId,
+              })),
+              skipDuplicates: true,
+            }),
+          ]
+        : []),
+    ]);
+    return this.listLines(orgId, line.fiscalYearId);
+  }
+
   // Pre-load the standard DBM Form 703 lines for a fiscal year that has none yet.
   async seedDefaults(orgId: string, userId: string, fiscalYearId: string) {
     await this.requireFiscalYear(orgId, fiscalYearId);
@@ -228,25 +268,62 @@ export class BudgetUtilizationService {
 
     const lines = await this.prisma.budgetUtilizationLine.findMany({
       where: { organizationId: orgId, fiscalYearId },
-      include: { accounts: true },
+      include: { accounts: true, excludedContras: true },
       orderBy: [{ section: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
     });
 
-    // Net disbursement (debit − credit) per GL account over the period, taken
-    // only from posted/reversed DV-sourced journal vouchers.
-    const agg = await this.prisma.$queryRaw<Array<{ account_id: string; net: string }>>(Prisma.sql`
-      SELECT l.chart_of_account_id AS account_id,
-             (COALESCE(SUM(l.debit_amount), 0) - COALESCE(SUM(l.credit_amount), 0))::text AS net
-      FROM jev_lines l
-      JOIN journal_entry_vouchers j ON j.id = l.jev_id
-      WHERE j.organization_id = ${orgId}::uuid
-        AND j.source_type = 'disbursement'
-        AND j.status IN ('posted', 'reversed')
-        AND j.jev_date BETWEEN ${start}::date AND ${end}::date
-      GROUP BY l.chart_of_account_id
-    `);
-    const netByAccount = new Map<string, number>();
-    for (const r of agg) netByAccount.set(r.account_id, Number(r.net));
+    const allAccountIds = [
+      ...new Set(lines.flatMap((l) => l.accounts.map((a) => a.chartOfAccountId))),
+    ];
+
+    // Gross: posted journal-voucher DEBITS per mapped GL account over the period,
+    // from ANY source (so a month-end accrual "Dr expense / Cr A/P" counts, not
+    // only DVs). Opening-balance and reversed vouchers are left out.
+    const grossByAccount = new Map<string, number>();
+    if (allAccountIds.length) {
+      const agg = await this.prisma.$queryRaw<Array<{ account_id: string; dr: string }>>(Prisma.sql`
+        SELECT jl.chart_of_account_id AS account_id,
+               COALESCE(SUM(jl.debit_amount), 0)::text AS dr
+        FROM jev_lines jl
+        JOIN journal_entry_vouchers j ON j.id = jl.jev_id
+        WHERE j.organization_id = ${orgId}::uuid
+          AND j.status = 'posted'
+          AND j.source_table IS DISTINCT FROM 'opening_balance'
+          AND j.jev_date BETWEEN ${start}::date AND ${end}::date
+          AND jl.debit_amount > 0
+          AND jl.chart_of_account_id IN (${Prisma.join(allAccountIds.map((id) => Prisma.sql`${id}::uuid`))})
+        GROUP BY jl.chart_of_account_id
+      `);
+      for (const r of agg) grossByAccount.set(r.account_id, Number(r.dr));
+    }
+
+    // For each line that lists excluded contra accounts, the debit total to drop:
+    // debits to the line's own accounts whose voucher ALSO credits one of those
+    // contras (e.g. the month-end "Dr Supplies Expense / Cr Supplies Inventory").
+    const excludedByLine = new Map<string, number>();
+    for (const bl of lines) {
+      const acctIds = bl.accounts.map((a) => a.chartOfAccountId);
+      const contraIds = bl.excludedContras.map((e) => e.chartOfAccountId);
+      if (!acctIds.length || !contraIds.length) continue;
+      const rows = await this.prisma.$queryRaw<Array<{ dr: string }>>(Prisma.sql`
+        SELECT COALESCE(SUM(jl.debit_amount), 0)::text AS dr
+        FROM jev_lines jl
+        JOIN journal_entry_vouchers j ON j.id = jl.jev_id
+        WHERE j.organization_id = ${orgId}::uuid
+          AND j.status = 'posted'
+          AND j.source_table IS DISTINCT FROM 'opening_balance'
+          AND j.jev_date BETWEEN ${start}::date AND ${end}::date
+          AND jl.debit_amount > 0
+          AND jl.chart_of_account_id IN (${Prisma.join(acctIds.map((id) => Prisma.sql`${id}::uuid`))})
+          AND EXISTS (
+            SELECT 1 FROM jev_lines x
+            WHERE x.jev_id = jl.jev_id
+              AND x.credit_amount > 0
+              AND x.chart_of_account_id IN (${Prisma.join(contraIds.map((id) => Prisma.sql`${id}::uuid`))})
+          )
+      `);
+      excludedByLine.set(bl.id, Number(rows[0]?.dr ?? 0));
+    }
 
     // APP commitment total (non-cancelled PO contract amounts) for the Supplies
     // & Materials cross-check — computed once if any line asks for it.
@@ -264,9 +341,8 @@ export class BudgetUtilizationService {
     }
 
     const reportLines = lines.map((l) => {
-      const utilization = round2(
-        l.accounts.reduce((s, a) => s + (netByAccount.get(a.chartOfAccountId) ?? 0), 0),
-      );
+      const gross = l.accounts.reduce((s, a) => s + (grossByAccount.get(a.chartOfAccountId) ?? 0), 0);
+      const utilization = round2(gross - (excludedByLine.get(l.id) ?? 0));
       const budget = round2(Number(l.budgetAmount));
       return {
         id: l.id,
@@ -318,16 +394,27 @@ export class BudgetUtilizationService {
   async lineBreakdown(orgId: string, lineId: string, startDate?: string, endDate?: string) {
     const line = await this.prisma.budgetUtilizationLine.findFirst({
       where: { id: lineId, organizationId: orgId },
-      include: { accounts: true },
+      include: { accounts: true, excludedContras: true },
     });
     if (!line) throw new NotFoundException('Budget utilization line not found.');
     const fy = await this.requireFiscalYear(orgId, line.fiscalYearId);
     const start = startDate ? new Date(startDate) : fy.startDate;
     const end = endDate ? new Date(endDate) : fy.endDate;
     const accountIds = line.accounts.map((a) => a.chartOfAccountId);
+    const contraIds = line.excludedContras.map((e) => e.chartOfAccountId);
     if (!accountIds.length) {
       return { line: { id: line.id, name: line.name }, period: { startDate: start, endDate: end }, rows: [], total: 0 };
     }
+    // Same rule as the report: posted debits to the mapped accounts, any source,
+    // minus opening-balance and any debit whose voucher credits an excluded contra.
+    const contraFilter = contraIds.length
+      ? Prisma.sql`AND NOT EXISTS (
+            SELECT 1 FROM jev_lines x
+            WHERE x.jev_id = jl.jev_id
+              AND x.credit_amount > 0
+              AND x.chart_of_account_id IN (${Prisma.join(contraIds.map((id) => Prisma.sql`${id}::uuid`))})
+          )`
+      : Prisma.empty;
     const rows = await this.prisma.$queryRaw<
       Array<{
         jev_id: string;
@@ -341,15 +428,17 @@ export class BudgetUtilizationService {
     >(Prisma.sql`
       SELECT j.id AS jev_id, j.jev_number, j.jev_date, j.particulars,
              c.account_code, c.name AS account_name,
-             (COALESCE(l.debit_amount, 0) - COALESCE(l.credit_amount, 0))::text AS amount
-      FROM jev_lines l
-      JOIN journal_entry_vouchers j ON j.id = l.jev_id
-      JOIN chart_of_accounts c ON c.id = l.chart_of_account_id
+             jl.debit_amount::text AS amount
+      FROM jev_lines jl
+      JOIN journal_entry_vouchers j ON j.id = jl.jev_id
+      JOIN chart_of_accounts c ON c.id = jl.chart_of_account_id
       WHERE j.organization_id = ${orgId}::uuid
-        AND j.source_type = 'disbursement'
-        AND j.status IN ('posted', 'reversed')
+        AND j.status = 'posted'
+        AND j.source_table IS DISTINCT FROM 'opening_balance'
         AND j.jev_date BETWEEN ${start}::date AND ${end}::date
-        AND l.chart_of_account_id IN (${Prisma.join(accountIds.map((id) => Prisma.sql`${id}::uuid`))})
+        AND jl.debit_amount > 0
+        AND jl.chart_of_account_id IN (${Prisma.join(accountIds.map((id) => Prisma.sql`${id}::uuid`))})
+        ${contraFilter}
       ORDER BY j.jev_date ASC, j.jev_number ASC
     `);
     const mapped = rows.map((r) => ({

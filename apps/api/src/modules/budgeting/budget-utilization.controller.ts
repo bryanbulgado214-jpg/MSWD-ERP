@@ -70,6 +70,18 @@ export class BudgetUtilizationController {
     return this.service.setAccounts(user.organizationId, id, dto.accountIds);
   }
 
+  // The "ignore entries offset by these accounts" rule for a line (e.g. the
+  // Supplies line ignoring the month-end entries that credit Supplies Inventory).
+  @Put('lines/:id/excluded-contras')
+  @RequirePermissions('budgeting.header.manage')
+  setExcludedContras(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SetUtilizationAccountsDto,
+  ) {
+    return this.service.setExcludedContras(user.organizationId, id, dto.accountIds);
+  }
+
   @Post('seed')
   @RequirePermissions('budgeting.header.manage')
   seed(@CurrentUser() user: AuthenticatedUser, @Body() dto: SeedUtilizationLinesDto) {
