@@ -7,6 +7,8 @@ interface WoNavLink {
   to: string;
   label: string;
   perm?: string;
+  // Shown when the user holds ANY of these permissions.
+  anyPerm?: string[];
 }
 
 // The named sub-sections; anything else under /work-orders (the list, a WO
@@ -22,11 +24,20 @@ export default function WorkOrdersSubNav() {
   const allLinks: WoNavLink[] = [
     { to: '/work-orders/dashboard', label: 'Dashboard' },
     { to: '/work-orders', label: 'Work Orders' },
-    // Teams & Personnel now lives as a tab inside Staff Availability.
-    { to: '/work-orders/staff', label: 'Staff Availability' },
+    // Staff Availability (and its Teams & Personnel tab) is only for the field
+    // heads — hidden from intake/clerk accounts that just do CCFs + work orders.
+    {
+      to: '/work-orders/staff',
+      label: 'Staff Availability',
+      anyPerm: ['workorder.staff.manage', 'workorder.team.manage'],
+    },
     { to: '/work-orders/ccf', label: 'Customer Complaints' },
   ];
-  const links = allLinks.filter((l) => !l.perm || permissions.has(l.perm));
+  const links = allLinks.filter((l) => {
+    if (l.perm) return permissions.has(l.perm);
+    if (l.anyPerm) return l.anyPerm.some((p) => permissions.has(p));
+    return true;
+  });
 
   const isActive = (to: string) => {
     const target = to.replace(/^\/work-orders\/?/, '');
