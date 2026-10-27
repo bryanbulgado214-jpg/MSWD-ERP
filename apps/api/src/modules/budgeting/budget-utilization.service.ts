@@ -75,7 +75,7 @@ export class BudgetUtilizationService {
   async listLines(orgId: string, fiscalYearId: string) {
     const lines = await this.prisma.budgetUtilizationLine.findMany({
       where: { organizationId: orgId, fiscalYearId },
-      include: { accounts: true, excludedContras: true },
+      include: { accounts: true, excludedContras: true, requiredContras: true },
       orderBy: [{ section: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
     });
     const accountIds = [
@@ -83,6 +83,7 @@ export class BudgetUtilizationService {
         lines.flatMap((l) => [
           ...l.accounts.map((a) => a.chartOfAccountId),
           ...l.excludedContras.map((e) => e.chartOfAccountId),
+          ...l.requiredContras.map((r) => r.chartOfAccountId),
         ]),
       ),
     ];
@@ -108,6 +109,7 @@ export class BudgetUtilizationService {
       version: l.version,
       accounts: l.accounts.map((a) => toRef(a.chartOfAccountId)),
       excludedContras: l.excludedContras.map((e) => toRef(e.chartOfAccountId)),
+      requiredContras: l.requiredContras.map((r) => toRef(r.chartOfAccountId)),
     }));
   }
 
@@ -229,6 +231,41 @@ export class BudgetUtilizationService {
     return this.listLines(orgId, line.fiscalYearId);
   }
 
+  // Replace the "required contra" accounts for a line — a debit to one of the
+  // line's mapped accounts is counted ONLY when its voucher also credits one of
+  // these (capital outlay: count a capital-asset debit only when offset by
+  // Accounts Payable, so asset-to-asset reclassifications are left out).
+  async setRequiredContras(orgId: string, lineId: string, accountIds: string[]) {
+    const line = await this.prisma.budgetUtilizationLine.findFirst({
+      where: { id: lineId, organizationId: orgId },
+    });
+    if (!line) throw new NotFoundException('Budget utilization line not found.');
+    const ids = [...new Set(accountIds)];
+    if (ids.length) {
+      const count = await this.prisma.chartOfAccount.count({
+        where: { organizationId: orgId, id: { in: ids } },
+      });
+      if (count !== ids.length) throw new BadRequestException('One or more accounts are invalid.');
+    }
+    await this.prisma.$transaction([
+      this.prisma.budgetUtilizationRequiredContra.deleteMany({
+        where: { budgetUtilizationLineId: lineId },
+      }),
+      ...(ids.length
+        ? [
+            this.prisma.budgetUtilizationRequiredContra.createMany({
+              data: ids.map((chartOfAccountId) => ({
+                budgetUtilizationLineId: lineId,
+                chartOfAccountId,
+              })),
+              skipDuplicates: true,
+            }),
+          ]
+        : []),
+    ]);
+    return this.listLines(orgId, line.fiscalYearId);
+  }
+
   // Pre-load the standard DBM Form 703 lines for a fiscal year that has none yet.
   async seedDefaults(orgId: string, userId: string, fiscalYearId: string) {
     await this.requireFiscalYear(orgId, fiscalYearId);
@@ -268,7 +305,7 @@ export class BudgetUtilizationService {
 
     const lines = await this.prisma.budgetUtilizationLine.findMany({
       where: { organizationId: orgId, fiscalYearId },
-      include: { accounts: true, excludedContras: true },
+      include: { accounts: true, excludedContras: true, requiredContras: true },
       orderBy: [{ section: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
     });
 
@@ -325,6 +362,48 @@ export class BudgetUtilizationService {
       excludedByLine.set(bl.id, Number(rows[0]?.dr ?? 0));
     }
 
+    // For each line that lists REQUIRED contra accounts (capital outlay), the
+    // gross is computed differently: a debit to one of the line's own accounts
+    // counts ONLY when its voucher also credits one of the required contras
+    // (Accounts Payable). This keeps asset-to-asset reclassification vouchers —
+    // which debit a capital asset but credit another asset, not A/P — out of the
+    // figure. Any excluded contras on the same line are honoured here too.
+    const requiredGrossByLine = new Map<string, number>();
+    for (const bl of lines) {
+      const acctIds = bl.accounts.map((a) => a.chartOfAccountId);
+      const requiredIds = bl.requiredContras.map((r) => r.chartOfAccountId);
+      if (!acctIds.length || !requiredIds.length) continue;
+      const excludedIds = bl.excludedContras.map((e) => e.chartOfAccountId);
+      const rows = await this.prisma.$queryRaw<Array<{ dr: string }>>(Prisma.sql`
+        SELECT COALESCE(SUM(jl.debit_amount), 0)::text AS dr
+        FROM jev_lines jl
+        JOIN journal_entry_vouchers j ON j.id = jl.jev_id
+        WHERE j.organization_id = ${orgId}::uuid
+          AND j.status = 'posted'
+          AND j.source_table IS DISTINCT FROM 'opening_balance'
+          AND j.jev_date BETWEEN ${start}::date AND ${end}::date
+          AND jl.debit_amount > 0
+          AND jl.chart_of_account_id IN (${Prisma.join(acctIds.map((id) => Prisma.sql`${id}::uuid`))})
+          AND EXISTS (
+            SELECT 1 FROM jev_lines r
+            WHERE r.jev_id = jl.jev_id
+              AND r.credit_amount > 0
+              AND r.chart_of_account_id IN (${Prisma.join(requiredIds.map((id) => Prisma.sql`${id}::uuid`))})
+          )
+          ${
+            excludedIds.length
+              ? Prisma.sql`AND NOT EXISTS (
+            SELECT 1 FROM jev_lines x
+            WHERE x.jev_id = jl.jev_id
+              AND x.credit_amount > 0
+              AND x.chart_of_account_id IN (${Prisma.join(excludedIds.map((id) => Prisma.sql`${id}::uuid`))})
+          )`
+              : Prisma.empty
+          }
+      `);
+      requiredGrossByLine.set(bl.id, Number(rows[0]?.dr ?? 0));
+    }
+
     // APP commitment total (non-cancelled PO contract amounts) for the Supplies
     // & Materials cross-check — computed once if any line asks for it.
     let appUtilization = 0;
@@ -341,8 +420,14 @@ export class BudgetUtilizationService {
     }
 
     const reportLines = lines.map((l) => {
-      const gross = l.accounts.reduce((s, a) => s + (grossByAccount.get(a.chartOfAccountId) ?? 0), 0);
-      const utilization = round2(gross - (excludedByLine.get(l.id) ?? 0));
+      // A line with required contras (capital outlay) uses its own offset-filtered
+      // gross — in which the required/excluded rules are already applied. Every
+      // other line sums all mapped-account debits and then drops excluded ones.
+      const hasRequired = l.requiredContras.length > 0 && l.accounts.length > 0;
+      const gross = hasRequired
+        ? requiredGrossByLine.get(l.id) ?? 0
+        : l.accounts.reduce((s, a) => s + (grossByAccount.get(a.chartOfAccountId) ?? 0), 0);
+      const utilization = round2(hasRequired ? gross : gross - (excludedByLine.get(l.id) ?? 0));
       const budget = round2(Number(l.budgetAmount));
       return {
         id: l.id,
@@ -394,7 +479,7 @@ export class BudgetUtilizationService {
   async lineBreakdown(orgId: string, lineId: string, startDate?: string, endDate?: string) {
     const line = await this.prisma.budgetUtilizationLine.findFirst({
       where: { id: lineId, organizationId: orgId },
-      include: { accounts: true, excludedContras: true },
+      include: { accounts: true, excludedContras: true, requiredContras: true },
     });
     if (!line) throw new NotFoundException('Budget utilization line not found.');
     const fy = await this.requireFiscalYear(orgId, line.fiscalYearId);
@@ -402,6 +487,7 @@ export class BudgetUtilizationService {
     const end = endDate ? new Date(endDate) : fy.endDate;
     const accountIds = line.accounts.map((a) => a.chartOfAccountId);
     const contraIds = line.excludedContras.map((e) => e.chartOfAccountId);
+    const requiredIds = line.requiredContras.map((r) => r.chartOfAccountId);
     if (!accountIds.length) {
       return { line: { id: line.id, name: line.name }, period: { startDate: start, endDate: end }, rows: [], total: 0 };
     }
@@ -413,6 +499,16 @@ export class BudgetUtilizationService {
             WHERE x.jev_id = jl.jev_id
               AND x.credit_amount > 0
               AND x.chart_of_account_id IN (${Prisma.join(contraIds.map((id) => Prisma.sql`${id}::uuid`))})
+          )`
+      : Prisma.empty;
+    // When the line requires an offset (capital outlay), keep only debits whose
+    // voucher also credits one of the required contras (Accounts Payable).
+    const requiredFilter = requiredIds.length
+      ? Prisma.sql`AND EXISTS (
+            SELECT 1 FROM jev_lines r
+            WHERE r.jev_id = jl.jev_id
+              AND r.credit_amount > 0
+              AND r.chart_of_account_id IN (${Prisma.join(requiredIds.map((id) => Prisma.sql`${id}::uuid`))})
           )`
       : Prisma.empty;
     const rows = await this.prisma.$queryRaw<
@@ -439,6 +535,7 @@ export class BudgetUtilizationService {
         AND jl.debit_amount > 0
         AND jl.chart_of_account_id IN (${Prisma.join(accountIds.map((id) => Prisma.sql`${id}::uuid`))})
         ${contraFilter}
+        ${requiredFilter}
       ORDER BY j.jev_date ASC, j.jev_number ASC
     `);
     const mapped = rows.map((r) => ({

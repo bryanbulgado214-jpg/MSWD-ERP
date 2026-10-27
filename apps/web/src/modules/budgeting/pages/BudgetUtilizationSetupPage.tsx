@@ -10,6 +10,7 @@ import {
   seedUtilizationLines,
   setUtilizationAccounts,
   setUtilizationExcludedContras,
+  setUtilizationRequiredContras,
   updateUtilizationLine,
   UTILIZATION_SECTION_LABELS,
   type FiscalYearLookupItem,
@@ -37,7 +38,10 @@ export default function BudgetUtilizationSetupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [mapFor, setMapFor] = useState<{ line: UtilizationLineConfig; kind: 'accounts' | 'excluded' } | null>(null);
+  const [mapFor, setMapFor] = useState<{
+    line: UtilizationLineConfig;
+    kind: 'accounts' | 'excluded' | 'required';
+  } | null>(null);
   const [newName, setNewName] = useState<Record<UtilizationSection, string>>({
     personnel_services: '',
     mooe: '',
@@ -241,6 +245,20 @@ export default function BudgetUtilizationSetupPage() {
                               ))}
                             </div>
                           )}
+                          {line.requiredContras.length > 0 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 5, alignItems: 'center' }}>
+                              <span style={{ fontSize: 11, color: '#98a2b3' }}>count only when offset by:</span>
+                              {line.requiredContras.map((a) => (
+                                <span
+                                  key={a.id}
+                                  style={{ background: '#ecfdf3', color: '#067647', borderRadius: 6, padding: '2px 7px', fontSize: 12 }}
+                                  title={a.name}
+                                >
+                                  {a.accountCode}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                           <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                             <button type="button" style={{ ...btn, padding: '4px 9px' }} onClick={() => setMapFor({ line, kind: 'accounts' })}>
                               Map accounts
@@ -253,6 +271,16 @@ export default function BudgetUtilizationSetupPage() {
                             >
                               Ignore offsets…
                             </button>
+                            {section === 'capital_outlay' && (
+                              <button
+                                type="button"
+                                style={{ ...btn, padding: '4px 9px' }}
+                                onClick={() => setMapFor({ line, kind: 'required' })}
+                                title="Count a capital-asset debit only when the voucher credits one of these accounts (Accounts Payable), so asset reclassifications are left out"
+                              >
+                                Require offset…
+                              </button>
+                            )}
                           </div>
                         </td>
                         <td style={{ padding: '9px 10px', textAlign: 'right' }}>
@@ -312,12 +340,17 @@ function AccountMapModal({
   onSaved,
 }: {
   line: UtilizationLineConfig;
-  kind: 'accounts' | 'excluded';
+  kind: 'accounts' | 'excluded' | 'required';
   onClose: () => void;
   onSaved: (lines: UtilizationLineConfig[]) => void;
 }) {
   const isExcluded = kind === 'excluded';
-  const initial = isExcluded ? line.excludedContras : line.accounts;
+  const isRequired = kind === 'required';
+  const initial = isRequired
+    ? line.requiredContras
+    : isExcluded
+      ? line.excludedContras
+      : line.accounts;
   const [accounts, setAccounts] = useState<PostableAccount[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set(initial.map((a) => a.id)));
   const [search, setSearch] = useState('');
@@ -349,9 +382,11 @@ function AccountMapModal({
     setSaving(true);
     setError('');
     try {
-      const updated = isExcluded
-        ? await setUtilizationExcludedContras(line.id, [...selected])
-        : await setUtilizationAccounts(line.id, [...selected]);
+      const updated = isRequired
+        ? await setUtilizationRequiredContras(line.id, [...selected])
+        : isExcluded
+          ? await setUtilizationExcludedContras(line.id, [...selected])
+          : await setUtilizationAccounts(line.id, [...selected]);
       onSaved(updated);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save.');
@@ -370,12 +405,19 @@ function AccountMapModal({
       >
         <div style={{ padding: '14px 18px', borderBottom: '1px solid #eaecf0' }}>
           <h3 style={{ margin: 0, fontSize: 16 }}>
-            {isExcluded ? 'Ignore entries offset by' : 'Map GL accounts'} — {line.name}
+            {isRequired
+              ? 'Count only when offset by'
+              : isExcluded
+                ? 'Ignore entries offset by'
+                : 'Map GL accounts'}{' '}
+            — {line.name}
           </h3>
           <p style={{ margin: '4px 0 0', fontSize: 12, color: '#667085' }}>
-            {isExcluded
-              ? 'Pick the contra accounts to ignore: a debit to this line is dropped when its voucher also credits one of these (e.g. the month-end Supplies Inventory reclass).'
-              : 'Pick the accounts whose posted voucher debits count toward this line.'}
+            {isRequired
+              ? 'Pick the offset accounts (Accounts Payable): a debit to this line is counted only when its voucher also credits one of these. Capital-asset reclassifications, which credit another asset instead of A/P, are left out.'
+              : isExcluded
+                ? 'Pick the contra accounts to ignore: a debit to this line is dropped when its voucher also credits one of these (e.g. the month-end Supplies Inventory reclass).'
+                : 'Pick the accounts whose posted voucher debits count toward this line.'}
           </p>
         </div>
         <div style={{ padding: '10px 18px' }}>
@@ -412,7 +454,13 @@ function AccountMapModal({
               disabled={saving}
               style={{ ...btn, background: '#175cd3', color: '#fff', borderColor: '#175cd3' }}
             >
-              {saving ? 'Saving…' : isExcluded ? 'Save ignore list' : 'Save mapping'}
+              {saving
+                ? 'Saving…'
+                : isRequired
+                  ? 'Save offset rule'
+                  : isExcluded
+                    ? 'Save ignore list'
+                    : 'Save mapping'}
             </button>
           </div>
         </div>

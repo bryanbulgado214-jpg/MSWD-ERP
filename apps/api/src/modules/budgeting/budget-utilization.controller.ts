@@ -82,6 +82,18 @@ export class BudgetUtilizationController {
     return this.service.setExcludedContras(user.organizationId, id, dto.accountIds);
   }
 
+  // The "count only when offset by these accounts" rule for a line (capital
+  // outlay: a capital-asset debit counts only when the voucher credits A/P).
+  @Put('lines/:id/required-contras')
+  @RequirePermissions('budgeting.header.manage')
+  setRequiredContras(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SetUtilizationAccountsDto,
+  ) {
+    return this.service.setRequiredContras(user.organizationId, id, dto.accountIds);
+  }
+
   @Post('seed')
   @RequirePermissions('budgeting.header.manage')
   seed(@CurrentUser() user: AuthenticatedUser, @Body() dto: SeedUtilizationLinesDto) {

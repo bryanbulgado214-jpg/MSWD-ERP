@@ -1356,6 +1356,7 @@ model BudgetUtilizationLine {
 
   accounts        BudgetUtilizationAccount[]
   excludedContras BudgetUtilizationExcludedContra[]
+  requiredContras BudgetUtilizationRequiredContra[]
 
   @@index([organizationId, fiscalYearId])
   @@map("budget_utilization_lines")
@@ -1387,6 +1388,23 @@ model BudgetUtilizationExcludedContra {
   @@unique([budgetUtilizationLineId, chartOfAccountId])
   @@index([chartOfAccountId])
   @@map("budget_utilization_excluded_contras")
+}
+
+// Contra accounts REQUIRED for a line: a debit to one of the line's mapped
+// accounts is counted ONLY when its voucher also credits one of these. Used by
+// capital outlay — a capital-asset debit counts only when offset by Accounts
+// Payable, so asset-to-asset reclassifications (e.g. Construction-in-Progress to
+// a finished asset) are left out of the utilization figure.
+model BudgetUtilizationRequiredContra {
+  id                      String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  budgetUtilizationLineId String @map("budget_utilization_line_id") @db.Uuid
+  chartOfAccountId        String @map("chart_of_account_id") @db.Uuid
+
+  line BudgetUtilizationLine @relation(fields: [budgetUtilizationLineId], references: [id], onDelete: Cascade)
+
+  @@unique([budgetUtilizationLineId, chartOfAccountId])
+  @@index([chartOfAccountId])
+  @@map("budget_utilization_required_contras")
 }
 
 // ════════════════════════════════════════════════════════════════════

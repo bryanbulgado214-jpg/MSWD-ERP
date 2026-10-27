@@ -439,6 +439,7 @@ export interface UtilizationLineConfig {
   version: number;
   accounts: UtilizationAccountRef[];
   excludedContras: UtilizationAccountRef[];
+  requiredContras: UtilizationAccountRef[];
 }
 
 export interface UtilizationReportLine {
@@ -541,6 +542,15 @@ export async function setUtilizationExcludedContras(
 ): Promise<UtilizationLineConfig[]> {
   return (
     await authFetchMutate(`/budgeting/utilization/lines/${id}/excluded-contras`, 'PUT', { accountIds })
+  ).json();
+}
+
+export async function setUtilizationRequiredContras(
+  id: string,
+  accountIds: string[],
+): Promise<UtilizationLineConfig[]> {
+  return (
+    await authFetchMutate(`/budgeting/utilization/lines/${id}/required-contras`, 'PUT', { accountIds })
   ).json();
 }
 
