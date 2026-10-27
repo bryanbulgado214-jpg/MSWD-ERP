@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
@@ -474,11 +474,37 @@ export default function WorkOrderDetailPage() {
         )}
       </div>
 
-      {/* Assign crew panel */}
+      {/* Assign crew modal */}
       {panel === 'assign' && (
-        <div className="wo-crew-box" style={{ marginTop: 16 }}>
-          <h3 className="wo-crew-box__title">Assign Crew{stagedCrews.length ? 's' : ''}</h3>
-
+        <ActionModal
+          title={crews.length ? 'Reassign Crews' : 'Assign Crew'}
+          onClose={() => setPanel('')}
+          footer={
+            <>
+              <button className="wo-btn" onClick={() => setPanel('')}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="wo-btn"
+                onClick={addAnotherCrew}
+                disabled={acting || !leaderId}
+                title="Stage this crew and start another"
+              >
+                + Add another crew
+              </button>
+              <button
+                className="wo-btn wo-btn--primary"
+                onClick={doAssign}
+                disabled={acting || (!leaderId && stagedCrews.length === 0)}
+              >
+                {acting
+                  ? 'Saving…'
+                  : `Assign ${stagedCrews.length + (leaderId ? 1 : 0) > 1 ? 'Crews' : 'Crew'}`}
+              </button>
+            </>
+          }
+        >
           {stagedCrews.length > 0 && (
             <div style={{ marginBottom: 12, display: 'grid', gap: 8 }}>
               {stagedCrews.map((c, i) => {
@@ -613,28 +639,6 @@ export default function WorkOrderDetailPage() {
             </>
           )}
 
-          <div className="wo-form__actions" style={{ flexWrap: 'wrap', gap: 8 }}>
-            <button className="wo-btn" onClick={() => setPanel('')}>Cancel</button>
-            <button
-              type="button"
-              className="wo-btn"
-              onClick={addAnotherCrew}
-              disabled={acting || !leaderId}
-              title="Stage this crew and start another"
-            >
-              + Add another crew
-            </button>
-            <button
-              className="wo-btn wo-btn--primary"
-              onClick={doAssign}
-              disabled={acting || (!leaderId && stagedCrews.length === 0)}
-            >
-              {acting
-                ? 'Saving…'
-                : `Assign ${stagedCrews.length + (leaderId ? 1 : 0) > 1 ? 'Crews' : 'Crew'}`}
-            </button>
-          </div>
-
           <MemberPickerModal
             open={memberModalOpen}
             onClose={() => setMemberModalOpen(false)}
@@ -644,14 +648,26 @@ export default function WorkOrderDetailPage() {
             onToggle={toggleMember}
             statusByPersonnel={staffStatus}
           />
-        </div>
+        </ActionModal>
       )}
 
-      {/* Complete panel */}
+      {/* Complete work order modal */}
       {panel === 'complete' && (
-        <div className="wo-complete-form" style={{ marginTop: 16, padding: 16, border: '1px solid #e4e7ec', borderRadius: 10, background: '#f9fafb' }}>
-          <h3 style={{ marginTop: 0 }}>Complete Work Order</h3>
-          <p style={{ marginTop: -6, fontSize: 13, color: '#667085' }}>
+        <ActionModal
+          title="Complete Work Order"
+          onClose={() => { setPanel(''); setCompletingCrew(null); }}
+          footer={
+            <>
+              <button className="wo-btn" onClick={() => { setPanel(''); setCompletingCrew(null); }}>
+                Cancel
+              </button>
+              <button className="wo-btn wo-btn--success" onClick={doCompleteCrew} disabled={acting}>
+                {acting ? 'Saving…' : 'Mark Completed'}
+              </button>
+            </>
+          }
+        >
+          <p style={{ marginTop: 0, fontSize: 13, color: '#667085' }}>
             {completingCrew
               ? `This is the last crew out (${completingCrew.soloTask ? 'One-man task' : `Crew ${completingCrew.crewNumber}`}). Record the work order's completion report.`
               : 'Record the completion report.'}
@@ -669,13 +685,7 @@ export default function WorkOrderDetailPage() {
             <textarea className="wo-textarea" rows={2} value={remarks} onChange={(e) => setRemarks(e.target.value)} />
           </label>
           <span style={{ fontSize: 12, color: '#667085' }}>The time returned is recorded as now on completion.</span>
-          <div className="wo-form__actions">
-            <button className="wo-btn" onClick={() => { setPanel(''); setCompletingCrew(null); }}>Cancel</button>
-            <button className="wo-btn wo-btn--success" onClick={doCompleteCrew} disabled={acting}>
-              {acting ? 'Saving…' : 'Mark Completed'}
-            </button>
-          </div>
-        </div>
+        </ActionModal>
       )}
 
       {/* Cancel panel */}
@@ -694,6 +704,102 @@ export default function WorkOrderDetailPage() {
 
       <div className="wo-meta" style={{ marginTop: 16, fontSize: 12, color: '#667085' }}>
         Created by {wo.creator?.username ?? '—'} on {fmtDateTime(wo.createdAt)}
+      </div>
+    </div>
+  );
+}
+
+// Floating window used for the Assign / Reassign Crews and Mark Completed
+// actions — a centered card over a dimmed backdrop (click outside or Escape to
+// close), with a scrolling body and a sticky footer for the action buttons.
+function ActionModal({
+  title,
+  onClose,
+  footer,
+  children,
+  maxWidth = 640,
+}: {
+  title: string;
+  onClose: () => void;
+  footer: ReactNode;
+  children: ReactNode;
+  maxWidth?: number;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      onMouseDown={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(16,24,40,0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: 16,
+      }}
+    >
+      <div
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{
+          background: '#fff',
+          borderRadius: 12,
+          width: '100%',
+          maxWidth,
+          maxHeight: '88vh',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 20px 48px rgba(16,24,40,0.24)',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '14px 20px',
+            borderBottom: '1px solid #eaecf0',
+          }}
+        >
+          <h3 style={{ margin: 0, fontSize: 16, color: 'var(--mswd-navy, #0a2540)' }}>{title}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              fontSize: 22,
+              cursor: 'pointer',
+              color: '#667085',
+              lineHeight: 1,
+            }}
+            title="Close"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </div>
+        <div style={{ overflowY: 'auto', padding: '16px 20px' }}>{children}</div>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 8,
+            padding: '12px 20px',
+            borderTop: '1px solid #eaecf0',
+            flexWrap: 'wrap',
+          }}
+        >
+          {footer}
+        </div>
       </div>
     </div>
   );
