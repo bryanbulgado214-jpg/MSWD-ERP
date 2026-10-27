@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../../../app/auth';
@@ -7,6 +7,28 @@ import type { WorkOrder } from '../types';
 import { WO_PRIORITY_LABELS, WO_STATUS_LABELS, WO_TYPE_LABELS } from '../types';
 import type { WorkOrderPriority, WorkOrderStatus, WorkOrderType } from '../types';
 import '../workorders.css';
+
+// List ordering: outstanding work first (Pending → Assigned → In Progress),
+// oldest first within each so nothing languishes; then the finished ones
+// (Completed → Verified → Cancelled) with the most recent on top.
+const STATUS_RANK: Record<string, number> = {
+  pending: 0,
+  assigned: 1,
+  in_progress: 2,
+  completed: 3,
+  verified: 4,
+  cancelled: 5,
+  draft: 6,
+};
+const OLDEST_FIRST = new Set(['pending', 'assigned', 'in_progress', 'draft']);
+
+function woSortTime(w: WorkOrder): number {
+  if (w.status === 'completed' || w.status === 'verified') {
+    return new Date(w.completedAt ?? w.verifiedAt ?? w.updatedAt ?? w.createdAt).getTime();
+  }
+  if (w.status === 'cancelled') return new Date(w.updatedAt ?? w.createdAt).getTime();
+  return new Date(w.createdAt).getTime();
+}
 
 export default function WorkOrderListPage() {
   const { permissions } = useAuth();
@@ -34,6 +56,17 @@ export default function WorkOrderListPage() {
   }, [statusFilter, typeFilter, searchQuery]);
 
   const canCreate = permissions.has('workorder.create');
+
+  const sorted = useMemo(() => {
+    return [...workOrders].sort((a, b) => {
+      const ra = STATUS_RANK[a.status] ?? 99;
+      const rb = STATUS_RANK[b.status] ?? 99;
+      if (ra !== rb) return ra - rb;
+      const ta = woSortTime(a);
+      const tb = woSortTime(b);
+      return OLDEST_FIRST.has(a.status) ? ta - tb : tb - ta;
+    });
+  }, [workOrders]);
 
   return (
     <div className="wo-page">
@@ -120,7 +153,7 @@ export default function WorkOrderListPage() {
               </tr>
             </thead>
             <tbody>
-              {workOrders.map((wo) => (
+              {sorted.map((wo) => (
                 <tr
                   key={wo.id}
                   className="wo-row--click"
