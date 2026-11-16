@@ -84,6 +84,10 @@ interface CoaRow {
   type: 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
   level: number;
   isHeader: boolean;
+  parentAccountId: string | null;
+  // UACS code (e.g. 5-01-01); may differ from the displayed account_code when a
+  // district imported its chart with legacy/auto-numbered header codes.
+  uacsCode: string | null;
 }
 
 interface Sums {
@@ -417,7 +421,8 @@ export class DetailedStatementsService {
 
     // ── Gather balances ──────────────────────────────────────────────────
     const accounts = await this.prisma.$queryRawUnsafe<CoaRow[]>(
-      `SELECT id, account_code AS code, name, account_type AS type, level, is_header AS "isHeader"
+      `SELECT id, account_code AS code, name, account_type AS type, level, is_header AS "isHeader",
+              parent_account_id AS "parentAccountId", uacs_code AS "uacsCode"
          FROM chart_of_accounts
         WHERE organization_id = $1::uuid AND is_active = true
         ORDER BY account_code`,
@@ -441,22 +446,11 @@ export class DetailedStatementsService {
     // signed contribution on the section's normal side
     const debitPositive = (t: CoaRow['type']) => t === 'asset' || t === 'expense';
     const sumMap = new Map(sums.map((s) => [s.accountId, s]));
-    const codeByType = new Map<string, CoaRow['type']>();
-    accounts.forEach((a) => codeByType.set(a.code, a.type));
 
-    // Per-postable-account signed amounts for each column, and prefix-accumulated
-    // subtotals for every ancestor header code.
-    const cur = new Map<string, number>(); // as-of end of selected period  (SFP) / YTD movement (SCI)
-    const cmp = new Map<string, number>(); // prior-year-end (SFP)          / current-month movement (SCI)
-    const addPrefix = (map: Map<string, number>, code: string, amt: number) => {
-      const parts = code.split('-');
-      let acc = '';
-      for (let i = 0; i < parts.length; i++) {
-        acc = acc ? `${acc}-${parts[i]}` : parts[i]!;
-        map.set(acc, (map.get(acc) ?? 0) + amt);
-      }
-    };
-
+    // Per-postable-account signed amount for each column (by account id). Headers
+    // carry no postings of their own; their figure is rolled up from descendants.
+    const leafCur = new Map<string, number>(); // as-of end of period (SFP) / YTD or month movement (SCI)
+    const leafCmp = new Map<string, number>(); // prior-year-end (SFP)      / the other SCI column
     for (const a of accounts) {
       if (a.isHeader) continue;
       const sign = debitPositive(a.type) ? 1 : -1;
@@ -466,22 +460,99 @@ export class DetailedStatementsService {
       const moDr = Number(s?.monthDebit ?? 0);
       const moCr = Number(s?.monthCredit ?? 0);
       const p = priorSums.get(a.id);
-
       const prior = sign * ((p?.debit ?? 0) - (p?.credit ?? 0));
-      if (annual) {
-        // Year-end: column 1 = full current year, column 2 = full prior year
-        addPrefix(cur, a.code, sign * (cumDr - cumCr));
-        addPrefix(cmp, a.code, prior);
-      } else if (kind === 'sfp') {
-        // column 1 = as-of end of selected period (cumulative), column 2 = prior year-end
-        addPrefix(cur, a.code, sign * (cumDr - cumCr));
-        addPrefix(cmp, a.code, prior);
+      if (annual || kind === 'sfp') {
+        // col1 = cumulative to period end (whole current year when annual); col2 = prior year
+        leafCur.set(a.id, sign * (cumDr - cumCr));
+        leafCmp.set(a.id, prior);
       } else {
-        // SCI (interim): column 1 = current-month movement, column 2 = year-to-date
-        addPrefix(cur, a.code, sign * (moDr - moCr));
-        addPrefix(cmp, a.code, sign * (cumDr - cumCr));
+        // SCI (interim): col1 = current-month movement; col2 = year-to-date
+        leafCur.set(a.id, sign * (moDr - moCr));
+        leafCmp.set(a.id, sign * (cumDr - cumCr));
       }
     }
+
+    // ── Build the account hierarchy from parent_account_id (authoritative) ────
+    // Ordering and subtotals are derived from the parent/child tree and the UACS
+    // code — NOT from parsing account_code — so a chart whose header rows carry
+    // legacy/auto-numbered codes (e.g. "37012" for Salaries and Wages) still
+    // nests each category directly above its own detail accounts.
+    const byId = new Map(accounts.map((a) => [a.id, a]));
+    const sortKey = (a: CoaRow) => a.uacsCode || a.code || '';
+    // Fallback nesting by UACS-code prefix, for charts where the explicit
+    // parent_account_id link was lost on import but the UACS code survived: the
+    // parent of 5-01-01-010 is the account whose UACS code is the longest proper
+    // prefix (5-01-01, then 5-01, then 5). Returns a shorter same-type code only,
+    // so the chain is strictly decreasing — no cycles.
+    const uacsIndex = new Map<string, CoaRow>();
+    for (const a of accounts) if (a.uacsCode && !uacsIndex.has(a.uacsCode)) uacsIndex.set(a.uacsCode, a);
+    const uacsParent = (a: CoaRow): CoaRow | null => {
+      if (!a.uacsCode) return null;
+      const parts = a.uacsCode.split('-');
+      for (let i = parts.length - 1; i >= 1; i--) {
+        const cand = uacsIndex.get(parts.slice(0, i).join('-'));
+        if (cand && cand.id !== a.id && cand.type === a.type) return cand;
+      }
+      return null;
+    };
+    const parentOf = (a: CoaRow): CoaRow | null => {
+      if (a.level === 1) return null; // section roots are never nested
+      const p = a.parentAccountId ? byId.get(a.parentAccountId) : null;
+      if (p && p.type === a.type) return p; // explicit link wins
+      return uacsParent(a); // else fall back to UACS-code prefix
+    };
+    const kids = new Map<string, CoaRow[]>();
+    const topByType = new Map<CoaRow['type'], CoaRow[]>();
+    for (const a of accounts) {
+      const p = parentOf(a);
+      if (p) {
+        const list = kids.get(p.id) ?? [];
+        list.push(a);
+        kids.set(p.id, list);
+      } else {
+        const list = topByType.get(a.type) ?? [];
+        list.push(a);
+        topByType.set(a.type, list);
+      }
+    }
+    for (const list of kids.values()) list.sort((x, y) => sortKey(x).localeCompare(sortKey(y)));
+    for (const list of topByType.values())
+      list.sort((x, y) => sortKey(x).localeCompare(sortKey(y)));
+
+    const hasKids = (a: CoaRow) => (kids.get(a.id)?.length ?? 0) > 0;
+    // Roll each account up the tree: a header/parent = sum of its children (plus
+    // any direct postings, for the rare non-header-with-children case).
+    const vCur = new Map<string, number>();
+    const vCmp = new Map<string, number>();
+    const compute = (a: CoaRow): void => {
+      if (vCur.has(a.id)) return;
+      const children = kids.get(a.id) ?? [];
+      if (!a.isHeader && children.length === 0) {
+        vCur.set(a.id, leafCur.get(a.id) ?? 0);
+        vCmp.set(a.id, leafCmp.get(a.id) ?? 0);
+        return;
+      }
+      let s1 = a.isHeader ? 0 : leafCur.get(a.id) ?? 0;
+      let s2 = a.isHeader ? 0 : leafCmp.get(a.id) ?? 0;
+      for (const c of children) {
+        compute(c);
+        s1 += vCur.get(c.id) ?? 0;
+        s2 += vCmp.get(c.id) ?? 0;
+      }
+      vCur.set(a.id, s1);
+      vCmp.set(a.id, s2);
+    };
+    accounts.forEach(compute);
+
+    const sectionTotal = (type: CoaRow['type']) => {
+      let c = 0;
+      let p = 0;
+      for (const a of topByType.get(type) ?? []) {
+        c += vCur.get(a.id) ?? 0;
+        p += vCmp.get(a.id) ?? 0;
+      }
+      return { current: round2(c), compare: round2(p) };
+    };
 
     const rows: StatementRow[] = [];
     const totals: Record<string, number> = {};
@@ -492,7 +563,6 @@ export class DetailedStatementsService {
       totalLabel: string,
       extra?: { label: string; current: number; compare: number },
     ): { current: number; compare: number } => {
-      const rootCode = accounts.find((a) => a.type === type && a.level === 1)?.code ?? type;
       rows.push({
         code: null,
         label: sectionLabel,
@@ -501,25 +571,36 @@ export class DetailedStatementsService {
         current: 0,
         compare: 0,
       });
-      for (const a of accounts) {
-        if (a.type !== type || a.level === 1) continue;
-        if (condensed && a.level >= 3) continue; // condensed = category (L2) rollup only
-        const c1 = cur.get(a.code) ?? 0;
-        const c2 = cmp.get(a.code) ?? 0;
-        // Show every header (structure) but hide empty leaf accounts to keep it readable.
-        if (!a.isHeader && Math.abs(c1) < 0.005 && Math.abs(c2) < 0.005) continue;
+      // Depth-first walk so each category header prints immediately above its own
+      // accounts. Headers are always shown (they carry the structure); empty leaf
+      // accounts are hidden to keep the statement readable.
+      const walk = (a: CoaRow) => {
+        if (condensed && a.level >= 3) return; // condensed = category (L2) rollup only
+        const c1 = vCur.get(a.id) ?? 0;
+        const c2 = vCmp.get(a.id) ?? 0;
+        const isHdr = a.isHeader || hasKids(a);
+        if (!isHdr && Math.abs(c1) < 0.005 && Math.abs(c2) < 0.005) return;
         rows.push({
-          code: a.code,
+          code: a.uacsCode || a.code,
           label: a.name,
-          level: a.level - 1,
-          kind: a.isHeader ? 'header' : 'account',
+          level: Math.max(0, a.level - 1),
+          kind: isHdr ? 'header' : 'account',
           current: round2(c1),
           compare: round2(c2),
           accountId: a.id,
         });
+        for (const c of kids.get(a.id) ?? []) walk(c);
+      };
+      for (const top of topByType.get(type) ?? []) {
+        // The section root (level 1) is represented by the section label itself;
+        // print its children. Any orphan node is printed in place.
+        if (top.level === 1) for (const c of kids.get(top.id) ?? []) walk(c);
+        else walk(top);
       }
-      let t1 = round2(cur.get(rootCode) ?? 0);
-      let t2 = round2(cmp.get(rootCode) ?? 0);
+
+      const base = sectionTotal(type);
+      let t1 = base.current;
+      let t2 = base.compare;
       if (extra) {
         rows.push({
           code: null,
@@ -574,10 +655,10 @@ export class DetailedStatementsService {
     if (kind === 'sfp') {
       // Interim surplus/(deficit): year-to-date Income − Expenses, not yet closed
       // to Retained Earnings, must sit inside Equity for A = L + E to hold.
-      const revRoot = accounts.find((a) => a.type === 'revenue' && a.level === 1)?.code ?? '4';
-      const expRoot = accounts.find((a) => a.type === 'expense' && a.level === 1)?.code ?? '5';
-      const surplusCur = round2((cur.get(revRoot) ?? 0) - (cur.get(expRoot) ?? 0));
-      const surplusCmp = round2((cmp.get(revRoot) ?? 0) - (cmp.get(expRoot) ?? 0));
+      const rev = sectionTotal('revenue');
+      const exp = sectionTotal('expense');
+      const surplusCur = round2(rev.current - exp.current);
+      const surplusCmp = round2(rev.compare - exp.compare);
 
       const assets = emitSection('asset', 'ASSETS', 'TOTAL ASSETS');
       const liab = emitSection('liability', 'LIABILITIES', 'TOTAL LIABILITIES');
