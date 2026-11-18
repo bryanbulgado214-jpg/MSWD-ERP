@@ -544,6 +544,42 @@ export class DetailedStatementsService {
     };
     accounts.forEach(compute);
 
+    // Display code for a row. Leaf accounts — and any header that already carries
+    // a real UACS code — show their own code. A header whose chart row has only a
+    // legacy / auto-numbered code (e.g. "36161", no hyphen, uacs_code null) shows
+    // the code *reconstructed from its detail accounts*: the common UACS prefix of
+    // the leaves beneath it, trimmed to the header's level. So "Cash and Cash
+    // Equivalents" (L2) reads 1-01, "Cash on Hand" (L3) 1-01-01, "Other Assets" 1-99.
+    const isUacsLike = (c: string | null) => !!c && c.includes('-');
+    const bestCode = (a: CoaRow): string | null =>
+      isUacsLike(a.uacsCode) ? a.uacsCode : isUacsLike(a.code) ? a.code : null;
+    const leafCodesUnder = (a: CoaRow, acc: string[]): string[] => {
+      const children = kids.get(a.id) ?? [];
+      if (children.length === 0) {
+        const b = bestCode(a);
+        if (b) acc.push(b);
+      } else {
+        for (const c of children) leafCodesUnder(c, acc);
+      }
+      return acc;
+    };
+    const displayCode = (a: CoaRow): string => {
+      const own = bestCode(a);
+      if (own) return own; // a real UACS code is already on the row
+      const codes = leafCodesUnder(a, []);
+      if (codes.length === 0) return a.code; // nothing to derive from — keep the raw code
+      let prefix = codes[0]!.split('-');
+      for (let i = 1; i < codes.length; i++) {
+        const segs = codes[i]!.split('-');
+        let k = 0;
+        while (k < prefix.length && k < segs.length && prefix[k] === segs[k]) k++;
+        prefix = prefix.slice(0, k);
+        if (prefix.length === 0) break;
+      }
+      if (prefix.length === 0) return a.code;
+      return prefix.slice(0, Math.max(1, a.level)).join('-');
+    };
+
     const sectionTotal = (type: CoaRow['type']) => {
       let c = 0;
       let p = 0;
@@ -581,7 +617,7 @@ export class DetailedStatementsService {
         const isHdr = a.isHeader || hasKids(a);
         if (!isHdr && Math.abs(c1) < 0.005 && Math.abs(c2) < 0.005) return;
         rows.push({
-          code: a.uacsCode || a.code,
+          code: displayCode(a),
           label: a.name,
           level: Math.max(0, a.level - 1),
           kind: isHdr ? 'header' : 'account',
