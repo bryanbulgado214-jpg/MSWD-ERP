@@ -77,6 +77,11 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
           padding: 20,
           width: '100%',
           maxWidth: 640,
+          // minWidth:0 lets the card honour maxWidth even when a child (the
+          // no-wrap voucher table) is very wide — it then scrolls inside its own
+          // overflow-x container instead of stretching the card off-centre.
+          minWidth: 0,
+          boxSizing: 'border-box',
           boxShadow: '0 12px 40px rgba(16,24,40,0.18)',
         }}
       >
@@ -991,8 +996,13 @@ function ReviewModal({
           )}
           <div style={{ overflowX: 'auto' }}>
             {/* Keep each voucher on one line (PCV, Payee, Particulars, Amount,
-                Charge); the wrapper scrolls horizontally for long values. */}
-            <table className="acct-table" style={{ whiteSpace: 'nowrap' }}>
+                Charge); the scroll wrapper handles long values. The inner div
+                keeps the table off this scroll div's direct-child list, so the
+                global sticky-header rule ".acct-page div:has(> .acct-table) {
+                overflow: visible !important }" doesn't override overflow-x here —
+                the row scrolls inside the modal instead of spilling out of it. */}
+            <div>
+            <table className="acct-table" style={{ whiteSpace: 'nowrap', width: 'max-content', maxWidth: 'none' }}>
               <thead>
                 <tr>
                   <th>PCV No.</th>
@@ -1037,6 +1047,7 @@ function ReviewModal({
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
 
           {rep.status === 'draft' && (

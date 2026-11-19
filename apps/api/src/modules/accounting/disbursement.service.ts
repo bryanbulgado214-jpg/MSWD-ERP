@@ -1398,34 +1398,62 @@ export class DisbursementService {
   }
 
   /**
-   * The next DV number the auto-generator would produce, WITHOUT consuming the
-   * sequence — a peek for the "Use next DV number" button and for defaulting a
-   * reimbursement DV. It honours both the sequence counter and the highest
-   * existing DV-YYYY-NNNN for the year (so an org that also types DV numbers by
-   * hand still gets a free number), and skips any number already taken.
+   * The next DV number to suggest for the "Use next DV number" button — a peek
+   * that does NOT consume any sequence. It continues the organization's OWN
+   * numbering: it takes the most recently created DV as the template, then uses
+   * (highest trailing number for that template + 1) in the same format. So a
+   * district whose DVs run "2611513" gets "2611514"; "DV-2026-0059" gets
+   * "DV-2026-0060"; "DV-2026-01-001" gets "DV-2026-01-002". It bumps past any
+   * number already used, and only falls back to "DV-YYYY-0001" when the org has
+   * no DV yet (or the latest has no digits to increment).
    */
   async peekNextDvNumber(orgId: string): Promise<{ dvNumber: string }> {
-    const year = new Date().getUTCFullYear();
-    const prefix = `DV-${year}-`;
-    const fmt = (n: number) => `${prefix}${String(n).padStart(4, '0')}`;
-
-    const seq = await this.prisma.$queryRaw<{ next_number: bigint }[]>(Prisma.sql`
-      SELECT next_number FROM document_sequences
-      WHERE organization_id = ${orgId}::uuid AND document_type = 'DISBURSEMENT_VOUCHER'
-    `);
-    let candidate = (seq.length > 0 ? Number(seq[0]!.next_number) : 0) + 1;
-
-    const existing = await this.prisma.disbursementVoucher.findMany({
-      where: { organizationId: orgId, dvNumber: { startsWith: prefix } },
+    const latest = await this.prisma.disbursementVoucher.findFirst({
+      where: { organizationId: orgId },
+      orderBy: { createdAt: 'desc' },
       select: { dvNumber: true },
     });
-    const used = new Set(existing.map((e) => e.dvNumber));
-    for (const e of existing) {
-      const m = /-(\d+)$/.exec(e.dvNumber);
-      if (m) candidate = Math.max(candidate, Number(m[1]) + 1);
+
+    // Split a DV number into prefix + its LAST run of digits (+ any trailing
+    // non-digits), e.g. "DV-2026-0059" → ["DV-2026-", "0059", ""].
+    const splitTrailing = (s: string): [string, string, string] | null => {
+      const m = s.match(/\d+(?!.*\d)/);
+      if (!m) return null;
+      const start = m.index ?? 0;
+      return [s.slice(0, start), m[0], s.slice(start + m[0].length)];
+    };
+
+    if (latest?.dvNumber) {
+      const parts = splitTrailing(latest.dvNumber);
+      if (parts) {
+        const [prefix, digits, suffix] = parts;
+        const width = digits.length;
+        const make = (v: bigint) => prefix + v.toString().padStart(width, '0') + suffix;
+
+        // Highest trailing number among DVs that share this template.
+        const rows = await this.prisma.disbursementVoucher.findMany({
+          where: { organizationId: orgId, dvNumber: { startsWith: prefix } },
+          select: { dvNumber: true },
+        });
+        const used = new Set(rows.map((r) => r.dvNumber));
+        let max = BigInt(digits);
+        for (const r of rows) {
+          const p = splitTrailing(r.dvNumber);
+          if (p && p[0] === prefix && p[2] === suffix) {
+            const v = BigInt(p[1]);
+            if (v > max) max = v;
+          }
+        }
+
+        let n = max + 1n;
+        let guard = 0;
+        while (used.has(make(n)) && guard++ < 100000) n += 1n;
+        return { dvNumber: make(n) };
+      }
     }
-    while (used.has(fmt(candidate))) candidate++;
-    return { dvNumber: fmt(candidate) };
+
+    const year = new Date().getUTCFullYear();
+    return { dvNumber: `DV-${year}-0001` };
   }
 
   private async requireDv(orgId: string, id: string) {
