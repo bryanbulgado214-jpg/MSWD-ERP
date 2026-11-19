@@ -425,8 +425,7 @@ export default function NewDisbursementPage() {
           Paying <strong>{payingInvoice.invoiceNumber}</strong> — {payingInvoice.supplierName}.
           Outstanding balance <strong>{peso(Number(payingInvoice.balance))}</strong>. The charge
           line debits <strong>Accounts Payable</strong>; reduce it to pay part of the balance. To
-          withhold tax, open the assistant — it charges <strong>Accounts Payable</strong>
-          automatically for you.
+          withhold tax, open the assistant and set the account charged to Accounts Payable.
         </div>
       ) : (
         <p
@@ -751,15 +750,6 @@ export default function NewDisbursementPage() {
               onApply={applyWht}
               payeeVatRegistered={payeeVat}
               payeeName={payeeName || null}
-              defaultChargeAccountId={payingInvoice?.apAccountId ?? null}
-              lockChargeAccount={!!payingInvoice?.apAccountId}
-              chargeDescription={
-                payingInvoice
-                  ? payingInvoice.schedule.length > 1 && installmentNo
-                    ? `A/P settled — SI ${payingInvoice.invoiceNumber} (installment ${installmentNo})`
-                    : `Accounts Payable settled — SI ${payingInvoice.invoiceNumber}`
-                  : null
-              }
             />
           )}
         </div>
