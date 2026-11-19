@@ -613,7 +613,12 @@ export class PettyCashService {
    * marks the vouchers replenished and restores the fund (see
    * DisbursementService.postDraft / remove, which complete/revert this).
    */
-  async approveReplenishment(organizationId: string, userId: string, id: string) {
+  async approveReplenishment(
+    organizationId: string,
+    userId: string,
+    id: string,
+    dvNumber?: string,
+  ) {
     const rep = await this.prisma.pettyCashReplenishment.findFirst({ where: { organizationId, id } });
     if (!rep) throw new NotFoundException('Replenishment not found.');
     if (rep.status !== 'draft')
@@ -679,6 +684,9 @@ export class PettyCashService {
       paymentMode: 'check',
       bankAccountId: bankAccount.id,
       asDraft: true,
+      // When manual numbering is on, the accountant supplies the DV number on
+      // approval; otherwise create() auto-numbers it.
+      ...(dvNumber?.trim() ? { dvNumber: dvNumber.trim() } : {}),
       lines,
     });
 

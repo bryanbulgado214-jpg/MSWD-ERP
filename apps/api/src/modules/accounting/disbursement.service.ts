@@ -1397,6 +1397,37 @@ export class DisbursementService {
     return pad(Number(row.next_number));
   }
 
+  /**
+   * The next DV number the auto-generator would produce, WITHOUT consuming the
+   * sequence — a peek for the "Use next DV number" button and for defaulting a
+   * reimbursement DV. It honours both the sequence counter and the highest
+   * existing DV-YYYY-NNNN for the year (so an org that also types DV numbers by
+   * hand still gets a free number), and skips any number already taken.
+   */
+  async peekNextDvNumber(orgId: string): Promise<{ dvNumber: string }> {
+    const year = new Date().getUTCFullYear();
+    const prefix = `DV-${year}-`;
+    const fmt = (n: number) => `${prefix}${String(n).padStart(4, '0')}`;
+
+    const seq = await this.prisma.$queryRaw<{ next_number: bigint }[]>(Prisma.sql`
+      SELECT next_number FROM document_sequences
+      WHERE organization_id = ${orgId}::uuid AND document_type = 'DISBURSEMENT_VOUCHER'
+    `);
+    let candidate = (seq.length > 0 ? Number(seq[0]!.next_number) : 0) + 1;
+
+    const existing = await this.prisma.disbursementVoucher.findMany({
+      where: { organizationId: orgId, dvNumber: { startsWith: prefix } },
+      select: { dvNumber: true },
+    });
+    const used = new Set(existing.map((e) => e.dvNumber));
+    for (const e of existing) {
+      const m = /-(\d+)$/.exec(e.dvNumber);
+      if (m) candidate = Math.max(candidate, Number(m[1]) + 1);
+    }
+    while (used.has(fmt(candidate))) candidate++;
+    return { dvNumber: fmt(candidate) };
+  }
+
   private async requireDv(orgId: string, id: string) {
     const dv = await this.prisma.disbursementVoucher.findFirst({
       where: { id, organizationId: orgId },

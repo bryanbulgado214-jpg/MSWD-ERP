@@ -132,3 +132,13 @@ export class PrepareReplenishmentDto {
   @IsUUID('all', { each: true })
   voucherIds!: string[];
 }
+
+export class ApproveReplenishmentDto {
+  // Required only when the org uses manual document numbering; otherwise the
+  // reimbursement DV auto-numbers. The value is clash-checked downstream in
+  // DisbursementService.create.
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  dvNumber?: string;
+}

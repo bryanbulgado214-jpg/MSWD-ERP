@@ -1037,6 +1037,12 @@ export async function createDisbursement(
   return res.json();
 }
 
+/** The next DV number the system would assign (peek — does not consume it). */
+export async function getNextDvNumber(): Promise<string> {
+  const res = await authFetch('/accounting/disbursements/next-number');
+  return (await res.json()).dvNumber as string;
+}
+
 export interface DvPurchaseOrderOption {
   id: string;
   poNumber: string;
@@ -1562,9 +1568,14 @@ export async function preparePettyCashReplenishment(data: {
 /** Accountant approves the replenishment — raises the draft reimbursement DV. */
 export async function approvePettyCashReplenishment(
   id: string,
+  dvNumber?: string,
 ): Promise<PettyCashReplenishmentDetail> {
   return (
-    await authFetchMutate(`/accounting/petty-cash/replenishments/${id}/approve`, 'POST')
+    await authFetchMutate(
+      `/accounting/petty-cash/replenishments/${id}/approve`,
+      'POST',
+      dvNumber ? { dvNumber } : undefined,
+    )
   ).json();
 }
 

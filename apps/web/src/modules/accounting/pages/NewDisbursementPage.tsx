@@ -10,6 +10,7 @@ import {
   getBankAccounts,
   getChartOfAccounts,
   getDisbursement,
+  getNextDvNumber,
   getPayees,
   getSupplierInvoice,
   listDvPurchaseOrders,
@@ -86,6 +87,7 @@ export default function NewDisbursementPage() {
   const [dvDate, setDvDate] = useState(new Date().toISOString().slice(0, 10));
   const [dvNumber, setDvNumber] = useState('');
   const [manualNumbering, setManualNumbering] = useState(false);
+  const [fillingNumber, setFillingNumber] = useState(false);
   const [payeeName, setPayeeName] = useState('');
   const [payeeTin, setPayeeTin] = useState('');
   const [payeeAddress, setPayeeAddress] = useState('');
@@ -298,6 +300,20 @@ export default function NewDisbursementPage() {
   );
   const bank = bankAccounts.find((b) => b.id === bankAccountId);
 
+  // Fill the DV Number field with the next number the system would assign. The
+  // field stays editable — this is only a convenience default. (Declared here,
+  // above the early `loading` return, so the hook order stays stable.)
+  const fillNextDvNumber = useCallback(async () => {
+    setFillingNumber(true);
+    try {
+      setDvNumber(await getNextDvNumber());
+    } catch {
+      /* leave the field unchanged on failure */
+    } finally {
+      setFillingNumber(false);
+    }
+  }, []);
+
   const canSubmit =
     canCreate &&
     payeeName.trim().length > 0 &&
@@ -409,7 +425,8 @@ export default function NewDisbursementPage() {
           Paying <strong>{payingInvoice.invoiceNumber}</strong> — {payingInvoice.supplierName}.
           Outstanding balance <strong>{peso(Number(payingInvoice.balance))}</strong>. The charge
           line debits <strong>Accounts Payable</strong>; reduce it to pay part of the balance. To
-          withhold tax, open the assistant and set the account charged to Accounts Payable.
+          withhold tax, open the assistant — it charges <strong>Accounts Payable</strong>
+          automatically for you.
         </div>
       ) : (
         <p
@@ -544,6 +561,25 @@ export default function NewDisbursementPage() {
                   placeholder="e.g. DV-2026-01-001"
                   required
                 />
+                {!isEdit && manualNumbering && (
+                  <button
+                    type="button"
+                    onClick={fillNextDvNumber}
+                    disabled={fillingNumber}
+                    style={{
+                      marginTop: 4,
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      color: '#175cd3',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: fillingNumber ? 'default' : 'pointer',
+                    }}
+                  >
+                    {fillingNumber ? 'Loading…' : 'Use next DV number'}
+                  </button>
+                )}
               </div>
             )}
             <div style={cell('220px')}>
@@ -715,6 +751,15 @@ export default function NewDisbursementPage() {
               onApply={applyWht}
               payeeVatRegistered={payeeVat}
               payeeName={payeeName || null}
+              defaultChargeAccountId={payingInvoice?.apAccountId ?? null}
+              lockChargeAccount={!!payingInvoice?.apAccountId}
+              chargeDescription={
+                payingInvoice
+                  ? payingInvoice.schedule.length > 1 && installmentNo
+                    ? `A/P settled — SI ${payingInvoice.invoiceNumber} (installment ${installmentNo})`
+                    : `Accounts Payable settled — SI ${payingInvoice.invoiceNumber}`
+                  : null
+              }
             />
           )}
         </div>

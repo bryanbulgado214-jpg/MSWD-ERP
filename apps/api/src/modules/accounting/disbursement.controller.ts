@@ -56,6 +56,14 @@ export class DisbursementController {
     });
   }
 
+  // The next DV number the auto-generator would produce (peek, non-consuming) —
+  // for the "Use next DV number" button. Declared before ':id' routes.
+  @Get('next-number')
+  @RequirePermissions('accounting.dv.create')
+  nextNumber(@CurrentUser() user: AuthenticatedUser) {
+    return this.disbursementService.peekNextDvNumber(user.organizationId);
+  }
+
   @Get()
   @RequirePermissions('accounting.dv.read')
   list(

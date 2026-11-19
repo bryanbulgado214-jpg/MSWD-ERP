@@ -9,6 +9,7 @@ import {
   cancelPettyCashVoucher,
   createPettyCashFund,
   createPettyCashVoucher,
+  getAccountingSettings,
   getPettyCashExpenseAccounts,
   getPettyCashFunds,
   getPettyCashReplenishment,
@@ -101,6 +102,7 @@ export default function PettyCashPage({ subNav }: { subNav?: ReactNode } = {}) {
   const [vouchers, setVouchers] = useState<PettyCashVoucher[]>([]);
   const [reps, setReps] = useState<PettyCashReplenishment[]>([]);
   const [expenseAccounts, setExpenseAccounts] = useState<PettyCashAccountRef[]>([]);
+  const [manualNumbering, setManualNumbering] = useState(false);
   const [tab, setTab] = useState<'vouchers' | 'replenishments'>('vouchers');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -137,7 +139,14 @@ export default function PettyCashPage({ subNav }: { subNav?: ReactNode } = {}) {
     getPettyCashExpenseAccounts()
       .then(setExpenseAccounts)
       .catch(() => setExpenseAccounts([]));
-  }, [loadFunds]);
+    // Only the accountant (manage) approves and can read the numbering setting;
+    // when manual numbering is on they must supply the reimbursement DV number.
+    if (canManage) {
+      getAccountingSettings()
+        .then((s) => setManualNumbering(s.manualDocumentNumbering))
+        .catch(() => undefined);
+    }
+  }, [loadFunds, canManage]);
 
   useEffect(() => {
     if (fundId) loadFundData(fundId);
@@ -360,6 +369,7 @@ export default function PettyCashPage({ subNav }: { subNav?: ReactNode } = {}) {
           id={reviewId}
           canManage={canManage}
           canOperate={canOperate}
+          manualNumbering={manualNumbering}
           expenseAccounts={expenseAccounts}
           onClose={() => setReviewId(null)}
           onChanged={async (msg) => {
@@ -836,6 +846,7 @@ function ReviewModal({
   id,
   canManage,
   canOperate,
+  manualNumbering,
   expenseAccounts,
   onClose,
   onChanged,
@@ -843,11 +854,13 @@ function ReviewModal({
   id: string;
   canManage: boolean;
   canOperate: boolean;
+  manualNumbering: boolean;
   expenseAccounts: PettyCashAccountRef[];
   onClose: () => void;
   onChanged: (msg: string) => void;
 }) {
   const [rep, setRep] = useState<PettyCashReplenishmentDetail | null>(null);
+  const [dvNumber, setDvNumber] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
@@ -912,6 +925,20 @@ function ReviewModal({
             </span>
           </div>
 
+          {rep.status === 'draft' && canManage && manualNumbering && (
+            <label className="acct-field" style={{ maxWidth: 260, marginTop: 12 }}>
+              DV Number
+              <input
+                value={dvNumber}
+                onChange={(e) => setDvNumber(e.target.value)}
+                placeholder="e.g. DV-2026-0001"
+              />
+              <span style={{ fontSize: 12, color: '#667085' }}>
+                Manual numbering is on — enter the DV number for the reimbursement voucher.
+              </span>
+            </label>
+          )}
+
           {rep.dvId && rep.status !== 'posted' && (
             <div className="acct-note" style={{ marginTop: 12 }}>
               A draft disbursement voucher{' '}
@@ -963,7 +990,9 @@ function ReviewModal({
             </p>
           )}
           <div style={{ overflowX: 'auto' }}>
-            <table className="acct-table">
+            {/* Keep each voucher on one line (PCV, Payee, Particulars, Amount,
+                Charge); the wrapper scrolls horizontally for long values. */}
+            <table className="acct-table" style={{ whiteSpace: 'nowrap' }}>
               <thead>
                 <tr>
                   <th>PCV No.</th>
@@ -1031,10 +1060,14 @@ function ReviewModal({
               {canManage && (
                 <button
                   className="acct-btn acct-btn--primary"
-                  disabled={busy || rep.unassignedCount > 0}
+                  disabled={
+                    busy ||
+                    rep.unassignedCount > 0 ||
+                    (manualNumbering && !dvNumber.trim())
+                  }
                   onClick={() =>
                     run(
-                      () => approvePettyCashReplenishment(rep.id),
+                      () => approvePettyCashReplenishment(rep.id, dvNumber.trim() || undefined),
                       `Replenishment ${rep.replNumber} approved — a draft disbursement voucher was raised. Post it to record the JEV.`,
                     )
                   }

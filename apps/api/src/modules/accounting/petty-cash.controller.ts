@@ -20,6 +20,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
 
 import {
+  ApproveReplenishmentDto,
   CreatePettyCashFundDto,
   CreatePettyCashVoucherDto,
   PrepareReplenishmentDto,
@@ -151,8 +152,9 @@ export class PettyCashController {
   approveReplenishment(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ApproveReplenishmentDto,
   ) {
-    return this.service.approveReplenishment(user.organizationId, user.userId, id);
+    return this.service.approveReplenishment(user.organizationId, user.userId, id, dto.dvNumber);
   }
 
   @Post('replenishments/:id/cancel')
