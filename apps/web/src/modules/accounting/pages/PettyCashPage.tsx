@@ -10,6 +10,7 @@ import {
   createPettyCashFund,
   createPettyCashVoucher,
   getAccountingSettings,
+  getNextDvNumber,
   getPettyCashExpenseAccounts,
   getPettyCashFunds,
   getPettyCashReplenishment,
@@ -53,7 +54,17 @@ const TabDot = ({ show, title }: { show: boolean; title: string }) =>
     />
   ) : null;
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+function Modal({
+  title,
+  onClose,
+  children,
+  maxWidth = 640,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  maxWidth?: number | string;
+}) {
   return (
     <div
       onMouseDown={onClose}
@@ -76,7 +87,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
           borderRadius: 10,
           padding: 20,
           width: '100%',
-          maxWidth: 640,
+          maxWidth,
           // minWidth:0 lets the card honour maxWidth even when a child (the
           // no-wrap voucher table) is very wide — it then scrolls inside its own
           // overflow-x container instead of stretching the card off-centre.
@@ -866,8 +877,22 @@ function ReviewModal({
 }) {
   const [rep, setRep] = useState<PettyCashReplenishmentDetail | null>(null);
   const [dvNumber, setDvNumber] = useState('');
+  const [fillingNumber, setFillingNumber] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+
+  // Fill the DV Number with the next number the system would assign (same as the
+  // New Disbursement Voucher page). The field stays editable.
+  async function fillNextDvNumber() {
+    setFillingNumber(true);
+    try {
+      setDvNumber(await getNextDvNumber());
+    } catch {
+      /* leave the field unchanged on failure */
+    } finally {
+      setFillingNumber(false);
+    }
+  }
 
   const reload = useCallback(
     () =>
@@ -907,7 +932,11 @@ function ReviewModal({
   const totalCr = rep?.jeLines.reduce((s, l) => s + l.credit, 0) ?? 0;
 
   return (
-    <Modal title={rep ? `Replenishment ${rep.replNumber}` : 'Replenishment'} onClose={onClose}>
+    <Modal
+      title={rep ? `Replenishment ${rep.replNumber}` : 'Replenishment'}
+      onClose={onClose}
+      maxWidth="min(1600px, 95vw)"
+    >
       {err && <div className="acct-error">{err}</div>}
       {!rep && <div className="acct-empty">Loading…</div>}
       {rep && (
@@ -938,7 +967,25 @@ function ReviewModal({
                 onChange={(e) => setDvNumber(e.target.value)}
                 placeholder="e.g. DV-2026-0001"
               />
-              <span style={{ fontSize: 12, color: '#667085' }}>
+              <button
+                type="button"
+                onClick={fillNextDvNumber}
+                disabled={fillingNumber}
+                style={{
+                  alignSelf: 'flex-start',
+                  marginTop: 4,
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  color: '#175cd3',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: fillingNumber ? 'default' : 'pointer',
+                }}
+              >
+                {fillingNumber ? 'Loading…' : 'Use next DV number'}
+              </button>
+              <span style={{ fontSize: 12, color: '#667085', marginTop: 4 }}>
                 Manual numbering is on — enter the DV number for the reimbursement voucher.
               </span>
             </label>
@@ -1001,8 +1048,8 @@ function ReviewModal({
                 global sticky-header rule ".acct-page div:has(> .acct-table) {
                 overflow: visible !important }" doesn't override overflow-x here —
                 the row scrolls inside the modal instead of spilling out of it. */}
-            <div>
-            <table className="acct-table" style={{ whiteSpace: 'nowrap', width: 'max-content', maxWidth: 'none' }}>
+            <div style={{ minWidth: '100%' }}>
+            <table className="acct-table" style={{ whiteSpace: 'nowrap' }}>
               <thead>
                 <tr>
                   <th>PCV No.</th>
