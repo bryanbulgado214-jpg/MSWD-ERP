@@ -82,6 +82,7 @@ function Modal({
     >
       <div
         onMouseDown={(e) => e.stopPropagation()}
+        className="pc-modal"
         style={{
           background: '#fff',
           borderRadius: 10,

@@ -845,6 +845,15 @@
   overflow-x: auto;
 }
 
+/* The petty-cash modals scroll inside the page backdrop, not the window, so the
+   page-offset sticky header above would float the column row down into the
+   table body as you scroll. Keep headers in those modals in normal flow. */
+.pc-modal .acct-table thead th {
+  position: static;
+  top: auto;
+  z-index: auto;
+}
+
 /* Clickable DV rows — the whole line opens the voucher. */
 /* Only the data cells open the voucher — NOT the last cell (edit/delete). The
    pointer and the blue hover highlight cover just that range. */
